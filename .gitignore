@@ -3,3 +3,10 @@
 xcuserdata/
 *.xcuserstate
 DerivedData/
+
+# Extension signing key. The *public* half lives in extension/manifest.json and is what
+# pins the extension ID, so the ID stays reproducible without this file. The private half
+# is only needed to pack a .crx and must never be committed.
+extension/keys/
+node_modules/
+extension/dist/

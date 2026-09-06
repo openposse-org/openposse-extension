@@ -1,0 +1,20 @@
+{
+  "agentName": "Andy",
+  "domainPattern": "*.leanix.net",
+  "shortcut": {
+    "key": "k",
+    "code": "KeyK",
+    "metaKey": true,
+    "ctrlKey": false,
+    "altKey": false,
+    "shiftKey": true
+  },
+  "inputSelector": "textarea[name=\"message\"]",
+  "submitMethod": "click",
+  "submitSelector": "button[aria-label=\"Submit Message\"]",
+  "responseContainerSelector": "lx-agentic-chat-assistant-message",
+  "quietPeriodMs": 900,
+  "responseTimeoutMs": 60000,
+  "triggerMethod": "synthetic",
+  "usesStructuralSelector": false
+}

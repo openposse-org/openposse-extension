@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "OpenPosse",
+  "version": "0.1.0",
+  "description": "Lets OpenPosse talk to AI assistants living in web apps.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAntJt/0RYFRcbhoF0gWbeapbOpfU/1Rdx/VBSEM3fJ53Yc5LhSZYbHuQevPzqUhhnBSINuOxxRH5f50r87C17O5VXzzf1bfoKSHHLU4u17vq9w02HAaG4OyJy+AepulSXpFXBr6IdyuE0LAjebDBtcpF9tqC0SM34Q2LmaUX5RcgdVxx1FyloxH3YMKgYvxxoIlXB/ygD2o+bTXdemJ4TDcKiaNHmw+S/h7VsnL/p516zbEda2QiM8/gTlXVSYZRvZYBW9c0MhDYmF8aI1cQllfKOEwZH9lqkaC27owwrwJL37FJCqpuxIzMJWAe0d6Sf84tf+W8rjXmohETUGWc7LwIDAQAB",
+  "background": {
+    "service_worker": "dist/service-worker.js",
+    "type": "module"
+  },
+  "permissions": [
+    "nativeMessaging",
+    "storage",
+    "tabs",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://*.leanix.net/*"
+  ],
+  "action": {
+    "default_title": "OpenPosse"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.leanix.net/*"
+      ],
+      "js": [
+        "dist/content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}

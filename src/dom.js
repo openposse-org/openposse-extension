@@ -1,0 +1,329 @@
+// DOM primitives shared by every vendor module.
+//
+// Each function here exists because the obvious implementation is wrong in a way that fails
+// *silently* — text that appears but is never seen, a response that is never detected as
+// finished, an element that is present but unreachable. Vendor modules should never
+// reimplement these.
+
+/**
+ * Sets an input's value so the page's framework actually notices.
+ *
+ * `element.value = text` updates the DOM but not React's internal state: React tracks value
+ * through an overridden property setter, so a direct assignment is invisible to it. The text
+ * appears on screen and the app behaves as though the field were empty — a send button stays
+ * disabled, or the submitted message is blank.
+ *
+ * Calling the *native* setter, then dispatching `input`, is what React's synthetic event
+ * system is listening for. Vue and Svelte listen for the same event, so this is not
+ * React-specific in practice.
+ */
+export function setInputValue(element, text) {
+  const prototype = element instanceof HTMLTextAreaElement
+    ? window.HTMLTextAreaElement.prototype
+    : window.HTMLInputElement.prototype;
+
+  const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+  if (setter) {
+    setter.call(element, text);
+  } else {
+    element.value = text;
+  }
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+/**
+ * Sets text on a `contenteditable` element.
+ *
+ * Separate from the above because `contenteditable` has no `value` property at all — the
+ * native-setter trick does not apply, and the framework is listening for a different event.
+ */
+export function setEditableText(element, text) {
+  element.focus();
+  element.textContent = text;
+  element.dispatchEvent(new InputEvent('input', { bubbles: true, data: text }));
+}
+
+/**
+ * Finds an element, looking through shadow roots and same-origin iframes.
+ *
+ * A plain `document.querySelector` stops at both boundaries, and several vendors put their
+ * assistant panel behind one of them. The failure is indistinguishable from a wrong selector,
+ * which sends you rewriting a selector that was correct all along.
+ *
+ * Cross-origin iframes are deliberately not attempted: they are unreachable by design, and
+ * pretending otherwise would produce a confusing partial result rather than a clear
+ * `ELEMENT_NOT_FOUND`.
+ */
+export function deepQuerySelector(selector, root = document) {
+  const direct = root.querySelector?.(selector);
+  if (direct) return direct;
+
+  const walker = root.querySelectorAll?.('*') ?? [];
+  for (const element of walker) {
+    if (element.shadowRoot) {
+      const found = deepQuerySelector(selector, element.shadowRoot);
+      if (found) return found;
+    }
+  }
+
+  for (const frame of root.querySelectorAll?.('iframe') ?? []) {
+    let document_;
+    try {
+      document_ = frame.contentDocument;      // throws or returns null when cross-origin
+    } catch {
+      continue;
+    }
+    if (!document_) continue;
+    const found = deepQuerySelector(selector, document_);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+/**
+ * Whether an element is actually on screen.
+ *
+ * Presence in the DOM is not openness, and conflating the two is a silent failure: LeanIX
+ * keeps its chat panel mounted and merely hides it, so a plain `querySelector` reports the
+ * input as present when the panel is shut. Anything asking "is the assistant open?" therefore
+ * gets a confident yes, skips the shortcut, and then types into nothing.
+ *
+ * `getBoundingClientRect` covers `display:none`, zero-size collapse and detached subtrees in
+ * one check; `visibility`/`opacity` are read separately because an element can occupy space
+ * while being invisible.
+ */
+export function isVisible(element) {
+  if (!element?.getBoundingClientRect) return false;
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return false;
+
+  const style = element.ownerDocument?.defaultView?.getComputedStyle(element);
+  if (!style) return true;
+  return style.visibility !== 'hidden' && style.display !== 'none' && style.opacity !== '0';
+}
+
+/** The first *visible* match, which is what "is this control available?" actually means. */
+export function deepQuerySelectorVisible(selector, root = document) {
+  return deepQuerySelectorAll(selector, root).find(isVisible) ?? null;
+}
+
+/** Every match, across shadow roots and same-origin iframes, in document order. */
+export function deepQuerySelectorAll(selector, root = document, seen = new Set()) {
+  const out = [];
+  for (const element of root.querySelectorAll?.('*') ?? []) {
+    if (seen.has(element)) continue;
+    seen.add(element);
+    try {
+      if (element.matches?.(selector)) out.push(element);
+    } catch {
+      return out;                       // malformed selector — nothing will match
+    }
+    if (element.shadowRoot) out.push(...deepQuerySelectorAll(selector, element.shadowRoot, seen));
+  }
+  for (const frame of root.querySelectorAll?.('iframe') ?? []) {
+    let document_ = null;
+    try { document_ = frame.contentDocument; } catch { continue; }
+    if (document_) out.push(...deepQuerySelectorAll(selector, document_, seen));
+  }
+  return out;
+}
+
+/**
+ * Waits for a *new* match to appear beyond the ones already present.
+ *
+ * This is what a chat transcript needs, and `waitForElement` is wrong for it. Asking a second
+ * question adds a second reply element while the first is still on screen, so a plain "find
+ * the response container" resolves instantly against the *previous* answer — and the agent
+ * reads the opening reply aloud again, forever, with no error anywhere.
+ *
+ * The caller counts matches before submitting and passes that count here.
+ *
+ * @returns {Promise<Element|null>} the newest match, or null on timeout.
+ */
+export function waitForNewMatch(selector, previousCount, { timeoutMs = 15000 } = {}) {
+  const newest = () => {
+    const all = deepQuerySelectorAll(selector);
+    // Last, not first: chat transcripts append downward, so the newest reply is the final
+    // match. With a single-answer vendor there is only one match and last === first.
+    return all.length > previousCount ? all[all.length - 1] : null;
+  };
+
+  const immediate = newest();
+  if (immediate) return Promise.resolve(immediate);
+
+  return new Promise((resolve) => {
+    const deadline = setTimeout(() => {
+      observer.disconnect();
+      resolve(null);
+    }, timeoutMs);
+
+    const observer = new MutationObserver(() => {
+      const found = newest();
+      if (!found) return;
+      clearTimeout(deadline);
+      observer.disconnect();
+      resolve(found);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
+}
+
+/**
+ * Waits for an element to appear, up to `timeoutMs`. Resolves null on timeout.
+ *
+ * Waits for a *visible* one by default. A hidden-but-mounted panel would otherwise satisfy
+ * this instantly, and the caller would proceed to drive a control nobody can see.
+ * `attributes: true` on the observer matters for the same reason: opening such a panel is a
+ * class or style change, not a DOM insertion, so a `childList`-only observer never fires.
+ */
+export function waitForElement(
+  selector, { timeoutMs = 5000, root = document, requireVisible = true } = {}
+) {
+  const find = () => (requireVisible
+    ? deepQuerySelectorVisible(selector, root)
+    : deepQuerySelector(selector, root));
+
+  const existing = find();
+  if (existing) return Promise.resolve(existing);
+
+  return new Promise((resolve) => {
+    const deadline = setTimeout(() => {
+      observer.disconnect();
+      resolve(null);
+    }, timeoutMs);
+
+    const observer = new MutationObserver(() => {
+      const found = find();
+      if (!found) return;
+      clearTimeout(deadline);
+      observer.disconnect();
+      resolve(found);
+    });
+    observer.observe(root.body ?? root, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'],
+    });
+  });
+}
+
+/**
+ * Streams an answer out of a container as the vendor writes it in.
+ *
+ * **Completion is a quiet period, not an event.** Vendors stream tokens into the DOM and emit
+ * nothing to say they have finished, so "done" has to be inferred from mutations stopping for
+ * `quietPeriodMs`. That is a heuristic, and treating it as one matters: too short and a long
+ * pause mid-answer looks like completion, too long and every reply feels sluggish.
+ *
+ * `onDelta` receives only what is *new* since the last call. The container holds the whole
+ * answer so far, so passing the full text each time would make the app speak the answer from
+ * the beginning on every mutation.
+ *
+ * @returns {Promise<string>} the complete text.
+ */
+export function streamResponse(container, { quietPeriodMs = 900, timeoutMs = 120000, onDelta }) {
+  return new Promise((resolve) => {
+    let spoken = '';
+    let quietTimer = null;
+
+    const finish = () => {
+      clearTimeout(quietTimer);
+      clearTimeout(overallTimer);
+      observer.disconnect();
+      resolve(container.innerText ?? '');
+    };
+
+    const overallTimer = setTimeout(finish, timeoutMs);
+
+    const armQuietTimer = () => {
+      clearTimeout(quietTimer);
+      quietTimer = setTimeout(finish, quietPeriodMs);
+    };
+
+    const observer = new MutationObserver(() => {
+      const text = container.innerText ?? '';
+      if (text.length > spoken.length && text.startsWith(spoken)) {
+        // The common case: the vendor appended. Emit only the new tail.
+        onDelta?.(text.slice(spoken.length));
+        spoken = text;
+      } else if (text !== spoken) {
+        // The vendor rewrote rather than appended — some re-render the whole block when a
+        // markdown element closes. There is no safe delta here, so re-sync silently rather
+        // than emitting text the app would speak twice.
+        spoken = text;
+      }
+      armQuietTimer();
+    });
+
+    observer.observe(container, { childList: true, subtree: true, characterData: true });
+    armQuietTimer();
+  });
+}
+
+/**
+ * Waits for a control to become enabled, re-applying `reapply` if it stays disabled.
+ *
+ * A one-shot `button.disabled` check is wrong immediately after a panel opens. The element
+ * exists, but the framework may not have finished binding to it, so the value we just set
+ * lands before anything is listening and the send control never enables. Nothing about that
+ * is distinguishable from the React-setter trap at a single instant — both look like "text is
+ * in the box and the button is dead".
+ *
+ * So: wait, and if it is still disabled halfway through, set the value again in case the
+ * first attempt was simply too early. A genuine framework mismatch still fails, just after
+ * evidence rather than on the first frame.
+ */
+export function waitForEnabled(element, { timeoutMs = 3000, reapply } = {}) {
+  if (!element.disabled) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    const started = Date.now();
+    let retried = false;
+
+    const tick = () => {
+      if (!element.disabled) { cleanup(); resolve(true); return; }
+
+      // One re-application, halfway to the deadline. Repeating it every tick would spam the
+      // page with input events and could itself keep a debounced control disabled.
+      if (!retried && reapply && Date.now() - started > timeoutMs / 2) {
+        retried = true;
+        reapply();
+      }
+      if (Date.now() - started > timeoutMs) { cleanup(); resolve(false); }
+    };
+
+    const timer = setInterval(tick, 50);
+    const observer = new MutationObserver(tick);
+    observer.observe(element, { attributes: true, attributeFilter: ['disabled', 'class'] });
+
+    const cleanup = () => { clearInterval(timer); observer.disconnect(); };
+  });
+}
+
+/**
+ * Presses a shortcut as a synthetic DOM event.
+ *
+ * Marked `isTrusted: false` by the browser, and some vendors check exactly that on
+ * security-sensitive shortcuts and ignore the event with no error. There is no way to detect
+ * the rejection directly — the only signal is that nothing happened — so the caller must time
+ * out and report `TIMEOUT`, which the app answers by posting a real event via `CGEventPost`.
+ *
+ * Do not "fix" this by retrying with different keys. The recipe records which method actually
+ * worked for this vendor during setup, so the runtime never has to guess.
+ */
+export function pressShortcut(shortcut, target = document) {
+  const init = {
+    key: shortcut.key,
+    code: shortcut.code ?? undefined,
+    metaKey: !!shortcut.metaKey,
+    ctrlKey: !!shortcut.ctrlKey,
+    altKey: !!shortcut.altKey,
+    shiftKey: !!shortcut.shiftKey,
+    bubbles: true,
+    cancelable: true,
+  };
+  target.dispatchEvent(new KeyboardEvent('keydown', init));
+  target.dispatchEvent(new KeyboardEvent('keyup', init));
+}
