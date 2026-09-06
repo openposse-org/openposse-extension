@@ -12,13 +12,17 @@
     "nativeMessaging",
     "storage",
     "tabs",
-    "alarms"
+    "alarms",
+    "scripting"
   ],
   "host_permissions": [
     "https://*.leanix.net/*"
   ],
+  "optional_host_permissions": [
+    "https://*/*"
+  ],
   "action": {
-    "default_title": "OpenPosse"
+    "default_title": "OpenPosse — grant access to this site"
   },
   "content_scripts": [
     {

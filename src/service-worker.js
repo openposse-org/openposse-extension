@@ -220,12 +220,160 @@ chrome.runtime.onMessage.addListener((message, _sender, _respond) => {
   return false;
 });
 
+// ── Site access (M3d) ───────────────────────────────────────────────────────────────────
+//
+// A content script's `matches` are static in the manifest, so adding a vendor by editing that
+// file is exactly the engineering task M3 exists to abolish. Runtime registration
+// (`chrome.scripting.registerContentScripts`) plus an optional host permission replaces it.
+//
+// **The permission needs a Chrome user gesture, and a native macOS window cannot make one.**
+// So the grant is bound to the extension's toolbar button: the user clicks it, and the click's
+// gesture is what lets `permissions.request` run. This is the one beat of setup that cannot
+// happen in OpenPosse's own window.
+//
+// **The app decides which origin to ask for, not us.** It sends `prepare_access` with a
+// pattern before the user clicks, and we request exactly that. Deriving it here would mean a
+// second implementation of `DomainPattern` — and a public-suffix mistake in either copy is a
+// grant over every site under `co.uk`. It also keeps this file to its rule: the extension
+// "never decides anything a user would care about".
+
+/** What the app has asked us to request on the next toolbar click. */
+let pendingAccess = null;
+
+/** Origins covered by the static manifest, which must never also be registered dynamically. */
+function staticOrigins() {
+  return new Set(chrome.runtime.getManifest().host_permissions ?? []);
+}
+
+/** Records what the app wants granted, so the toolbar click knows what to ask for. */
+function prepareAccess({ tabId, pattern }) {
+  pendingAccess = { tabId, pattern };
+  return { ok: true, pattern };
+}
+
+/** Whether a pattern is already granted, so the wizard can skip a step nobody needs. */
+async function checkAccess({ pattern }) {
+  const granted = await chrome.permissions.contains({ origins: [pattern] });
+  return { ok: true, pattern, granted };
+}
+
+/**
+ * The toolbar click: the gesture that makes a permission request possible.
+ *
+ * `chrome.action.onClicked` only fires when the action has no `default_popup`, which is why
+ * the manifest declares a title and nothing else.
+ */
+chrome.action.onClicked.addListener(async (tab) => {
+  // Falls back to this tab's exact origin when the app has not asked for anything — clicking
+  // the button outside setup should still do the obvious thing. Deliberately narrower than
+  // what the wizard requests: an exact host can never be over-broad, and guessing a wildcard
+  // here would be the second `DomainPattern` implementation this design exists to avoid.
+  let pattern = pendingAccess?.pattern;
+  if (!pattern || (pendingAccess.tabId != null && pendingAccess.tabId !== tab.id)) {
+    try {
+      pattern = `https://${new URL(tab.url).host}/*`;
+    } catch {
+      return;                        // not an addressable page
+    }
+  }
+
+  let granted = false;
+  try {
+    granted = await chrome.permissions.request({ origins: [pattern] });
+  } catch (error) {
+    // The reported-but-unverified claim this milestone rests on: that a gesture propagates
+    // into the service worker. If it does not, this throws "must be called during a user
+    // gesture" and the grant has to move to a popup page instead. Say which, loudly — the
+    // difference decides the shape of the wizard's second step.
+    console.error('[openposse] permissions.request failed in the worker:', error?.message ?? error);
+    notifyAccess(pattern, false, String(error?.message ?? error));
+    return;
+  }
+
+  pendingAccess = null;
+  if (granted) await reconcileRegistrations();
+  notifyAccess(pattern, granted, null);
+});
+
+/** Tells the app a grant landed, so the wizard advances without polling for it. */
+function notifyAccess(pattern, granted, error) {
+  try {
+    bridge.send(envelope({
+      id: 'access',
+      type: 'event',
+      agent: 'openposse.recorder',
+      payload: { kind: 'access', pattern, granted, error },
+    }));
+  } catch { /* app not connected — the wizard will ask again with check_access */ }
+}
+
+/**
+ * Registers a content script for every granted origin that the manifest does not already cover.
+ *
+ * **Dynamic registrations are cleared on extension update, and the `chrome://extensions` reload
+ * button counts as an update for an unpacked extension.** Permissions survive; registrations do
+ * not. During development that reads as "the agent worked yesterday and does nothing today",
+ * with nothing in the logs — so this runs on install, on startup, and whenever a permission is
+ * added, and derives its list from `permissions.getAll()` rather than from stored state.
+ * The granted origins are the durable half, which makes them the right source of truth.
+ */
+async function reconcileRegistrations() {
+  const [{ origins = [] }, existing] = await Promise.all([
+    chrome.permissions.getAll(),
+    chrome.scripting.getRegisteredContentScripts(),
+  ]);
+
+  const covered = staticOrigins();
+  const already = new Set(existing.map((script) => script.id));
+
+  const wanted = origins.filter((origin) => !covered.has(origin));
+  const toAdd = wanted
+    .filter((origin) => !already.has(registrationID(origin)))
+    .map((origin) => ({
+      id: registrationID(origin),
+      matches: [origin],
+      js: ['dist/content.js'],
+      runAt: 'document_idle',
+      allFrames: true,
+      persistAcrossSessions: true,
+    }));
+
+  if (toAdd.length > 0) {
+    try {
+      await chrome.scripting.registerContentScripts(toAdd);
+    } catch (error) {
+      // Registration succeeds without host permission and then silently never injects, so a
+      // failure here is the *loud* case and worth keeping.
+      console.error('[openposse] could not register content scripts:', error?.message ?? error);
+    }
+  }
+
+  // Drop registrations whose permission the user revoked, or the script outlives the grant and
+  // fails silently from then on.
+  const stale = existing
+    .filter((script) => script.id.startsWith('openposse:') && !wanted.includes(originOf(script.id)))
+    .map((script) => script.id);
+  if (stale.length > 0) {
+    try { await chrome.scripting.unregisterContentScripts({ ids: stale }); } catch { /* gone */ }
+  }
+
+  return { registered: wanted.length };
+}
+
+const registrationID = (origin) => `openposse:${origin}`;
+const originOf = (id) => id.slice('openposse:'.length);
+
+chrome.permissions.onAdded.addListener(() => { reconcileRegistrations(); });
+chrome.permissions.onRemoved.addListener(() => { reconcileRegistrations(); });
+
 /** Recording intents, handled by the worker rather than by a content script. */
 const WORKER_INTENTS = {
   list_tabs: listTabs,
   focus_tab: focusTab,
   arm_recording: armRecording,
   disarm_recording: disarmRecording,
+  prepare_access: prepareAccess,
+  check_access: checkAccess,
 };
 
 /**
@@ -379,11 +527,16 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
 chrome.runtime.onInstalled.addListener(() => {
   console.info('[openposse] extension installed');
   ensureConnected();
+  // An update — which the chrome://extensions reload button performs — clears every dynamic
+  // registration while leaving the permissions in place. Without this, every vendor added
+  // through the wizard stops working after a reload, silently.
+  reconcileRegistrations();
 });
 
 // Reconnect when the browser restarts, not only when the extension is first installed.
 chrome.runtime.onStartup.addListener(() => {
   ensureConnected();
+  reconcileRegistrations();
 });
 
 // Connect as soon as the worker runs.
@@ -406,4 +559,14 @@ globalThis.openposse = {
   status: () => status,
   connect: () => ensureConnected(),
   disconnect: () => bridge.disconnect(),
+  // M3d diagnostics: what is granted, and what is actually registered. The two disagreeing is
+  // the silent failure this milestone is built around — a grant with no registration and a
+  // registration with no grant both look like nothing happening.
+  access: async () => ({
+    granted: (await chrome.permissions.getAll()).origins,
+    registered: (await chrome.scripting.getRegisteredContentScripts()).map((s) => s.id),
+    static: [...staticOrigins()],
+    pending: pendingAccess,
+  }),
+  reconcile: () => reconcileRegistrations(),
 };
