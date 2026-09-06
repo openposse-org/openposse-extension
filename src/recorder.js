@@ -29,6 +29,24 @@ const MIN_ANSWER_TEXT = 40;
 /** How long after a submit we keep waiting for the answer before giving up. */
 const REPLY_WINDOW_MS = 120_000;
 
+/**
+ * Mutations must stop for this long before we decide which element was the answer.
+ *
+ * **Deciding on the first qualifying element does not work**, and Notion is where that showed:
+ * it recorded a reply element **59ms** after Enter — page churn, a loading state, the prompt
+ * echoing back — while the actual answer was still seconds away. The capture that looked
+ * structurally perfect (`matches 0→1`) named the wrong thing, and the measured timing that the
+ * response ceiling is derived from was nonsense.
+ *
+ * Longer than `Recipe.quietPeriodMs` (~900ms) on purpose. That one decides when an answer has
+ * *finished* during a recording we already trust; this one decides *what the answer was*, from
+ * nothing, once. Being slow here costs a second at setup; being wrong costs the recipe.
+ */
+const SETTLE_MS = 2500;
+
+/** Ceiling on waiting for quiet, for a page that never stops mutating. */
+const SETTLE_CEILING_MS = 45_000;
+
 /** The live recording, or null. One per tab, and a tab records one thing at a time. */
 let session = null;
 
@@ -196,34 +214,50 @@ function onSubmitted(event) {
 }
 
 function watchForReply() {
-  // Every element added since the submit, kept across mutation batches.
+  // Every element added since the submit, with when it first appeared.
   //
   // Accumulating rather than judging each batch on its own is load-bearing. A vendor adds the
   // reply element **empty** and fills it afterwards, so at the moment it appears in
   // `addedNodes` it has no text and fails the "is this an answer?" test — and by the time it
   // has text, the mutations are happening *inside* it and it is never in `addedNodes` again.
-  // Judging batch by batch therefore misses the element entirely and then matches some inner
-  // `<p>`, which is how a recipe ends up reading back one paragraph of a long answer.
-  const addedSinceSubmit = new Set();
+  //
+  // The timestamp is what `elapsedMs` reports: when the chosen element *appeared*, which is
+  // what the runtime's `waitForNewMatch` actually waits for — not when the answer finished.
+  const addedSinceSubmit = new Map();
+  let settleTimer = null;
+
+  const decide = () => {
+    clearTimeout(settleTimer);
+    clearTimeout(ceiling);
+    clearTimeout(session.replyTimer);
+    observer.disconnect();
+    session.observer = null;
+
+    for (const el of [...addedSinceSubmit.keys()]) {
+      if (!el.isConnected) addedSinceSubmit.delete(el);
+    }
+
+    const reply = chooseReplyElement([...addedSinceSubmit.keys()]);
+    // No event when nothing qualified. The draft stays missing its reply and the wizard
+    // already says what is outstanding — inventing a failure here would give the app two
+    // things to explain.
+    if (reply) emitReply(reply, addedSinceSubmit.get(reply) ?? Date.now());
+  };
 
   const observer = new MutationObserver((records) => {
     for (const record of records) {
       for (const node of record.addedNodes) {
-        if (node.nodeType === 1) addedSinceSubmit.add(node);
+        if (node.nodeType === 1 && !addedSinceSubmit.has(node)) {
+          addedSinceSubmit.set(node, Date.now());
+        }
       }
     }
-    // Elements detached again are not answers — some vendors mount a skeleton and replace it.
-    for (const el of addedSinceSubmit) {
-      if (!el.isConnected) addedSinceSubmit.delete(el);
-    }
 
-    const reply = chooseReplyElement([...addedSinceSubmit]);
-    if (!reply) return;
-
-    observer.disconnect();
-    clearTimeout(session.replyTimer);
-    session.observer = null;
-    emitReply(reply);
+    // Restart the settle timer on every mutation. The answer is still being written while
+    // these keep arriving, so the moment they stop is the first moment the page can be asked
+    // what it produced.
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(decide, SETTLE_MS);
   });
 
   // `characterData` as well as `childList`: an element that was added empty gains its text
@@ -232,11 +266,15 @@ function watchForReply() {
   observer.observe(document.body, { childList: true, subtree: true, characterData: true });
   session.observer = observer;
 
+  // A page with a spinner, a clock or a blinking cursor never goes quiet, and waiting for
+  // silence that will not come is indistinguishable from a broken recorder.
+  const ceiling = setTimeout(decide, SETTLE_CEILING_MS);
+
   session.replyTimer = setTimeout(() => {
     observer.disconnect();
     session.observer = null;
-    // No event. The draft stays missing its reply and the wizard already says what is
-    // outstanding — inventing a failure event here would give the app two things to explain.
+    clearTimeout(settleTimer);
+    clearTimeout(ceiling);
   }, REPLY_WINDOW_MS);
 }
 
@@ -266,12 +304,27 @@ function chooseReplyElement(added) {
   const custom = candidates.find((el) => el.tagName.includes('-'));
   if (custom) return custom;
 
-  // Outermost: no other candidate contains it.
-  return candidates.find((el) => !candidates.some((other) => other !== el && other.contains(el)))
-    ?? candidates[0];
+  // The tightest element that still holds essentially the whole answer.
+  //
+  // "Outermost" was the first rule here and it is wrong in the same way `openposseDiff`'s
+  // comment already warned: every ancestor up to `<body>` also contains the answer, so the
+  // outermost candidate drags in the page chrome around it and the agent reads that aloud too.
+  // "Innermost" is wrong in the other direction — it lands on the first `<p>` of a
+  // multi-paragraph reply.
+  //
+  // So: take the largest text any candidate holds, keep the ones within 10% of it — those all
+  // contain the answer and differ only in how much extra they carry — and among those choose
+  // the one nothing else contains. That is the answer with the least wrapper around it.
+  const textLength = (el) => (el.innerText ?? '').length;
+  const largest = Math.max(...candidates.map(textLength));
+  const holdsTheAnswer = candidates.filter((el) => textLength(el) >= largest * 0.9);
+
+  return holdsTheAnswer.find(
+    (el) => !holdsTheAnswer.some((other) => other !== el && el.contains(other))
+  ) ?? holdsTheAnswer[0];
 }
 
-function emitReply(element) {
+function emitReply(element, firstSeenAt) {
   const selector = selectorFor(element);
   const matches = deepQuerySelectorAll(selector.css);
 
@@ -290,11 +343,19 @@ function emitReply(element) {
       // guessed. Guessing it is how M2 shipped a 15s ceiling against a cold path that needed
       // 14.8s, which passed on every warm tab and looked intermittent.
       //
-      // Measured to "an answer element with readable text", which is *later* than the moment
-      // the runtime's `waitForNewMatch` resolves — that fires as soon as the count increases,
-      // empty element and all. Erring long is the right direction: the derived ceiling is a
-      // multiple of this, and the two failures are not symmetric.
-      elapsedMs: Date.now() - session.submittedAt,
+      // When the chosen element *appeared*, not when the answer finished — that is what the
+      // runtime's `waitForNewMatch` waits for, so it is the quantity the ceiling should be
+      // derived from.
+      //
+      // Reported for the element we settled on, which is why it is passed in rather than read
+      // off the clock here. Timing the *decision* instead would report the settle period
+      // rather than the vendor, and timing the first qualifying element reported 59ms on
+      // Notion for a loading state.
+      elapsedMs: Math.max(0, firstSeenAt - session.submittedAt),
+      // Length only, never the text. A number here is what makes a wrong pick obvious: an
+      // answer is hundreds of characters, a loading label is tens. Reading the selector alone
+      // cannot tell those apart, which is how the 59ms capture looked fine.
+      textLength: (element.innerText ?? '').length,
     },
   });
 }
