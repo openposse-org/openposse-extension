@@ -163,9 +163,41 @@ async function focusTab({ tabId }) {
  * torn down when the arming call resolves would miss every one of them.
  */
 async function armRecording({ tabId }, { id, agent }) {
+  await ensureContentScript(tabId);
   await chrome.tabs.sendMessage(tabId, { intent: 'arm_recording' });
   recording = { id, agent, tabId, keepAlive: startKeepAlive() };
   return { ok: true, tabId };
+}
+
+/**
+ * Guarantees a content script is running in `tabId`, injecting it if not.
+ *
+ * **`registerContentScripts` only injects on page load.** The tab the user picked was open
+ * before they granted access to its site, so it has no content script and every intent fails
+ * with "Receiving end does not exist". Telling them to reload the page they just chose is both
+ * a bad step and a lossy one — a reload can lose exactly the state that made them pick it.
+ *
+ * So: ping, and inject only if nobody answers. The registration still handles every *future*
+ * load; this handles the one tab already in front of the user.
+ *
+ * Injecting unconditionally would be simpler and wrong — a tab covered by the static manifest
+ * already has the script, and a second copy would add a second `onMessage` listener and answer
+ * every intent twice. `content.js` guards against that too, but not needing the guard is
+ * better than relying on it.
+ */
+async function ensureContentScript(tabId) {
+  try {
+    const alive = await chrome.tabs.sendMessage(tabId, { intent: 'ping' });
+    if (alive?.ok) return { injected: false };
+  } catch {
+    // No listener. That is the case this function exists for.
+  }
+
+  await chrome.scripting.executeScript({
+    target: { tabId, allFrames: true },
+    files: ['dist/content.js'],
+  });
+  return { injected: true };
 }
 
 async function disarmRecording({ tabId }) {
@@ -450,6 +482,12 @@ async function dispatchIntent(request) {
   chrome.runtime.onMessage.addListener(onStream);
 
   try {
+    // Same guarantee the recorder needs, and it retires a standing annoyance: after an
+    // extension reload, every already-open tab is running the old content script or none at
+    // all, and the documented workaround was "reload the page too". Ensuring it here means a
+    // reload is no longer part of anyone's routine.
+    await ensureContentScript(tab.id);
+
     const result = await chrome.tabs.sendMessage(tab.id, {
       intent: payload.intent,
       recipe,

@@ -215,15 +215,37 @@ function disarmRecording() {
   return { ok: true, wasArmed: isArmed() && disarmRecorder() };
 }
 
+/// Answers "are you there?" so the worker can tell an un-injected tab from a broken one.
+function ping() {
+  return { ok: true, href: location.origin };
+}
+
 const INTENTS = {
   ask_assistant: askAssistant,
   get_last_response: getLastResponse,
   invoke_via_shortcut: invokeViaShortcut,
   arm_recording: armRecording,
   disarm_recording: disarmRecording,
+  ping,
 };
 
-chrome.runtime.onMessage.addListener((request, _sender, respond) => {
+// Runs once per page, however many times the file is injected.
+//
+// A dynamically-registered content script only injects on *page load*, so a tab that was
+// already open when the user granted access has none — and asking someone to reload the page
+// they just chose is both bad and lossy. The worker therefore injects into the open tab with
+// `executeScript`, which means this file can arrive twice: once from the injection, once from
+// the registration on the next load. Without this guard the second copy adds a second
+// `onMessage` listener and every intent is answered twice.
+if (globalThis.__openposseContentScript) {
+  console.debug('[openposse] content script already present');
+} else {
+  globalThis.__openposseContentScript = true;
+  install();
+}
+
+function install() {
+  chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   const handler = INTENTS[request?.intent];
   if (!handler) {
     respond(failure(ERROR.unsupportedIntent, `unknown intent: ${request?.intent}`));
@@ -247,4 +269,5 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
     .then(respond)
     .catch((error) => respond(failure(ERROR.timeout, String(error?.message ?? error))));
   return true;              // keeps the channel open for the async reply
-});
+  });
+}
