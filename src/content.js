@@ -21,6 +21,7 @@ import {
   waitForEnabled,
   waitForNewMatch,
 } from './dom.js';
+import { arm as armRecorder, disarm as disarmRecorder, isArmed } from './recorder.js';
 
 /** Wire error codes this script can originate. Mirrors `docs/protocol.md`. */
 const ERROR = {
@@ -190,10 +191,36 @@ async function invokeViaShortcut({ recipe }) {
   return { ok: true, openedBy: 'synthetic' };
 }
 
+/**
+ * Arms the recorder on this page (M3).
+ *
+ * Returns as soon as the listeners are attached. The captures themselves arrive over the next
+ * few minutes on their own channel, because what they are waiting for is a person finding a
+ * menu item and typing a question.
+ */
+function armRecording() {
+  armRecorder({
+    emit: (event) => {
+      chrome.runtime.sendMessage({ kind: 'openposse.recording', event }).catch(() => {
+        // The worker may have been terminated. Losing one capture is survivable and the
+        // wizard's checklist already shows what is still outstanding; throwing here would
+        // tear down the recording over it.
+      });
+    },
+  });
+  return { ok: true };
+}
+
+function disarmRecording() {
+  return { ok: true, wasArmed: isArmed() && disarmRecorder() };
+}
+
 const INTENTS = {
   ask_assistant: askAssistant,
   get_last_response: getLastResponse,
   invoke_via_shortcut: invokeViaShortcut,
+  arm_recording: armRecording,
+  disarm_recording: disarmRecording,
 };
 
 chrome.runtime.onMessage.addListener((request, _sender, respond) => {
