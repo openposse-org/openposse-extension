@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "esbuild src/service-worker.js --bundle --format=esm --outfile=dist/service-worker.js && esbuild src/content.js --bundle --format=iife --outfile=dist/content.js && esbuild tools/capture.js --bundle --format=iife --outfile=dist/capture.js",
-    "watch": "npm run build -- --watch"
+    "watch": "npm run build -- --watch",
+    "test": "node --test tools/*.test.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"
