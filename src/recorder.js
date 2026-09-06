@@ -196,16 +196,28 @@ function onSubmitted(event) {
 }
 
 function watchForReply() {
+  // Every element added since the submit, kept across mutation batches.
+  //
+  // Accumulating rather than judging each batch on its own is load-bearing. A vendor adds the
+  // reply element **empty** and fills it afterwards, so at the moment it appears in
+  // `addedNodes` it has no text and fails the "is this an answer?" test — and by the time it
+  // has text, the mutations are happening *inside* it and it is never in `addedNodes` again.
+  // Judging batch by batch therefore misses the element entirely and then matches some inner
+  // `<p>`, which is how a recipe ends up reading back one paragraph of a long answer.
+  const addedSinceSubmit = new Set();
+
   const observer = new MutationObserver((records) => {
-    const added = [];
     for (const record of records) {
       for (const node of record.addedNodes) {
-        if (node.nodeType === 1) added.push(node);
+        if (node.nodeType === 1) addedSinceSubmit.add(node);
       }
     }
-    if (added.length === 0) return;
+    // Elements detached again are not answers — some vendors mount a skeleton and replace it.
+    for (const el of addedSinceSubmit) {
+      if (!el.isConnected) addedSinceSubmit.delete(el);
+    }
 
-    const reply = chooseReplyElement(added);
+    const reply = chooseReplyElement([...addedSinceSubmit]);
     if (!reply) return;
 
     observer.disconnect();
@@ -214,7 +226,10 @@ function watchForReply() {
     emitReply(reply);
   });
 
-  observer.observe(document.body, { childList: true, subtree: true });
+  // `characterData` as well as `childList`: an element that was added empty gains its text
+  // through character-data mutations, and without this the observer is never called again
+  // after the initial insertion.
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
   session.observer = observer;
 
   session.replyTimer = setTimeout(() => {
@@ -274,6 +289,11 @@ function emitReply(element) {
       // How long the vendor took, so the recipe's response ceiling is measured rather than
       // guessed. Guessing it is how M2 shipped a 15s ceiling against a cold path that needed
       // 14.8s, which passed on every warm tab and looked intermittent.
+      //
+      // Measured to "an answer element with readable text", which is *later* than the moment
+      // the runtime's `waitForNewMatch` resolves — that fires as soon as the count increases,
+      // empty element and all. Erring long is the right direction: the derived ceiling is a
+      // multiple of this, and the two failures are not symmetric.
       elapsedMs: Date.now() - session.submittedAt,
     },
   });
