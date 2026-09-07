@@ -350,6 +350,18 @@ function chooseReplyElement(added) {
   const custom = candidates.find((el) => el.tagName.includes('-'));
   if (custom) return custom;
 
+  // Prefer a candidate we can actually *name*.
+  //
+  // Choosing the element and then computing a selector for it treats the two as independent,
+  // and they are not: on Notion the best-shaped candidate had no usable attribute and produced
+  // a structural path matching 59 elements, while the container one level out carried
+  // `data-content-editable-root` and was exact. An element we can identify durably beats a
+  // marginally tidier one we can only reach by counting divs.
+  const nameable = candidates.filter(
+    (el) => selectorFor(el, { allowMultiple: true }).isStable
+  );
+  const pool = nameable.length > 0 ? nameable : candidates;
+
   // The tightest element that still holds essentially the whole answer.
   //
   // "Outermost" was the first rule here and it is wrong in the same way `openposseDiff`'s
@@ -362,8 +374,8 @@ function chooseReplyElement(added) {
   // contain the answer and differ only in how much extra they carry — and among those choose
   // the one nothing else contains. That is the answer with the least wrapper around it.
   const textLength = (el) => (el.innerText ?? '').length;
-  const largest = Math.max(...candidates.map(textLength));
-  const holdsTheAnswer = candidates.filter((el) => textLength(el) >= largest * 0.9);
+  const largest = Math.max(...pool.map(textLength));
+  const holdsTheAnswer = pool.filter((el) => textLength(el) >= largest * 0.9);
 
   return holdsTheAnswer.find(
     (el) => !holdsTheAnswer.some((other) => other !== el && el.contains(other))
@@ -371,7 +383,9 @@ function chooseReplyElement(added) {
 }
 
 function emitReply(element, firstSeenAt) {
-  const selector = selectorFor(element);
+  // `allowMultiple`: a chat has one reply element per turn, so demanding a unique match
+  // rejects the correct selector on every conversation after the first.
+  const selector = selectorFor(element, { allowMultiple: true });
   const matches = deepQuerySelectorAll(selector.css);
 
   // The check the whole design turns on. `matchesBefore` counts only those matches that were

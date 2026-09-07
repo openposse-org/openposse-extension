@@ -105,10 +105,21 @@ globalThis.openposseDiff = function openposseDiff() {
     if (after > before + 20 && isVisible(el)) grew.push({ el, before, after, delta: after - before });
   }
 
-  // Smallest growth first, because the *tightest* element that grew is the reply. Every
-  // ancestor up to <body> also grew by the same amount, and picking one of those would make
-  // the app read the entire page chrome aloud along with the answer.
-  grew.sort((a, b) => a.delta - b.delta || a.after - b.after);
+  // Newly-added elements first, largest content first within each group.
+  //
+  // This used to sort by *smallest* growth, on the reasoning that the tightest element which
+  // grew is the reply and every ancestor up to `<body>` grew by the same amount. That holds for
+  // a vendor whose answer is one element. It is badly wrong for one whose answer is many blocks:
+  // on Notion it filled all eight slots with 21-character fragments and left the 1500-character
+  // answer off the list entirely, which sent me writing a heuristic against noise.
+  //
+  // `isNewSinceSnapshot` is the more decisive signal anyway — `responseContainerSelector` has to
+  // gain a match per answer, so an element that merely got longer can never be the right one.
+  grew.sort((a, b) => {
+    const aNew = !snapshot.has(a.el), bNew = !snapshot.has(b.el);
+    if (aNew !== bNew) return aNew ? -1 : 1;
+    return b.after - a.after;
+  });
 
   return {
     origin: location.origin,
