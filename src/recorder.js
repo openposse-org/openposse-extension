@@ -81,7 +81,25 @@ export function arm({ emit }) {
   armSubmit();
   armNavigation();
 
-  emit({ kind: 'armed' });
+  // **Adopt a composer that is already focused.**
+  //
+  // Everything downstream keys off `session.input`, and the only thing that sets it is a
+  // `focusin` — which never fires when the assistant was already open and focused before we
+  // armed. The submit handler then returns early on every click, nothing starts watching for a
+  // reply, and the recording runs to its deadline reporting "missing submit" for a button the
+  // user plainly pressed. Worse, the first `focusin` that *does* arrive is the re-focus after
+  // sending, which then gets read as the click that opened the assistant.
+  const focused = document.activeElement;
+  const alreadyOpen = isEditable(focused) && isVisible(focused);
+  if (alreadyOpen) {
+    session.input = focused;
+    session.emit({ kind: 'input', selector: selectorFor(focused) });
+  }
+
+  // Reported so the app can say so. An assistant that was already open cannot teach us how to
+  // open it, and `design/NOTES.md` already names this as a wizard state: press the shortcut
+  // now and it *closes* the panel, because these controls are toggles.
+  emit({ kind: 'armed', alreadyOpen });
   return true;
 }
 
@@ -225,7 +243,14 @@ function armInput() {
     // The composer just appeared and no shortcut was pressed, so something was clicked to open
     // it. Attribute it to the most recent click — excluding a click *inside* the composer,
     // which is someone focusing a box that was already there rather than opening anything.
-    if (!session.opened && session.lastClick
+    // Only the *first* composer we ever see can have been opened by a click.
+    //
+    // Without `session.input === null` this misfires on a re-render: sending a message
+    // re-creates the composer and refocuses it, so a second `focusin` arrives moments after
+    // the send click — and the send button gets recorded as the control that opens the
+    // assistant. Measured on Notion, which recorded `agent-send-message-button` as its open
+    // control while the actual submit was never captured at all.
+    if (!session.opened && session.input === null && session.lastClick
         && Date.now() - session.lastClick.at < OPEN_ATTRIBUTION_MS
         && !el.contains(session.lastClick.element)
         && session.lastClick.element !== el) {
