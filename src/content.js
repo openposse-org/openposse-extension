@@ -159,10 +159,23 @@ async function askAssistant({ recipe, prompt }, emit) {
     recipe.responseContainerSelector, repliesBefore, { timeoutMs: responseTimeoutMs }
   );
   if (!container) {
+    // Distinguish "sent, and the vendor never answered" from "never actually sent".
+    //
+    // A synthetic Enter is `isTrusted: false` and some vendors ignore it exactly the way they
+    // ignore a synthetic shortcut — the text lands in the composer and simply sits there. Both
+    // failures time out identically, and they need opposite fixes: one is a slow or broken
+    // assistant, the other means this recipe should have recorded the send *button*.
+    //
+    // Our own prompt, not page content: checking for it reads nothing the user wrote.
+    const remaining = (input.value ?? input.textContent ?? '');
+    const submitRejected = prompt.length > 0 && remaining.includes(prompt.slice(0, 24));
+
     return failure(
       ERROR.timeout,
-      `no new response within ${Math.round(responseTimeoutMs / 1000)}s`,
-      { openedBy }
+      submitRejected
+        ? 'the message was typed but sending it did nothing — the vendor ignored a synthetic Enter'
+        : `no new response within ${Math.round(responseTimeoutMs / 1000)}s`,
+      { openedBy, submitRejected }
     );
   }
 
