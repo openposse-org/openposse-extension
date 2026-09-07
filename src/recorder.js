@@ -291,10 +291,30 @@ function watchForReply() {
   };
 
   const observer = new MutationObserver((records) => {
+    const now = Date.now();
     for (const record of records) {
       for (const node of record.addedNodes) {
-        if (node.nodeType === 1 && !addedSinceSubmit.has(node)) {
-          addedSinceSubmit.set(node, Date.now());
+        if (node.nodeType !== 1) continue;
+        if (!addedSinceSubmit.has(node)) addedSinceSubmit.set(node, now);
+
+        // **Descendants too, and this is not defensive padding.**
+        //
+        // `MutationRecord.addedNodes` holds only the nodes inserted *directly into the
+        // target* — never their descendants. A vendor that builds its answer and attaches it
+        // in one go therefore produces a single record naming one subtree root, and every
+        // element inside it is invisible to us.
+        //
+        // Measured on Notion: the one node reported was a plain `div` with no attributes, so
+        // the only candidate had no usable selector and we fell to a 20-segment structural
+        // path. The `div[data-content-editable-root="true"]` container that identifies the
+        // answer exactly was three levels inside it, and was never even a candidate — we were
+        // ranking a set of one and calling it a choice.
+        const descendants = node.querySelectorAll?.('*') ?? [];
+        // A page-level re-render can insert thousands of elements at once. That is not an
+        // answer, and walking it would cost more than it could ever be worth.
+        if (descendants.length > 2000) continue;
+        for (const child of descendants) {
+          if (!addedSinceSubmit.has(child)) addedSinceSubmit.set(child, now);
         }
       }
     }
@@ -347,16 +367,13 @@ function chooseReplyElement(added) {
   });
   if (candidates.length === 0) return null;
 
-  const custom = candidates.find((el) => el.tagName.includes('-'));
-  if (custom) return custom;
-
   // Prefer a candidate we can actually *name*.
   //
-  // Choosing the element and then computing a selector for it treats the two as independent,
-  // and they are not: on Notion the best-shaped candidate had no usable attribute and produced
-  // a structural path matching 59 elements, while the container one level out carried
-  // `data-content-editable-root` and was exact. An element we can identify durably beats a
-  // marginally tidier one we can only reach by counting divs.
+  // Choosing the element and then computing a selector for it treats the two as independent
+  // decisions, and they are not. On Notion the structurally tidiest candidate had no usable
+  // attribute and produced a 20-segment path, while the container three levels inside it
+  // carried `data-content-editable-root` and identified the answer exactly. An element we can
+  // name durably beats a marginally tidier one reachable only by counting divs.
   const nameable = candidates.filter(
     (el) => selectorFor(el, { allowMultiple: true }).isStable
   );
@@ -371,12 +388,21 @@ function chooseReplyElement(added) {
   // multi-paragraph reply.
   //
   // So: take the largest text any candidate holds, keep the ones within 10% of it — those all
-  // contain the answer and differ only in how much extra they carry — and among those choose
-  // the one nothing else contains. That is the answer with the least wrapper around it.
+  // contain the answer and differ only in how much extra they carry.
   const textLength = (el) => (el.innerText ?? '').length;
   const largest = Math.max(...pool.map(textLength));
   const holdsTheAnswer = pool.filter((el) => textLength(el) >= largest * 0.9);
 
+  // A custom element's tag is the most durable identifier a page can offer, so prefer one —
+  // but only among the elements that actually hold the answer.
+  //
+  // This used to be an early return on the *first* custom element found anywhere in the
+  // candidate set, which was safe only because LeanIX had exactly one. Now that descendants
+  // are candidates too, a web-components page offers many, and "first" is arbitrary.
+  const custom = holdsTheAnswer.find((el) => el.tagName.includes('-'));
+  if (custom) return custom;
+
+  // Otherwise the one nothing else contains: the answer with the least wrapper around it.
   return holdsTheAnswer.find(
     (el) => !holdsTheAnswer.some((other) => other !== el && el.contains(other))
   ) ?? holdsTheAnswer[0];
