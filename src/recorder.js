@@ -160,11 +160,50 @@ function armShortcut() {
  *
  * A heuristic, and the dry run is what verifies it — the same division as everywhere else here.
  */
+/** Shapes a control usually takes. Checked before falling back to `cursor: pointer`. */
+const CONTROL_SELECTOR =
+  'button, a, [role="button"], [role="menuitem"], [role="tab"], [type="submit"]';
+
+/**
+ * The control a click landed on, or null if it did not land on one.
+ *
+ * **`closest('button, [role=button]')` alone is not enough**, and Notion is where that showed:
+ * clicking its send control captured nothing at all, so the recorder never started watching for
+ * a reply and the whole recording timed out. Plenty of apps build controls from plain `div`s
+ * with no role — Notion's composer buttons among them.
+ *
+ * `cursor: pointer` is the fallback because it is the one signal that is nearly universal:
+ * a thing you can click is styled as a thing you can click, whatever element it is made of.
+ */
+function clickableTarget(event) {
+  const direct = event.target?.closest?.(CONTROL_SELECTOR);
+  if (direct) return direct;
+
+  // Walk a few levels for a pointer cursor. Bounded: the cursor is usually set on the control
+  // or its immediate wrapper, and `body` often has one on some sites.
+  let node = event.target;
+  for (let depth = 0; node?.nodeType === 1 && depth < 4; depth += 1) {
+    if (node === document.body) break;
+    const style = node.ownerDocument?.defaultView?.getComputedStyle(node);
+    if (style?.cursor === 'pointer') return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
 function armClickTracking() {
   const handler = (event) => {
-    const target = event.target?.closest?.('button, a, [role="button"], [role="menuitem"]')
-      ?? event.target;
-    if (target?.nodeType === 1) session.lastClick = { element: target, at: Date.now() };
+    const target = clickableTarget(event);
+    if (!target) return;
+
+    // **The selector is computed now, not when it is needed.**
+    //
+    // Attribution happens later, when the composer appears — and by then the control is often
+    // gone: a click that opens a panel usually re-renders the thing that was clicked, leaving
+    // a detached node. `selectorFor` on a detached element walks up to a null parent
+    // immediately and returns an empty string, which is what `open click  via structure` in the
+    // log was: a capture that succeeded and recorded nothing.
+    session.lastClick = { element: target, selector: selectorFor(target), at: Date.now() };
   };
   listen(window, 'click', handler, true);
 }
@@ -191,10 +230,12 @@ function armInput() {
         && !el.contains(session.lastClick.element)
         && session.lastClick.element !== el) {
       session.opened = true;
+      // The selector was computed at click time — see `armClickTracking`. Recomputing it here
+      // would be too late: the control that opened the panel is usually detached by now.
       session.emit({
         kind: 'open',
         openMethod: 'click',
-        selector: selectorFor(session.lastClick.element),
+        selector: session.lastClick.selector,
       });
     }
 
@@ -217,7 +258,11 @@ function armSubmit() {
   // A click anywhere; we work out whether it was the send control by where it landed.
   const onClick = (event) => {
     if (!session.input) return;
-    const button = event.target?.closest?.('button, [role="button"]');
+    // Same broadened test as the open control. `closest('button, [role=button]')` missed
+    // Notion's send button entirely, so nothing was recorded, nothing started watching for a
+    // reply, and the recording ran to its 90s deadline reporting "missing submit" — for a
+    // button the user had plainly clicked.
+    const button = clickableTarget(event);
     if (!button || !isVisible(button)) return;
     // Clicking inside the composer itself is not sending — formatting controls, attachment
     // buttons and emoji pickers all live there.
