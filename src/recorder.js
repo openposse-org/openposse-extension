@@ -61,6 +61,10 @@ export function arm({ emit }) {
   session = {
     emit,
     input: null,
+    opened: false,
+    /// The most recent click, so a composer that appears just after one can be attributed to
+    /// it. See `armInput`.
+    lastClick: null,
     submittedAt: null,
     // Everything on the page at submit time. The reply selector's `matchesBefore` is the
     // number of its matches that were already here — which is what proves the selector gained
@@ -72,6 +76,7 @@ export function arm({ emit }) {
   };
 
   armShortcut();
+  armClickTracking();
   armInput();
   armSubmit();
   armNavigation();
@@ -124,8 +129,10 @@ function armShortcut() {
     // shortcut listener attached at all.
     unlisten(window, 'keydown', handler, true);
 
+    session.opened = true;
     session.emit({
-      kind: 'shortcut',
+      kind: 'open',
+      openMethod: 'shortcut',
       shortcut: {
         key: event.key,
         metaKey: event.metaKey,
@@ -141,6 +148,30 @@ function armShortcut() {
   listen(window, 'keydown', handler, true);
 }
 
+// MARK: - 1b. …or the button that opens it
+
+/**
+ * Remembers the last click, so a composer appearing right after one can be attributed to it.
+ *
+ * **Not every assistant has a keyboard shortcut.** Notion's opens from a button, and requiring
+ * a shortcut was LeanIX's shape generalised into a rule — it would have excluded most of the
+ * long tail. There is no event for "the assistant opened", so the attribution is: the composer
+ * appeared, nobody pressed a shortcut, and this is what was clicked just before.
+ *
+ * A heuristic, and the dry run is what verifies it — the same division as everywhere else here.
+ */
+function armClickTracking() {
+  const handler = (event) => {
+    const target = event.target?.closest?.('button, a, [role="button"], [role="menuitem"]')
+      ?? event.target;
+    if (target?.nodeType === 1) session.lastClick = { element: target, at: Date.now() };
+  };
+  listen(window, 'click', handler, true);
+}
+
+/** How long after a click a composer can appear and still be blamed on it. */
+const OPEN_ATTRIBUTION_MS = 5000;
+
 // MARK: - 2. The message box
 
 function armInput() {
@@ -151,6 +182,21 @@ function armInput() {
     const el = event.target;
     if (!isEditable(el) || !isVisible(el)) return;
     if (session.input === el) return;
+
+    // The composer just appeared and no shortcut was pressed, so something was clicked to open
+    // it. Attribute it to the most recent click — excluding a click *inside* the composer,
+    // which is someone focusing a box that was already there rather than opening anything.
+    if (!session.opened && session.lastClick
+        && Date.now() - session.lastClick.at < OPEN_ATTRIBUTION_MS
+        && !el.contains(session.lastClick.element)
+        && session.lastClick.element !== el) {
+      session.opened = true;
+      session.emit({
+        kind: 'open',
+        openMethod: 'click',
+        selector: selectorFor(session.lastClick.element),
+      });
+    }
 
     session.input = el;
     session.emit({ kind: 'input', selector: selectorFor(el) });

@@ -39,6 +39,37 @@ function failure(code, message, extra = {}) {
 }
 
 /**
+ * Opens a closed assistant, by whichever route was recorded.
+ *
+ * **A click is the better route where a vendor offers both**, for the same reason
+ * `submitMethod` prefers a button over a synthetic Enter: browsers mark JS-dispatched key
+ * events `isTrusted: false` and some vendors ignore them silently, while a synthetic click on
+ * a real control is almost never gated that way. The recorder records what the user did; this
+ * just executes it.
+ *
+ * @returns the method that worked, for `Recipe.triggerMethod`, or null if nothing happened.
+ */
+async function openAssistant(recipe) {
+  if (recipe.openMethod === 'click') {
+    if (!recipe.openSelector) return null;
+    // Wait rather than demand it instantly: the control may be behind a menu that is still
+    // rendering, and a page that is working perfectly can fail an immediate lookup.
+    const control = await waitForElement(recipe.openSelector, { timeoutMs: 3000 });
+    if (!control) return null;
+    control.click();
+    return 'click';
+  }
+
+  if (!recipe.shortcut) return null;
+  pressShortcut(recipe.shortcut, document.activeElement ?? document.body);
+  // Names the route so `Recipe.triggerMethod` never has to guess. A null from the caller is
+  // the `isTrusted` rejection: the browser marks JS-dispatched key events untrusted and some
+  // vendors ignore them silently, with no error to catch — the panel not appearing is the
+  // only signal there is.
+  return 'synthetic';
+}
+
+/**
  * Puts a question to the assistant and streams the answer back.
  *
  * Each step reports its own specific failure. A single "couldn't ask the assistant" would be
@@ -60,19 +91,17 @@ async function askAssistant({ recipe, prompt }, emit) {
   let input = deepQuerySelectorVisible(recipe.inputSelector);
 
   if (!input) {
-    pressShortcut(recipe.shortcut, document.activeElement ?? document.body);
+    openedBy = await openAssistant(recipe);
     input = await waitForElement(recipe.inputSelector, { timeoutMs: 3000 });
-    // Names the method that actually worked, which is what `Recipe.triggerMethod` records so
-    // the runtime never has to guess. A null here is the `isTrusted` rejection: the browser
-    // marks JS-dispatched key events untrusted and some vendors ignore them silently, with
-    // no error to catch — absence of the panel is the only signal there is.
-    openedBy = input ? 'synthetic' : null;
+    if (!input) openedBy = null;
   }
 
   if (!input) {
     return failure(
       ERROR.timeout,
-      'assistant did not open from a synthetic shortcut — needs the app to post a real event',
+      recipe.openMethod === 'click'
+        ? 'the assistant did not open when its button was clicked'
+        : 'assistant did not open from a synthetic shortcut — needs the app to post a real event',
       { openedBy: null }
     );
   }
@@ -174,21 +203,24 @@ function getLastResponse({ recipe }) {
  * all.
  */
 async function invokeViaShortcut({ recipe }) {
-  // Never press blind. A toggle pressed while the panel is open closes it, so a blind press
-  // turns a working state into a broken one — and looks like the shortcut failing.
+  // Never act blind. These controls are usually *toggles*, so opening one that is already open
+  // closes it — turning a working state into a broken one, and looking like the trigger failed.
   if (deepQuerySelectorVisible(recipe.inputSelector)) {
     return { ok: true, openedBy: 'already-open' };
   }
 
-  pressShortcut(recipe.shortcut, document.activeElement ?? document.body);
+  const openedBy = await openAssistant(recipe);
 
   const input = await waitForElement(recipe.inputSelector, { timeoutMs: 3000 });
   if (!input) {
-    // Very likely `isTrusted: false` being rejected. Say so truthfully and stop — the app
-    // owns the CGEventPost fallback, and the extension cannot post a trusted event at all.
-    return failure(ERROR.timeout, 'assistant did not open from a synthetic shortcut');
+    // For a shortcut this is very likely `isTrusted: false` being rejected. Say so truthfully
+    // and stop — the app owns the CGEventPost fallback, and the extension cannot post a
+    // trusted event at all.
+    return failure(ERROR.timeout, recipe.openMethod === 'click'
+      ? 'the assistant did not open when its button was clicked'
+      : 'assistant did not open from a synthetic shortcut');
   }
-  return { ok: true, openedBy: 'synthetic' };
+  return { ok: true, openedBy };
 }
 
 /**
