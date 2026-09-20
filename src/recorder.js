@@ -21,7 +21,7 @@
 // records one bit — "they submitted with Enter" — with no payload at all.
 
 import { deepQuerySelectorAll, isVisible } from './dom.js';
-import { selectorFor, selectorForBoth } from './selector.js';
+import { selectorFor, selectorForBoth, describePair } from './selector.js';
 
 /** Text long enough to be an answer rather than a label or a spinner. */
 const MIN_ANSWER_TEXT = 40;
@@ -512,7 +512,14 @@ function recordAnswer(element, firstSeenAt) {
   // one answer is exactly the failure this whole path exists to prevent, and it is worse than
   // no capture because it validates.
   if (!selector) {
-    session.emit({ kind: 'reply_pending', repliesSoFar: session.answers.length, noCommonSelector: true });
+    session.emit({
+      kind: 'reply_pending',
+      repliesSoFar: session.answers.length,
+      noCommonSelector: true,
+      // Shape, not content — see `describePair`. Without it this failure is a dead end, which
+      // is the same gap that cost two rounds on the reply selector already.
+      pairShape: describePair(first.element, second.element),
+    });
     return;
   }
 

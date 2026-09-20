@@ -273,6 +273,69 @@ export function selectorForBoth(a, b) {
     if (attempt.isStable && matchesBoth(attempt.css)) return attempt;
   }
 
+  // An attribute both answers carry, **whatever its value**.
+  //
+  // This is the case two samples exist to reveal, and it is the one Notion needs. Its answers
+  // each have `data-agent-service-scroll-anchor`, with a different per-message id in it — so
+  // the value is useless and the *name* is exactly the role marker we want. An attribute
+  // present on two different answers is describing what they are; only its value distinguishes
+  // them, which is precisely why dropping it generalises correctly.
+  //
+  // Unreachable from one sample: with a single element there is no way to tell an attribute
+  // that marks every answer from one that marks this answer, and guessing wrong is what
+  // produced a selector naming one message.
+  if (a.tagName === b.tagName) {
+    const tag = a.tagName.toLowerCase();
+    const shared = [...(a.attributes ?? [])]
+      .map((attr) => attr.name)
+      // `class` and `style` are on everything, so their presence says nothing. `id` is
+      // per-element by definition and cannot be shared.
+      .filter((name) => !['class', 'style', 'id'].includes(name))
+      .filter((name) => !STATE_WORDS.some((word) => name.includes(word)))
+      .filter((name) => b.hasAttribute?.(name))
+      .map((name) => ({ name, css: `${tag}[${CSS.escape(name)}]` }))
+      .filter((candidate) => matchesBoth(candidate.css))
+      .map((candidate) => ({ ...candidate, matchCount: deepMatchCount(candidate.css) }))
+      // Tightest first. Several attributes can match both — one marks answers, another marks
+      // every row in the panel — and the narrower set is the better description of "an answer".
+      .sort((x, y) => x.matchCount - y.matchCount);
+
+    if (shared.length > 0) {
+      const best = shared[0];
+      return {
+        css: best.css,
+        via: `shared-attribute:${best.name}`,
+        // Stable in the sense that matters: it survives a reload and names a role rather than
+        // an instance. The dry run asks twice, so a wrong guess here fails loudly.
+        isStable: true,
+        matchCount: best.matchCount,
+      };
+    }
+  }
+
+  // A class both carry. Weaker than an attribute — class names churn on a redesign and are
+  // often generated — but a class on *two different answers* is describing a role, and that is
+  // the same argument as above. Still better than a positional path, which is the alternative.
+  const sharedClasses = [...(a.classList ?? [])]
+    .filter((name) => b.classList?.contains(name))
+    .filter((name) => !isGeneratedID(name))
+    .map((name) => ({ name, css: `${a.tagName.toLowerCase()}.${CSS.escape(name)}` }))
+    .filter((candidate) => matchesBoth(candidate.css))
+    .map((candidate) => ({ ...candidate, matchCount: deepMatchCount(candidate.css) }))
+    .sort((x, y) => x.matchCount - y.matchCount);
+
+  if (sharedClasses.length > 0) {
+    const best = sharedClasses[0];
+    return {
+      css: best.css,
+      via: `shared-class:${best.name}`,
+      // Not claimed as stable. It works and it generalises, but a class is the first thing a
+      // redesign changes — the wizard should keep saying so.
+      isStable: false,
+      matchCount: best.matchCount,
+    };
+  }
+
   // Otherwise generalise the two structural paths against each other: keep the segments they
   // agree on, and drop the `:nth-of-type()` from those they do not. Where the two answers are
   // siblings, that is precisely the segment that names *which* one — so removing it turns
@@ -301,6 +364,34 @@ export function selectorForBoth(a, b) {
   // the one-shot selector this function exists to prevent, so say so instead and let
   // `RecipeDraft` produce a sentence the user can act on.
   return null;
+}
+
+/**
+ * Why two answers could not be described together — shape only, never content.
+ *
+ * `selectorForBoth` returning null was the second time in this project that a failure arrived
+ * with nothing to diagnose it by. Tag names, counts and path depths are page *structure*, the
+ * same category as a selector, so they are safe to write to the probe log and they are exactly
+ * what says whether the recorder picked two analogous elements or two unrelated ones.
+ */
+export function describePair(a, b) {
+  const sharedAttrs = [...(a.attributes ?? [])]
+    .map((attr) => attr.name)
+    .filter((name) => b.hasAttribute?.(name));
+  const sharedClasses = [...(a.classList ?? [])]
+    .filter((name) => b.classList?.contains(name));
+
+  return [
+    `tags=${a.tagName.toLowerCase()}/${b.tagName.toLowerCase()}`,
+    a.tagName === b.tagName ? 'same-tag' : 'DIFFERENT-TAGS',
+    `attrs=${a.attributes?.length ?? 0}/${b.attributes?.length ?? 0}`,
+    `shared-attrs=${sharedAttrs.length}${sharedAttrs.length ? ` (${sharedAttrs.join(',')})` : ''}`,
+    `shared-classes=${sharedClasses.length}`,
+    `depth=${structuralSegments(a).length}/${structuralSegments(b).length}`,
+    // The one that explains a bail-out on its own: the generaliser compares paths segment by
+    // segment, so two answers sitting at different depths cannot be merged.
+    `sameAncestor=${a.parentElement === b.parentElement ? 'siblings' : 'no'}`,
+  ].join(' ');
 }
 
 /** The `nth-of-type` path as segments, so two of them can be compared. */
