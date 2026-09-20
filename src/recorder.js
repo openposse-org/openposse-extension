@@ -21,7 +21,7 @@
 // records one bit — "they submitted with Enter" — with no payload at all.
 
 import { deepQuerySelectorAll, isVisible } from './dom.js';
-import { selectorFor } from './selector.js';
+import { selectorFor, selectorForBoth } from './selector.js';
 
 /** Text long enough to be an answer rather than a label or a spinner. */
 const MIN_ANSWER_TEXT = 40;
@@ -70,6 +70,9 @@ export function arm({ emit }) {
     // number of its matches that were already here — which is what proves the selector gained
     // one, rather than naming the transcript that merely grew longer.
     preexisting: null,
+    // Every answer banked so far. Two are needed before a reply selector can be computed —
+    // see `recordAnswer`.
+    answers: [],
     replyTimer: null,
     listeners: [],
     observer: null,
@@ -357,7 +360,7 @@ function watchForReply() {
     // No event when nothing qualified. The draft stays missing its reply and the wizard
     // already says what is outstanding — inventing a failure here would give the app two
     // things to explain.
-    if (reply) emitReply(reply, addedSinceSubmit.get(reply) ?? Date.now());
+    if (reply) recordAnswer(reply, addedSinceSubmit.get(reply) ?? Date.now());
   };
 
   const observer = new MutationObserver((records) => {
@@ -478,10 +481,47 @@ function chooseReplyElement(added) {
   ) ?? holdsTheAnswer[0];
 }
 
-function emitReply(element, firstSeenAt) {
-  // `allowMultiple`: a chat has one reply element per turn, so demanding a unique match
-  // rejects the correct selector on every conversation after the first.
-  const selector = selectorFor(element, { allowMultiple: true });
+/**
+ * Banks one answer, and emits the reply capture once there are two of them.
+ *
+ * **Two, because one cannot distinguish an answer from where answers appear.** Both attempts
+ * against Notion named a single message — first a per-message id, then a seventeen-segment
+ * positional path — and both looked healthy: `0→1 PER-REPLY`, a selector that resolved, a
+ * recipe that validated. The next question matched nothing in each case. No test applied to one
+ * element can separate the two, because on a page holding one answer they are the same element.
+ *
+ * With two, the constraint does the work: a selector matching both cannot be naming either.
+ * It also makes the existing before/after check mean something — the second exchange reports
+ * `1→2`, which is the real signal that was being approximated by `0→1`.
+ *
+ * The first answer emits `reply_pending` instead, so the panel can ask for one more rather than
+ * looking like it has stopped noticing.
+ */
+function recordAnswer(element, firstSeenAt) {
+  session.answers.push({ element, firstSeenAt });
+
+  if (session.answers.length < 2) {
+    session.emit({ kind: 'reply_pending', repliesSoFar: session.answers.length });
+    return;
+  }
+
+  const [first, second] = session.answers.slice(-2);
+  const selector = selectorForBoth(first.element, second.element);
+
+  // Nothing described both. Say so rather than falling back to one of them — a selector for
+  // one answer is exactly the failure this whole path exists to prevent, and it is worse than
+  // no capture because it validates.
+  if (!selector) {
+    session.emit({ kind: 'reply_pending', repliesSoFar: session.answers.length, noCommonSelector: true });
+    return;
+  }
+
+  // Timed from the *second* answer, which is the one measured under normal conditions: the
+  // first often lands on a freshly opened panel that is still warming up.
+  emitReply(selector, second.firstSeenAt);
+}
+
+function emitReply(selector, firstSeenAt) {
   const matches = deepQuerySelectorAll(selector.css);
 
   // The check the whole design turns on. `matchesBefore` counts only those matches that were

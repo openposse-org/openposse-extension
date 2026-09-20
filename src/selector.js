@@ -144,8 +144,11 @@ export function deepMatchCount(selector) {
  * Returns the shape of `CapturedSelector` in `Sources/OpenPosseShared/Recording.swift` —
  * `{ css, via, isStable, matchCount }` — so neither side translates.
  */
-export function selectorFor(el, { allowMultiple = false } = {}) {
-  for (const attr of candidateAttributes(el)) {
+export function selectorFor(el, { allowMultiple = false, forceStructural = false } = {}) {
+  // `forceStructural` skips straight to the path, for `selectorForBoth` — which needs two
+  // paths it can compare segment by segment, and an attribute selector for one element cannot
+  // be compared with a structural path for the other.
+  for (const attr of forceStructural ? [] : candidateAttributes(el)) {
     const value = el.getAttribute?.(attr);
     if (!value) continue;
     // A framework-generated id is worse than no id: it looks stable, resolves during the dry
@@ -182,7 +185,7 @@ export function selectorFor(el, { allowMultiple = false } = {}) {
   // Deliberately allowed to match more than once: a chat has one such element per turn, and
   // the runtime takes the newest via `waitForNewMatch`. Uniqueness is the wrong test here.
   const tag = el.tagName.toLowerCase();
-  if (tag.includes('-')) {
+  if (!forceStructural && tag.includes('-')) {
     const matchCount = deepMatchCount(tag);
     if (matchCount >= 1) {
       return { css: tag, via: 'custom-element', isStable: true, matchCount };
@@ -236,6 +239,74 @@ ${[...parent.children].filter((c) => c.tagName === node.tagName).indexOf(node) +
     isStable: false,
     matchCount,
   };
+}
+
+/**
+ * A selector that matches **both** recorded answers — the place answers appear, rather than
+ * either of the two that happen to be there.
+ *
+ * **One sample cannot tell those apart, and everything that tried has been wrong.** Recorded
+ * against Notion, a single answer produced `[data-agent-service-scroll-anchor="event_34s…"]`,
+ * which named one message; with that rejected it produced a seventeen-segment `nth-of-type`
+ * path, which named one *position*. Both matched perfectly at record time, both reported the
+ * healthy-looking `0→1 PER-REPLY`, and both matched nothing on the very next question. There is
+ * no test on a single element that separates "this answer" from "answers" — the distinction is
+ * only visible across two.
+ *
+ * With two, it falls out: a selector that matches both cannot be naming either one.
+ *
+ * The order of attempts matters. An attribute selector is tried first because it survives DOM
+ * churn, and only if no attribute describes both do we generalise the structural paths — which
+ * is the floor, as it is everywhere else in this file.
+ */
+export function selectorForBoth(a, b) {
+  const matchesBoth = (css) => {
+    if (!css) return false;
+    const found = deepQuerySelectorAll(css);
+    return found.includes(a) && found.includes(b);
+  };
+
+  // Either element's own best selector may already be general — a class or a `data-*` role
+  // shared by every answer is exactly what we are hoping to find.
+  for (const candidate of [a, b]) {
+    const attempt = selectorFor(candidate, { allowMultiple: true });
+    if (attempt.isStable && matchesBoth(attempt.css)) return attempt;
+  }
+
+  // Otherwise generalise the two structural paths against each other: keep the segments they
+  // agree on, and drop the `:nth-of-type()` from those they do not. Where the two answers are
+  // siblings, that is precisely the segment that names *which* one — so removing it turns
+  // "the second child" into "any child", which is the set we are after.
+  const pathA = structuralSegments(a);
+  const pathB = structuralSegments(b);
+
+  if (pathA.length === pathB.length && pathA.length > 0) {
+    const merged = pathA.map((segment, index) =>
+      segment === pathB[index] ? segment : segment.replace(/:nth-of-type\(\d+\)/, '')
+    );
+    const css = merged.join(' > ');
+    if (matchesBoth(css)) {
+      return {
+        css,
+        via: 'structure-generalised',
+        // Still structural, so still the thing most likely to break on a redesign — and the
+        // wizard says so. But it is at least structural about the *right* set.
+        isStable: false,
+        matchCount: deepMatchCount(css),
+      };
+    }
+  }
+
+  // Nothing describes both. Returning the first element's selector unchanged would hand back
+  // the one-shot selector this function exists to prevent, so say so instead and let
+  // `RecipeDraft` produce a sentence the user can act on.
+  return null;
+}
+
+/** The `nth-of-type` path as segments, so two of them can be compared. */
+function structuralSegments(el) {
+  const { css, via } = selectorFor(el, { allowMultiple: true, forceStructural: true });
+  return via.startsWith('structure') ? css.split(' > ') : [];
 }
 
 /** Identifying attributes only — never `value`, never text. Used by the DevTools tool. */
