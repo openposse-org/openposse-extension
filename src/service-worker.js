@@ -414,8 +414,23 @@ function notifyAccess(pattern, granted, error) {
  * with nothing in the logs — so this runs on install, on startup, and whenever a permission is
  * added, and derives its list from `permissions.getAll()` rather than from stored state.
  * The granted origins are the durable half, which makes them the right source of truth.
+ *
+ * **Serialised, because the body is check-then-act.** It reads the registered scripts, decides
+ * what is missing, and registers it — and two overlapping runs both read "nothing registered"
+ * and both register the same id, so the second fails with `Duplicate script ID`. Three events
+ * can start it (install, startup, a permission being granted) and a reload fires more than one
+ * of them, which is exactly when it was seen. Queuing rather than sharing one in-flight promise:
+ * a caller reacting to a *new* permission needs a fresh read, not the answer from a run that
+ * started before the grant existed.
  */
-async function reconcileRegistrations() {
+let reconcileQueue = Promise.resolve();
+
+function reconcileRegistrations() {
+  reconcileQueue = reconcileQueue.then(runReconcile, runReconcile);
+  return reconcileQueue;
+}
+
+async function runReconcile() {
   const [{ origins = [] }, existing] = await Promise.all([
     chrome.permissions.getAll(),
     chrome.scripting.getRegisteredContentScripts(),
@@ -451,11 +466,34 @@ async function reconcileRegistrations() {
     try {
       await chrome.scripting.registerContentScripts([script]);
     } catch (error) {
+      const message = String(error?.message ?? error);
+
+      // A duplicate is not a failure — it is the state we were trying to reach, reported by
+      // Chrome because `getRegisteredContentScripts` had not caught up. The serialisation
+      // above removes the case we can cause ourselves; this covers the one we cannot, where
+      // Chrome restores a persisted registration while an update is still settling.
+      //
+      // Updated rather than left alone, so a registration persisted from an older build is
+      // brought to the shape this build intends — `allFrames` and `matches` have both changed
+      // during M3, and a stale registration injecting into the wrong frames would be the same
+      // class of invisible bug the frame fix was for.
+      if (message.includes('Duplicate script ID')) {
+        try {
+          await chrome.scripting.updateContentScripts([script]);
+        } catch (updateError) {
+          console.warn(
+            `[openposse] could not refresh the registration for ${script.matches[0]}:`,
+            updateError?.message ?? updateError
+          );
+        }
+        continue;
+      }
+
       // Registration succeeds without host permission and then silently never injects, so a
       // failure here is the *loud* case and worth keeping.
       console.error(
         `[openposse] could not register content script for ${script.matches[0]}:`,
-        error?.message ?? error
+        message
       );
     }
   }
