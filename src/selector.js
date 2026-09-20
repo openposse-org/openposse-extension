@@ -96,6 +96,29 @@ export function isGeneratedID(value) {
   if (/^\d+$/.test(value)) return true;
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return true;
 
+  // A high-entropy handle in any segment — `event_34s3k84bks4r9dp0t67t1t3hx7`.
+  //
+  // **Recorded live against Notion**, whose answer containers carry a per-message id. It is
+  // worse than the `:rim:` case it joins, because it does not merely fail on the next page
+  // load: it names *one message*, so the very next question matches nothing and every future
+  // answer times out. Nothing upstream catches it — the reply's before/after count went 0→1
+  // and reported PER-REPLY, which is exactly what a genuine per-reply container looks like on
+  // a conversation that has one reply in it.
+  //
+  // The signal is entropy, not shape: sixteen-plus characters in one unbroken run, mixing
+  // letters and digits. A name somebody chose that long puts separators between its words —
+  // `agent-chat-send-button`, `content-editable-root` — so splitting first is what keeps those
+  // out of it. Consistent with the policy above: over-eager costs a less pretty selector,
+  // under-eager costs an agent that answers once and then never again.
+  if (value.split(/[-_]/).some((segment) =>
+    segment.length >= 16
+      && /^[a-z0-9]+$/i.test(segment)
+      && /[a-z]/i.test(segment)
+      && /\d/.test(segment)
+  )) {
+    return true;
+  }
+
   return false;
 }
 

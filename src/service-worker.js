@@ -124,6 +124,45 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   ensureConnected();
 });
 
+/**
+ * Which frame can actually see the assistant, or undefined if none can.
+ *
+ * **This exists because broadcasting was silently answering with the wrong frame.**
+ * `chrome.tabs.sendMessage` without a `frameId` goes to every frame, the content script is
+ * registered `all_frames: true`, and the promise resolves with whichever responds *first*.
+ * On Notion — two iframes — that played out the same way twice: the frame holding the
+ * composer typed the prompt, sent it, and got an answer, while a frame with no composer
+ * pressed the shortcut into nothing, timed out after three seconds, and reported "the
+ * assistant did not open".
+ *
+ * The three-second failure beats any real exchange, which needs typing, sending, model
+ * latency and a quiet period. So the wrong answer did not merely sometimes win — it won by
+ * construction, every time, and the page visibly disagreed with the report.
+ *
+ * `executeScript` rather than another `sendMessage`, because it returns a result for *every*
+ * frame with its `frameId` instead of just the first to answer — which is the whole problem.
+ * It runs in the same isolated world as our content script, so it can call the query the
+ * content script already installed rather than duplicating a shadow-piercing visibility check
+ * that would then drift from it. A frame with no content script has no such global and
+ * answers false, which is the right answer from a frame that could not have handled the
+ * intent anyway.
+ */
+async function frameOwningAssistant(tabId, selector) {
+  if (!selector) return undefined;
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      args: [selector],
+      func: (sel) => Boolean(globalThis.__openposseSeesAssistant?.(sel)),
+    });
+    return results.find((entry) => entry.result === true)?.frameId;
+  } catch {
+    // A frame we are not allowed to inject into, or a tab that has gone. Falling back to the
+    // top frame is what the code did before this existed, so this is never worse.
+    return undefined;
+  }
+}
+
 /** Wire error codes the worker itself can originate. */
 const ERROR = {
   tabNotFound: 'TAB_NOT_FOUND',
@@ -515,12 +554,20 @@ async function dispatchIntent(request) {
     // reload is no longer part of anyone's routine.
     await ensureContentScript(tab.id);
 
-    const result = await chrome.tabs.sendMessage(tab.id, {
-      intent: payload.intent,
-      recipe,
-      prompt: payload.prompt,
-      id,
-    });
+    const message = { intent: payload.intent, recipe, prompt: payload.prompt, id };
+
+    let frameId = await frameOwningAssistant(tab.id, recipe.inputSelector);
+    let result = await chrome.tabs.sendMessage(tab.id, message, { frameId: frameId ?? 0 });
+
+    // The assistant was shut, so nobody owned it and the top frame took the shortcut — but
+    // the panel may have opened in an iframe, where the top frame cannot see it. Re-locate
+    // once and let whoever has it now finish the job.
+    if (!result?.ok && frameId === undefined) {
+      frameId = await frameOwningAssistant(tab.id, recipe.inputSelector);
+      if (frameId !== undefined && frameId !== 0) {
+        result = await chrome.tabs.sendMessage(tab.id, message, { frameId });
+      }
+    }
 
     if (result?.ok) {
       reply('response', {

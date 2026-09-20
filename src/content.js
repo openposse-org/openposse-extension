@@ -315,4 +315,22 @@ function install() {
     .catch((error) => respond(failure(ERROR.timeout, String(error?.message ?? error))));
   return true;              // keeps the channel open for the async reply
   });
+
+  // Lets the worker ask *this frame* whether it can see the assistant, before sending it an
+  // intent it has no way to carry out. See `frameOwningAssistant` in the service worker —
+  // without it, every frame answers and the fastest failure wins.
+  //
+  // Installed on `globalThis` rather than exposed as an intent because the worker reads it
+  // with `executeScript`, which returns one result per frame. An intent would go back through
+  // `sendMessage`, which returns only the first — the very thing being fixed.
+  //
+  // Visible, not merely present: LeanIX keeps its composer mounted while the panel is shut,
+  // so presence would nominate a frame that cannot actually be typed into.
+  globalThis.__openposseSeesAssistant = (selector) => {
+    try {
+      return Boolean(deepQuerySelectorVisible(selector));
+    } catch {
+      return false;
+    }
+  };
 }
