@@ -436,13 +436,27 @@ async function reconcileRegistrations() {
       persistAcrossSessions: true,
     }));
 
-  if (toAdd.length > 0) {
+  // One call per origin, not one call for the batch.
+  //
+  // `registerContentScripts` is atomic: a single bad entry — an origin whose grant has just
+  // been revoked, or an id Chrome has already restored while an update was still settling —
+  // rejects the whole array, and every *other* vendor silently loses its registration too.
+  // Seen once during an extension reload, and it self-corrected on the next reconcile, which
+  // is exactly what makes the batched version dangerous: the failure is transient, plausible,
+  // and takes out bystanders.
+  //
+  // Registering separately costs one extra round trip per vendor and confines the damage to
+  // the origin that actually had a problem.
+  for (const script of toAdd) {
     try {
-      await chrome.scripting.registerContentScripts(toAdd);
+      await chrome.scripting.registerContentScripts([script]);
     } catch (error) {
       // Registration succeeds without host permission and then silently never injects, so a
       // failure here is the *loud* case and worth keeping.
-      console.error('[openposse] could not register content scripts:', error?.message ?? error);
+      console.error(
+        `[openposse] could not register content script for ${script.matches[0]}:`,
+        error?.message ?? error
+      );
     }
   }
 
