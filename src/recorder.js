@@ -569,12 +569,12 @@ function recordAnswer(element, firstSeenAt) {
     return;
   }
 
-  // Timed from the *second* answer, which is the one measured under normal conditions: the
-  // first often lands on a freshly opened panel that is still warming up.
-  emitReply(selector, second.firstSeenAt);
+  // Timed and measured from the *second* answer, which is the one seen under normal
+  // conditions: the first often lands on a freshly opened panel that is still warming up.
+  emitReply(selector, second.element, second.firstSeenAt);
 }
 
-function emitReply(selector, firstSeenAt) {
+function emitReply(selector, element, firstSeenAt) {
   const matches = deepQuerySelectorAll(selector.css);
 
   // The check the whole design turns on. `matchesBefore` counts only those matches that were
