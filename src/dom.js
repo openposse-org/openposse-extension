@@ -165,9 +165,23 @@ export function deepQuerySelectorAll(selector, root = document, seen = new Set()
  *
  * The caller counts matches before submitting and passes that count here.
  *
+ * **It does not resolve on the first new match**, and that cost a working setup. Notion adds a
+ * *status* row — "Working on your request", "Connecting a few dots" — before it adds the answer
+ * row. Resolving instantly locked onto the status row, streamed its text until it went quiet,
+ * and the agent read the progress indicator aloud instead of the joke. The recipe, the routing
+ * and the trigger were all correct; only the element was wrong.
+ *
+ * So once a new match appears, it waits `settleMs` for *further* matches and takes the last —
+ * the same lesson the recorder already learned about answers arriving in pieces, which the
+ * runtime had not. `childList` only, deliberately: text being written into a row is the answer
+ * streaming and must not keep restarting this, or the wait would last as long as the answer and
+ * streaming would be lost entirely.
+ *
  * @returns {Promise<Element|null>} the newest match, or null on timeout.
  */
-export function waitForNewMatch(selector, previousCount, { timeoutMs = 15000 } = {}) {
+export function waitForNewMatch(
+  selector, previousCount, { timeoutMs = 15000, settleMs = 900 } = {}
+) {
   const newest = () => {
     const all = deepQuerySelectorAll(selector);
     // Last, not first: chat transcripts append downward, so the newest reply is the final
@@ -175,21 +189,38 @@ export function waitForNewMatch(selector, previousCount, { timeoutMs = 15000 } =
     return all.length > previousCount ? all[all.length - 1] : null;
   };
 
-  const immediate = newest();
-  if (immediate) return Promise.resolve(immediate);
-
   return new Promise((resolve) => {
+    let settleTimer = null;
+    let observer = null;
+
+    const finish = () => {
+      clearTimeout(settleTimer);
+      clearTimeout(deadline);
+      observer?.disconnect();
+      resolve(newest());
+    };
+
     const deadline = setTimeout(() => {
-      observer.disconnect();
-      resolve(null);
+      clearTimeout(settleTimer);
+      observer?.disconnect();
+      resolve(newest());        // Whatever we have beats nothing at the ceiling.
     }, timeoutMs);
 
-    const observer = new MutationObserver(() => {
-      const found = newest();
-      if (!found) return;
-      clearTimeout(deadline);
-      observer.disconnect();
-      resolve(found);
+    // Restarted every time the count grows, so a status row followed by an answer row lands
+    // on the answer. A vendor that adds only one row pays `settleMs` once.
+    const armSettle = () => {
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(finish, settleMs);
+    };
+
+    let seen = deepQuerySelectorAll(selector).length;
+    if (seen > previousCount) armSettle();
+
+    observer = new MutationObserver(() => {
+      const count = deepQuerySelectorAll(selector).length;
+      if (count <= previousCount || count === seen) return;
+      seen = count;
+      armSettle();
     });
     observer.observe(document.body, { childList: true, subtree: true });
   });

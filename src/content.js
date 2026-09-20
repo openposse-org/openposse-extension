@@ -156,7 +156,11 @@ async function askAssistant({ recipe, prompt }, emit) {
   // hardcoded ceiling reports a healthy-but-slow answer as a broken agent.
   const responseTimeoutMs = recipe.responseTimeoutMs ?? 60000;
   const container = await waitForNewMatch(
-    recipe.responseContainerSelector, repliesBefore, { timeoutMs: responseTimeoutMs }
+    recipe.responseContainerSelector, repliesBefore,
+    // `quietPeriodMs` is the vendor's own measured "things have stopped changing", recorded
+    // per recipe rather than guessed — the right order of magnitude for how long to wait in
+    // case a status row is about to be followed by the real answer.
+    { timeoutMs: responseTimeoutMs, settleMs: recipe.quietPeriodMs ?? 900 }
   );
   if (!container) {
     // Distinguish "sent, and the vendor never answered" from "never actually sent".
