@@ -21,7 +21,7 @@
 // records one bit — "they submitted with Enter" — with no payload at all.
 
 import { deepQuerySelectorAll, isVisible } from './dom.js';
-import { selectorFor, selectorForBoth, describePair } from './selector.js';
+import { selectorFor, selectorForBoth, describePair, roleAttributes } from './selector.js';
 
 /** Text long enough to be an answer rather than a label or a spinner. */
 const MIN_ANSWER_TEXT = 40;
@@ -493,8 +493,19 @@ function chooseReplyElement(added) {
   // attribute and produced a 20-segment path, while the container three levels inside it
   // carried `data-content-editable-root` and identified the answer exactly. An element we can
   // name durably beats a marginally tidier one reachable only by counting divs.
+  //
+  // **"Nameable" means carrying a role attribute, not producing a stable selector on its own.**
+  // Those came apart the moment per-message values were rejected: Notion's answer container is
+  // marked `data-agent-service-scroll-anchor="event_34s3…"`, whose value is correctly refused —
+  // and reading that refusal as "cannot be identified" dropped the best candidate on the page.
+  // What was chosen instead was `div.xdt5ytf`: a build-generated class matching twenty-four
+  // elements and gaining three per answer, which passed the dry run and would have broken on
+  // Notion's next deploy.
+  //
+  // Two samples are what make the value dispensable — `selectorForBoth` drops it and keeps the
+  // attribute — so the element has to survive this filter to get there.
   const nameable = candidates.filter(
-    (el) => selectorFor(el, { allowMultiple: true }).isStable
+    (el) => selectorFor(el, { allowMultiple: true }).isStable || roleAttributes(el).length > 0
   );
   const pool = nameable.length > 0 ? nameable : candidates;
 

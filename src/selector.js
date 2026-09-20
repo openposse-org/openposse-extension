@@ -31,6 +31,38 @@ const STATE_WORDS = [
 ];
 
 /**
+ * Attribute names that could identify a *role*, whatever their values happen to hold.
+ *
+ * **The difference from `candidateAttributes` is the value check, and it is load-bearing.**
+ * That function rejects an attribute whose value is a per-instance handle, which is correct
+ * when naming one element: `[data-x="event_34s3…"]` matches that message and nothing else ever
+ * again. But the same attribute with the value *dropped* — `[data-x]` — is exactly the role
+ * marker we want, and `selectorForBoth` can only discover that if the element carrying it is
+ * still in the running.
+ *
+ * It was not. Rejecting the value made Notion's answer container "unnameable", so
+ * `chooseReplyElement` stopped preferring it and settled on a generic `div.xdt5ytf` — a
+ * seven-character build-generated class matching twenty-four elements. The two fixes were
+ * working against each other: one correctly refused a per-message value, and the other read
+ * that refusal as "this element cannot be identified at all".
+ *
+ * So: names here, values in `candidateAttributes`. With two samples a value need not be stable,
+ * which is the whole reason for recording two.
+ */
+export function roleAttributes(el) {
+  const named = STABLE_ATTRS.filter((attr) => attr !== 'id' && el.getAttribute?.(attr));
+  const discovered = [...(el.attributes ?? [])]
+    .map((attr) => attr.name)
+    .filter((name) => name.startsWith('data-') || name.startsWith('aria-'))
+    .filter((name) => !STABLE_ATTRS.includes(name))
+    // State, not identity — the same distinction `STATE_WORDS` already draws, and for the same
+    // reason: `[data-loading]` names a moment, not a thing.
+    .filter((name) => !STATE_WORDS.some((word) => name.includes(word)));
+
+  return [...new Set([...named, ...discovered])];
+}
+
+/**
  * Every attribute on `el` worth trying, most intentional first.
  *
  * The fixed list above covers test ids, which are the most deliberate thing a team can leave
@@ -286,12 +318,7 @@ export function selectorForBoth(a, b) {
   // produced a selector naming one message.
   if (a.tagName === b.tagName) {
     const tag = a.tagName.toLowerCase();
-    const shared = [...(a.attributes ?? [])]
-      .map((attr) => attr.name)
-      // `class` and `style` are on everything, so their presence says nothing. `id` is
-      // per-element by definition and cannot be shared.
-      .filter((name) => !['class', 'style', 'id'].includes(name))
-      .filter((name) => !STATE_WORDS.some((word) => name.includes(word)))
+    const shared = roleAttributes(a)
       .filter((name) => b.hasAttribute?.(name))
       .map((name) => ({ name, css: `${tag}[${CSS.escape(name)}]` }))
       .filter((candidate) => matchesBoth(candidate.css))
