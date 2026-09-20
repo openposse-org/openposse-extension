@@ -55,7 +55,13 @@ function handleFromApp(message) {
     status.connected = message.type === 'response' && message.payload?.accepted === true;
     status.lastError = status.connected ? null : (message.payload?.message ?? 'handshake refused');
     console.info('[openposse] handshake:', status.connected ? 'app is running' : status.lastError);
-    if (status.connected) chrome.alarms.clear('openposse.reconnect');
+    if (status.connected) {
+      chrome.alarms.clear('openposse.reconnect');
+      // Reset here rather than on the attempt, so the budget is spent per *outage* and not
+      // once for the life of the worker. Without this the second relaunch in a session would
+      // find the counter exhausted and fall back to the alarm's floor.
+      fastRetries = 0;
+    }
     return;
   }
 
@@ -80,12 +86,33 @@ function handleFromApp(message) {
  * should have to know. Quitting and reopening an app must not require servicing the browser.
  *
  * An alarm rather than a timer: MV3 workers are terminated when idle, taking any `setTimeout`
- * with them, and `chrome.alarms` is the only scheduling that survives that. One minute is
- * Chrome's practical floor, and it is cheap — the worker is asleep in between, and a
- * successful connection cancels the alarm.
+ * with them, and `chrome.alarms` is the only scheduling that survives that. It is cheap — the
+ * worker is asleep in between, and a successful connection cancels the alarm.
+ *
+ * **Two mechanisms, because they cover different failures.** The alarm is the guarantee: it
+ * survives the worker being terminated, which no timer does. But its floor is 30 seconds
+ * (one minute until Chrome 120, which is what this used to be set to), and the case that is
+ * actually common in development is the one it serves worst — OpenPosse restarts while Chrome
+ * stays open and the worker is still warm, and the bridge then sits dead for up to half a
+ * minute after every rebuild. So a few quick attempts run first. They are best-effort by
+ * construction: a terminated worker takes them with it, which is precisely what the alarm is
+ * underneath them for.
  */
+const FAST_RETRY_MS = [1000, 2000, 4000, 8000];
+let fastRetries = 0;
+
 function scheduleReconnect() {
-  chrome.alarms.create('openposse.reconnect', { periodInMinutes: 1 });
+  chrome.alarms.create('openposse.reconnect', { periodInMinutes: 0.5 });
+
+  // Bounded, and bounded by *disconnects* rather than by the timer: each failed attempt ends
+  // in another `onDisconnect`, which lands back here and advances the counter. With the app
+  // genuinely closed that is four attempts and then silence, with the alarm carrying on.
+  const delay = FAST_RETRY_MS[fastRetries];
+  if (delay === undefined) return;
+  fastRetries += 1;
+  setTimeout(() => {
+    if (!bridge.connected) ensureConnected();
+  }, delay);
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {
