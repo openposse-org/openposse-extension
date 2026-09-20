@@ -180,13 +180,19 @@ export function deepQuerySelectorAll(selector, root = document, seen = new Set()
  * @returns {Promise<Element|null>} the newest match, or null on timeout.
  */
 export function waitForNewMatch(
-  selector, previousCount, { timeoutMs = 15000, settleMs = 900 } = {}
+  selector, previousCount, { timeoutMs = 15000, settleMs = 900, choose } = {}
 ) {
   const newest = () => {
     const all = deepQuerySelectorAll(selector);
+    if (all.length <= previousCount) return null;
     // Last, not first: chat transcripts append downward, so the newest reply is the final
     // match. With a single-answer vendor there is only one match and last === first.
-    return all.length > previousCount ? all[all.length - 1] : null;
+    //
+    // `choose` overrides that when the selector names transcript *rows* rather than answers —
+    // which is all some vendors expose. It is given every match and the count from before the
+    // question, because deciding which row is the answer needs the caller's knowledge of what
+    // it asked, and this module has none.
+    return choose ? choose(all, previousCount) : all[all.length - 1];
   };
 
   return new Promise((resolve) => {

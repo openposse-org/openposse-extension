@@ -155,12 +155,44 @@ async function askAssistant({ recipe, prompt }, emit) {
   // From the recipe, not a constant. The vendor decides how long it thinks for, and a
   // hardcoded ceiling reports a healthy-but-slow answer as a broken agent.
   const responseTimeoutMs = recipe.responseTimeoutMs ?? 60000;
-  const container = await waitForNewMatch(
+
+  /**
+   * Which of the rows that appeared is the answer.
+   *
+   * **Some vendors do not let a selector name answers at all.** Measured on Notion: after one
+   * exchange the transcript holds three rows — the question, the answer, and a seven-character
+   * trailer — and all three carry an identical set of attributes. The recorder tried every
+   * strategy it has and `div[data-agent-service-find-row]` was genuinely the tightest thing
+   * that described both recorded answers. There is nothing tighter to find.
+   *
+   * So the recipe names rows and this decides which row, using the one thing the page cannot
+   * confuse us about: **we know what we typed.** The row echoing our own prompt is the
+   * question, by construction rather than by guess.
+   *
+   * It does not read anything the user wrote — only our own prompt, and only to exclude it.
+   */
+  const withoutOurQuestion = (all) => {
+    const fresh = all.slice(repliesBefore);
+    const needle = prompt.slice(0, 48);
+    const notOurs = fresh.filter(
+      (el) => !needle || !(el.innerText ?? '').includes(needle)
+    );
+    // Falling back to `fresh` matters: a vendor that does not echo the question at all would
+    // otherwise filter away nothing and, on a page that does, filter away everything.
+    const pool = notOurs.length > 0 ? notOurs : fresh;
+    return pool[pool.length - 1] ?? null;
+  };
+
+  let container = await waitForNewMatch(
     recipe.responseContainerSelector, repliesBefore,
     // `quietPeriodMs` is the vendor's own measured "things have stopped changing", recorded
     // per recipe rather than guessed — the right order of magnitude for how long to wait in
     // case a status row is about to be followed by the real answer.
-    { timeoutMs: responseTimeoutMs, settleMs: recipe.quietPeriodMs ?? 900 }
+    {
+      timeoutMs: responseTimeoutMs,
+      settleMs: recipe.quietPeriodMs ?? 900,
+      choose: withoutOurQuestion,
+    }
   );
   if (!container) {
     // Distinguish "sent, and the vendor never answered" from "never actually sent".
@@ -183,10 +215,42 @@ async function askAssistant({ recipe, prompt }, emit) {
     );
   }
 
-  const text = await streamResponse(container, {
-    quietPeriodMs: recipe.quietPeriodMs ?? 900,
-    onDelta: (delta) => emit({ kind: 'partial_result', text: delta }),
-  });
+  // Read, then look again — because a status row is only knowable as one in hindsight.
+  //
+  // Notion shows "Working on your request" before it shows the answer, and from the DOM that
+  // row is indistinguishable from a reply: same attributes, same shape, and at 45 characters
+  // it clears any sensible minimum length. Waiting longer does not separate them either, since
+  // the gap between the two is the model thinking — seconds, not the few hundred milliseconds
+  // a render takes to settle.
+  //
+  // What *is* decidable is what happened afterwards. Once the page goes quiet, we pick again:
+  // if the best row is no longer the one we read, the one we read was transient and the answer
+  // has since arrived. This works whether the vendor removes the status row or overwrites it,
+  // which matters because we do not know which Notion does and guessing has already cost four
+  // rounds.
+  //
+  // Bounded at three passes. Each ends in a quiet period, so a page that never settles is
+  // still held by `responseTimeoutMs` in the wait above rather than by this loop.
+  let text = '';
+  let readFrom = null;
+  for (let pass = 0; pass < 3; pass += 1) {
+    const current = pass === 0
+      ? container
+      : withoutOurQuestion(deepQuerySelectorAll(recipe.responseContainerSelector));
+
+    // The same row twice means the page has settled on it. That is the answer.
+    if (!current || current === readFrom) break;
+
+    readFrom = current;
+    container = current;
+    text = await streamResponse(current, {
+      quietPeriodMs: recipe.quietPeriodMs ?? 900,
+      // Partials keep flowing so speech can start early, which is the whole latency argument
+      // for driving a page. The cost is that a status row can be spoken before it is known to
+      // be one; the app replaces the answer on `.done`, so what is left on screen is right.
+      onDelta: (delta) => emit({ kind: 'partial_result', text: delta }),
+    });
+  }
 
   // Transport diagnostics, not content: how many reply elements existed before and after.
   // Without these, "Andy answered" and "Andy re-read the previous answer" are the same
