@@ -287,9 +287,20 @@ ${[...parent.children].filter((c) => c.tagName === node.tagName).indexOf(node) +
  *
  * With two, it falls out: a selector that matches both cannot be naming either one.
  *
- * The order of attempts matters. An attribute selector is tried first because it survives DOM
- * churn, and only if no attribute describes both do we generalise the structural paths — which
- * is the floor, as it is everywhere else in this file.
+ * **Every strategy is tried and the tightest result wins**, rather than the first one that
+ * works. That distinction cost a working setup. Notion marks *every* row —
+ * questions, answers and a trailing seven-character one — with
+ * `data-agent-service-find-row`, so the attribute strategy matched both answers and returned
+ * immediately, naming a set three times too large. The runtime then took the last match, which
+ * on Notion is not the answer, and the agent read a status message aloud.
+ *
+ * The right rule falls out of having two samples: the **smallest** set containing both answers
+ * is the best description of "answers". A class only answers carry matches two; a row attribute
+ * matches five or six. Ranking across strategies picks the class; ranking within one strategy
+ * and returning early cannot.
+ *
+ * Order still breaks ties, because an attribute survives DOM churn better than a class and a
+ * structural path is the floor — but only when the sets are the same size.
  */
 export function selectorForBoth(a, b) {
   const matchesBoth = (css) => {
@@ -298,11 +309,18 @@ export function selectorForBoth(a, b) {
     return found.includes(a) && found.includes(b);
   };
 
+  /// Every selector that describes both, cheapest description last to break ties.
+  const candidates = [];
+  const consider = (css, via, isStable, rank) => {
+    if (!matchesBoth(css)) return;
+    candidates.push({ css, via, isStable, matchCount: deepMatchCount(css), rank });
+  };
+
   // Either element's own best selector may already be general — a class or a `data-*` role
   // shared by every answer is exactly what we are hoping to find.
   for (const candidate of [a, b]) {
     const attempt = selectorFor(candidate, { allowMultiple: true });
-    if (attempt.isStable && matchesBoth(attempt.css)) return attempt;
+    if (attempt.isStable) consider(attempt.css, attempt.via, true, 0);
   }
 
   // An attribute both answers carry, **whatever its value**.
@@ -318,49 +336,45 @@ export function selectorForBoth(a, b) {
   // produced a selector naming one message.
   if (a.tagName === b.tagName) {
     const tag = a.tagName.toLowerCase();
-    const shared = roleAttributes(a)
-      .filter((name) => b.hasAttribute?.(name))
-      .map((name) => ({ name, css: `${tag}[${CSS.escape(name)}]` }))
-      .filter((candidate) => matchesBoth(candidate.css))
-      .map((candidate) => ({ ...candidate, matchCount: deepMatchCount(candidate.css) }))
-      // Tightest first. Several attributes can match both — one marks answers, another marks
-      // every row in the panel — and the narrower set is the better description of "an answer".
-      .sort((x, y) => x.matchCount - y.matchCount);
+    for (const name of roleAttributes(a).filter((n) => b.hasAttribute?.(n))) {
+      // Stable in the sense that matters: it survives a reload and names a role rather than
+      // an instance.
+      consider(`${tag}[${CSS.escape(name)}]`, `shared-attribute:${name}`, true, 1);
 
-    if (shared.length > 0) {
-      const best = shared[0];
-      return {
-        css: best.css,
-        via: `shared-attribute:${best.name}`,
-        // Stable in the sense that matters: it survives a reload and names a role rather than
-        // an instance. The dry run asks twice, so a wrong guess here fails loudly.
-        isStable: true,
-        matchCount: best.matchCount,
-      };
+      // The attribute *with* its value, which is tighter whenever the value is a role rather
+      // than a handle — `[data-role="assistant"]` on both answers beats `[data-role]` on every
+      // row. Only when both carry the same value; a per-message id cannot match both, so this
+      // costs nothing on the case that motivated dropping values in the first place.
+      const value = a.getAttribute(name);
+      if (value && b.getAttribute?.(name) === value) {
+        consider(
+          `${tag}[${CSS.escape(name)}="${CSS.escape(value)}"]`,
+          `shared-attribute-value:${name}`, true, 1
+        );
+      }
     }
   }
 
   // A class both carry. Weaker than an attribute — class names churn on a redesign and are
   // often generated — but a class on *two different answers* is describing a role, and that is
   // the same argument as above. Still better than a positional path, which is the alternative.
-  const sharedClasses = [...(a.classList ?? [])]
-    .filter((name) => b.classList?.contains(name))
-    .filter((name) => !isGeneratedID(name))
-    .map((name) => ({ name, css: `${a.tagName.toLowerCase()}.${CSS.escape(name)}` }))
-    .filter((candidate) => matchesBoth(candidate.css))
-    .map((candidate) => ({ ...candidate, matchCount: deepMatchCount(candidate.css) }))
-    .sort((x, y) => x.matchCount - y.matchCount);
+  //
+  // Not claimed stable: a class is the first thing a redesign changes, and the wizard should
+  // keep saying so even when this is the tightest thing available.
+  for (const name of [...(a.classList ?? [])]) {
+    if (!b.classList?.contains(name) || isGeneratedID(name)) continue;
+    consider(
+      `${a.tagName.toLowerCase()}.${CSS.escape(name)}`, `shared-class:${name}`, false, 2
+    );
+  }
 
-  if (sharedClasses.length > 0) {
-    const best = sharedClasses[0];
-    return {
-      css: best.css,
-      via: `shared-class:${best.name}`,
-      // Not claimed as stable. It works and it generalises, but a class is the first thing a
-      // redesign changes — the wizard should keep saying so.
-      isStable: false,
-      matchCount: best.matchCount,
-    };
+  // Tightest wins, and only then does the kind of selector break the tie. The smallest set
+  // containing both answers is the best description of "answers" — that is the whole leverage
+  // two samples provide, and returning the first strategy that worked threw it away.
+  if (candidates.length > 0) {
+    candidates.sort((x, y) => x.matchCount - y.matchCount || x.rank - y.rank);
+    const { css, via, isStable, matchCount } = candidates[0];
+    return { css, via, isStable, matchCount };
   }
 
   // Otherwise generalise the two structural paths against each other: keep the segments they
