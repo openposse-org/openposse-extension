@@ -356,11 +356,32 @@ function watchForReply() {
       if (!el.isConnected) addedSinceSubmit.delete(el);
     }
 
-    const reply = chooseReplyElement([...addedSinceSubmit.keys()]);
-    // No event when nothing qualified. The draft stays missing its reply and the wizard
-    // already says what is outstanding — inventing a failure here would give the app two
-    // things to explain.
-    if (reply) recordAnswer(reply, addedSinceSubmit.get(reply) ?? Date.now());
+    const pool = [...addedSinceSubmit.keys()];
+    const reply = chooseReplyElement(pool);
+
+    if (reply) {
+      recordAnswer(reply, addedSinceSubmit.get(reply) ?? Date.now());
+      return;
+    }
+
+    // **Silence here was wrong, and it stranded a recording.** The old comment argued that
+    // saying nothing was the honest option because the wizard already lists what is
+    // outstanding — but the wizard lists "reply" as outstanding whether we looked and found
+    // nothing or never looked at all. A user who has sent a question and watched it answered
+    // is then staring at a panel still asking for the thing they just did.
+    //
+    // Measured: a second question was sent, the page answered, no candidate passed the
+    // filters, and the panel sat on "Watching for your second question…" while the user sent
+    // it three more times.
+    //
+    // So: say we looked. Counts only — how many elements were added, how many were visible,
+    // how many held enough text — which is what names the filter that ate it.
+    session.emit({
+      kind: 'reply_pending',
+      repliesSoFar: session.answers.length,
+      noAnswerFound: true,
+      shape: describeCandidates(pool),
+    });
   };
 
   const observer = new MutationObserver((records) => {
@@ -432,6 +453,31 @@ function watchForReply() {
  * 3. **Otherwise the outermost added element** with enough text to be an answer, so a
  *    multi-paragraph reply is not truncated to its first `<p>`.
  */
+/**
+ * Why nothing qualified as an answer — counts only, never text.
+ *
+ * Each number is one of `chooseReplyElement`'s filters, in the order it applies them, so the
+ * first one that collapses to zero is the one that ate the answer. `longest` is the decisive
+ * figure when `enoughText` is zero: a page that produced 900 elements whose biggest holds 12
+ * characters was still rendering, while one holding 38 means `MIN_ANSWER_TEXT` is simply too
+ * high for this vendor's shorter replies.
+ */
+function describeCandidates(added) {
+  const visible = added.filter((el) => isVisible(el));
+  const notComposer = visible.filter((el) => !(session.input && el.contains(session.input)));
+  const lengths = notComposer.map((el) => (el.innerText ?? '').length);
+  const enoughText = lengths.filter((n) => n >= MIN_ANSWER_TEXT).length;
+
+  return [
+    `added=${added.length}`,
+    `visible=${visible.length}`,
+    `notComposer=${notComposer.length}`,
+    `enoughText=${enoughText}`,
+    `longest=${lengths.length ? Math.max(...lengths) : 0}`,
+    `threshold=${MIN_ANSWER_TEXT}`,
+  ].join(' ');
+}
+
 function chooseReplyElement(added) {
   const candidates = added.filter((el) => {
     if (!isVisible(el)) return false;
@@ -518,7 +564,7 @@ function recordAnswer(element, firstSeenAt) {
       noCommonSelector: true,
       // Shape, not content — see `describePair`. Without it this failure is a dead end, which
       // is the same gap that cost two rounds on the reply selector already.
-      pairShape: describePair(first.element, second.element),
+      shape: describePair(first.element, second.element),
     });
     return;
   }
