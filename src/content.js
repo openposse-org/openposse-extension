@@ -21,7 +21,9 @@ import {
   waitForEnabled,
   waitForNewMatch,
 } from './dom.js';
-import { arm as armRecorder, disarm as disarmRecorder, isArmed } from './recorder.js';
+import {
+  arm as armRecorder, disarm as disarmRecorder, isArmed, MIN_ANSWER_TEXT,
+} from './recorder.js';
 
 /** Wire error codes this script can originate. Mirrors `docs/protocol.md`. */
 const ERROR = {
@@ -174,12 +176,33 @@ async function askAssistant({ recipe, prompt }, emit) {
   const withoutOurQuestion = (all) => {
     const fresh = all.slice(repliesBefore);
     const needle = prompt.slice(0, 48);
+
+    // Not the row echoing our own question.
     const notOurs = fresh.filter(
       (el) => !needle || !(el.innerText ?? '').includes(needle)
     );
     // Falling back to `fresh` matters: a vendor that does not echo the question at all would
     // otherwise filter away nothing and, on a page that does, filter away everything.
-    const pool = notOurs.length > 0 ? notOurs : fresh;
+    let pool = notOurs.length > 0 ? notOurs : fresh;
+
+    // ...and not the furniture around it.
+    //
+    // **The last row on Notion is a timestamp.** Excluding the question left the answer *and*
+    // a seven-character "6:44 PM", and taking the last of those read the clock aloud. The
+    // trailing seven-character row from the recorded shape was that, all along.
+    //
+    // This was considered and dropped once, on the grounds that it cannot exclude the
+    // 45-character status row — which is true, and was the wrong conclusion. The status row
+    // and the timestamp are different problems: one is transient and is caught by re-picking
+    // after the page settles, the other is permanent and is caught by its size. Two rows, two
+    // rules; keeping only one of them left the other in place.
+    const substantial = pool.filter(
+      (el) => (el.innerText ?? '').length >= MIN_ANSWER_TEXT
+    );
+    // Only when something qualifies. An assistant that genuinely answers "Yes." is rare but
+    // real, and filtering it to nothing would be worse than reading it.
+    if (substantial.length > 0) pool = substantial;
+
     return pool[pool.length - 1] ?? null;
   };
 

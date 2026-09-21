@@ -24,7 +24,7 @@ import { deepQuerySelectorAll, isVisible } from './dom.js';
 import { selectorFor, selectorForBoth, describePair, roleAttributes } from './selector.js';
 
 /** Text long enough to be an answer rather than a label or a spinner. */
-const MIN_ANSWER_TEXT = 40;
+export const MIN_ANSWER_TEXT = 40;
 
 /** How long after a submit we keep waiting for the answer before giving up. */
 const REPLY_WINDOW_MS = 120_000;
