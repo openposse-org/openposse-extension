@@ -24,6 +24,8 @@ export default [
         window: 'readonly',
         document: 'readonly',
         location: 'readonly',
+        navigator: 'readonly',
+        crypto: 'readonly',
         InputEvent: 'readonly',
         globalThis: 'readonly',
         chrome: 'readonly',

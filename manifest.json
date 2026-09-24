@@ -1,39 +1,33 @@
 {
   "manifest_version": 3,
   "name": "OpenPosse",
-  "version": "0.1.0",
-  "description": "Lets OpenPosse talk to AI assistants living in web apps.",
+  "version": "0.2.0",
+  "description": "Talk to the AI assistants you already use. It listens, works out who you meant, and asks them.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAntJt/0RYFRcbhoF0gWbeapbOpfU/1Rdx/VBSEM3fJ53Yc5LhSZYbHuQevPzqUhhnBSINuOxxRH5f50r87C17O5VXzzf1bfoKSHHLU4u17vq9w02HAaG4OyJy+AepulSXpFXBr6IdyuE0LAjebDBtcpF9tqC0SM34Q2LmaUX5RcgdVxx1FyloxH3YMKgYvxxoIlXB/ygD2o+bTXdemJ4TDcKiaNHmw+S/h7VsnL/p516zbEda2QiM8/gTlXVSYZRvZYBW9c0MhDYmF8aI1cQllfKOEwZH9lqkaC27owwrwJL37FJCqpuxIzMJWAe0d6Sf84tf+W8rjXmohETUGWc7LwIDAQAB",
   "background": {
     "service_worker": "dist/service-worker.js",
     "type": "module"
   },
   "permissions": [
-    "nativeMessaging",
+    "offscreen",
     "storage",
     "tabs",
     "alarms",
     "scripting"
   ],
-  "host_permissions": [
-    "https://*.leanix.net/*"
-  ],
   "optional_host_permissions": [
     "https://*/*"
   ],
   "action": {
-    "default_title": "OpenPosse — grant access to this site"
+    "default_title": "OpenPosse",
+    "default_popup": "popup.html"
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://*.leanix.net/*"
-      ],
-      "js": [
-        "dist/content.js"
-      ],
-      "run_at": "document_idle",
-      "all_frames": true
+  "options_page": "setup.html",
+  "commands": {
+    "summon": {
+      "suggested_key": { "default": "Ctrl+Shift+5" },
+      "description": "Talk to an assistant",
+      "global": true
     }
-  ]
+  }
 }
