@@ -32,6 +32,16 @@
 
 * { box-sizing: border-box; }
 
+/* `hidden` is only a UA-stylesheet rule (`[hidden] { display: none }`), so **any** author rule
+ * setting `display` on the same element silently outranks it — the element keeps its attribute,
+ * `el.hidden` keeps reading true, and it is on screen the whole time.
+ *
+ * That is not hypothetical: `.mic-fix { display: block }` in popup.html left an empty red card
+ * above the roster on a perfectly working microphone, and it read as a second mic bug rather
+ * than a CSS one. Stated once, here, because every surface that toggles `hidden` shares this
+ * file and the failure gives no clue where to look. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--stage);
