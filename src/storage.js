@@ -14,7 +14,32 @@
 // instead of an empty list.
 
 const AGENTS_KEY = 'agents';
+const MIC_KEY = 'micGranted';
 const recipeKey = (id) => `recipe:${id}`;
+
+// ── The microphone, remembered rather than predicted ───────────────────────────────────────
+//
+// **`navigator.permissions.query({name:'microphone'})` is not a source of truth here.**
+// `prompt` is its default *and* its fallback, so an unsupported query, a wrapper that
+// swallowed an error, and a genuine "never asked" all look identical — and from a popup it
+// reports `prompt` even when the grant is live. The spec itself is ambiguous enough that it
+// can say `prompt` while `getUserMedia` is actively running.
+//
+// So the setup page, which really calls `getUserMedia` and therefore *knows*, records what
+// happened. Everywhere else reads the record. A fact beats an inference, and this is the
+// difference between the popup reporting a broken microphone and a working one.
+//
+// `denied` remains worth reading directly: it is the one state the API is unambiguous about,
+// and the one nothing in our UI can fix.
+
+export async function setMicGranted(granted) {
+  await chrome.storage.local.set({ [MIC_KEY]: Boolean(granted) });
+}
+
+export async function micGranted() {
+  const stored = await chrome.storage.local.get(MIC_KEY);
+  return stored[MIC_KEY] === true;
+}
 
 /** A v4-ish id. Only has to be unique within one browser profile. */
 export function newID() {

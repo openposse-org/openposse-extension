@@ -5,7 +5,7 @@
 // `permissions.request()` now comes from a button in here. That is a better place for it
 // anyway: clicking the toolbar icon and having something invisible happen was never legible.
 
-import { loadRoster, findAgent } from './storage.js';
+import { loadRoster, findAgent, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
 
 const el = (id) => document.getElementById(id);
@@ -73,30 +73,34 @@ async function render() {
 /**
  * Says which microphone problem this is, because they need different actions.
  *
- * `prompt` means it was never asked for, and the fix is one click on the setup page.
- * `denied` means Chrome is refusing, and no amount of clicking here will change that — only
- * the site settings will. Telling someone to "check input" in either case, which is what the
- * design's dead-mic badge says, sends them to look for a fault in hardware that is fine.
+ * **Reads what setup recorded, not what `permissions.query` predicts.** The first version
+ * asked the API and showed "not granted" on a microphone that had been granted minutes
+ * earlier and worked — because `prompt` is that API's default *and* its fallback, and it
+ * answers `prompt` from a popup even when the grant is live. See `storage.js`.
  *
- * That badge is still right for its own case — a microphone that is connected and producing
- * silence — and belongs in the panel's not-capturing state at E4, not here.
+ * `denied` is still read directly: it is the one state the API is unambiguous about, and the
+ * one nothing here can fix.
+ *
+ * Deliberately not the design's `NOT HEARING ANYTHING — CHECK INPUT`. That badge is for a
+ * microphone that is connected and silent, and belongs in the panel's not-capturing state at
+ * E4 — telling someone to check their input device when they simply have not finished setup
+ * sends them looking for a fault that is not there.
  */
 async function checkMic() {
   const warning = el('mic-warning');
-  let state;
-  try {
-    state = (await navigator.permissions.query({ name: 'microphone' })).state;
-  } catch {
-    // Cannot tell. Say nothing rather than cry wolf — an older Chrome without the query is
-    // not a broken microphone. (This is what the previous version claimed to do and did not:
-    // it left `state` at its default and showed the warning anyway.)
+  if (await micGranted()) {
     warning.hidden = true;
     return;
   }
 
-  warning.hidden = state === 'granted';
-  warning.textContent = state === 'denied'
-    ? 'Microphone blocked by Chrome — allow it in site settings, then reopen this.'
+  let denied = false;
+  try {
+    denied = (await navigator.permissions.query({ name: 'microphone' })).state === 'denied';
+  } catch { /* cannot tell; the setup message below is the safe thing to say either way */ }
+
+  warning.hidden = false;
+  warning.textContent = denied
+    ? 'Microphone blocked by Chrome — allow it in this extension’s site settings.'
     : "Microphone isn't set up yet — click to finish setup.";
 }
 

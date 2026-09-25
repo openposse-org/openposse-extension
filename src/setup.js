@@ -5,7 +5,7 @@
 // with `NotAllowedError: Permission dismissed` on macOS. This page exists for that reason, not
 // for tidiness.
 
-import { loadRoster, importFromMacApp } from './storage.js';
+import { loadRoster, importFromMacApp, setMicGranted, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
@@ -17,18 +17,24 @@ const markDone = (section, done) => el(section).classList.toggle('done', done);
 
 // ── 1. Microphone ──────────────────────────────────────────────────────────────────────────
 
-async function micState() {
+/** The one state `permissions.query` is unambiguous about, and the one we cannot fix. */
+async function isBlocked() {
   try {
-    return (await navigator.permissions.query({ name: 'microphone' })).state;
+    return (await navigator.permissions.query({ name: 'microphone' })).state === 'denied';
   } catch {
-    return 'prompt';      // Older Chrome without the query; the button still works.
+    return false;
   }
 }
 
 async function refreshMic() {
-  const state = await micState();
-  const granted = state === 'granted';
-  setStatus('mic-status', granted ? 'granted' : `not granted (${state})`);
+  const granted = await micGranted();
+  if (granted) {
+    setStatus('mic-status', 'granted');
+  } else {
+    setStatus('mic-status', await isBlocked()
+      ? 'blocked by Chrome — allow it in this extension’s site settings'
+      : 'not granted');
+  }
   markDone('step-mic', granted);
   el('grant-mic').disabled = granted;
   return granted;
@@ -41,8 +47,13 @@ el('grant-mic').addEventListener('click', async () => {
     // Released at once. The *grant* is what persists; holding the device would light the
     // recording indicator for no reason and worry people.
     for (const track of stream.getTracks()) track.stop();
+
+    // Recorded here because this is the only place that knows. Everywhere else has to infer
+    // it from an API that answers `prompt` in three different situations — see `storage.js`.
+    await setMicGranted(true);
     await refreshMic();
   } catch (error) {
+    await setMicGranted(false);
     setStatus('mic-status', `${error.name} — ${error.message}`);
   }
 });
