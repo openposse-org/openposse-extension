@@ -70,12 +70,34 @@ async function render() {
 
 // ── The microphone warning ─────────────────────────────────────────────────────────────────
 
+/**
+ * Says which microphone problem this is, because they need different actions.
+ *
+ * `prompt` means it was never asked for, and the fix is one click on the setup page.
+ * `denied` means Chrome is refusing, and no amount of clicking here will change that — only
+ * the site settings will. Telling someone to "check input" in either case, which is what the
+ * design's dead-mic badge says, sends them to look for a fault in hardware that is fine.
+ *
+ * That badge is still right for its own case — a microphone that is connected and producing
+ * silence — and belongs in the panel's not-capturing state at E4, not here.
+ */
 async function checkMic() {
-  let state = 'prompt';
+  const warning = el('mic-warning');
+  let state;
   try {
     state = (await navigator.permissions.query({ name: 'microphone' })).state;
-  } catch { /* older Chrome; leave the warning off rather than crying wolf */ }
-  el('mic-warning').hidden = state === 'granted';
+  } catch {
+    // Cannot tell. Say nothing rather than cry wolf — an older Chrome without the query is
+    // not a broken microphone. (This is what the previous version claimed to do and did not:
+    // it left `state` at its default and showed the warning anyway.)
+    warning.hidden = true;
+    return;
+  }
+
+  warning.hidden = state === 'granted';
+  warning.textContent = state === 'denied'
+    ? 'Microphone blocked by Chrome — allow it in site settings, then reopen this.'
+    : "Microphone isn't set up yet — click to finish setup.";
 }
 
 // ── Asking without speaking ────────────────────────────────────────────────────────────────
@@ -117,6 +139,12 @@ el('record').addEventListener('click', async () => {
 el('settings').addEventListener('click', (event) => {
   event.preventDefault();
   chrome.runtime.openOptionsPage();
+});
+
+// The warning is the only route to the fix, so it has to be the button that gets you there.
+el('mic-warning').addEventListener('click', () => {
+  chrome.runtime.openOptionsPage();
+  window.close();
 });
 
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
