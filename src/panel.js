@@ -133,6 +133,19 @@ export function panelLevel(value) {
     .catch(() => { /* the tab went; the next turn re-injects */ });
 }
 
+/**
+ * Whether an agent is currently talking.
+ *
+ * Its own message for the same reason the level is: it must not re-render, and it must not be
+ * merged into the state the dismiss timer reads from. What it buys is a panel that does not
+ * fade out mid-sentence.
+ */
+export function panelSpeaking(speaking) {
+  if (panelTabId === null) return;
+  chrome.tabs.sendMessage(panelTabId, { kind: 'openposse.orb.speaking', speaking })
+    .catch(() => {});
+}
+
 /** Fades the panel out. The content script stays — re-showing it is then free. */
 export async function hidePanel() {
   await panel({ visible: false });

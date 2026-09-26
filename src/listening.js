@@ -11,7 +11,7 @@
 
 import { loadRoster, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
-import { panel, panelLevel } from './panel.js';
+import { panel, panelLevel, panelSpeaking } from './panel.js';
 
 /**
  * How much of an interim result to show as still-being-revised.
@@ -378,10 +378,14 @@ export function handleOffscreenMessage(message) {
       // A word boundary. Pulsed rather than metered: `speechSynthesis` exposes no audio node,
       // so this is speech *rate*, and the orb eases between pulses into something that reads
       // as a voice. Honest, and honestly coarser than the microphone's real amplitude.
+      if (message.started) panelSpeaking(true);
       panelLevel(message.pulse ? 0.85 : 0.4);
       return true;
 
     case 'openposse.spoke':
+      // Releases the panel's dismiss timer, which was held open so it could not fade out
+      // mid-sentence, and drops the orb back to rest.
+      panelSpeaking(false);
       panelLevel(0);
       return true;
 

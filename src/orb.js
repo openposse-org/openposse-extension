@@ -96,7 +96,15 @@ if (!globalThis.__openposseOrb) {
       ? (hasLevel
         ? Math.min(1.05, 0.22 + 0.04 * Math.sin(t / 28) + 0.85 * shown)
         : 0.80 + 0.16 * Math.sin(t / 13) + 0.09 * Math.sin(t / 4.1))
-      : mode === 'agent' ? 0.58 + 0.16 * Math.sin(t / 9.5) + 0.10 * Math.sin(t / 3.3)
+      // An answering agent moves with its own speech for the same reason a listening orb moves
+      // with yours — otherwise it is an animation that happens to be playing while a voice
+      // happens to be talking, and the two drift apart within a sentence. The floor is higher
+      // than the microphone's because there is no silence to represent: an agent that is
+      // speaking is always saying something.
+      : mode === 'agent'
+        ? (hasLevel
+          ? Math.min(1.05, 0.42 + 0.06 * Math.sin(t / 9.5) + 0.60 * shown)
+          : 0.58 + 0.16 * Math.sin(t / 9.5) + 0.10 * Math.sin(t / 3.3))
         : mode === 'think' ? 0.26 + 0.07 * Math.sin(t / 20)
           : mode === 'dead' ? 0
             : 0.13 + 0.04 * Math.sin(t / 28);
@@ -485,9 +493,15 @@ if (!globalThis.__openposseOrb) {
   // by the worker's lifecycle.
   const DISMISS_MS = 6500;
   let dismiss = null;
+  let speaking = false;
 
   function armDismiss(phase) {
     clearTimeout(dismiss);
+    // **Never while the agent is still talking.** The answer is read aloud after the panel
+    // reaches `answering`, and a shortened sentence can easily outlast 6.5 seconds — so the
+    // panel would fade out mid-word, taking the text with it. The timer restarts from the end
+    // of speech instead, which is when someone actually has the answer.
+    if (speaking) return;
     if (phase === 'answering' || phase === 'needs-attention' || phase === 'not-capturing') {
       dismiss = setTimeout(() => show(false), DISMISS_MS);
     }
@@ -500,6 +514,13 @@ if (!globalThis.__openposseOrb) {
     if (message?.kind === 'openposse.orb.level') {
       target = message.level;
       hasLevel = true;
+      return false;
+    }
+    if (message?.kind === 'openposse.orb.speaking') {
+      speaking = message.speaking === true;
+      // Re-armed from here, so the countdown starts when the agent stops rather than when the
+      // answer arrived.
+      if (!speaking) armDismiss(state.phase);
       return false;
     }
     if (message?.kind !== 'openposse.orb') return false;
