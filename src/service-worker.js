@@ -678,7 +678,10 @@ globalThis.openposse = {
   listen: () => startListening(),
   hush: () => stopListening(),
   listening: () => isListening(),
-  /** `openposse.bias(false)`, say "Ivan" twice, compare. See `setBias`. */
+  /**
+   * `openposse.bias(3)` to sweep the weight, `openposse.bias(false)` to hear the recogniser
+   * unbiased. The scale is logarithmic — see `NAME_BOOST` — so the steps that matter are small.
+   */
   bias: (on = true) => setBias(on),
   ask: (name, prompt) => ask(name, prompt, { onPartial: (t) => console.debug('…', t.length) }),
   // What is granted, and what is actually registered. The two disagreeing is the silent

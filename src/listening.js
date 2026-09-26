@@ -13,8 +13,26 @@ import { loadRoster, micGranted } from './storage.js';
 
 const OFFSCREEN_PATH = 'offscreen.html';
 
-/** Boost for roster names, on the spec's 0.0–10.0 scale. E0 used 8 and three names survived. */
-const NAME_BOOST = 8;
+/**
+ * How hard to lean on roster names, on the spec's 0.0–10.0 scale.
+ *
+ * **That scale is logarithmic**, which is the whole story. `boost` is roughly the natural log
+ * of how many times more likely the page thinks the phrase is than the model does — so the 8
+ * this started with, taken from E0 and from the plan's "~8–10", asserted that "Ivan" is about
+ * **3,000×** more likely than English says. The recogniser believed it: interim hypotheses came
+ * back as "Ivan Ivan Ivan…" thirty-three times over, for an utterance that contained the word
+ * once.
+ *
+ * E0 did not catch it because E0 only read finals, and the final rescoring pass repairs it —
+ * "Ivan tell me a joke" arrived perfectly while the interim text was nonsense. Interim results
+ * are what the orb will show at E4, so the artefact was always going to surface; it surfaced
+ * the first time anything displayed them.
+ *
+ * 3.0 is ~20×, and is what the spec's own explainer uses for a proper noun. MDN warns that 9
+ * and 10 make the engine hear the phrase where it is not, which is exactly what was observed.
+ * Biasing is meant to win close calls — "Ivan" over "even" — not to overrule the audio.
+ */
+const NAME_BOOST = 3;
 
 /** Session keys. Flags only — never text. */
 const LISTENING = 'listening';
@@ -90,10 +108,13 @@ async function tell(kind, body = {}) {
  * from this one.
  */
 async function phrasesForRoster() {
-  const biasOn = (await chrome.storage.session.get(BIAS))[BIAS] !== false;
-  if (!biasOn) return [];
+  const stored = (await chrome.storage.session.get(BIAS))[BIAS];
+  // Anything that is not a number is the default — including the boolean this key used to
+  // hold, which can still be sitting in session storage from before the sweep existed.
+  const boost = typeof stored === 'number' ? stored : NAME_BOOST;
+  if (boost <= 0) return [];
   const { agents } = await loadRoster();
-  return agents.map((agent) => ({ phrase: agent.name, boost: NAME_BOOST }));
+  return agents.map((agent) => ({ phrase: agent.name, boost }));
 }
 
 export async function startListening() {
@@ -113,7 +134,13 @@ export async function startListening() {
   failure = null;
   await chrome.storage.session.set({ [LISTENING]: true });
   await setBadge(true);
-  await tell('openposse.listen.start', { options: { phrases: await phrasesForRoster() } });
+
+  const phrases = await phrasesForRoster();
+  // How many names and at what weight — a count and a number, not the names. Paired with the
+  // tail measurement below it, this is what makes a boost sweep readable: each turn says what
+  // it was listening with before it says how it ended.
+  console.debug('[openposse] listening', phrases.length, 'phrases at boost', phrases[0]?.boost ?? 0);
+  await tell('openposse.listen.start', { options: { phrases } });
   await broadcastState();
   return null;
 }
@@ -132,16 +159,20 @@ export async function isListening() {
 }
 
 /**
- * Turns roster biasing off, to see what it was doing.
+ * Sweeps the boost, or turns biasing off entirely.
  *
  * A development handle, not a setting. The plan asks E2 to show `phrases` *demonstrably*
- * helping on "Ivan", and the only way to demonstrate that is to say the same word twice with
- * the bias on and off and compare what comes back. Session-scoped, so it cannot be left off by
- * accident — a browser restart puts it back.
+ * helping on "Ivan", and the only way to demonstrate that is to say the same word under
+ * different weights and compare what comes back — which is also how 8 was caught being far too
+ * high. Session-scoped, so it cannot be left somewhere strange by accident; a browser restart
+ * puts it back to `NAME_BOOST`.
+ *
+ * `false` or `0` → no phrases at all. A number → that boost. Anything else → the default.
  */
 export async function setBias(on) {
-  await chrome.storage.session.set({ [BIAS]: on !== false });
-  return { bias: on !== false };
+  const boost = on === false ? 0 : (typeof on === 'number' ? on : NAME_BOOST);
+  await chrome.storage.session.set({ [BIAS]: boost });
+  return { boost, meaning: boost > 0 ? `~${Math.round(Math.exp(boost))}× more likely` : 'off' };
 }
 
 /** Back to not-listening, however we got here. */
