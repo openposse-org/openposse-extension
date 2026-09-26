@@ -32,8 +32,6 @@
       /* Voice sits above the text box because voice is the product and typing is the
          fallback — the order on screen should say which is which. */
       .listen { display: flex; gap: 9px; align-items: center; }
-      .listen button { flex: 0 0 auto; }
-      .listen .hint { flex: 1; }
       .ask { display: flex; gap: 7px; margin-top: 10px; }
       .ask input { flex: 1; }
       footer {
@@ -66,12 +64,12 @@
       No assistants yet. Open a page with an AI assistant on it, then record it.
     </div>
 
-    <!-- Starts a turn; the orb shows it. The readout that used to live here was an E2
-         stopgap from before there was an orb, and keeping it would mean two answer surfaces
-         for one product — one of them a 320px panel that closes when you look away. -->
+    <!-- Starts a turn. **Nothing here narrates one** — the orb owns the whole of the current
+         turn, and a second surface describing it can only ever be a slower, smaller copy that
+         disappears when you look away. The button still says whether it is a Stop, because
+         that is the control's own state rather than a report about the turn. -->
     <div class="listen">
       <button id="listen" class="secondary">Listen</button>
-      <div class="hint" id="listen-hint">The panel appears over the page</div>
     </div>
 
     <!-- The manual path. Not only a fallback for a dead microphone: it is the whole product

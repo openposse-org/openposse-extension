@@ -123,18 +123,12 @@ async function checkMic() {
 // So what is left here is the *control* — start a turn, stop a turn — and the one piece of
 // state a button has to carry, which is whether it is currently a Stop.
 
-function showState({ listening, failure }) {
+function showState({ listening }) {
   const button = el('listen');
   button.textContent = listening ? 'Stop' : 'Listen';
   // Losing `.secondary` fills the button with the channel blue — the same "this is live now"
   // signal the badge shows on the toolbar, so the two surfaces agree.
   button.classList.toggle('secondary', !listening);
-
-  // A failure that happened before the panel could exist has nowhere else to appear: an
-  // ungranted microphone means no turn, so no orb. The mic warning above is the fix for the
-  // common case; this catches the rest.
-  el('listen-hint').textContent = failure?.message
-    ?? (listening ? 'Listening — speak now' : 'The panel appears over the page');
 }
 
 el('listen').addEventListener('click', () => {
