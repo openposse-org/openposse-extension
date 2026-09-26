@@ -204,7 +204,7 @@ chrome.commands.getAll().then((commands) => {
   if (summon?.shortcut) el('shortcut').textContent = summon.shortcut;
 });
 
-// The turn may already be running — ⇧⌘5 works with nothing on screen, so a popup opened
+// The turn may already be running — ⇧⌘9 works with nothing on screen, so a popup opened
 // afterwards has to catch up rather than assume it is starting from idle.
 const catchUp = chrome.runtime
   .sendMessage({ kind: 'openposse.listen.query' })

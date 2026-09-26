@@ -611,7 +611,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   }
   if (request?.kind === 'openposse.listen.query') {
     // What a popup needs the moment it opens: are we listening, what has been heard so far, and
-    // what went wrong last time. It may have opened halfway through a turn started by ⇧⌘5.
+    // what went wrong last time. It may have opened halfway through a turn started by ⇧⌘9.
     isListening().then((listening) => respond({ listening, ...currentTurn() }));
     return true;
   }
@@ -631,16 +631,26 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
 });
 
 /**
- * ⇧⌘5 — the one global gesture.
+ * ⇧⌘9 — the one global gesture.
  *
  * A toggle, because it is the only control available when nothing of ours is on screen: the
  * same press has to be both "listen" and "never mind". That was M1's finding about ⌥V and it
  * transfers unchanged, along with its consequence — cancelling discards the half-sentence
  * rather than sending it (see `offscreen.js`).
  *
- * **`Ctrl+Shift+5`, not ⌥V.** Chrome allows `global: true` only on Ctrl+Shift+[0-9], so the
- * key is chosen by the platform rather than by us. On macOS Chrome maps Ctrl to ⌘, which is
- * why the popup shows ⇧⌘5.
+ * **The key is chosen by the platform, not by us, and the platform leaves very little.** Chrome
+ * permits `global: true` only on `Ctrl+Shift+[0-9]`, and on macOS converts `Ctrl` to Command —
+ * so the entire space is ⌘⇧0 through ⌘⇧9. macOS Screenshot already owns **3, 4, 5 and 6** of
+ * those ten, which is 40% of the range gone before we start.
+ *
+ * The plan specified 5, which is the screenshot toolbar — pressing it opened screen recording
+ * and never reached Chrome. 9 is clear, and it is deliberately at the far end: a slip from 2 to
+ * 3, or from 7 to 6, takes a screenshot, whereas a slip from 9 hits 0 and does nothing.
+ *
+ * `MacCtrl+Shift+[0-9]` would give us the real Control key and is **not** an escape: the
+ * `global` validator matches on `Ctrl+Shift+<digit>` literally. The user's own escape is
+ * `chrome://extensions/shortcuts`, where the restriction does not apply at all — so anyone who
+ * wants ⌥V back can have it, we simply cannot ship it as the default.
  */
 chrome.commands.onCommand.addListener((command) => {
   if (command === 'summon') toggleListening();

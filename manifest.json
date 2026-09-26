@@ -25,7 +25,7 @@
   "options_page": "setup.html",
   "commands": {
     "summon": {
-      "suggested_key": { "default": "Ctrl+Shift+5" },
+      "suggested_key": { "default": "Ctrl+Shift+9" },
       "description": "Talk to an assistant",
       "global": true
     }
