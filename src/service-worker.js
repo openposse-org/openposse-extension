@@ -20,8 +20,23 @@ import { route, navigationTarget, productName, FLOOR_MS } from './routing.js';
 import { panel, hidePanel } from './panel.js';
 import { channelFor } from './channels.js';
 
-/** The last thing asked, so clicking a different avatar can put it to them instead. */
-let lastPrompt = '';
+/**
+ * The last thing asked, so clicking a different avatar can put it to them instead.
+ *
+ * **Session storage, not a module variable.** MV3 terminates an idle worker after ~30 seconds,
+ * and the panel can easily still be on screen after that — so a variable here would be empty
+ * exactly when someone reaches for the avatar, and the click would do nothing with no way to
+ * tell that from a dead button. It expires with the floor, because re-asking a question the
+ * conversation has moved on from is not a repair.
+ */
+async function rememberPrompt(prompt) {
+  await chrome.storage.session.set({ lastPrompt: prompt, lastPromptAt: Date.now() });
+}
+
+async function recallPrompt() {
+  const { lastPrompt, lastPromptAt = 0 } = await chrome.storage.session.get(['lastPrompt', 'lastPromptAt']);
+  return lastPrompt && Date.now() - lastPromptAt <= FLOOR_MS ? lastPrompt : '';
+}
 
 /**
  * Replies in flight, by correlation id.
@@ -216,7 +231,7 @@ async function handleUtterance(text) {
  * and the popup's was an E2 stopgap from when there was no orb to put anything on.
  */
 async function putQuestion(agent, prompt, matched) {
-  lastPrompt = prompt;
+  await rememberPrompt(prompt);
   markThinking(agent.name);
   panel({
     phase: 'thinking', agentName: agent.name, channel: channelFor(agent.name),
@@ -797,10 +812,22 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   if (request?.kind === 'openposse.orb.reroute') {
     // Clicking an avatar puts the same question to someone else, straight to thinking — the
     // design's own behaviour, and the fastest repair when routing picked the wrong agent.
-    if (lastPrompt) {
-      handleUtterance(`${request.agentName} ${lastPrompt}`).catch(() => {});
-    }
-    respond({ ok: Boolean(lastPrompt) });
+    //
+    // Straight to `putQuestion` rather than back through routing: the agent was *clicked*, so
+    // re-deriving them from a sentence would be throwing away the one unambiguous signal in
+    // the whole loop.
+    (async () => {
+      const prompt = await recallPrompt();
+      const { agents } = await loadRoster();
+      const agent = findAgent(agents, request.agentName);
+      if (!prompt || !agent) {
+        panel({ phase: 'needs-attention', message: 'Nothing recent to ask again.' });
+        respond({ ok: false });
+        return;
+      }
+      respond({ ok: true });
+      await putQuestion(agent, prompt, 'reroute');
+    })();
     return true;
   }
 
