@@ -139,7 +139,7 @@ export async function startListening() {
   // How many names and at what weight — a count and a number, not the names. Paired with the
   // tail measurement below it, this is what makes a boost sweep readable: each turn says what
   // it was listening with before it says how it ended.
-  console.debug('[openposse] listening', phrases.length, 'phrases at boost', phrases[0]?.boost ?? 0);
+  console.info('[openposse] listening —', phrases.length, 'phrases at boost', phrases[0]?.boost ?? 0);
   await tell('openposse.listen.start', { options: { phrases } });
   await broadcastState();
   return null;
@@ -231,15 +231,16 @@ export function handleOffscreenMessage(message) {
       return true;
 
     case 'openposse.listen.ended':
-      // The one number E2 exists to produce, so it has to be readable somewhere.
+      // The numbers E2 exists to produce, so they have to be readable somewhere.
       //
-      // A duration is not a transcript, page content or a vendor response — it is diagnostics
-      // of exactly the kind the rule carves out, and it says whether Chrome's recogniser closes
-      // a turn by itself or whether `SilenceTimeoutEndpointer` has to be ported. Logged once
-      // per turn at debug level, and it comes out of this file when the question is settled.
-      if (message.tailMs != null) {
-        console.debug('[openposse] turn ended', message.tailMs, 'ms after the last result');
-      }
+      // Durations are not transcripts, page content or vendor responses — they are diagnostics
+      // of exactly the kind the rule carves out. `info` rather than `debug` because `debug` is
+      // Verbose level and Chrome DevTools hides that by default: a measurement nobody can find
+      // is not a measurement. Both lines come out of this file once the question is settled.
+      console.info(
+        '[openposse] turn ended — commit', message.commitMs ?? '—',
+        'ms after the last interim,', message.tailMs ?? '—', 'ms to end',
+      );
       settle();
       return true;
 

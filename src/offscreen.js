@@ -24,8 +24,23 @@ const Phrase = globalThis.SpeechRecognitionPhrase;
 /** The live recogniser, or null when not listening. One at a time, always. */
 let recognition = null;
 
-/** When the last result arrived, so `end` can report how long the tail was. See below. */
+// ── The endpointing measurement ───────────────────────────────────────────────────────────
+//
+// Two intervals, because the first one asked turned out to answer nothing.
+//
+// `tailMs` — last result to `end` — was measured first and came back **0 ms, twice**. That is
+// not a finding, it is an identity: the final result *is* the recogniser deciding the turn is
+// over, so the two fire in the same task and the gap between them was always going to be zero.
+// It does settle the architectural question — the turn closes itself, so M1's
+// `SilenceTimeoutEndpointer` is not ported — and it is kept for exactly that.
+//
+// `commitMs` — last *interim* result to the final — is the one with information in it. It is
+// the silence the recogniser insists on before committing, which is the wait a user actually
+// feels between finishing their sentence and anything happening.
+
 let lastResultAt = 0;
+let lastInterimAt = 0;
+let commitMs = null;
 
 /** Set while we are deliberately stopping, so the resulting `end` does not read as a surprise. */
 let cancelling = false;
@@ -122,7 +137,11 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
 
   listener.addEventListener('result', (event) => {
     const last = event.results[event.results.length - 1];
-    lastResultAt = performance.now();
+    const now = performance.now();
+    lastResultAt = now;
+    if (last.isFinal) commitMs = lastInterimAt ? Math.round(now - lastInterimAt) : null;
+    else lastInterimAt = now;
+
     // The one place transcript text is allowed to go: straight to whoever is showing it.
     send('openposse.heard', { text: last[0].transcript, isFinal: last.isFinal });
   });
@@ -143,10 +162,8 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
     recognition = null;
     send('openposse.listen.ended', {
       cancelled: cancelling,
-      // Milliseconds between the last result and the recogniser deciding the turn was over —
-      // the measurement the plan asked for. Not content, and the only thing that can tell us
-      // whether endpointing is free here or has to be rebuilt.
       tailMs: lastResultAt ? Math.round(performance.now() - lastResultAt) : null,
+      commitMs,
     });
     cancelling = false;
   });
@@ -160,6 +177,8 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
 
   recognition = listener;
   lastResultAt = 0;
+  lastInterimAt = 0;
+  commitMs = null;
   send('openposse.listen.started', { biased: Boolean(Phrase) && phrases.length > 0 });
 }
 
