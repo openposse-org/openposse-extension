@@ -98,7 +98,7 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
     });
     return;
   }
-  if (recognition) return;                       // already listening; a second ⇧⌘9 stops it
+  if (recognition) return;                    // already listening; a second press stops it
 
   const options = { langs: [lang], processLocally: true };
   try {

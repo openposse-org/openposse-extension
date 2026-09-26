@@ -611,7 +611,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   }
   if (request?.kind === 'openposse.listen.query') {
     // What a popup needs the moment it opens: are we listening, what has been heard so far, and
-    // what went wrong last time. It may have opened halfway through a turn started by ⇧⌘9.
+    // what went wrong last time. It may have opened halfway through a turn the shortcut began.
     isListening().then((listening) => respond({ listening, ...currentTurn() }));
     return true;
   }
@@ -631,26 +631,28 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
 });
 
 /**
- * ⇧⌘9 — the one global gesture.
+ * The summon shortcut — **⌥V where the user has set it, ⌘⇧9 out of the box.**
  *
  * A toggle, because it is the only control available when nothing of ours is on screen: the
- * same press has to be both "listen" and "never mind". That was M1's finding about ⌥V and it
- * transfers unchanged, along with its consequence — cancelling discards the half-sentence
- * rather than sending it (see `offscreen.js`).
+ * same press has to be both "listen" and "never mind". That was M1's finding and it transfers
+ * unchanged, along with its consequence — cancelling discards the half-sentence rather than
+ * sending it (see `offscreen.js`).
  *
- * **The key is chosen by the platform, not by us, and the platform leaves very little.** Chrome
- * permits `global: true` only on `Ctrl+Shift+[0-9]`, and on macOS converts `Ctrl` to Command —
- * so the entire space is ⌘⇧0 through ⌘⇧9. macOS Screenshot already owns **3, 4, 5 and 6** of
- * those ten, which is 40% of the range gone before we start.
+ * **The restriction binds what we may suggest, not what the user may assign**, and the
+ * difference is the whole story. Chrome permits `global: true` in a *manifest* only on
+ * `Ctrl+Shift+[0-9]`, converting `Ctrl` to Command on macOS — so the entire suggestible space
+ * is ⌘⇧0 through ⌘⇧9, of which macOS Screenshot already owns **3, 4, 5 and 6**. (The plan
+ * specified 5, the screenshot toolbar, so the shortcut opened screen recording and never
+ * reached Chrome at all.) 9 is clear and deliberately at the far end: a slip from 2 to 3, or 7
+ * to 6, takes a screenshot; a slip from 9 hits 0 and does nothing.
  *
- * The plan specified 5, which is the screenshot toolbar — pressing it opened screen recording
- * and never reached Chrome. 9 is clear, and it is deliberately at the far end: a slip from 2 to
- * 3, or from 7 to 6, takes a screenshot, whereas a slip from 9 hits 0 and does nothing.
+ * At `chrome://extensions/shortcuts` **none of that applies** — confirmed by doing it, not by
+ * reading. ⌥V can be assigned there and marked Global, which is what M1 always wanted and what
+ * `HotKeyCenter` still registers on the Mac side. So the two halves of this project use the
+ * same gesture after all; we simply cannot ship it as the default.
  *
- * `MacCtrl+Shift+[0-9]` would give us the real Control key and is **not** an escape: the
- * `global` validator matches on `Ctrl+Shift+<digit>` literally. The user's own escape is
- * `chrome://extensions/shortcuts`, where the restriction does not apply at all — so anyone who
- * wants ⌥V back can have it, we simply cannot ship it as the default.
+ * Nothing else in this codebase names a key. Every surface that shows one reads
+ * `chrome.commands.getAll()`, so whatever the user actually bound is what they are told.
  */
 chrome.commands.onCommand.addListener((command) => {
   if (command === 'summon') toggleListening();

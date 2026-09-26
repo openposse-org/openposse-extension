@@ -70,8 +70,25 @@
         </div>
       </section>
 
-      <section class="step" id="step-import">
+      <section class="step" id="step-shortcut">
         <div class="num">3</div>
+        <div style="flex:1">
+          <h2>Choose how you summon it</h2>
+          <p>
+            Chrome only lets an extension <em>suggest</em> Ctrl+Shift and a digit for a shortcut
+            that works outside the browser, so OpenPosse ships with one of those. Anything else
+            — <span class="mono">⌥V</span>, say — you pick here, and you can tick
+            <strong>Global</strong> so it reaches you in any app rather than only in Chrome.
+          </p>
+          <div class="row">
+            <button class="secondary" id="open-shortcuts">Change shortcut…</button>
+            <span class="status mono" id="shortcut-status">checking…</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="step" id="step-import">
+        <div class="num">4</div>
         <div style="flex:1">
           <h2>Bring across assistants you already recorded <span class="kind">— optional</span></h2>
           <p>

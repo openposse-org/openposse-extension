@@ -91,7 +91,29 @@ el('install-model').addEventListener('click', async () => {
   await refreshModel();
 });
 
-// ── 3. Import ──────────────────────────────────────────────────────────────────────────────
+// ── 3. The shortcut ────────────────────────────────────────────────────────────────────────
+//
+// Here because it cannot be done for them and would otherwise be folklore. A manifest may only
+// *suggest* `Ctrl+Shift+[0-9]` for a shortcut that works outside Chrome — but the user's own
+// assignment at `chrome://extensions/shortcuts` carries no such restriction, so ⌥V is available
+// to anyone who knows the page exists. Telling them beats them not knowing.
+//
+// A plain link cannot go there: `chrome://` URLs are not navigable from a page, including one
+// of ours. `chrome.tabs.create` can.
+
+async function refreshShortcut() {
+  const summon = (await chrome.commands.getAll()).find((c) => c.name === 'summon');
+  // Deliberately not claiming it is global. Nothing in the API reports that, and saying "press
+  // it anywhere" about a Chrome-only binding would be a promise the product cannot keep.
+  setStatus('shortcut-status', summon?.shortcut || 'none assigned');
+  markDone('step-shortcut', Boolean(summon?.shortcut));
+}
+
+el('open-shortcuts').addEventListener('click', async () => {
+  await chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+});
+
+// ── 4. Import ──────────────────────────────────────────────────────────────────────────────
 
 el('pick-folder').addEventListener('click', () => el('folder').click());
 
@@ -168,4 +190,10 @@ async function refreshRoster() {
 
 await refreshMic();
 await refreshModel();
+await refreshShortcut();
 await refreshRoster();
+
+// Shortcuts are changed on another tab, so this page is stale the moment they leave it. Chrome
+// has no event for a rebinding — re-reading on focus is the only way the status can be true
+// when they come back, and coming back is exactly what they do.
+window.addEventListener('focus', () => { refreshShortcut(); });
