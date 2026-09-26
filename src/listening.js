@@ -94,8 +94,11 @@ async function ensureOffscreen() {
   try {
     await chrome.offscreen.createDocument({
       url: chrome.runtime.getURL(OFFSCREEN_PATH),
-      reasons: [chrome.offscreen.Reason.USER_MEDIA],
-      justification: 'on-device speech recognition for voice input',
+      // Both, because this document now does both. `AUDIO_PLAYBACK` is what keeps it alive
+      // while an answer is being read out — an offscreen document whose stated reason has
+      // finished is a candidate for closing, and losing it mid-sentence would cut the agent off.
+      reasons: [chrome.offscreen.Reason.USER_MEDIA, chrome.offscreen.Reason.AUDIO_PLAYBACK],
+      justification: 'on-device speech recognition and speaking answers aloud',
     });
   } catch (error) {
     // Two documents cannot coexist, and two calls can race here — a shortcut press while a
@@ -162,6 +165,10 @@ export async function startListening() {
 
   turn = null;
   failure = null;
+  // Starting a turn stops whatever is being read out. Barge-in's cheap half: the microphone is
+  // about to open, and an agent still talking would be heard by it — and speaking over someone
+  // who has just pressed the key to interrupt is the rudest thing this could do.
+  await tell('openposse.hush');
   await chrome.storage.session.set({ [LISTENING]: true });
   await setBadge('listening');
   // Before the panel, not after. The panel's injection can take a moment, and until this runs
@@ -184,6 +191,27 @@ export async function startListening() {
   await tell('openposse.listen.start', { options: { phrases } });
   await broadcastState();
   return null;
+}
+
+/**
+ * Says an answer out loud, in that agent's voice.
+ *
+ * The whole roster's voice hints travel with it, because distinctness is a property of the
+ * *set* — `assignVoices` has to see everyone to guarantee two agents never sound alike, and
+ * the offscreen document is where the voice list lives.
+ */
+export async function say(text, agentID) {
+  const { agents } = await loadRoster();
+  await tell('openposse.speak', {
+    text,
+    agentID,
+    roster: agents.map((a) => ({ id: a.id, voice: a.voice })),
+  });
+}
+
+/** Stops mid-sentence. Starting a new turn while one is being read out is a cancel. */
+export async function hush() {
+  await tell('openposse.hush');
 }
 
 export async function stopListening() {
@@ -344,6 +372,17 @@ export function handleOffscreenMessage(message) {
       // nothing, and a surface showing the last thing heard would otherwise keep showing a
       // previous utterance as though it had just been said.
       if (message.note === 'no-speech') { turn = null; failure = { code: 'no-speech', message: "Didn't hear anything." }; }
+      return true;
+
+    case 'openposse.speaking':
+      // A word boundary. Pulsed rather than metered: `speechSynthesis` exposes no audio node,
+      // so this is speech *rate*, and the orb eases between pulses into something that reads
+      // as a voice. Honest, and honestly coarser than the microphone's real amplitude.
+      panelLevel(message.pulse ? 0.85 : 0.4);
+      return true;
+
+    case 'openposse.spoke':
+      panelLevel(0);
       return true;
 
     case 'openposse.level':
