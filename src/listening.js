@@ -200,6 +200,15 @@ export function handleOffscreenMessage(message) {
       return true;
 
     case 'openposse.listen.ended':
+      // The one number E2 exists to produce, so it has to be readable somewhere.
+      //
+      // A duration is not a transcript, page content or a vendor response — it is diagnostics
+      // of exactly the kind the rule carves out, and it says whether Chrome's recogniser closes
+      // a turn by itself or whether `SilenceTimeoutEndpointer` has to be ported. Logged once
+      // per turn at debug level, and it comes out of this file when the question is settled.
+      if (message.tailMs != null) {
+        console.debug('[openposse] turn ended', message.tailMs, 'ms after the last result');
+      }
       settle();
       return true;
 
