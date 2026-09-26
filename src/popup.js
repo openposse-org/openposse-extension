@@ -7,13 +7,21 @@
 
 import { loadRoster, findAgent, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
+import { FLOOR_MS } from './routing.js';
 
 const el = (id) => document.getElementById(id);
 
-/** Who currently holds the floor, so the popup lights the same agent the panel does. */
+/**
+ * Who currently holds the floor, so the popup lights the agent a follow-up would reach.
+ *
+ * **Expiry is checked here too, against the same constant the worker routes by.** A ring that
+ * outlives the floor is not a cosmetic problem: it says a name-less question would go to Ivan
+ * when it would actually be refused.
+ */
 async function activeAgentName() {
-  const { floorHolder } = await chrome.storage.session.get('floorHolder');
-  return floorHolder ?? null;
+  const { floorHolder, floorAt = 0 } = await chrome.storage.session.get(['floorHolder', 'floorAt']);
+  if (!floorHolder || Date.now() - floorAt > FLOOR_MS) return null;
+  return floorHolder;
 }
 
 // ── Roster ─────────────────────────────────────────────────────────────────────────────────
@@ -144,9 +152,31 @@ el('listen').addEventListener('click', () => {
   chrome.runtime.sendMessage({ kind: 'openposse.listen.toggle' }).catch(() => {});
 });
 
+/**
+ * What happened to the utterance after it was heard.
+ *
+ * The readout doubles as the answer surface until the orb exists. Not a permanent arrangement —
+ * a 320px popup that closes when you look away is the wrong home for a paragraph — but it is
+ * the difference between E3 being demonstrable and being a claim about the console.
+ */
+function showTurn({ phase, agentName, text, message }) {
+  const out = el('heard');
+  if (phase === 'thinking') {
+    out.className = 'heard';
+    out.textContent = `Asking ${agentName}…`;
+  } else if (phase === 'answered') {
+    out.className = 'heard final';
+    out.textContent = text || `${agentName} answered.`;
+  } else {
+    out.className = 'heard bad';
+    out.textContent = message;
+  }
+}
+
 chrome.runtime.onMessage.addListener((message) => {
   if (message?.kind === 'openposse.heard') showHeard(message.text, message.isFinal);
   else if (message?.kind === 'openposse.listen.state') showState(message);
+  else if (message?.kind === 'openposse.turn') showTurn(message);
   return false;
 });
 

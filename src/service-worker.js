@@ -14,8 +14,9 @@
 import { loadRoster, recipeFor, findAgent } from './storage.js';
 import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
-  isListening, currentTurn, setBias,
+  isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone,
 } from './listening.js';
+import { route, FLOOR_MS } from './routing.js';
 
 /**
  * Replies in flight, by correlation id.
@@ -75,6 +76,102 @@ export async function ask(agentName, prompt, { onPartial } = {}) {
   dispatchIntent({ id, agent: agent.name, payload: { intent: 'ask_assistant', recipe, prompt } });
   return answer;
 }
+
+// ── The voice loop's other half (E3) ────────────────────────────────────────────────────
+//
+// E2 ends with a transcript sitting in a readout. This is what turns it into a question
+// somebody actually gets asked — and it is short, because both ends already existed: `route`
+// picks the agent, `ask` has been driving Notion since M3.
+
+/** Session state, so it dies with the browser — a floor held across a restart is meaningless. */
+async function floorHolder(agents) {
+  const { floorHolder: name, floorAt = 0 } = await chrome.storage.session.get(['floorHolder', 'floorAt']);
+  if (!name || Date.now() - floorAt > FLOOR_MS) return null;
+  return findAgent(agents, name);
+}
+
+async function holdFloor(name) {
+  await chrome.storage.session.set({ floorHolder: name, floorAt: Date.now() });
+}
+
+/**
+ * Plain sentences for the ways an utterance can fail to name anybody.
+ *
+ * Separate strings rather than one "sorry, try again", because they send you to different
+ * places: an empty roster wants the recorder, an unrecognised name wants you to say it again,
+ * and a bare name wants nothing at all except for you to finish the sentence.
+ */
+const ROUTING_COPY = {
+  'heard-nothing': "Didn't catch that.",
+  'no-agents': 'No assistants yet — record one first.',
+  'unknown-agent': "Didn't catch who you meant. Start with an assistant's name.",
+};
+
+/**
+ * One spoken turn, end to end.
+ *
+ * **The tab is not switched, and that is a deliberate departure from the plan.** The plan says
+ * "switch to the agent's tab", inherited from the Mac app, where driving a page meant posting
+ * real keystrokes and therefore meant focusing it. The content script drives the DOM directly,
+ * which works in a background tab on another window — measured, not assumed. So switching would
+ * take somebody away from what they were doing to no purpose. The orb at E4 is how the answer
+ * arrives; until then it is in the tab where it belongs.
+ */
+async function handleUtterance(text) {
+  const { agents } = await loadRoster();
+  const decision = route(text, agents, { floorHolder: await floorHolder(agents) });
+
+  if (decision.problem) {
+    markDone(decision.problem);
+    announceTurn({
+      phase: 'problem',
+      // `name-only` is answered by the agent's own name with a question mark — the spoken
+      // equivalent of looking up. It is the one "failure" that is really just a pause.
+      message: decision.problem === 'name-only'
+        ? `${decision.agent.name}?`
+        : ROUTING_COPY[decision.problem] ?? 'Something went wrong.',
+    });
+    return;
+  }
+
+  const { agent, prompt, matched } = decision;
+  markThinking(agent.name);
+  announceTurn({ phase: 'thinking', agentName: agent.name, matched });
+
+  const result = await ask(agent.name, prompt);
+
+  if (result.type === 'response') {
+    // The floor moves only on a real answer. An agent that failed did not take part in the
+    // conversation, and inheriting follow-ups would send the next question somewhere it has
+    // already been shown not to work.
+    await holdFloor(agent.name);
+    markDone(null);
+    announceTurn({ phase: 'answered', agentName: agent.name, text: result.payload?.text ?? '' });
+  } else {
+    markDone(result.payload?.code ?? 'failed');
+    announceTurn({
+      phase: 'problem',
+      agentName: agent.name,
+      message: result.payload?.message ?? `${agent.name} could not answer.`,
+    });
+  }
+}
+
+/** Tells any open surface where the turn has got to. Nothing is stored and nothing is logged. */
+function announceTurn(detail) {
+  chrome.runtime.sendMessage({ kind: 'openposse.turn', ...detail }).catch(() => { /* nothing open */ });
+}
+
+// Wrapped, because nothing awaits this. An unhandled rejection in a service worker is silent,
+// and the visible symptom would be a badge stuck on an agent who is not thinking about
+// anything — the turn simply stopping, with no way to tell it from a slow vendor.
+setTurnHandler((text) => {
+  handleUtterance(text).catch((error) => {
+    markDone('failed');
+    announceTurn({ phase: 'problem', message: 'Something went wrong handling that.' });
+    console.error('[openposse] turn failed:', error?.message ?? error);
+  });
+});
 
 /**
  * Which frame can actually see the assistant, or undefined if none can.

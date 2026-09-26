@@ -39,7 +39,12 @@
         flex: 1; min-height: 34px;
         font-size: 12.5px; line-height: 1.35;
         color: var(--text-dim);
-        display: flex; align-items: center;
+        /* `safe center` rather than `center`: an answer taller than the box would otherwise be
+           clipped at the *top* with no way to scroll up to it, because centred overflow
+           spills in both directions. `safe` falls back to flex-start exactly when that
+           would happen. */
+        display: flex; align-items: safe center;
+        max-height: 132px; overflow-y: auto;
       }
       .heard.final { color: var(--text); }
       .heard.bad { color: var(--error); }

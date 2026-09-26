@@ -10,6 +10,7 @@
 // a badge that says we are listening after the worker has died is a lie a user would act on.
 
 import { loadRoster, micGranted } from './storage.js';
+import { channelFor, initialFor } from './channels.js';
 
 const OFFSCREEN_PATH = 'offscreen.html';
 
@@ -47,6 +48,19 @@ let turn = null;
 
 /** The last thing that went wrong, so a popup opened afterwards can say what happened. */
 let failure = null;
+
+/**
+ * Who gets the finished utterance.
+ *
+ * A registered callback rather than a direct import, because the thing that acts on a
+ * transcript lives in `service-worker.js` and importing it here would make a cycle. This file
+ * knows how to listen; it deliberately knows nothing about what listening is *for*.
+ */
+let turnHandler = null;
+export function setTurnHandler(handler) { turnHandler = handler; }
+
+/** True from the moment an utterance is handed on until whatever it started finishes. */
+let thinking = null;
 
 export function currentTurn() {
   return { turn, failure };
@@ -133,7 +147,7 @@ export async function startListening() {
   turn = null;
   failure = null;
   await chrome.storage.session.set({ [LISTENING]: true });
-  await setBadge(true);
+  await setBadge('listening');
 
   const phrases = await phrasesForRoster();
   // How many names and at what weight — a count and a number, not the names. Paired with the
@@ -178,23 +192,51 @@ export async function setBias(on) {
 /** Back to not-listening, however we got here. */
 async function settle() {
   await chrome.storage.session.set({ [LISTENING]: false });
-  await setBadge(false);
+  // Not blindly cleared: the utterance may already have been handed on, and the agent working
+  // on it owns the badge now. See `markThinking`.
+  await setBadge(thinking ?? 'idle');
   await broadcastState();
 }
 
 // ── The badge ─────────────────────────────────────────────────────────────────────────────
 //
 // The only thing visible while the popup is closed, which is the normal case for a global
-// shortcut. It carries *state*, never content — a dot means the microphone is open, and that
-// is the one fact someone needs to know without opening anything. The agent initial and the
-// error states belong to E9; this is the half that cannot wait, because a microphone you
-// cannot tell is open is the kind of thing that ends up in a review.
+// shortcut. It carries *state*, never content — a dot means the microphone is open, an initial
+// means that agent is working on something. Those are the two facts someone needs without
+// opening anything, and a microphone you cannot tell is open is the kind of thing that ends up
+// in a review.
+//
+// The initial in the agent's own channel colour is the plan's E9 design, arriving early because
+// E3 already knows which agent it is and inventing a second placeholder would be work.
 
-async function setBadge(listening) {
+/** `'●'` blue while listening, the agent's initial in their colour while asking, else nothing. */
+async function setBadge(state) {
+  const look = state === 'listening' ? { text: '●', color: '#0A84FF' }
+    : state?.agentName ? { text: initialFor(state.agentName), color: channelFor(state.agentName) }
+      : state === 'problem' ? { text: '!', color: '#FF453A' }
+        : { text: '', color: '#0A84FF' };
   try {
-    await chrome.action.setBadgeText({ text: listening ? '●' : '' });
-    if (listening) await chrome.action.setBadgeBackgroundColor({ color: '#0A84FF' });
+    await chrome.action.setBadgeText({ text: look.text });
+    if (look.text) await chrome.action.setBadgeBackgroundColor({ color: look.color });
   } catch { /* no action on this platform, or the extension is unloading */ }
+}
+
+/**
+ * Claims the badge for an agent that is working, or hands it back.
+ *
+ * **It must be claimed synchronously from the turn handler**, because `end` follows the final
+ * result within a millisecond and `settle()` would otherwise clear a badge the ask had just
+ * set. `settle` checks this flag rather than blindly clearing, which is why the flag exists at
+ * all rather than the ask simply calling `setBadge` itself.
+ */
+export function markThinking(agentName) {
+  thinking = agentName ? { agentName } : null;
+  setBadge(thinking ?? 'idle');
+}
+
+export function markDone(problem) {
+  thinking = null;
+  setBadge(problem ? 'problem' : 'idle');
 }
 
 // ── Talking to whoever is watching ────────────────────────────────────────────────────────
@@ -228,6 +270,12 @@ export function handleOffscreenMessage(message) {
       // the surface would render each interim result twice. What is kept here is for a popup
       // opened *after* the turn, which saw none of them.
       turn = { text: message.text, isFinal: message.isFinal, at: Date.now() };
+      // Handed on as soon as it is final. The handler reads the roster before it claims the
+      // badge, so `end` — a millisecond behind — can still win the race and clear it; the
+      // agent's initial then appears a moment later. A flicker, not a wrong state, and worth
+      // saying out loud rather than leaving `settle`'s check looking like it guarantees more
+      // than it does.
+      if (message.isFinal) turnHandler?.(message.text);
       return true;
 
     case 'openposse.listen.ended':
