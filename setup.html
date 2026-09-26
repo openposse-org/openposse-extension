@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>OpenPosse — setup</title>
+    <link rel="stylesheet" href="ui.css" />
+    <style>
+      body { padding: 36px 40px 60px; }
+      main { max-width: 620px; }
+      section { margin-bottom: 34px; }
+      .step {
+        display: flex;
+        gap: 13px;
+        align-items: flex-start;
+      }
+      .num {
+        width: 21px; height: 21px; flex: 0 0 21px;
+        border-radius: 50%;
+        display: grid; place-items: center;
+        font-family: "SF Mono", ui-monospace, monospace;
+        font-size: 10px;
+        border: 1px solid var(--line);
+        color: var(--text-faint);
+        margin-top: 2px;
+      }
+      .step.done .num {
+        background: var(--green); border-color: var(--green);
+        color: #00250c; font-weight: 700;
+      }
+      .status { margin-top: 9px; }
+      .row { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Set up OpenPosse</h1>
+      <p>
+        Three things, once. Everything after this happens on your machine — speech recognition
+        included.
+      </p>
+
+      <section class="step" id="step-mic">
+        <div class="num">1</div>
+        <div style="flex:1">
+          <h2>Let it hear you</h2>
+          <p>
+            The microphone is granted to OpenPosse itself, not to any website, so this is asked
+            once and never again. It has to be asked on a page like this one — a background
+            worker has nowhere to show the prompt.
+          </p>
+          <div class="row">
+            <button id="grant-mic">Grant microphone access</button>
+            <span class="status mono" id="mic-status">not granted</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="step" id="step-model">
+        <div class="num">2</div>
+        <div style="flex:1">
+          <h2>Download the speech model</h2>
+          <p>
+            A few tens of megabytes, once. After this, nothing you say is sent anywhere —
+            recognition runs entirely on this machine, and OpenPosse requires it to.
+          </p>
+          <div class="row">
+            <button id="install-model">Download</button>
+            <span class="status mono" id="model-status">checking…</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="step" id="step-shortcut">
+        <div class="num">3</div>
+        <div style="flex:1">
+          <h2>Choose how you summon it</h2>
+          <p>
+            Chrome only lets an extension <em>suggest</em> Ctrl+Shift and a digit for a shortcut
+            that works outside the browser, so OpenPosse ships with one of those. Anything else
+            — <span class="mono">⌥V</span>, say — you pick here, and you can tick
+            <strong>Global</strong> so it reaches you in any app rather than only in Chrome.
+          </p>
+          <div class="row">
+            <button class="secondary" id="open-shortcuts">Change shortcut…</button>
+            <span class="status mono" id="shortcut-status">checking…</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="step" id="step-import">
+        <div class="num">4</div>
+        <div style="flex:1">
+          <h2>Bring across assistants you already recorded <span class="kind">— optional</span></h2>
+          <p>
+            If you used the OpenPosse Mac app, pick its folder and the assistants come with
+            their recipes intact:
+            <span class="mono">~/Library/Application&nbsp;Support/OpenPosse</span>
+          </p>
+          <div class="row">
+            <button class="secondary" id="pick-folder">Choose folder…</button>
+            <span class="status mono" id="import-status"></span>
+          </div>
+          <!-- Directory picker: agents.json and recipes/*.json arrive together, so one
+               choice imports everything rather than asking for files one at a time. -->
+          <input type="file" id="folder" webkitdirectory directory hidden />
+        </div>
+      </section>
+
+      <section>
+        <h2>Assistants</h2>
+        <div id="roster" class="card">none yet</div>
+      </section>
+    </main>
+    <script type="module" src="dist/setup.js"></script>
+  </body>
+</html>

@@ -11,117 +11,223 @@
 // to reconstruct its state from nothing after any idle gap, and must never assume a variable
 // set on one event still exists on the next.
 
-import { Bridge, envelope } from './bridge.js';
-
-/** Transport-level status, readable by the popup and by tests. Never message content. */
-const status = {
-  connected: false,
-  lastError: null,
-  lastEventAt: null,
-};
-
-const bridge = new Bridge({
-  onMessage: (message) => {
-    status.lastEventAt = Date.now();
-    handleFromApp(message);
-  },
-  onDisconnect: (reason) => {
-    status.connected = false;
-    status.lastError = reason;
-    console.warn('[openposse] native port closed:', reason);
-    scheduleReconnect();
-  },
-});
+import { loadRoster, recipeFor, findAgent } from './storage.js';
+import {
+  handleOffscreenMessage, toggleListening, startListening, stopListening,
+  isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone,
+} from './listening.js';
+import { route, navigationTarget, productName, FLOOR_MS } from './routing.js';
 
 /**
- * Handles one message from the app.
+ * Replies in flight, by correlation id.
  *
- * Transport errors are distinguished from page errors here because they mean different
- * things to a user: `APP_NOT_RUNNING` is fixed by launching OpenPosse, while
- * `ELEMENT_NOT_FOUND` means a vendor changed their UI and the recipe needs re-recording.
+ * **V1 has no transport.** Intents used to arrive from a native host over a Unix socket and
+ * their answers went back the same way; now they originate inside the extension — from the
+ * popup, and from the voice loop — so a reply is a promise resolving in this same process.
+ *
+ * The correlation-id discipline is kept anyway, because `dispatchIntent` streams partial
+ * results alongside its final answer and those still have to be told apart.
  */
-function handleFromApp(message) {
-  if (message?.type === 'error') {
-    const code = message.payload?.code;
-    if (code === 'APP_NOT_RUNNING' || code === 'APP_DISCONNECTED') {
-      status.connected = false;
-      status.lastError = code;
+const pending = new Map();
+
+function replyTo(id) {
+  return (type, body) => {
+    const sink = pending.get(id);
+    if (!sink) return;
+    if (type === 'event') {
+      sink.onEvent?.(body);
       return;
     }
-  }
-
-  // The handshake reply — and the only thing that sets `connected`. See `ensureConnected`.
-  if (message?.id === 'handshake') {
-    status.connected = message.type === 'response' && message.payload?.accepted === true;
-    status.lastError = status.connected ? null : (message.payload?.message ?? 'handshake refused');
-    console.info('[openposse] handshake:', status.connected ? 'app is running' : status.lastError);
-    if (status.connected) {
-      chrome.alarms.clear('openposse.reconnect');
-      // Reset here rather than on the attempt, so the budget is spent per *outage* and not
-      // once for the life of the worker. Without this the second relaunch in a session would
-      // find the counter exhausted and fall back to the alarm's floor.
-      fastRetries = 0;
-    }
-    return;
-  }
-
-  if (message?.type === 'request') {
-    dispatchIntent(message);
-    return;
-  }
-
-  console.debug('[openposse] message type:', message?.type);
+    pending.delete(id);
+    sink.resolve({ type, payload: body });
+  };
 }
 
 /**
- * Retries the connection on a slow alarm.
+ * Puts a question to an agent and returns its answer.
  *
- * `protocol.md` says "no reconnect loop", and that was written about the *host*, which is
- * right: a browser-spawned relay must not sit retrying a socket, because Chrome respawns it
- * on the next `connectNative` anyway.
+ * The entry point everything user-facing goes through — the popup's text box today, the voice
+ * loop at E3. It loads the recipe the recorder produced, finds the tab that recipe is for, and
+ * hands the work to `dispatchIntent`.
  *
- * Applying the same rule to the extension turned out to be wrong. The port dies whenever
- * OpenPosse restarts, and with no retry the browser bridge then stays dead until the user
- * opens `chrome://extensions` and reloads the extension by hand — which is not a thing anyone
- * should have to know. Quitting and reopening an app must not require servicing the browser.
- *
- * An alarm rather than a timer: MV3 workers are terminated when idle, taking any `setTimeout`
- * with them, and `chrome.alarms` is the only scheduling that survives that. It is cheap — the
- * worker is asleep in between, and a successful connection cancels the alarm.
- *
- * **Two mechanisms, because they cover different failures.** The alarm is the guarantee: it
- * survives the worker being terminated, which no timer does. But its floor is 30 seconds
- * (one minute until Chrome 120, which is what this used to be set to), and the case that is
- * actually common in development is the one it serves worst — OpenPosse restarts while Chrome
- * stays open and the worker is still warm, and the bridge then sits dead for up to half a
- * minute after every rebuild. So a few quick attempts run first. They are best-effort by
- * construction: a terminated worker takes them with it, which is precisely what the alarm is
- * underneath them for.
+ * `onPartial` receives text as it streams. Speech can start on the first chunk rather than the
+ * finished answer, which is the whole latency argument for driving a page instead of calling
+ * an API — see `docs/protocol.md`.
  */
-const FAST_RETRY_MS = [1000, 2000, 4000, 8000];
-let fastRetries = 0;
+export async function ask(agentName, prompt, { onPartial } = {}) {
+  const { agents } = await loadRoster();
+  const agent = findAgent(agents, agentName);
+  if (!agent) return { type: 'error', payload: { code: ERROR.unsupportedIntent, message: `no agent called ${agentName}` } };
 
-function scheduleReconnect() {
-  chrome.alarms.create('openposse.reconnect', { periodInMinutes: 0.5 });
+  const recipe = await recipeFor(agent);
+  if (!recipe) {
+    // The `broken` state made concrete. The agent exists and routes; its recipe does not.
+    return {
+      type: 'error',
+      payload: { code: ERROR.elementNotFound, message: `${agent.name} needs re-recording` },
+    };
+  }
 
-  // Bounded, and bounded by *disconnects* rather than by the timer: each failed attempt ends
-  // in another `onDisconnect`, which lands back here and advances the counter. With the app
-  // genuinely closed that is four attempts and then silence, with the alarm carrying on.
-  const delay = FAST_RETRY_MS[fastRetries];
-  if (delay === undefined) return;
-  fastRetries += 1;
-  setTimeout(() => {
-    if (!bridge.connected) ensureConnected();
-  }, delay);
+  const id = crypto.randomUUID();
+  const answer = new Promise((resolve) => {
+    pending.set(id, { resolve, onEvent: (event) => onPartial?.(event?.text ?? '') });
+  });
+
+  dispatchIntent({ id, agent: agent.name, payload: { intent: 'ask_assistant', recipe, prompt } });
+  return answer;
 }
 
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name !== 'openposse.reconnect') return;
-  if (bridge.connected) {
-    chrome.alarms.clear('openposse.reconnect');
+// ── The voice loop's other half (E3) ────────────────────────────────────────────────────
+//
+// E2 ends with a transcript sitting in a readout. This is what turns it into a question
+// somebody actually gets asked — and it is short, because both ends already existed: `route`
+// picks the agent, `ask` has been driving Notion since M3.
+
+/** Session state, so it dies with the browser — a floor held across a restart is meaningless. */
+async function floorHolder(agents) {
+  const { floorHolder: name, floorAt = 0 } = await chrome.storage.session.get(['floorHolder', 'floorAt']);
+  if (!name || Date.now() - floorAt > FLOOR_MS) return null;
+  return findAgent(agents, name);
+}
+
+async function holdFloor(name) {
+  await chrome.storage.session.set({ floorHolder: name, floorAt: Date.now() });
+}
+
+/**
+ * Plain sentences for the ways an utterance can fail to name anybody.
+ *
+ * Separate strings rather than one "sorry, try again", because they send you to different
+ * places: an empty roster wants the recorder, an unrecognised name wants you to say it again,
+ * and a bare name wants nothing at all except for you to finish the sentence.
+ */
+const ROUTING_COPY = {
+  'heard-nothing': "Didn't catch that.",
+  'no-agents': 'No assistants yet — record one first.',
+  'unknown-agent': "Didn't catch who you meant. Start with an assistant's name.",
+};
+
+/**
+ * One spoken turn, end to end.
+ *
+ * **The tab is not switched, and that is a deliberate departure from the plan.** The plan says
+ * "switch to the agent's tab", inherited from the Mac app, where driving a page meant posting
+ * real keystrokes and therefore meant focusing it. The content script drives the DOM directly,
+ * which works in a background tab on another window — measured, not assumed. So switching would
+ * take somebody away from what they were doing to no purpose. The orb at E4 is how the answer
+ * arrives; until then it is in the tab where it belongs.
+ */
+/**
+ * The roster, plus what each agent's vendor is called out loud.
+ *
+ * Nobody says "take me to Ivan" — they say "Notion", and only the agent's name is in the
+ * roster. The other name comes from the domain the recorder already captured.
+ */
+async function rosterWithProducts() {
+  const { agents } = await loadRoster();
+  return Promise.all(agents.map(async (agent) => ({
+    ...agent,
+    product: productName((await recipeFor(agent))?.domainPattern),
+  })));
+}
+
+/**
+ * Takes someone to an agent's tab, which is the one time we move them.
+ *
+ * `focusTab` rather than a bare `tabs.update`, so this inherits its ordering lesson: activate
+ * the tab, *then* raise the window. The other order shows the window's previously-active tab
+ * for a frame first, which reads as landing on the wrong page.
+ */
+async function goToAgent(nav) {
+  if (nav.problem) {
+    markDone(nav.problem);
+    announceTurn({ phase: 'problem', message: 'Show you what? Ask an assistant something first.' });
     return;
   }
-  ensureConnected();
+
+  const agent = nav.agent;
+  const recipe = await recipeFor(agent);
+  const tabs = recipe?.domainPattern
+    ? await chrome.tabs.query({ url: matchPattern(recipe.domainPattern) })
+    : [];
+  const tab = tabs.find((t) => t.active) ?? tabs[0];
+
+  if (!tab) {
+    markDone('tab-not-found');
+    announceTurn({ phase: 'problem', message: `No ${agent.product || agent.name} tab is open.` });
+    return;
+  }
+
+  await focusTab({ tabId: tab.id });
+  // Being shown an agent's tab is as much a reason to expect a follow-up as being answered by
+  // it, so the floor moves here too — "show me Notion", then "what changed last week".
+  await holdFloor(agent.name);
+  markDone(null);
+  announceTurn({ phase: 'navigated', agentName: agent.name });
+}
+
+async function handleUtterance(text) {
+  const agents = await rosterWithProducts();
+  const floor = await floorHolder(agents);
+
+  // Navigation is checked first and returns null unless it is *certain* — the opening phrase
+  // plus a name it recognises has to consume the whole utterance. Anything left over falls
+  // through to being a question, which is what stops "show me the Q3 numbers" being swallowed.
+  const nav = navigationTarget(text, agents, { floorHolder: floor });
+  if (nav) return goToAgent(nav);
+
+  const decision = route(text, agents, { floorHolder: floor });
+
+  if (decision.problem) {
+    markDone(decision.problem);
+    announceTurn({
+      phase: 'problem',
+      // `name-only` is answered by the agent's own name with a question mark — the spoken
+      // equivalent of looking up. It is the one "failure" that is really just a pause.
+      message: decision.problem === 'name-only'
+        ? `${decision.agent.name}?`
+        : ROUTING_COPY[decision.problem] ?? 'Something went wrong.',
+    });
+    return;
+  }
+
+  const { agent, prompt, matched } = decision;
+  markThinking(agent.name);
+  announceTurn({ phase: 'thinking', agentName: agent.name, matched });
+
+  const result = await ask(agent.name, prompt);
+
+  if (result.type === 'response') {
+    // The floor moves only on a real answer. An agent that failed did not take part in the
+    // conversation, and inheriting follow-ups would send the next question somewhere it has
+    // already been shown not to work.
+    await holdFloor(agent.name);
+    markDone(null);
+    announceTurn({ phase: 'answered', agentName: agent.name, text: result.payload?.text ?? '' });
+  } else {
+    markDone(result.payload?.code ?? 'failed');
+    announceTurn({
+      phase: 'problem',
+      agentName: agent.name,
+      message: result.payload?.message ?? `${agent.name} could not answer.`,
+    });
+  }
+}
+
+/** Tells any open surface where the turn has got to. Nothing is stored and nothing is logged. */
+function announceTurn(detail) {
+  chrome.runtime.sendMessage({ kind: 'openposse.turn', ...detail }).catch(() => { /* nothing open */ });
+}
+
+// Wrapped, because nothing awaits this. An unhandled rejection in a service worker is silent,
+// and the visible symptom would be a badge stuck on an agent who is not thinking about
+// anything — the turn simply stopping, with no way to tell it from a slow vendor.
+setTurnHandler((text) => {
+  handleUtterance(text).catch((error) => {
+    markDone('failed');
+    announceTurn({ phase: 'problem', message: 'Something went wrong handling that.' });
+    console.error('[openposse] turn failed:', error?.message ?? error);
+  });
 });
 
 /**
@@ -297,20 +403,20 @@ function startKeepAlive() {
   return setInterval(() => { chrome.runtime.getPlatformInfo(); }, 20_000);
 }
 
-/** Relays one capture from the content script to the app, on the arming correlation id. */
+/** Relays one capture from the content script to whoever armed the recorder. */
 chrome.runtime.onMessage.addListener((message, _sender, _respond) => {
   if (message?.kind !== 'openposse.recording' || !recording) return false;
 
-  try {
-    bridge.send(envelope({
-      id: recording.id,
-      type: 'event',
-      agent: recording.agent,
-      payload: { kind: 'recording', event: message.event },
-    }));
-  } catch (error) {
-    console.warn('[openposse] could not relay a capture:', error?.message ?? error);
-  }
+  // Broadcast rather than resolved: captures arrive for minutes after arming, so they are
+  // events on an open channel, not the answer to a request. The recorder UI listens.
+  chrome.runtime.sendMessage({
+    kind: 'openposse.capture',
+    id: recording.id,
+    event: message.event,
+  }).catch(() => {
+    // Nothing listening — the wizard was closed mid-recording. Disarming is handled on that
+    // path; losing a capture nobody is watching for is not a failure.
+  });
 
   // The page is gone, so the listeners went with it. Stopping here means the keepalive does
   // not outlive the thing it was keeping alive.
@@ -393,16 +499,13 @@ chrome.action.onClicked.addListener(async (tab) => {
   notifyAccess(pattern, granted, null);
 });
 
-/** Tells the app a grant landed, so the wizard advances without polling for it. */
+/** Announces that a grant landed, so the recorder advances without polling for it. */
 function notifyAccess(pattern, granted, error) {
-  try {
-    bridge.send(envelope({
-      id: 'access',
-      type: 'event',
-      agent: 'openposse.recorder',
-      payload: { kind: 'access', pattern, granted, error },
-    }));
-  } catch { /* app not connected — the wizard will ask again with check_access */ }
+  chrome.runtime.sendMessage({
+    kind: 'openposse.access', pattern, granted, error,
+  }).catch(() => {
+    // Nobody listening. The grant still happened and `check_access` will find it.
+  });
 }
 
 /**
@@ -549,13 +652,7 @@ async function dispatchIntent(request) {
   const { id, agent, payload } = request;
   const recipe = payload?.recipe;
 
-  const reply = (type, body) => {
-    try {
-      bridge.send(envelope({ id, type, agent, payload: body }));
-    } catch (error) {
-      console.warn('[openposse] could not reply:', error?.message ?? error);
-    }
-  };
+  const reply = replyTo(id);
 
   // Recording intents are browser-level and carry no recipe — there is not one yet. Checked
   // before the recipe guard below, which would otherwise reject every one of them as
@@ -649,83 +746,113 @@ async function dispatchIntent(request) {
 }
 
 /**
- * Opens the port and confirms the app is really there.
+ * What the popup and the voice loop ask this worker to do.
  *
- * Connecting is not the same as being connected: `connectNative` succeeds as soon as Chrome
- * spawns the host, which happens even when OpenPosse is not running — the host then replies
- * `APP_NOT_RUNNING` and exits. So the port opening tells us nothing, and the handshake reply
- * is what actually answers the question.
+ * Everything arrives as a runtime message rather than over a socket now. The worker still has
+ * to be able to reconstruct its state from nothing on every wake — MV3 terminates it after
+ * about thirty seconds idle — which is why the roster is read from storage per request rather
+ * than held in a variable.
  */
-export async function ensureConnected() {
-  if (bridge.connected) return status;
-
-  try {
-    bridge.connect();
-    bridge.send(envelope({
-      id: 'handshake',
-      type: 'request',
-      agent: 'openposse.host',
-      payload: { intent: 'handshake' },
-    }));
-    status.lastError = null;
-    // `status.connected` is deliberately NOT set here. Sending proves only that Chrome
-    // spawned the host — which it does whether or not OpenPosse is running. `handleFromApp`
-    // sets it when the app itself answers.
-  } catch (error) {
-    status.connected = false;
-    status.lastError = String(error?.message ?? error);
-  }
-  return status;
-}
-
-// The popup and any future content script ask for status through here rather than reaching
-// into the worker's variables, which may not exist after an idle termination.
 chrome.runtime.onMessage.addListener((request, _sender, respond) => {
-  if (request?.kind === 'openposse.status') {
-    ensureConnected().then(respond);
+  // Offscreen traffic first: it is the highest-volume kind by far — an interim result every
+  // few hundred milliseconds — and none of it wants a reply. Returning false hands the message
+  // on without holding a port open for an answer nobody is going to send.
+  if (handleOffscreenMessage(request)) return false;
+
+  if (request?.kind === 'openposse.listen.toggle') {
+    toggleListening().then((problem) => respond({ ok: !problem, failure: problem ?? null }));
+    return true;
+  }
+  if (request?.kind === 'openposse.listen.query') {
+    // What a popup needs the moment it opens: are we listening, what has been heard so far, and
+    // what went wrong last time. It may have opened halfway through a turn the shortcut began.
+    isListening().then((listening) => respond({ listening, ...currentTurn() }));
+    return true;
+  }
+
+  if (request?.kind === 'openposse.ask') {
+    ask(request.agentName, request.prompt).then(respond);
     return true;          // keeps the channel open for the async reply
+  }
+  if (request?.kind === 'openposse.record') {
+    // E8 wires the recorder's own UI to this. Acknowledged rather than silently dropped, so
+    // the popup's button is honest about doing nothing yet.
+    console.info('[openposse] record requested for tab', request.tabId, '— not wired until E8');
+    respond({ ok: false, reason: 'not-wired' });
+    return true;
   }
   return false;
 });
 
+/**
+ * The summon shortcut — **⌥V where the user has set it, ⌘⇧9 out of the box.**
+ *
+ * A toggle, because it is the only control available when nothing of ours is on screen: the
+ * same press has to be both "listen" and "never mind". That was M1's finding and it transfers
+ * unchanged, along with its consequence — cancelling discards the half-sentence rather than
+ * sending it (see `offscreen.js`).
+ *
+ * **The restriction binds what we may suggest, not what the user may assign**, and the
+ * difference is the whole story. Chrome permits `global: true` in a *manifest* only on
+ * `Ctrl+Shift+[0-9]`, converting `Ctrl` to Command on macOS — so the entire suggestible space
+ * is ⌘⇧0 through ⌘⇧9, of which macOS Screenshot already owns **3, 4, 5 and 6**. (The plan
+ * specified 5, the screenshot toolbar, so the shortcut opened screen recording and never
+ * reached Chrome at all.) 9 is clear and deliberately at the far end: a slip from 2 to 3, or 7
+ * to 6, takes a screenshot; a slip from 9 hits 0 and does nothing.
+ *
+ * At `chrome://extensions/shortcuts` **none of that applies** — confirmed by doing it, not by
+ * reading. ⌥V can be assigned there and marked Global, which is what M1 always wanted and what
+ * `HotKeyCenter` still registers on the Mac side. So the two halves of this project use the
+ * same gesture after all; we simply cannot ship it as the default.
+ *
+ * Nothing else in this codebase names a key. Every surface that shows one reads
+ * `chrome.commands.getAll()`, so whatever the user actually bound is what they are told.
+ */
+chrome.commands.onCommand.addListener((command) => {
+  if (command === 'summon') toggleListening();
+});
+
 chrome.runtime.onInstalled.addListener(() => {
   console.info('[openposse] extension installed');
-  ensureConnected();
+  // A reload destroys the offscreen document and clears session storage, but the badge is the
+  // browser's and survives — so without this the toolbar claims a microphone is open that
+  // nothing is holding.
+  chrome.action.setBadgeText({ text: '' }).catch(() => {});
   // An update — which the chrome://extensions reload button performs — clears every dynamic
   // registration while leaving the permissions in place. Without this, every vendor added
-  // through the wizard stops working after a reload, silently.
+  // through the recorder stops working after a reload, silently.
   reconcileRegistrations();
 });
 
-// Reconnect when the browser restarts, not only when the extension is first installed.
 chrome.runtime.onStartup.addListener(() => {
-  ensureConnected();
   reconcileRegistrations();
 });
-
-// Connect as soon as the worker runs.
-//
-// This is not eagerness for its own sake — it falls out of the direction of the
-// architecture. OpenPosse cannot reach into the browser: the host is spawned by *Chrome* via
-// `connectNative`, and the socket runs host → app. So for the app to drive a page at all, the
-// extension must already be holding a port open. A lazily-connected extension would be
-// unreachable exactly when the user says "Andy, ..." — the moment it needs to work.
-ensureConnected();
 
 // Console handle for development.
 //
 // `chrome.runtime.sendMessage` from the service worker's own DevTools console does NOT reach
 // this worker: Chrome excludes the sender from `onMessage` delivery, so it fails with
 // "Receiving end does not exist" even when everything is working. That error names the
-// messaging API rather than the bridge, which sends you looking in the wrong place — hence a
-// handle that can be called directly.
+// messaging API rather than the thing that is actually wrong, which sends you looking in the
+// wrong place — hence a handle that can be called directly.
 globalThis.openposse = {
-  status: () => status,
-  connect: () => ensureConnected(),
-  disconnect: () => bridge.disconnect(),
-  // M3d diagnostics: what is granted, and what is actually registered. The two disagreeing is
-  // the silent failure this milestone is built around — a grant with no registration and a
-  // registration with no grant both look like nothing happening.
+  roster: () => loadRoster(),
+  // Listening, without the hotkey — useful when the shortcut is taken by something else, and
+  // the only way to drive a turn while the popup is open to watch it. Note that none of these
+  // return what was heard: the transcript goes to the popup and nowhere else, and a console
+  // handle that printed it would be a logging path this project does not have.
+  listen: () => startListening(),
+  hush: () => stopListening(),
+  listening: () => isListening(),
+  /**
+   * `openposse.bias(3)` to sweep the weight, `openposse.bias(false)` to hear the recogniser
+   * unbiased. The scale is logarithmic — see `NAME_BOOST` — so the steps that matter are small.
+   */
+  bias: (on = true) => setBias(on),
+  ask: (name, prompt) => ask(name, prompt, { onPartial: (t) => console.debug('…', t.length) }),
+  // What is granted, and what is actually registered. The two disagreeing is the silent
+  // failure the recorder is built around — a grant with no registration and a registration
+  // with no grant both look like nothing happening.
   access: async () => ({
     granted: (await chrome.permissions.getAll()).origins,
     registered: (await chrome.scripting.getRegisteredContentScripts()).map((s) => s.id),

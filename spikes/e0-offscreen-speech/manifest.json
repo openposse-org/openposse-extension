@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "OpenPosse E0 spike — offscreen speech",
+  "version": "0.0.1",
+  "description": "Throwaway. Answers one question: does on-device speech recognition work inside an offscreen document?",
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "permissions": ["offscreen"],
+  "action": {
+    "default_title": "E0 spike — click to run"
+  },
+  "options_page": "setup.html"
+}

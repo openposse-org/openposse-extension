@@ -24,6 +24,8 @@ export default [
         window: 'readonly',
         document: 'readonly',
         location: 'readonly',
+        navigator: 'readonly',
+        crypto: 'readonly',
         InputEvent: 'readonly',
         globalThis: 'readonly',
         chrome: 'readonly',
@@ -48,6 +50,11 @@ export default [
         structuredClone: 'readonly',
         URL: 'readonly',
         Date: 'readonly',
+        // The offscreen document's timing source. It measures how long the recogniser waits
+        // after the last word before declaring the turn over — the number that decides whether
+        // endpointing is free here or has to be rebuilt, so it wants a monotonic clock rather
+        // than one a clock change can move.
+        performance: 'readonly',
         Math: 'readonly',
         JSON: 'readonly',
         Promise: 'readonly',

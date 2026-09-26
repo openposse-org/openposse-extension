@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>E0 spike — microphone</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0; padding: 40px;
+        background: #1C1C1E; color: #fff;
+        font: 14px/1.5 -apple-system, "SF Pro Text", system-ui, sans-serif;
+      }
+      h1 { font-size: 19px; font-weight: 600; margin: 0 0 6px; }
+      p { color: rgba(235,235,245,.6); max-width: 46em; margin: 0 0 16px; }
+      button {
+        font: inherit; font-weight: 600; color: #fff;
+        background: #0A84FF; border: 0; border-radius: 7px;
+        padding: 9px 15px; cursor: pointer;
+      }
+      #out {
+        margin-top: 20px; padding: 13px;
+        background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.1);
+        border-radius: 9px;
+        font-family: "SF Mono", ui-monospace, monospace; font-size: 12px;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Microphone access</h1>
+    <p>
+      The permission is bound to this extension's origin, so it only has to be granted once —
+      but it cannot be requested from an offscreen document or a panel, because neither can
+      show the prompt. That is the whole reason this page exists.
+    </p>
+    <button id="grant">Grant microphone access</button>
+    <div id="out">not requested yet</div>
+    <script src="setup.js"></script>
+  </body>
+</html>

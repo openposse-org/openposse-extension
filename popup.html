@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>OpenPosse</title>
+    <link rel="stylesheet" href="ui.css" />
+    <style>
+      body { width: 320px; padding: 14px; }
+      header {
+        display: flex; align-items: center; gap: 8px;
+        margin-bottom: 12px;
+      }
+      .mark {
+        width: 19px; height: 19px; border-radius: 6.5px;
+        background: linear-gradient(150deg, #0a84ff, #30d158);
+        display: grid; place-items: center;
+        font-size: 8px; font-weight: 700; color: #fff;
+        box-shadow: inset 0 0.5px 0 rgba(255,255,255,.5), 0 1px 3px rgba(0,0,0,.4);
+      }
+      header .title { font-size: 13.5px; font-weight: 600; letter-spacing: -0.008em; }
+      header .spacer { flex: 1; }
+      .hint { color: var(--text-faint); font-size: 11px; }
+      /* A warning you can act on. It is the only route to the fix, so it has to look
+         pressable rather than decorative. */
+      .mic-fix {
+        display: block; width: 100%; margin-bottom: 11px;
+        font: inherit; font-size: 12px; text-align: left; cursor: pointer;
+      }
+      #agents { margin-bottom: 12px; }
+      #empty { color: var(--text-dim); font-size: 12.5px; }
+
+      /* Voice sits above the text box because voice is the product and typing is the
+         fallback — the order on screen should say which is which. */
+      .listen { display: flex; gap: 9px; align-items: center; }
+      .listen button { flex: 0 0 auto; }
+      /* Fixed height so the popup does not resize under the cursor as words arrive. The orb
+         holds its height across all six states for the same reason. */
+      .heard {
+        flex: 1; min-height: 34px;
+        font-size: 12.5px; line-height: 1.35;
+        color: var(--text-dim);
+        /* `safe center` rather than `center`: an answer taller than the box would otherwise be
+           clipped at the *top* with no way to scroll up to it, because centred overflow
+           spills in both directions. `safe` falls back to flex-start exactly when that
+           would happen. */
+        display: flex; align-items: safe center;
+        max-height: 132px; overflow-y: auto;
+      }
+      .heard.final { color: var(--text); }
+      .heard.bad { color: var(--error); }
+      .ask { display: flex; gap: 7px; margin-top: 10px; }
+      .ask input { flex: 1; }
+      footer {
+        margin-top: 14px; padding-top: 11px;
+        border-top: 1px solid var(--line);
+        display: flex; gap: 8px; align-items: center;
+      }
+      footer .spacer { flex: 1; }
+      a { color: var(--text-dim); font-size: 11.5px; text-decoration: none; }
+      a:hover { color: var(--text); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="mark">op</div>
+      <div class="title">OpenPosse</div>
+      <div class="spacer"></div>
+      <div class="hint mono" id="shortcut"></div>
+    </header>
+
+    <!-- Deliberately not the design's `NOT HEARING ANYTHING — CHECK INPUT` badge. That one is
+         for a microphone that is connected and silent, and belongs in the panel's
+         not-capturing state. A permission that was never granted needs different words and a
+         different action — telling someone to check their input device would send them to
+         look for a fault that is not there. -->
+    <button id="mic-warning" hidden class="card bad mic-fix"></button>
+
+    <div id="agents"></div>
+    <div id="empty" hidden>
+      No assistants yet. Open a page with an AI assistant on it, then record it.
+    </div>
+
+    <!-- The same turn the shortcut starts, with somewhere to watch it. Until the orb exists (E4) this
+         is the only surface live text has, and the shortcut is useless while the popup is
+         shut — so the button is not a duplicate of the hotkey, it is how you see it work. -->
+    <div class="listen">
+      <button id="listen" class="secondary">Listen</button>
+      <div id="heard" class="heard"></div>
+    </div>
+
+    <!-- The manual path. Not only a fallback for a dead microphone: it is the whole product
+         minus voice, and it is the right answer in a meeting or an open-plan office. -->
+    <div class="ask">
+      <input type="text" id="prompt" placeholder="Ask Ivan to…" />
+      <button id="send">Ask</button>
+    </div>
+
+    <footer>
+      <button class="secondary" id="record">Record this tab</button>
+      <div class="spacer"></div>
+      <a href="#" id="settings">Settings</a>
+    </footer>
+
+    <script type="module" src="dist/popup.js"></script>
+  </body>
+</html>
