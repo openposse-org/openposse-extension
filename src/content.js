@@ -158,6 +158,18 @@ async function askAssistant({ recipe, prompt }, emit) {
   // hardcoded ceiling reports a healthy-but-slow answer as a broken agent.
   const responseTimeoutMs = recipe.responseTimeoutMs ?? 60000;
 
+  // How long to keep waiting for a row *after* the one we read has gone quiet.
+  //
+  // It has to cover a model thinking, which is why it is seconds rather than the few hundred
+  // milliseconds a render takes. Bounded rather than given the whole remaining budget, because
+  // this is also the latency a vendor that only ever adds one row pays on every exchange, and
+  // a minute of that would be unusable.
+  //
+  // The honest fix is to record the vendor's own "still generating" indicator during setup —
+  // Notion shows one — and wait on that disappearing instead of on a clock. That is a recorder
+  // change, so it belongs to E8. Until then this is a guess with a ceiling.
+  const ANSWER_GRACE_MS = 10_000;
+
   /**
    * Which of the rows that appeared is the answer.
    *
@@ -259,7 +271,26 @@ async function askAssistant({ recipe, prompt }, emit) {
   for (let pass = 0; pass < 3; pass += 1) {
     const current = pass === 0
       ? container
-      : withoutOurQuestion(deepQuerySelectorAll(recipe.responseContainerSelector));
+      // **Wait for a further row rather than looking again immediately.**
+      //
+      // Re-picking on the spot was the bug: the status row goes quiet after ~900 ms, but the
+      // gap before the answer is the model *thinking* — seconds. So the second pass ran while
+      // the transcript still held exactly what the first pass had read, found the same element,
+      // and broke with the status text as the answer. Notion's own screen disagreed, because
+      // by then it had replaced "Working on your request" with the joke.
+      //
+      // `waitForNewMatch` returns the moment a row arrives, so a vendor that adds one costs
+      // nothing. A vendor that never adds another pays `ANSWER_GRACE_MS` once and then returns
+      // null, ending the loop with the text we already had — which is the right answer for it.
+      : await waitForNewMatch(
+        recipe.responseContainerSelector,
+        deepQuerySelectorAll(recipe.responseContainerSelector).length,
+        {
+          timeoutMs: Math.min(ANSWER_GRACE_MS, responseTimeoutMs),
+          settleMs: recipe.quietPeriodMs ?? 900,
+          choose: withoutOurQuestion,
+        },
+      );
 
     // The same row twice means the page has settled on it. That is the answer.
     if (!current || current === readFrom) break;
