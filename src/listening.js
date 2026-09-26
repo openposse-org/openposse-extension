@@ -164,6 +164,10 @@ export async function startListening() {
   failure = null;
   await chrome.storage.session.set({ [LISTENING]: true });
   await setBadge('listening');
+  // Before the panel, not after. The panel's injection can take a moment, and until this runs
+  // an open popup still shows the *previous* turn's outcome — so the two surfaces disagree,
+  // one saying "Didn't hear anything" while the other says "Listening".
+  await broadcastState();
   // `create` injects the panel into whatever tab is in front. Everything after this is a merge
   // onto that state, so a turn never has to restate the roster or the shortcut.
   await panel({

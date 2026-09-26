@@ -17,6 +17,21 @@ import { channelFor, initialFor } from './channels.js';
 let panelTabId = null;
 
 /**
+ * The injection this turn is waiting on.
+ *
+ * **It has to be shared, because the two halves of a turn start at the same moment.** The
+ * command handler fires `primePanel` without awaiting it — it cannot await, the whole point is
+ * that nothing comes between the keypress and `executeScript` — and then starts the listening
+ * path, which reaches `panel({ create })` while that injection is still in the air. Without
+ * this, that call found `panelTabId` still null and dropped the state message on the floor: the
+ * orb was injected, rendered, and never told to become visible.
+ *
+ * The symptom was "it doesn't work the first time", because the *second* attempt found the id
+ * left behind by the first.
+ */
+let injection = null;
+
+/**
  * Injects the panel, and **must be called before anything is awaited.**
  *
  * This is the whole reason the orb appeared on Notion and nowhere else. Notion has a standing
@@ -32,7 +47,12 @@ let panelTabId = null;
  *
  * @param tabId the tab from `chrome.commands.onCommand`, when there is one.
  */
-export async function primePanel(tabId) {
+export function primePanel(tabId) {
+  injection = place(tabId);
+  return injection;
+}
+
+async function place(tabId) {
   if (tabId != null) return injectInto(tabId);
   // No tab on the event: a global shortcut fired while Chrome was in the background. Falling
   // back to a query is right for the popup's button, and for the global case it will usually
@@ -81,9 +101,10 @@ async function rosterForPanel() {
  */
 export async function panel(patch, { create = false } = {}) {
   if (create) {
-    // Only if the gesture path did not already place it. Re-injecting here would be the same
-    // spent-grant mistake, one call further down.
-    if (panelTabId === null) await primePanel();
+    // Wait for the gesture path's injection rather than racing it, and start one here only for
+    // the routes that have no gesture — the popup's button, a typed question.
+    panelTabId = await (injection ?? primePanel());
+    injection = null;             // consumed; the next turn primes its own
     const shortcut = (await chrome.commands.getAll()).find((c) => c.name === 'summon')?.shortcut;
     patch = { agents: await rosterForPanel(), shortcut: shortcut ?? '', ...patch };
   }
