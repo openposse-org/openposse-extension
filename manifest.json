@@ -9,6 +9,7 @@
     "type": "module"
   },
   "permissions": [
+    "activeTab",
     "offscreen",
     "storage",
     "tabs",

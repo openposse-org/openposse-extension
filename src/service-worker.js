@@ -17,6 +17,11 @@ import {
   isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone,
 } from './listening.js';
 import { route, navigationTarget, productName, FLOOR_MS } from './routing.js';
+import { panel, hidePanel } from './panel.js';
+import { channelFor } from './channels.js';
+
+/** The last thing asked, so clicking a different avatar can put it to them instead. */
+let lastPrompt = '';
 
 /**
  * Replies in flight, by correlation id.
@@ -158,6 +163,9 @@ async function goToAgent(nav) {
     return;
   }
 
+  // Hidden before the switch, not after: the panel is injected into the tab being left, and
+  // leaving it up there means it is still on screen when that tab is next looked at.
+  await hidePanel();
   await focusTab({ tabId: tab.id });
   // Being shown an agent's tab is as much a reason to expect a follow-up as being answered by
   // it, so the floor moves here too — "show me Notion", then "what changed last week".
@@ -180,6 +188,12 @@ async function handleUtterance(text) {
 
   if (decision.problem) {
     markDone(decision.problem);
+    panel({
+      phase: 'needs-attention',
+      message: decision.problem === 'name-only'
+        ? `${decision.agent.name}?`
+        : ROUTING_COPY[decision.problem] ?? 'Something went wrong.',
+    });
     announceTurn({
       phase: 'problem',
       // `name-only` is answered by the agent's own name with a question mark — the spoken
@@ -192,7 +206,9 @@ async function handleUtterance(text) {
   }
 
   const { agent, prompt, matched } = decision;
+  lastPrompt = prompt;
   markThinking(agent.name);
+  panel({ phase: 'thinking', agentName: agent.name, channel: channelFor(agent.name) });
   announceTurn({ phase: 'thinking', agentName: agent.name, matched });
 
   const result = await ask(agent.name, prompt);
@@ -203,9 +219,15 @@ async function handleUtterance(text) {
     // already been shown not to work.
     await holdFloor(agent.name);
     markDone(null);
+    panel({ phase: 'answering', agentName: agent.name, answer: result.payload?.text ?? '' });
     announceTurn({ phase: 'answered', agentName: agent.name, text: result.payload?.text ?? '' });
   } else {
     markDone(result.payload?.code ?? 'failed');
+    panel({
+      phase: 'needs-attention',
+      agentName: agent.name,
+      message: result.payload?.message ?? `${agent.name} could not answer.`,
+    });
     announceTurn({
       phase: 'problem',
       agentName: agent.name,
@@ -758,6 +780,16 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   // few hundred milliseconds — and none of it wants a reply. Returning false hands the message
   // on without holding a port open for an answer nobody is going to send.
   if (handleOffscreenMessage(request)) return false;
+
+  if (request?.kind === 'openposse.orb.reroute') {
+    // Clicking an avatar puts the same question to someone else, straight to thinking — the
+    // design's own behaviour, and the fastest repair when routing picked the wrong agent.
+    if (lastPrompt) {
+      handleUtterance(`${request.agentName} ${lastPrompt}`).catch(() => {});
+    }
+    respond({ ok: Boolean(lastPrompt) });
+    return true;
+  }
 
   if (request?.kind === 'openposse.listen.toggle') {
     toggleListening().then((problem) => respond({ ok: !problem, failure: problem ?? null }));
