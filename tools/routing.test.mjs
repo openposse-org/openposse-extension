@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { route, bestMatch, normalise, editDistance } from '../src/routing.js';
+import { route, bestMatch, normalise, editDistance, navigationTarget, productName } from '../src/routing.js';
 
 const ROSTER = [
   { id: '1', name: 'Ivan' },
@@ -137,4 +137,70 @@ test('normalise and editDistance behave as the matcher assumes', () => {
   assert.equal(editDistance('ivan', 'ivan'), 0);
   assert.equal(editDistance('ivan', 'ivar'), 1);
   assert.equal(editDistance('', 'ivan'), 4);
+});
+
+// ── Navigation (E3b) ───────────────────────────────────────────────────────────────────────
+//
+// These matter more than they look. A false positive here does not misfire — it swallows the
+// question and switches tabs instead, so the speaker watches their request vanish with nothing
+// to explain it. Every one of these is a sentence somebody would actually say.
+
+const NAV_ROSTER = [
+  { id: '1', name: 'Ivan', product: 'notion' },
+  { id: '2', name: 'Andy', product: 'leanix' },
+];
+
+test('"show me" with the floor held goes to that agent', () => {
+  const result = navigationTarget('show me', NAV_ROSTER, { floorHolder: NAV_ROSTER[0] });
+  assert.equal(result.agent.name, 'Ivan');
+});
+
+test('"show me" with nobody holding the floor asks what', () => {
+  // Rather than guessing at whichever tab happens to be open, which is right once.
+  assert.equal(navigationTarget('show me', NAV_ROSTER).problem, 'nothing-to-show');
+});
+
+test('a question that merely begins like navigation is still a question', () => {
+  // The one that matters. "show me" opens both a navigation request and an ordinary question,
+  // and treating this as navigation would discard the request entirely.
+  assert.equal(navigationTarget('show me the Q3 numbers', NAV_ROSTER), null);
+  assert.equal(navigationTarget('show me what changed last week', NAV_ROSTER), null);
+  assert.equal(navigationTarget('open the door', NAV_ROSTER), null);
+});
+
+test('a vendor can be named by its product', () => {
+  // Nobody says "take me to Ivan". They say Notion.
+  for (const said of ['take me to Notion', 'open Notion', 'go to Notion', 'switch to Notion']) {
+    assert.equal(navigationTarget(said, NAV_ROSTER)?.agent?.name, 'Ivan', said);
+  }
+});
+
+test('a vendor can also be named by its agent', () => {
+  // Unambiguous when someone does say it, so there is no reason to refuse.
+  assert.equal(navigationTarget('take me to Ivan', NAV_ROSTER).agent.name, 'Ivan');
+});
+
+test('the longer opening wins over the one it contains', () => {
+  // "take me back to" must not be eaten by "take me to" leaving "back to notion".
+  assert.equal(navigationTarget('take me back to Notion', NAV_ROSTER).agent.name, 'Ivan');
+});
+
+test('naming something we do not know is a question, not a failed navigation', () => {
+  // "take me to the summary" is a request to an assistant. Refusing it as bad navigation would
+  // be worse than passing it on.
+  assert.equal(navigationTarget('take me to the summary', NAV_ROSTER), null);
+});
+
+test('product names come from the domain, minus the generic subdomain', () => {
+  assert.equal(productName('notion.so'), 'notion');
+  assert.equal(productName('*.notion.so'), 'notion');
+  assert.equal(productName('app.leanix.net'), 'leanix');
+  assert.equal(productName('chat.openai.com'), 'openai');
+  assert.equal(productName(''), '');
+});
+
+test('asking a question is never navigation', () => {
+  // The ordinary case, stated so a future prefix cannot quietly capture it.
+  assert.equal(navigationTarget('Ivan tell me a joke', NAV_ROSTER), null);
+  assert.equal(navigationTarget('and what about last quarter', NAV_ROSTER), null);
 });

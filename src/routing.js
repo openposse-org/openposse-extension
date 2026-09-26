@@ -142,6 +142,102 @@ export function bestMatch(fragment, agents) {
   return scored[0];
 }
 
+// ── Navigation (E3b) ──────────────────────────────────────────────────────────────────────
+//
+// Asking an agent something does **not** switch to its tab — the content script drives a
+// background tab perfectly well, so switching would only pull someone away from what they were
+// doing. Navigation is therefore something you ask for, and this is where asking is recognised.
+
+/** Utterances that mean "show me the thing we were just talking about", and nothing else. */
+const BARE_NAVIGATION = new Set([
+  'show me', 'show me that', 'show it', 'show that', 'show it to me', 'show me it',
+  'open it', 'open that', 'take me there', 'take me to it', 'let me see', 'let me see it',
+  'go there', 'jump to it', 'back to it',
+]);
+
+/** Openings that mean "show me X", where X has to name something we know. */
+const NAVIGATION_PREFIXES = [
+  'take me back to', 'take me to', 'switch back to', 'switch to',
+  'go back to', 'go to', 'jump to', 'show me', 'open up', 'open',
+];
+
+/**
+ * The vendor's name as a person would say it, derived from the recipe's domain.
+ *
+ * Nobody says "take me to Ivan" — they say "Notion". The agent's name and its vendor are
+ * different strings and only the agent's is in the roster, so the other one has to come from
+ * the domain the recorder already captured. Same job `BrowserTab.productInitial` did on the
+ * Mac side.
+ *
+ * Generic subdomains are dropped, because `app.leanix.net` is "LeanIX" and never "app".
+ */
+const GENERIC_SUBDOMAINS = new Set(['www', 'app', 'chat', 'my', 'portal', 'web', 'console']);
+
+export function productName(domainPattern) {
+  const labels = String(domainPattern ?? '')
+    .replace(/^\*\./, '')
+    .split('.')
+    .filter(Boolean);
+  while (labels.length > 1 && GENERIC_SUBDOMAINS.has(labels[0])) labels.shift();
+  return labels[0] ?? '';
+}
+
+/** Matches a fragment against what an agent can be called: its name, or its vendor's. */
+function matchTarget(fragment, agents) {
+  const labelled = agents.flatMap((agent) => {
+    const labels = [agent.name];
+    if (agent.product) labels.push(agent.product);
+    return labels.map((label) => ({ id: agent.id, name: label, agent }));
+  });
+  const hit = bestMatch(fragment, labelled);
+  return hit ? hit.agent.agent : null;
+}
+
+/**
+ * Whether this utterance is asking to be taken somewhere, and where.
+ *
+ * Returns `null` when it is **not** navigation, so the caller falls through to `route` and
+ * treats it as a question. That default is load-bearing.
+ *
+ * **The rule is exhaustion**: an opening like "show me" counts only when it, plus something
+ * that names an agent, consumes the *whole* utterance. "Show me" is navigation; "show me the
+ * Q3 numbers" is a question. Getting this wrong does not merely misfire — it **eats the
+ * question** and switches tabs instead, so the speaker watches their request vanish with no
+ * error anywhere. Anything left over therefore means question, every time.
+ *
+ * @returns `{ agent }`, `{ problem }`, or `null` for "this is not navigation"
+ */
+export function navigationTarget(utterance, agents, { floorHolder = null } = {}) {
+  const text = normalise(utterance);
+  if (!text || !agents || agents.length === 0) return null;
+
+  // "show me" on its own — whatever we were just talking about.
+  if (BARE_NAVIGATION.has(text)) {
+    return floorHolder ? { agent: floorHolder } : { problem: 'nothing-to-show' };
+  }
+
+  // Longest prefix first, so "take me back to" is not consumed by "take me to".
+  for (const prefix of NAVIGATION_PREFIXES) {
+    if (text !== prefix && !text.startsWith(`${prefix} `)) continue;
+
+    const rest = text.slice(prefix.length).trim().replace(/^(the|my)\s+/, '');
+    if (!rest) {
+      // "open" alone is not a request to go anywhere; "take me to" alone is.
+      return BARE_NAVIGATION.has(prefix) || prefix.includes('me')
+        ? (floorHolder ? { agent: floorHolder } : { problem: 'nothing-to-show' })
+        : null;
+    }
+
+    const agent = matchTarget(rest, agents);
+    // Nothing left over and it named someone: navigation. Anything else is a question, and
+    // this `null` is what stops "show me the Q3 numbers" being swallowed.
+    if (agent) return { agent };
+    return null;
+  }
+
+  return null;
+}
+
 /**
  * Decides who an utterance is for.
  *

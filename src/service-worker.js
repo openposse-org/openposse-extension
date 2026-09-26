@@ -16,7 +16,7 @@ import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
   isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone,
 } from './listening.js';
-import { route, FLOOR_MS } from './routing.js';
+import { route, navigationTarget, productName, FLOOR_MS } from './routing.js';
 
 /**
  * Replies in flight, by correlation id.
@@ -117,9 +117,66 @@ const ROUTING_COPY = {
  * take somebody away from what they were doing to no purpose. The orb at E4 is how the answer
  * arrives; until then it is in the tab where it belongs.
  */
-async function handleUtterance(text) {
+/**
+ * The roster, plus what each agent's vendor is called out loud.
+ *
+ * Nobody says "take me to Ivan" — they say "Notion", and only the agent's name is in the
+ * roster. The other name comes from the domain the recorder already captured.
+ */
+async function rosterWithProducts() {
   const { agents } = await loadRoster();
-  const decision = route(text, agents, { floorHolder: await floorHolder(agents) });
+  return Promise.all(agents.map(async (agent) => ({
+    ...agent,
+    product: productName((await recipeFor(agent))?.domainPattern),
+  })));
+}
+
+/**
+ * Takes someone to an agent's tab, which is the one time we move them.
+ *
+ * `focusTab` rather than a bare `tabs.update`, so this inherits its ordering lesson: activate
+ * the tab, *then* raise the window. The other order shows the window's previously-active tab
+ * for a frame first, which reads as landing on the wrong page.
+ */
+async function goToAgent(nav) {
+  if (nav.problem) {
+    markDone(nav.problem);
+    announceTurn({ phase: 'problem', message: 'Show you what? Ask an assistant something first.' });
+    return;
+  }
+
+  const agent = nav.agent;
+  const recipe = await recipeFor(agent);
+  const tabs = recipe?.domainPattern
+    ? await chrome.tabs.query({ url: matchPattern(recipe.domainPattern) })
+    : [];
+  const tab = tabs.find((t) => t.active) ?? tabs[0];
+
+  if (!tab) {
+    markDone('tab-not-found');
+    announceTurn({ phase: 'problem', message: `No ${agent.product || agent.name} tab is open.` });
+    return;
+  }
+
+  await focusTab({ tabId: tab.id });
+  // Being shown an agent's tab is as much a reason to expect a follow-up as being answered by
+  // it, so the floor moves here too — "show me Notion", then "what changed last week".
+  await holdFloor(agent.name);
+  markDone(null);
+  announceTurn({ phase: 'navigated', agentName: agent.name });
+}
+
+async function handleUtterance(text) {
+  const agents = await rosterWithProducts();
+  const floor = await floorHolder(agents);
+
+  // Navigation is checked first and returns null unless it is *certain* — the opening phrase
+  // plus a name it recognises has to consume the whole utterance. Anything left over falls
+  // through to being a question, which is what stops "show me the Q3 numbers" being swallowed.
+  const nav = navigationTarget(text, agents, { floorHolder: floor });
+  if (nav) return goToAgent(nav);
+
+  const decision = route(text, agents, { floorHolder: floor });
 
   if (decision.problem) {
     markDone(decision.problem);

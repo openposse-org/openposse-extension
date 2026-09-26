@@ -164,6 +164,9 @@ function showTurn({ phase, agentName, text, message }) {
   if (phase === 'thinking') {
     out.className = 'heard';
     out.textContent = `Asking ${agentName}…`;
+  } else if (phase === 'navigated') {
+    out.className = 'heard final';
+    out.textContent = `Showing you ${agentName}.`;
   } else if (phase === 'answered') {
     out.className = 'heard final';
     out.textContent = text || `${agentName} answered.`;
