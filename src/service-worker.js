@@ -12,6 +12,10 @@
 // set on one event still exists on the next.
 
 import { loadRoster, recipeFor, findAgent } from './storage.js';
+import {
+  handleOffscreenMessage, toggleListening, startListening, stopListening,
+  isListening, currentTurn, setBias,
+} from './listening.js';
 
 /**
  * Replies in flight, by correlation id.
@@ -596,6 +600,22 @@ async function dispatchIntent(request) {
  * than held in a variable.
  */
 chrome.runtime.onMessage.addListener((request, _sender, respond) => {
+  // Offscreen traffic first: it is the highest-volume kind by far — an interim result every
+  // few hundred milliseconds — and none of it wants a reply. Returning false hands the message
+  // on without holding a port open for an answer nobody is going to send.
+  if (handleOffscreenMessage(request)) return false;
+
+  if (request?.kind === 'openposse.listen.toggle') {
+    toggleListening().then((problem) => respond({ ok: !problem, failure: problem ?? null }));
+    return true;
+  }
+  if (request?.kind === 'openposse.listen.query') {
+    // What a popup needs the moment it opens: are we listening, what has been heard so far, and
+    // what went wrong last time. It may have opened halfway through a turn started by ⇧⌘5.
+    isListening().then((listening) => respond({ listening, ...currentTurn() }));
+    return true;
+  }
+
   if (request?.kind === 'openposse.ask') {
     ask(request.agentName, request.prompt).then(respond);
     return true;          // keeps the channel open for the async reply
@@ -610,8 +630,28 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   return false;
 });
 
+/**
+ * ⇧⌘5 — the one global gesture.
+ *
+ * A toggle, because it is the only control available when nothing of ours is on screen: the
+ * same press has to be both "listen" and "never mind". That was M1's finding about ⌥V and it
+ * transfers unchanged, along with its consequence — cancelling discards the half-sentence
+ * rather than sending it (see `offscreen.js`).
+ *
+ * **`Ctrl+Shift+5`, not ⌥V.** Chrome allows `global: true` only on Ctrl+Shift+[0-9], so the
+ * key is chosen by the platform rather than by us. On macOS Chrome maps Ctrl to ⌘, which is
+ * why the popup shows ⇧⌘5.
+ */
+chrome.commands.onCommand.addListener((command) => {
+  if (command === 'summon') toggleListening();
+});
+
 chrome.runtime.onInstalled.addListener(() => {
   console.info('[openposse] extension installed');
+  // A reload destroys the offscreen document and clears session storage, but the badge is the
+  // browser's and survives — so without this the toolbar claims a microphone is open that
+  // nothing is holding.
+  chrome.action.setBadgeText({ text: '' }).catch(() => {});
   // An update — which the chrome://extensions reload button performs — clears every dynamic
   // registration while leaving the permissions in place. Without this, every vendor added
   // through the recorder stops working after a reload, silently.
@@ -631,6 +671,15 @@ chrome.runtime.onStartup.addListener(() => {
 // wrong place — hence a handle that can be called directly.
 globalThis.openposse = {
   roster: () => loadRoster(),
+  // Listening, without the hotkey — useful when the shortcut is taken by something else, and
+  // the only way to drive a turn while the popup is open to watch it. Note that none of these
+  // return what was heard: the transcript goes to the popup and nowhere else, and a console
+  // handle that printed it would be a logging path this project does not have.
+  listen: () => startListening(),
+  hush: () => stopListening(),
+  listening: () => isListening(),
+  /** `openposse.bias(false)`, say "Ivan" twice, compare. See `setBias`. */
+  bias: (on = true) => setBias(on),
   ask: (name, prompt) => ask(name, prompt, { onPartial: (t) => console.debug('…', t.length) }),
   // What is granted, and what is actually registered. The two disagreeing is the silent
   // failure the recorder is built around — a grant with no registration and a registration

@@ -104,6 +104,52 @@ async function checkMic() {
     : "Microphone isn't set up yet — click to finish setup.";
 }
 
+// ── Listening ──────────────────────────────────────────────────────────────────────────────
+//
+// Two sources, deliberately. Interim results come **straight from the offscreen document**,
+// because `runtime.sendMessage` reaches every extension context at once and routing them
+// through the worker would add a round trip to text that updates several times a second. State
+// — are we listening, and what went wrong — comes from the worker, which is the only thing that
+// knows it across a popup that opens and closes mid-turn.
+
+/** Renders the turn. Interim text is dimmed and final text is not, so finality is visible. */
+function showHeard(text, isFinal) {
+  const out = el('heard');
+  out.className = `heard${isFinal ? ' final' : ''}`;
+  out.textContent = text;
+}
+
+function showState({ listening, turn, failure }) {
+  const button = el('listen');
+  button.textContent = listening ? 'Stop' : 'Listen';
+  // Losing `.secondary` fills the button with the channel blue — the same "this is live now"
+  // signal the badge shows on the toolbar, so the two surfaces agree.
+  button.classList.toggle('secondary', !listening);
+
+  if (failure) {
+    el('heard').className = 'heard bad';
+    el('heard').textContent = failure.message;
+    return;
+  }
+  if (turn?.text) {
+    showHeard(turn.text, turn.isFinal);
+    return;
+  }
+  showHeard(listening ? 'Listening…' : '', false);
+}
+
+el('listen').addEventListener('click', () => {
+  // Not awaited: the reply arrives as a broadcast state message like every other transition, so
+  // waiting for this one would mean rendering the same thing twice by two different routes.
+  chrome.runtime.sendMessage({ kind: 'openposse.listen.toggle' }).catch(() => {});
+});
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.kind === 'openposse.heard') showHeard(message.text, message.isFinal);
+  else if (message?.kind === 'openposse.listen.state') showState(message);
+  return false;
+});
+
 // ── Asking without speaking ────────────────────────────────────────────────────────────────
 
 async function send() {
@@ -158,4 +204,11 @@ chrome.commands.getAll().then((commands) => {
   if (summon?.shortcut) el('shortcut').textContent = summon.shortcut;
 });
 
-await Promise.all([render(), checkMic()]);
+// The turn may already be running — ⇧⌘5 works with nothing on screen, so a popup opened
+// afterwards has to catch up rather than assume it is starting from idle.
+const catchUp = chrome.runtime
+  .sendMessage({ kind: 'openposse.listen.query' })
+  .then((state) => showState(state ?? { listening: false }))
+  .catch(() => showState({ listening: false }));
+
+await Promise.all([render(), checkMic(), catchUp]);

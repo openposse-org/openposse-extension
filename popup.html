@@ -28,6 +28,21 @@
       }
       #agents { margin-bottom: 12px; }
       #empty { color: var(--text-dim); font-size: 12.5px; }
+
+      /* Voice sits above the text box because voice is the product and typing is the
+         fallback — the order on screen should say which is which. */
+      .listen { display: flex; gap: 9px; align-items: center; }
+      .listen button { flex: 0 0 auto; }
+      /* Fixed height so the popup does not resize under the cursor as words arrive. The orb
+         holds its height across all six states for the same reason. */
+      .heard {
+        flex: 1; min-height: 34px;
+        font-size: 12.5px; line-height: 1.35;
+        color: var(--text-dim);
+        display: flex; align-items: center;
+      }
+      .heard.final { color: var(--text); }
+      .heard.bad { color: var(--error); }
       .ask { display: flex; gap: 7px; margin-top: 10px; }
       .ask input { flex: 1; }
       footer {
@@ -58,6 +73,14 @@
     <div id="agents"></div>
     <div id="empty" hidden>
       No assistants yet. Open a page with an AI assistant on it, then record it.
+    </div>
+
+    <!-- The same turn ⇧⌘5 starts, with somewhere to watch it. Until the orb exists (E4) this
+         is the only surface live text has, and the shortcut is useless while the popup is
+         shut — so the button is not a duplicate of the hotkey, it is how you see it work. -->
+    <div class="listen">
+      <button id="listen" class="secondary">Listen</button>
+      <div id="heard" class="heard"></div>
     </div>
 
     <!-- The manual path. Not only a fallback for a dead microphone: it is the whole product
