@@ -80,13 +80,22 @@ if (!globalThis.__openposseOrb) {
     cx.clearRect(0, 0, w, h);
     cx.globalCompositeOperation = 'lighter';
 
-    // Synthetic, with the per-mode floors the design specifies so an idle orb still breathes.
-    // **The design asks for the real mic RMS here** — "so a dead mic can never look healthy" —
-    // which needs an AnalyserNode alongside the recogniser in the offscreen document. Deferred
-    // rather than forgotten: the honest half of that promise, the `dead` state, is driven by
-    // real signals already (see `modeFor`), so a mic that is not granted or has failed reads
-    // as dead rather than as a healthy idle orb.
-    const amp = mode === 'speak' ? 0.80 + 0.16 * Math.sin(t / 13) + 0.09 * Math.sin(t / 4.1)
+    // **While listening, the radius is the microphone**, which is what the design asks for and
+    // why: "so a dead mic can never look healthy." The synthetic curve below drew the same
+    // confident sphere whether or not anything was being heard — breaking the promise in
+    // precisely the case it exists for, a granted, connected, silent microphone.
+    //
+    // The floor is kept, so silence still breathes rather than collapsing: a quiet room sits
+    // near 0.24 against a synthetic 0.80, which is the visible difference between "listening"
+    // and "hearing you". `shown` eases toward the reported level, because the meter arrives at
+    // 20 Hz and this runs at 60.
+    //
+    // Every other mode stays synthetic. `agent` becomes the TTS output level at E5, by the same
+    // argument and through the same channel.
+    const amp = mode === 'speak'
+      ? (hasLevel
+        ? Math.min(1.05, 0.22 + 0.04 * Math.sin(t / 28) + 0.85 * shown)
+        : 0.80 + 0.16 * Math.sin(t / 13) + 0.09 * Math.sin(t / 4.1))
       : mode === 'agent' ? 0.58 + 0.16 * Math.sin(t / 9.5) + 0.10 * Math.sin(t / 3.3)
         : mode === 'think' ? 0.26 + 0.07 * Math.sin(t / 20)
           : mode === 'dead' ? 0
@@ -338,6 +347,17 @@ if (!globalThis.__openposseOrb) {
   let t = 0;
   let raf = null;
 
+  /**
+   * The microphone level: where it is, where it is heading, and whether there is one at all.
+   *
+   * `hasLevel` stays false until a reading arrives, so a browser or a device that cannot give
+   * us a meter falls back to the synthetic curve rather than drawing a permanently dead orb.
+   * An absent meter is not a silent room, and they must not look the same.
+   */
+  let shown = 0;
+  let target = 0;
+  let hasLevel = false;
+
   /** The design's six states, mapped from the loop's own vocabulary. */
   function modeFor(phase) {
     switch (phase) {
@@ -351,6 +371,10 @@ if (!globalThis.__openposseOrb) {
 
   function tick() {
     t += 1;
+    // Eased here rather than smoothed harder at the source: the meter already has the design's
+    // 80 ms attack and 250 ms release, and this only bridges 20 Hz of messages to 60 Hz of
+    // frames. Doing it twice would add lag the person would read as the orb being slow.
+    shown += (target - shown) * 0.25;
     draw(canvas, t, modeFor(state.phase), state.channel ?? 'none');
     raf = requestAnimationFrame(tick);
   }
@@ -470,8 +494,19 @@ if (!globalThis.__openposseOrb) {
   }
 
   chrome.runtime.onMessage.addListener((message) => {
+    // Its own branch, before the state merge and returning early: this arrives 20 times a
+    // second, and letting it fall through to `render()` would rebuild the avatars, the status
+    // line and the answer bubble each time, to move a sphere's radius.
+    if (message?.kind === 'openposse.orb.level') {
+      target = message.level;
+      hasLevel = true;
+      return false;
+    }
     if (message?.kind !== 'openposse.orb') return false;
     state = { ...state, ...message.state };
+    // A new turn starts from silence. Without this the orb opens at whatever the last one
+    // ended on, which reads as it hearing something before anyone has spoken.
+    if (message.state.phase === 'listening') { shown = 0; target = 0; hasLevel = false; }
     render();
     show(message.state.visible ?? visible);
     armDismiss(state.phase);

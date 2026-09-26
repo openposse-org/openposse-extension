@@ -11,7 +11,7 @@
 
 import { loadRoster, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
-import { panel } from './panel.js';
+import { panel, panelLevel } from './panel.js';
 
 /**
  * How much of an interim result to show as still-being-revised.
@@ -344,6 +344,12 @@ export function handleOffscreenMessage(message) {
       // nothing, and a surface showing the last thing heard would otherwise keep showing a
       // previous utterance as though it had just been said.
       if (message.note === 'no-speech') { turn = null; failure = { code: 'no-speech', message: "Didn't hear anything." }; }
+      return true;
+
+    case 'openposse.level':
+      // Straight through. Not stored, not logged — it is a fact about the room, and only the
+      // orb wants it.
+      panelLevel(message.level);
       return true;
 
     case 'openposse.listen.started':

@@ -119,6 +119,20 @@ export async function panel(patch, { create = false } = {}) {
   }
 }
 
+/**
+ * The microphone level, on its own channel.
+ *
+ * **Deliberately not routed through `panel()`.** That merges into the panel's state and the orb
+ * re-renders its DOM on every one — rebuilding avatars, status and answer twenty times a second
+ * to move a sphere's radius. This is a number the renderer eases toward between frames and
+ * nothing else reads, so it gets its own message and touches no state.
+ */
+export function panelLevel(value) {
+  if (panelTabId === null) return;
+  chrome.tabs.sendMessage(panelTabId, { kind: 'openposse.orb.level', level: value })
+    .catch(() => { /* the tab went; the next turn re-injects */ });
+}
+
 /** Fades the panel out. The content script stays — re-showing it is then free. */
 export async function hidePanel() {
   await panel({ visible: false });
