@@ -25,6 +25,9 @@ if (!globalThis.__openposseOrb) {
   // face floods with colour, and the rim is stroked three times at falling blur and rising
   // opacity because that is what makes it bloom rather than read as a drawn circle.
 
+  /** The outer bloom. Off — see the note where it is drawn. */
+  const SHOW_HALO = false;
+
   const PAL = [[255, 122, 24], [255, 63, 216], [138, 92, 255], [34, 216, 255], [196, 242, 255], [255, 122, 24]];
   const LUTS = {};
   let POINTS = null;
@@ -93,15 +96,26 @@ if (!globalThis.__openposseOrb) {
     const R = Math.min(w, h) * 0.232 * (0.93 + 0.13 * amp);
     const L = lut(mode === 'dead' ? '#8E8E93' : tint);
 
-    // Diffuse halo. The inner stop **must** be transparent: a radial gradient's inner radius is
-    // a plateau, so anything inside it floods the core, and the reference's face is near-black.
-    const hg = cx.createRadialGradient(ox, oy, R * 0.55, ox, oy, R * 2.05);
-    hg.addColorStop(0, 'rgba(0,0,0,0)');
-    hg.addColorStop(0.62, `rgba(${L.s[18]},${0.30 * lum})`);
-    hg.addColorStop(0.78, `rgba(${L.s[50]},${0.13 * lum})`);
-    hg.addColorStop(1, 'rgba(0,0,0,0)');
-    cx.fillStyle = hg;
-    cx.beginPath(); cx.arc(ox, oy, R * 2.05, 0, 6.2832); cx.fill();
+    // Diffuse halo — **off by request, 2026-09-26.**
+    //
+    // A deliberate departure from a design marked high-fidelity, so it is a switch rather than
+    // a deletion: the bloom reaches 2.05R, roughly doubling the panel's visual footprint over
+    // somebody else's page, and on screen it read as a second ring around the sphere rather
+    // than as light coming off it. The rim's own three passes already bloom.
+    //
+    // Kept because judging it needs to be done against a real page in both states, and
+    // re-deciding costs one word here.
+    if (SHOW_HALO) {
+      // The inner stop **must** be transparent: a radial gradient's inner radius is a plateau,
+      // so anything inside it floods the core, and the reference's face is near-black.
+      const hg = cx.createRadialGradient(ox, oy, R * 0.55, ox, oy, R * 2.05);
+      hg.addColorStop(0, 'rgba(0,0,0,0)');
+      hg.addColorStop(0.62, `rgba(${L.s[18]},${0.30 * lum})`);
+      hg.addColorStop(0.78, `rgba(${L.s[50]},${0.13 * lum})`);
+      hg.addColorStop(1, 'rgba(0,0,0,0)');
+      cx.fillStyle = hg;
+      cx.beginPath(); cx.arc(ox, oy, R * 2.05, 0, 6.2832); cx.fill();
+    }
 
     if (mode !== 'dead') {
       const pts = points(), step = w < 160 ? 2 : 1;

@@ -205,10 +205,23 @@ async function handleUtterance(text) {
     return;
   }
 
-  const { agent, prompt, matched } = decision;
+  return putQuestion(decision.agent, decision.prompt, decision.matched);
+}
+
+/**
+ * Asks one agent one question, with the panel and badge along for the ride.
+ *
+ * Split out of `handleUtterance` so the typed path reaches it too. Before this, speaking put
+ * the answer on the orb and typing put it in the popup — two answer surfaces for one product,
+ * and the popup's was an E2 stopgap from when there was no orb to put anything on.
+ */
+async function putQuestion(agent, prompt, matched) {
   lastPrompt = prompt;
   markThinking(agent.name);
-  panel({ phase: 'thinking', agentName: agent.name, channel: channelFor(agent.name) });
+  panel({
+    phase: 'thinking', agentName: agent.name, channel: channelFor(agent.name),
+    transcript: prompt, volatile: '', answer: '', message: '', visible: true,
+  }, { create: true });
   announceTurn({ phase: 'thinking', agentName: agent.name, matched });
 
   const result = await ask(agent.name, prompt);
@@ -803,8 +816,16 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   }
 
   if (request?.kind === 'openposse.ask') {
-    ask(request.agentName, request.prompt).then(respond);
-    return true;          // keeps the channel open for the async reply
+    // The typed path, through the same door as the spoken one — so the answer lands on the orb
+    // rather than in a popup that closes the moment you look away.
+    loadRoster()
+      .then(({ agents }) => findAgent(agents, request.agentName))
+      .then((agent) => (agent
+        ? putQuestion(agent, request.prompt, 'typed')
+        : announceTurn({ phase: 'problem', message: `No agent called ${request.agentName}.` })))
+      .catch(() => {});
+    respond({ ok: true });
+    return true;
   }
   if (request?.kind === 'openposse.record') {
     // E8 wires the recorder's own UI to this. Acknowledged rather than silently dropped, so
