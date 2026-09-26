@@ -592,7 +592,16 @@ async function runReconcile() {
   const covered = staticOrigins();
   const already = new Set(existing.map((script) => script.id));
 
-  const wanted = origins.filter((origin) => !covered.has(origin));
+  // **The all-sites grant is for the panel, never for the driver.**
+  //
+  // This function registers `content.js` for every granted origin, so without this line
+  // turning on "show the panel on any page" would silently install the vendor driver into
+  // every page the user visits — a `MutationObserver`, a message listener and a shadow-piercing
+  // query on every tab, forever, to drive assistants that are not there.
+  //
+  // The panel does not need it: it is injected per turn by `executeScript`, which the host
+  // permission is what makes possible. The driver stays where a recipe says an assistant is.
+  const wanted = origins.filter((origin) => !covered.has(origin) && origin !== 'https://*/*');
   const toAdd = wanted
     .filter((origin) => !already.has(registrationID(origin)))
     .map((origin) => ({

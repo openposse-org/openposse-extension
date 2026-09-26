@@ -87,8 +87,37 @@
         </div>
       </section>
 
-      <section class="step" id="step-import">
+      <section class="step" id="step-panel">
         <div class="num">4</div>
+        <div style="flex:1">
+          <h2>Show the panel on any page <span class="kind">— optional</span></h2>
+          <p>
+            The panel appears over whatever page you're on. Chrome normally lends an extension
+            access to the current tab when you press its shortcut — but not when that shortcut
+            is <strong>Global</strong>, which is exactly what makes
+            <span class="mono">⌥V</span> work from other apps. So the two can't both be had
+            without asking you directly.
+          </p>
+          <p>
+            Chrome will word this as <em>“Read and change all your data on all websites”</em>,
+            because that is the only wording it has. What OpenPosse does with it is draw the
+            panel. It still sends nothing anywhere — speech, assistants and answers all stay on
+            this machine — and it does not read pages it hasn't been asked to drive.
+          </p>
+          <p>
+            Skip it and everything still works: the panel appears on your assistants' own pages,
+            and the toolbar icon shows what's happening everywhere else. You can turn it off
+            again here at any time.
+          </p>
+          <div class="row">
+            <button class="secondary" id="grant-panel">Turn on</button>
+            <span class="status mono" id="panel-status">checking…</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="step" id="step-import">
+        <div class="num">5</div>
         <div style="flex:1">
           <h2>Bring across assistants you already recorded <span class="kind">— optional</span></h2>
           <p>
