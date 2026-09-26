@@ -320,12 +320,16 @@ export function handleOffscreenMessage(message) {
       // of exactly the kind the rule carves out. `info` rather than `debug` because `debug` is
       // Verbose level and Chrome DevTools hides that by default: a measurement nobody can find
       // is not a measurement. Both lines come out of this file once the question is settled.
+      // **"speechend never fired" is only a finding if something was said.** With no results
+      // at all there was nothing to end, and blaming the API for a silent room sends the next
+      // reader looking for a browser bug — the same shape as the measurements that came back
+      // 0 ms and meant nothing.
       console.info(
         '[openposse] turn ended —',
-        message.speechEndFired
-          ? `${message.waitMs} ms from you stopping to the final`
-          : 'speechend never fired (the Apple outcome)',
-        `· ${message.tailMs ?? '—'} ms final to end`,
+        message.tailMs == null ? 'nothing was said'
+          : message.speechEndFired
+            ? `${message.waitMs} ms from you stopping to the final · ${message.tailMs} ms final to end`
+            : `speechend never fired despite speech · ${message.tailMs} ms final to end`,
       );
       settle();
       return true;
