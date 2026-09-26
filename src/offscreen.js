@@ -19,6 +19,7 @@
 // message to whoever is displaying it.
 
 import { assignVoices } from './voices.js';
+import { chooseEngine, hasWebGPU } from './tts.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const Phrase = globalThis.SpeechRecognitionPhrase;
@@ -306,9 +307,47 @@ function voices() {
   });
 }
 
+/**
+ * Whether Kokoro's weights are actually present.
+ *
+ * A **real check against the bundle**, not a flag: the assets are not shipped yet, and a
+ * hardcoded `false` would have to be remembered and flipped by hand on the day they are. This
+ * answers correctly today and correctly the moment the files land, which is the difference
+ * between a gate and a note to self.
+ */
+async function hasKokoroAssets() {
+  try {
+    const res = await fetch(chrome.runtime.getURL('models/kokoro/model.onnx'), { method: 'HEAD' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Decided per turn rather than cached: a GPU can be lost, and assets can be added. */
+async function engine() {
+  return chooseEngine({
+    hasWebGPU: await hasWebGPU(),
+    hasKokoroAssets: await hasKokoroAssets(),
+  });
+}
+
 async function speak({ text, agentID, roster = [] }) {
   if (!text) return;
   speechSynthesis.cancel();                 // never two agents at once
+
+  // E6's fork. `chooseEngine` routes to Kokoro when WebGPU *and* the weights are both present,
+  // and to the system voices otherwise — which is every machine today, because the weights are
+  // not bundled yet. The branch is live rather than hypothetical, so adding the assets is the
+  // whole of the remaining change.
+  const { engine: chosen } = await engine();
+  if (chosen === 'kokoro') {
+    // Unreachable until `models/kokoro/` exists. Deliberately not a silent fall-through: if
+    // this is ever reached without an implementation, that is a bug worth hearing about
+    // rather than quietly getting the voices E6 exists to replace.
+    send('openposse.spoke', { ok: false, reason: 'kokoro-not-implemented' });
+    return;
+  }
 
   const assigned = assignVoices(roster, await voices());
   const voice = assigned.get(agentID) ?? null;
@@ -349,6 +388,11 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
     case 'openposse.hush':
       speechSynthesis.cancel();
       respond({ ok: true });
+      return true;
+    case 'openposse.engine.query':
+      // Asked by setup. This document is the only place that can answer — WebGPU and the voice
+      // list both live here.
+      engine().then(respond);
       return true;
     case 'openposse.listen.start':
       start(message.options).then(() => respond({ ok: true }));

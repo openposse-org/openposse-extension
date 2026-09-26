@@ -7,6 +7,7 @@
 
 import { loadRoster, importFromMacApp, setMicGranted, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
+import { describeEngine, REASONS } from './tts.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const LANGS = { langs: ['en-US'], processLocally: true };
@@ -180,6 +181,26 @@ el('folder').addEventListener('change', async (event) => {
   event.target.value = '';     // So choosing the same folder twice fires `change` again.
 });
 
+// ── Which engine speaks ────────────────────────────────────────────────────────────────────
+//
+// Reported rather than chosen. The decision is made from what the machine can actually do, and
+// the value of showing it is that "why does it sound like that" has an answer — a person on a
+// browser without WebGPU should be told so, not left to wonder.
+//
+// The offscreen document is the only context that can answer: WebGPU and the voice list both
+// live there, and it is created on demand by the worker.
+
+async function refreshEngine() {
+  try {
+    const choice = await chrome.runtime.sendMessage({ kind: 'openposse.engine.query' });
+    el('engine').textContent = choice ? describeEngine(choice) : REASONS.system;
+  } catch {
+    // No offscreen document yet — it is made when a turn starts. Saying what will happen is
+    // more use than an error about a document nobody asked for.
+    el('engine').textContent = REASONS.system;
+  }
+}
+
 // ── Roster ─────────────────────────────────────────────────────────────────────────────────
 
 async function refreshRoster() {
@@ -233,6 +254,7 @@ await refreshMic();
 await refreshModel();
 await refreshShortcut();
 await refreshPanelAccess();
+await refreshEngine();
 await refreshRoster();
 
 // Shortcuts are changed on another tab, so this page is stale the moment they leave it. Chrome

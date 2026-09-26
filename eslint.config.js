@@ -48,6 +48,11 @@ export default [
         // speech synthesis, and an utterance started in a tab dies when that tab navigates.
         speechSynthesis: 'readonly',
         SpeechSynthesisUtterance: 'readonly',
+        // Only ever against `chrome.runtime.getURL` — asking the bundle whether the Kokoro
+        // weights are present. **Never a network call**: a runtime fetch of model weights
+        // would breach the project's "no third-party model downloads at runtime" rule, so a
+        // `fetch` here with an outside host in it is a bug, not a feature.
+        fetch: 'readonly',
         KeyboardEvent: 'readonly',
         MouseEvent: 'readonly',
         Event: 'readonly',
