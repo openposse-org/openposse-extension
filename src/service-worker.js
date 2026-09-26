@@ -17,6 +17,26 @@ import {
   isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone,
 } from './listening.js';
 import { route, navigationTarget, productName, FLOOR_MS } from './routing.js';
+import { panel, hidePanel, primePanel } from './panel.js';
+import { channelFor } from './channels.js';
+
+/**
+ * The last thing asked, so clicking a different avatar can put it to them instead.
+ *
+ * **Session storage, not a module variable.** MV3 terminates an idle worker after ~30 seconds,
+ * and the panel can easily still be on screen after that — so a variable here would be empty
+ * exactly when someone reaches for the avatar, and the click would do nothing with no way to
+ * tell that from a dead button. It expires with the floor, because re-asking a question the
+ * conversation has moved on from is not a repair.
+ */
+async function rememberPrompt(prompt) {
+  await chrome.storage.session.set({ lastPrompt: prompt, lastPromptAt: Date.now() });
+}
+
+async function recallPrompt() {
+  const { lastPrompt, lastPromptAt = 0 } = await chrome.storage.session.get(['lastPrompt', 'lastPromptAt']);
+  return lastPrompt && Date.now() - lastPromptAt <= FLOOR_MS ? lastPrompt : '';
+}
 
 /**
  * Replies in flight, by correlation id.
@@ -158,6 +178,9 @@ async function goToAgent(nav) {
     return;
   }
 
+  // Hidden before the switch, not after: the panel is injected into the tab being left, and
+  // leaving it up there means it is still on screen when that tab is next looked at.
+  await hidePanel();
   await focusTab({ tabId: tab.id });
   // Being shown an agent's tab is as much a reason to expect a follow-up as being answered by
   // it, so the floor moves here too — "show me Notion", then "what changed last week".
@@ -180,6 +203,12 @@ async function handleUtterance(text) {
 
   if (decision.problem) {
     markDone(decision.problem);
+    panel({
+      phase: 'needs-attention',
+      message: decision.problem === 'name-only'
+        ? `${decision.agent.name}?`
+        : ROUTING_COPY[decision.problem] ?? 'Something went wrong.',
+    });
     announceTurn({
       phase: 'problem',
       // `name-only` is answered by the agent's own name with a question mark — the spoken
@@ -191,8 +220,23 @@ async function handleUtterance(text) {
     return;
   }
 
-  const { agent, prompt, matched } = decision;
+  return putQuestion(decision.agent, decision.prompt, decision.matched);
+}
+
+/**
+ * Asks one agent one question, with the panel and badge along for the ride.
+ *
+ * Split out of `handleUtterance` so the typed path reaches it too. Before this, speaking put
+ * the answer on the orb and typing put it in the popup — two answer surfaces for one product,
+ * and the popup's was an E2 stopgap from when there was no orb to put anything on.
+ */
+async function putQuestion(agent, prompt, matched) {
+  await rememberPrompt(prompt);
   markThinking(agent.name);
+  panel({
+    phase: 'thinking', agentName: agent.name, channel: channelFor(agent.name),
+    transcript: prompt, volatile: '', answer: '', message: '', visible: true,
+  }, { create: true });
   announceTurn({ phase: 'thinking', agentName: agent.name, matched });
 
   const result = await ask(agent.name, prompt);
@@ -203,9 +247,15 @@ async function handleUtterance(text) {
     // already been shown not to work.
     await holdFloor(agent.name);
     markDone(null);
+    panel({ phase: 'answering', agentName: agent.name, answer: result.payload?.text ?? '' });
     announceTurn({ phase: 'answered', agentName: agent.name, text: result.payload?.text ?? '' });
   } else {
     markDone(result.payload?.code ?? 'failed');
+    panel({
+      phase: 'needs-attention',
+      agentName: agent.name,
+      message: result.payload?.message ?? `${agent.name} could not answer.`,
+    });
     announceTurn({
       phase: 'problem',
       agentName: agent.name,
@@ -542,7 +592,16 @@ async function runReconcile() {
   const covered = staticOrigins();
   const already = new Set(existing.map((script) => script.id));
 
-  const wanted = origins.filter((origin) => !covered.has(origin));
+  // **The all-sites grant is for the panel, never for the driver.**
+  //
+  // This function registers `content.js` for every granted origin, so without this line
+  // turning on "show the panel on any page" would silently install the vendor driver into
+  // every page the user visits — a `MutationObserver`, a message listener and a shadow-piercing
+  // query on every tab, forever, to drive assistants that are not there.
+  //
+  // The panel does not need it: it is injected per turn by `executeScript`, which the host
+  // permission is what makes possible. The driver stays where a recipe says an assistant is.
+  const wanted = origins.filter((origin) => !covered.has(origin) && origin !== 'https://*/*');
   const toAdd = wanted
     .filter((origin) => !already.has(registrationID(origin)))
     .map((origin) => ({
@@ -759,6 +818,28 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   // on without holding a port open for an answer nobody is going to send.
   if (handleOffscreenMessage(request)) return false;
 
+  if (request?.kind === 'openposse.orb.reroute') {
+    // Clicking an avatar puts the same question to someone else, straight to thinking — the
+    // design's own behaviour, and the fastest repair when routing picked the wrong agent.
+    //
+    // Straight to `putQuestion` rather than back through routing: the agent was *clicked*, so
+    // re-deriving them from a sentence would be throwing away the one unambiguous signal in
+    // the whole loop.
+    (async () => {
+      const prompt = await recallPrompt();
+      const { agents } = await loadRoster();
+      const agent = findAgent(agents, request.agentName);
+      if (!prompt || !agent) {
+        panel({ phase: 'needs-attention', message: 'Nothing recent to ask again.' });
+        respond({ ok: false });
+        return;
+      }
+      respond({ ok: true });
+      await putQuestion(agent, prompt, 'reroute');
+    })();
+    return true;
+  }
+
   if (request?.kind === 'openposse.listen.toggle') {
     toggleListening().then((problem) => respond({ ok: !problem, failure: problem ?? null }));
     return true;
@@ -771,8 +852,16 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   }
 
   if (request?.kind === 'openposse.ask') {
-    ask(request.agentName, request.prompt).then(respond);
-    return true;          // keeps the channel open for the async reply
+    // The typed path, through the same door as the spoken one — so the answer lands on the orb
+    // rather than in a popup that closes the moment you look away.
+    loadRoster()
+      .then(({ agents }) => findAgent(agents, request.agentName))
+      .then((agent) => (agent
+        ? putQuestion(agent, request.prompt, 'typed')
+        : announceTurn({ phase: 'problem', message: `No agent called ${request.agentName}.` })))
+      .catch(() => {});
+    respond({ ok: true });
+    return true;
   }
   if (request?.kind === 'openposse.record') {
     // E8 wires the recorder's own UI to this. Acknowledged rather than silently dropped, so
@@ -808,8 +897,14 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
  * Nothing else in this codebase names a key. Every surface that shows one reads
  * `chrome.commands.getAll()`, so whatever the user actually bound is what they are told.
  */
-chrome.commands.onCommand.addListener((command) => {
-  if (command === 'summon') toggleListening();
+chrome.commands.onCommand.addListener((command, tab) => {
+  if (command !== 'summon') return;
+  // **First, before any await.** `activeTab` is granted by this keypress and is spent by the
+  // time an async chain gets around to using it — which is why the orb only ever appeared on
+  // Notion, the one site with a standing host permission. The event carries the tab, so no
+  // query is needed either.
+  primePanel(tab?.id);
+  toggleListening();
 });
 
 chrome.runtime.onInstalled.addListener(() => {

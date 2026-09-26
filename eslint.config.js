@@ -35,6 +35,15 @@ export default [
         setInterval: 'readonly',
         clearInterval: 'readonly',
         MutationObserver: 'readonly',
+        // The orb's frame loop. It runs inside a vendor's page, so it has to stop when the
+        // panel is hidden rather than burning 60fps on somebody else's tab — which is what
+        // `cancelAnimationFrame` is doing there.
+        requestAnimationFrame: 'readonly',
+        cancelAnimationFrame: 'readonly',
+        // The loudness meter in the offscreen document. `SpeechRecognition` reports no level,
+        // so the orb's radius comes from a second capture of the same device through this.
+        AudioContext: 'readonly',
+        Float32Array: 'readonly',
         KeyboardEvent: 'readonly',
         MouseEvent: 'readonly',
         Event: 'readonly',

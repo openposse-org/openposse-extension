@@ -113,7 +113,48 @@ el('open-shortcuts').addEventListener('click', async () => {
   await chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
 });
 
-// ── 4. Import ──────────────────────────────────────────────────────────────────────────────
+// ── 4. Where the panel may appear ──────────────────────────────────────────────────────────
+//
+// **A global shortcut and `activeTab` are mutually exclusive**, which is why this exists.
+// Chrome grants an extension temporary access to the current tab when the user presses its
+// shortcut — but not when that shortcut is marked `global`, because such a command can fire
+// while Chrome is in the background and there is no tab the gesture belongs to. Measured, after
+// two wrong explanations: the same keypress that works on a vendor's page fails on every other
+// with "Cannot access contents of url".
+//
+// Vendor pages work without this, because a recorded assistant already has a host permission of
+// its own. Everything else needs the broad grant or nothing.
+//
+// Offered rather than asked for at install. The prompt Chrome shows is alarming and it should
+// be — this is the biggest thing the extension can ask for — so it belongs behind a sentence
+// explaining what it buys and a choice the user makes knowingly.
+
+const ALL_SITES = { origins: ['https://*/*'] };
+
+async function refreshPanelAccess() {
+  const granted = await chrome.permissions.contains(ALL_SITES);
+  setStatus('panel-status', granted
+    ? 'on — the panel appears on any page'
+    : "off — the panel appears on assistants' pages only");
+  markDone('step-panel', granted);
+  el('grant-panel').textContent = granted ? 'Turn off' : 'Turn on';
+  return granted;
+}
+
+el('grant-panel').addEventListener('click', async () => {
+  // Read first, act on the answer: this is a toggle, and `request()` on an already-granted
+  // permission resolves true without showing anything, which would make the button dead.
+  if (await chrome.permissions.contains(ALL_SITES)) {
+    await chrome.permissions.remove(ALL_SITES);
+  } else {
+    // Not awaited-then-checked before the request: the prompt needs this click to still be
+    // Chrome's idea of a user gesture, and the `contains` above is the only hop it can afford.
+    await chrome.permissions.request(ALL_SITES);
+  }
+  await refreshPanelAccess();
+});
+
+// ── 5. Import ──────────────────────────────────────────────────────────────────────────────
 
 el('pick-folder').addEventListener('click', () => el('folder').click());
 
@@ -191,6 +232,7 @@ async function refreshRoster() {
 await refreshMic();
 await refreshModel();
 await refreshShortcut();
+await refreshPanelAccess();
 await refreshRoster();
 
 // Shortcuts are changed on another tab, so this page is stale the moment they leave it. Chrome

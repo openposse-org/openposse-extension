@@ -32,22 +32,6 @@
       /* Voice sits above the text box because voice is the product and typing is the
          fallback — the order on screen should say which is which. */
       .listen { display: flex; gap: 9px; align-items: center; }
-      .listen button { flex: 0 0 auto; }
-      /* Fixed height so the popup does not resize under the cursor as words arrive. The orb
-         holds its height across all six states for the same reason. */
-      .heard {
-        flex: 1; min-height: 34px;
-        font-size: 12.5px; line-height: 1.35;
-        color: var(--text-dim);
-        /* `safe center` rather than `center`: an answer taller than the box would otherwise be
-           clipped at the *top* with no way to scroll up to it, because centred overflow
-           spills in both directions. `safe` falls back to flex-start exactly when that
-           would happen. */
-        display: flex; align-items: safe center;
-        max-height: 132px; overflow-y: auto;
-      }
-      .heard.final { color: var(--text); }
-      .heard.bad { color: var(--error); }
       .ask { display: flex; gap: 7px; margin-top: 10px; }
       .ask input { flex: 1; }
       footer {
@@ -80,12 +64,12 @@
       No assistants yet. Open a page with an AI assistant on it, then record it.
     </div>
 
-    <!-- The same turn the shortcut starts, with somewhere to watch it. Until the orb exists (E4) this
-         is the only surface live text has, and the shortcut is useless while the popup is
-         shut — so the button is not a duplicate of the hotkey, it is how you see it work. -->
+    <!-- Starts a turn. **Nothing here narrates one** — the orb owns the whole of the current
+         turn, and a second surface describing it can only ever be a slower, smaller copy that
+         disappears when you look away. The button still says whether it is a Stop, because
+         that is the control's own state rather than a report about the turn. -->
     <div class="listen">
       <button id="listen" class="secondary">Listen</button>
-      <div id="heard" class="heard"></div>
     </div>
 
     <!-- The manual path. Not only a fallback for a dead microphone: it is the whole product

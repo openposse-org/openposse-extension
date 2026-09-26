@@ -11,6 +11,16 @@
 
 import { loadRoster, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
+import { panel, panelLevel } from './panel.js';
+
+/**
+ * How much of an interim result to show as still-being-revised.
+ *
+ * The design dims "the last ~9 characters while the user is still speaking", which is a
+ * presentational stand-in for confidence rather than a measurement — Web Speech gives one
+ * transcript per result and does not say which part it is least sure of.
+ */
+const VOLATILE_TAIL = 9;
 
 const OFFSCREEN_PATH = 'offscreen.html';
 
@@ -140,6 +150,12 @@ export async function startListening() {
       code: 'mic-not-granted',
       message: "The microphone isn't set up yet — finish setup first.",
     };
+    // The design's dead-mic state, driven by a real signal rather than a synthetic one: an
+    // ungranted microphone shows as dead, never as a healthy idle orb.
+    await panel({
+      phase: 'not-capturing', visible: true, transcript: '', volatile: '', answer: '',
+      message: '', agentName: null, channel: null,
+    }, { create: true });
     await broadcastState();
     return failure;
   }
@@ -148,6 +164,17 @@ export async function startListening() {
   failure = null;
   await chrome.storage.session.set({ [LISTENING]: true });
   await setBadge('listening');
+  // Before the panel, not after. The panel's injection can take a moment, and until this runs
+  // an open popup still shows the *previous* turn's outcome — so the two surfaces disagree,
+  // one saying "Didn't hear anything" while the other says "Listening".
+  await broadcastState();
+  // `create` injects the panel into whatever tab is in front. Everything after this is a merge
+  // onto that state, so a turn never has to restate the roster or the shortcut.
+  await panel({
+    phase: 'listening', visible: true,
+    transcript: '', volatile: '', answer: '', sub: '', message: '',
+    agentName: null, channel: null,
+  }, { create: true });
 
   const phrases = await phrasesForRoster();
   // How many names and at what weight — a count and a number, not the names. Paired with the
@@ -270,6 +297,14 @@ export function handleOffscreenMessage(message) {
       // the surface would render each interim result twice. What is kept here is for a popup
       // opened *after* the turn, which saw none of them.
       turn = { text: message.text, isFinal: message.isFinal, at: Date.now() };
+      // Committed white, the tail dimmed, and the phase moves to routing the moment it commits
+      // — the panel should never show a caret next to text the recogniser has finished with.
+      panel(message.isFinal
+        ? { phase: 'routing', transcript: message.text, volatile: '' }
+        : {
+          transcript: message.text.slice(0, -VOLATILE_TAIL),
+          volatile: message.text.slice(-VOLATILE_TAIL),
+        });
       // Handed on as soon as it is final. The handler reads the roster before it claims the
       // badge, so `end` — a millisecond behind — can still win the race and clear it; the
       // agent's initial then appears a moment later. A flicker, not a wrong state, and worth
@@ -285,12 +320,16 @@ export function handleOffscreenMessage(message) {
       // of exactly the kind the rule carves out. `info` rather than `debug` because `debug` is
       // Verbose level and Chrome DevTools hides that by default: a measurement nobody can find
       // is not a measurement. Both lines come out of this file once the question is settled.
+      // **"speechend never fired" is only a finding if something was said.** With no results
+      // at all there was nothing to end, and blaming the API for a silent room sends the next
+      // reader looking for a browser bug — the same shape as the measurements that came back
+      // 0 ms and meant nothing.
       console.info(
         '[openposse] turn ended —',
-        message.speechEndFired
-          ? `${message.waitMs} ms from you stopping to the final`
-          : 'speechend never fired (the Apple outcome)',
-        `· ${message.tailMs ?? '—'} ms final to end`,
+        message.tailMs == null ? 'nothing was said'
+          : message.speechEndFired
+            ? `${message.waitMs} ms from you stopping to the final · ${message.tailMs} ms final to end`
+            : `speechend never fired despite speech · ${message.tailMs} ms final to end`,
       );
       settle();
       return true;
@@ -305,6 +344,12 @@ export function handleOffscreenMessage(message) {
       // nothing, and a surface showing the last thing heard would otherwise keep showing a
       // previous utterance as though it had just been said.
       if (message.note === 'no-speech') { turn = null; failure = { code: 'no-speech', message: "Didn't hear anything." }; }
+      return true;
+
+    case 'openposse.level':
+      // Straight through. Not stored, not logged — it is a fact about the room, and only the
+      // orb wants it.
+      panelLevel(message.level);
       return true;
 
     case 'openposse.listen.started':

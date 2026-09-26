@@ -24,6 +24,74 @@ const Phrase = globalThis.SpeechRecognitionPhrase;
 /** The live recogniser, or null when not listening. One at a time, always. */
 let recognition = null;
 
+// ── Loudness ──────────────────────────────────────────────────────────────────────────────
+//
+// The orb's radius follows the microphone, which is the design's own requirement and the
+// reason it gives: **"so a dead mic can never look healthy."** A synthetic amplitude breaks
+// that promise in the one case it exists for — a granted, connected, silent microphone draws
+// the same confident sphere as a working one, and the person sees a healthy instrument while
+// nothing is being heard.
+//
+// `SpeechRecognition` exposes no level, so this is a second capture of the same device
+// alongside it. Guarded end to end: if the graph cannot be built, the orb falls back to the
+// synthetic amplitude rather than the turn failing. Losing the meter costs a nicety; losing
+// recognition costs the product.
+//
+// An RMS figure is a number about a room, not a transcript. It is never stored or logged.
+
+/** ~20 Hz. The orb runs at 60 and eases between these, so more would be spent on messaging. */
+const LEVEL_MS = 50;
+
+/** One-pole smoothing, `1 − e^(−dt/τ)`, with the design's 80 ms attack and 250 ms release. */
+const ATTACK = 1 - Math.exp(-LEVEL_MS / 80);
+const RELEASE = 1 - Math.exp(-LEVEL_MS / 250);
+
+let meter = null;
+let level = 0;
+
+async function startMeter() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const ctx = new AudioContext();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    ctx.createMediaStreamSource(stream).connect(analyser);
+
+    const buf = new Float32Array(analyser.fftSize);
+    const timer = setInterval(() => {
+      analyser.getFloatTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i += 1) sum += buf[i] * buf[i];
+      const rms = Math.sqrt(sum / buf.length);
+
+      // Decibels, not raw RMS. Loudness is perceived logarithmically, and a linear gain either
+      // pins a loud voice at the ceiling or leaves a quiet one indistinguishable from silence.
+      // −55 dB is a quiet room, −10 dB is someone speaking up.
+      const db = 20 * Math.log10(Math.max(rms, 1e-6));
+      const target = Math.min(1, Math.max(0, (db + 55) / 45));
+
+      // Fast to rise, slow to fall — so a consonant registers and the orb does not flicker
+      // between syllables.
+      level += (target - level) * (target > level ? ATTACK : RELEASE);
+      send('openposse.level', { level: Math.round(level * 1000) / 1000 });
+    }, LEVEL_MS);
+
+    meter = { ctx, stream, timer };
+  } catch {
+    // No meter. `orb.js` falls back to the synthetic amplitude, which is where it started.
+    meter = null;
+  }
+}
+
+function stopMeter() {
+  if (!meter) return;
+  clearInterval(meter.timer);
+  for (const track of meter.stream.getTracks()) track.stop();
+  meter.ctx.close().catch(() => {});
+  meter = null;
+  level = 0;
+}
+
 // ── The endpointing measurement ───────────────────────────────────────────────────────────
 //
 // It took three attempts to measure the right interval, and the two failures are worth keeping
@@ -171,6 +239,9 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
 
   listener.addEventListener('end', () => {
     recognition = null;
+    // Released with the turn. Holding the device would light the recording indicator for no
+    // reason, and a meter nothing is reading is a microphone held open for nothing.
+    stopMeter();
     send('openposse.listen.ended', {
       cancelled: cancelling,
       tailMs: lastResultAt ? Math.round(performance.now() - lastResultAt) : null,
@@ -192,6 +263,7 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
   lastResultAt = 0;
   speechEndAt = 0;
   waitMs = null;
+  startMeter();
   send('openposse.listen.started', { biased: Boolean(Phrase) && phrases.length > 0 });
 }
 

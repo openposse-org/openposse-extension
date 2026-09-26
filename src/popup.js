@@ -114,36 +114,21 @@ async function checkMic() {
 
 // ── Listening ──────────────────────────────────────────────────────────────────────────────
 //
-// Two sources, deliberately. Interim results come **straight from the offscreen document**,
-// because `runtime.sendMessage` reaches every extension context at once and routing them
-// through the worker would add a round trip to text that updates several times a second. State
-// — are we listening, and what went wrong — comes from the worker, which is the only thing that
-// knows it across a popup that opens and closes mid-turn.
+// **The popup does not show the turn — the orb does.** It used to, because E2 built the
+// microphone before there was anywhere to put what it heard, and a readout here was the
+// difference between that milestone being demonstrable and being a claim about the console.
+// E4 made it a duplicate: two answer surfaces for one product, one of them a 320px panel that
+// closes the moment you look away.
+//
+// So what is left here is the *control* — start a turn, stop a turn — and the one piece of
+// state a button has to carry, which is whether it is currently a Stop.
 
-/** Renders the turn. Interim text is dimmed and final text is not, so finality is visible. */
-function showHeard(text, isFinal) {
-  const out = el('heard');
-  out.className = `heard${isFinal ? ' final' : ''}`;
-  out.textContent = text;
-}
-
-function showState({ listening, turn, failure }) {
+function showState({ listening }) {
   const button = el('listen');
   button.textContent = listening ? 'Stop' : 'Listen';
   // Losing `.secondary` fills the button with the channel blue — the same "this is live now"
   // signal the badge shows on the toolbar, so the two surfaces agree.
   button.classList.toggle('secondary', !listening);
-
-  if (failure) {
-    el('heard').className = 'heard bad';
-    el('heard').textContent = failure.message;
-    return;
-  }
-  if (turn?.text) {
-    showHeard(turn.text, turn.isFinal);
-    return;
-  }
-  showHeard(listening ? 'Listening…' : '', false);
 }
 
 el('listen').addEventListener('click', () => {
@@ -152,34 +137,8 @@ el('listen').addEventListener('click', () => {
   chrome.runtime.sendMessage({ kind: 'openposse.listen.toggle' }).catch(() => {});
 });
 
-/**
- * What happened to the utterance after it was heard.
- *
- * The readout doubles as the answer surface until the orb exists. Not a permanent arrangement —
- * a 320px popup that closes when you look away is the wrong home for a paragraph — but it is
- * the difference between E3 being demonstrable and being a claim about the console.
- */
-function showTurn({ phase, agentName, text, message }) {
-  const out = el('heard');
-  if (phase === 'thinking') {
-    out.className = 'heard';
-    out.textContent = `Asking ${agentName}…`;
-  } else if (phase === 'navigated') {
-    out.className = 'heard final';
-    out.textContent = `Showing you ${agentName}.`;
-  } else if (phase === 'answered') {
-    out.className = 'heard final';
-    out.textContent = text || `${agentName} answered.`;
-  } else {
-    out.className = 'heard bad';
-    out.textContent = message;
-  }
-}
-
 chrome.runtime.onMessage.addListener((message) => {
-  if (message?.kind === 'openposse.heard') showHeard(message.text, message.isFinal);
-  else if (message?.kind === 'openposse.listen.state') showState(message);
-  else if (message?.kind === 'openposse.turn') showTurn(message);
+  if (message?.kind === 'openposse.listen.state') showState(message);
   return false;
 });
 
@@ -199,7 +158,8 @@ async function send() {
     kind: 'openposse.ask', agentName: agent.name, prompt,
   });
   // Closing is the honest signal that it has been handed off. Leaving the popup open would
-  // suggest the answer is coming back *here*, and it is not — it appears in the vendor's tab.
+  // suggest the answer is coming back *here*, and it is not — typing now goes through the same
+  // door as speaking, so it lands on the orb over the page.
   window.close();
 }
 
