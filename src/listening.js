@@ -238,8 +238,11 @@ export function handleOffscreenMessage(message) {
       // Verbose level and Chrome DevTools hides that by default: a measurement nobody can find
       // is not a measurement. Both lines come out of this file once the question is settled.
       console.info(
-        '[openposse] turn ended — commit', message.commitMs ?? '—',
-        'ms after the last interim,', message.tailMs ?? '—', 'ms to end',
+        '[openposse] turn ended —',
+        message.speechEndFired
+          ? `${message.waitMs} ms from you stopping to the final`
+          : 'speechend never fired (the Apple outcome)',
+        `· ${message.tailMs ?? '—'} ms final to end`,
       );
       settle();
       return true;

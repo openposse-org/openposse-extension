@@ -26,21 +26,29 @@ let recognition = null;
 
 // ── The endpointing measurement ───────────────────────────────────────────────────────────
 //
-// Two intervals, because the first one asked turned out to answer nothing.
+// It took three attempts to measure the right interval, and the two failures are worth keeping
+// because they share a shape: **both were anchored to result events, and result events are the
+// recogniser talking to itself.**
 //
-// `tailMs` — last result to `end` — was measured first and came back **0 ms, twice**. That is
-// not a finding, it is an identity: the final result *is* the recogniser deciding the turn is
-// over, so the two fire in the same task and the gap between them was always going to be zero.
-// It does settle the architectural question — the turn closes itself, so M1's
-// `SilenceTimeoutEndpointer` is not ported — and it is kept for exactly that.
+// - *last result → `end`* came back 0 ms, twice. Not a finding, an identity: the final result
+//   *is* the decision that the turn is over, so the two fire in one task.
+// - *last interim → final* came back 0 ms on three turns of four. Also near-tautological —
+//   SODA emits its final immediately after its last interim, so this measures dispatch order
+//   rather than silence.
 //
-// `commitMs` — last *interim* result to the final — is the one with information in it. It is
-// the silence the recogniser insists on before committing, which is the wait a user actually
-// feels between finishing their sentence and anything happening.
+// What nobody had asked was **when the speaker stopped**, and the API has an event for it.
+// `speechend` → final is the wait a person actually experiences between finishing a sentence
+// and anything happening, and it is the only one of the three that is about them.
+//
+// **Whether it fires at all is itself the finding.** Apple's `SpeechDetector` emits nothing in
+// practice — measured, recorded in the root CLAUDE.md, and the reason M1 had to endpoint on the
+// absence of transcription instead. A `null` here is the same answer from a different vendor,
+// and E4's orb needs it either way: "the speaker stopped" is what moves it from listening to
+// thinking, and without the event that transition has to be inferred all over again.
 
 let lastResultAt = 0;
-let lastInterimAt = 0;
-let commitMs = null;
+let speechEndAt = 0;
+let waitMs = null;
 
 /** Set while we are deliberately stopping, so the resulting `end` does not read as a surprise. */
 let cancelling = false;
@@ -139,12 +147,15 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
     const last = event.results[event.results.length - 1];
     const now = performance.now();
     lastResultAt = now;
-    if (last.isFinal) commitMs = lastInterimAt ? Math.round(now - lastInterimAt) : null;
-    else lastInterimAt = now;
+    if (last.isFinal && speechEndAt) waitMs = Math.round(now - speechEndAt);
 
     // The one place transcript text is allowed to go: straight to whoever is showing it.
     send('openposse.heard', { text: last[0].transcript, isFinal: last.isFinal });
   });
+
+  // The moment the recogniser believes you stopped talking. Everything after this is it
+  // deciding, which is the only part of the wait we could ever do something about.
+  listener.addEventListener('speechend', () => { speechEndAt = performance.now(); });
 
   listener.addEventListener('error', (event) => {
     // `no-speech` and `aborted` are ordinary ends to a turn, not faults. Reporting them through
@@ -163,7 +174,9 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
     send('openposse.listen.ended', {
       cancelled: cancelling,
       tailMs: lastResultAt ? Math.round(performance.now() - lastResultAt) : null,
-      commitMs,
+      // null means `speechend` never fired — the Apple outcome, and a finding in itself.
+      waitMs,
+      speechEndFired: Boolean(speechEndAt),
     });
     cancelling = false;
   });
@@ -177,8 +190,8 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
 
   recognition = listener;
   lastResultAt = 0;
-  lastInterimAt = 0;
-  commitMs = null;
+  speechEndAt = 0;
+  waitMs = null;
   send('openposse.listen.started', { biased: Boolean(Phrase) && phrases.length > 0 });
 }
 
