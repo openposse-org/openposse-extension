@@ -17,7 +17,7 @@ import {
   isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone,
 } from './listening.js';
 import { route, navigationTarget, productName, FLOOR_MS } from './routing.js';
-import { panel, hidePanel } from './panel.js';
+import { panel, hidePanel, primePanel } from './panel.js';
 import { channelFor } from './channels.js';
 
 /**
@@ -888,8 +888,14 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
  * Nothing else in this codebase names a key. Every surface that shows one reads
  * `chrome.commands.getAll()`, so whatever the user actually bound is what they are told.
  */
-chrome.commands.onCommand.addListener((command) => {
-  if (command === 'summon') toggleListening();
+chrome.commands.onCommand.addListener((command, tab) => {
+  if (command !== 'summon') return;
+  // **First, before any await.** `activeTab` is granted by this keypress and is spent by the
+  // time an async chain gets around to using it — which is why the orb only ever appeared on
+  // Notion, the one site with a standing host permission. The event carries the tab, so no
+  // query is needed either.
+  primePanel(tab?.id);
+  toggleListening();
 });
 
 chrome.runtime.onInstalled.addListener(() => {

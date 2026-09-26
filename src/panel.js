@@ -16,10 +16,33 @@ import { channelFor, initialFor } from './channels.js';
 /** Where the panel currently is, so state updates go to one tab rather than being broadcast. */
 let panelTabId = null;
 
-async function inject() {
-  // `lastFocusedWindow`, not `currentWindow`: the shortcut is global, so Chrome is often not
-  // the focused application at all and `currentWindow` would be undefined.
+/**
+ * Injects the panel, and **must be called before anything is awaited.**
+ *
+ * This is the whole reason the orb appeared on Notion and nowhere else. Notion has a standing
+ * host permission, so it needs no gesture; every other tab relies on `activeTab`, which is
+ * granted *by the keypress* and does not survive being spent. The first version reached
+ * `executeScript` through six awaits — a storage read, a session write, a badge update, a
+ * `commands.getAll()` and a `tabs.query()` — and by then the grant was gone. The symptom was a
+ * panel that worked on one site, which reads as the panel being broken rather than as a
+ * permission being lost.
+ *
+ * So the command handler calls this first, with the tab **the event itself carries**: no query,
+ * no storage, nothing between the keypress and the injection.
+ *
+ * @param tabId the tab from `chrome.commands.onCommand`, when there is one.
+ */
+export async function primePanel(tabId) {
+  if (tabId != null) return injectInto(tabId);
+  // No tab on the event: a global shortcut fired while Chrome was in the background. Falling
+  // back to a query is right for the popup's button, and for the global case it will usually
+  // fail — correctly, since nobody is looking at a browser window to see a panel in.
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  return tab?.id == null ? null : injectInto(tab.id);
+}
+
+async function injectInto(tabId) {
+  const tab = { id: tabId };
   if (!tab?.id) return null;
   try {
     // Idempotent by a guard inside `orb.js`, so re-injecting after a navigation rebuilds the
@@ -27,7 +50,14 @@ async function inject() {
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['dist/orb.js'] });
     panelTabId = tab.id;
     return tab.id;
-  } catch {
+  } catch (error) {
+    // **Said out loud, not swallowed.** The first version caught this silently, and the
+    // symptom was "the orb appears on Notion and nowhere else" with nothing to explain it —
+    // which is indistinguishable from the panel being broken. The message tells the two apart:
+    // "Cannot access contents of url" means we hold no permission for that tab, anything else
+    // means the injection itself failed. A URL is not page content; it is the one fact needed
+    // to know which of those happened.
+    console.warn('[openposse] panel could not be injected:', error?.message ?? error);
     panelTabId = null;
     return null;
   }
@@ -51,8 +81,10 @@ async function rosterForPanel() {
  */
 export async function panel(patch, { create = false } = {}) {
   if (create) {
+    // Only if the gesture path did not already place it. Re-injecting here would be the same
+    // spent-grant mistake, one call further down.
+    if (panelTabId === null) await primePanel();
     const shortcut = (await chrome.commands.getAll()).find((c) => c.name === 'summon')?.shortcut;
-    await inject();
     patch = { agents: await rosterForPanel(), shortcut: shortcut ?? '', ...patch };
   }
   if (panelTabId === null) return;

@@ -398,15 +398,23 @@ if (!globalThis.__openposseOrb) {
     const avatars = $('.avatars');
     avatars.textContent = '';
     for (const agent of state.agents) {
+      const holdsFloor = agent.name === state.agentName;
       const a = document.createElement('div');
-      a.className = `avatar${agent.name === state.agentName ? ' lit' : ''}`;
+      a.className = `avatar${holdsFloor ? ' lit' : ''}`;
       a.style.setProperty('--channel', agent.channel);
       a.textContent = agent.initial;
-      a.title = agent.name;
-      a.addEventListener('click', () => {
-        chrome.runtime.sendMessage({ kind: 'openposse.orb.reroute', agentName: agent.name })
-          .catch(() => {});
-      });
+      // Re-routing to whoever is already answering is a no-op, so it does not offer itself as
+      // one: no pointer, no click. The design says the click is ignored in that case, and a
+      // button that looks pressable and is ignored is worse than one that does not.
+      a.title = holdsFloor ? `${agent.name} has the floor` : `Ask ${agent.name} instead`;
+      if (!holdsFloor) {
+        a.addEventListener('click', () => {
+          chrome.runtime.sendMessage({ kind: 'openposse.orb.reroute', agentName: agent.name })
+            .catch(() => {});
+        });
+      } else {
+        a.style.cursor = 'default';
+      }
       avatars.append(a);
     }
 
