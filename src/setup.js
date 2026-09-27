@@ -231,8 +231,11 @@ async function refreshWeights() {
   el('drop-weights').hidden = !have;
   el('get-weights').hidden = done;
   el('get-weights').textContent = state === 'partial' ? 'Resume' : 'Download';
+  // Says what is on disk, and nothing about whether it is being used — the engine line above
+  // owns that, and this claiming "used whenever WebGPU is available" directly contradicted it
+  // while the engine was still unbuilt. One fact, one place.
   setStatus('weights-status', done
-    ? 'installed — used whenever WebGPU is available'
+    ? `installed — ${want} files, verified`
     : state === 'partial'
       ? `${have} of ${want} files — interrupted`
       : `not downloaded · ${mb(TOTAL_BYTES)}`);
