@@ -7,7 +7,7 @@
 
 import { loadRoster, importFromMacApp, setMicGranted, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
-import { describeEngine, REASONS } from './tts.js';
+import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
 import {
   weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES,
 } from './weights.js';
@@ -194,14 +194,21 @@ el('folder').addEventListener('change', async (event) => {
 // live there, and it is created on demand by the worker.
 
 async function refreshEngine() {
-  try {
-    const choice = await chrome.runtime.sendMessage({ kind: 'openposse.engine.query' });
-    el('engine').textContent = choice ? describeEngine(choice) : REASONS.system;
-  } catch {
-    // No offscreen document yet — it is made when a turn starts. Saying what will happen is
-    // more use than an error about a document nobody asked for.
-    el('engine').textContent = REASONS.system;
-  }
+  // **Worked out here rather than asked of the offscreen document.**
+  //
+  // The first version messaged that document for the answer, and it usually does not exist —
+  // it is created when a turn starts, and opening settings is not a turn. So the send threw,
+  // the catch fell back to the bland "System voices", and the page never showed the *reason*,
+  // which is the only part worth reading. It looked like the line was not updating.
+  //
+  // This page is a Window, so it has `navigator.gpu` and can read the weights itself. Nothing
+  // about the choice needs a microphone, and asking something that may not be there for an
+  // answer we can compute was the whole mistake.
+  const choice = chooseEngine({
+    hasWebGPU: await hasWebGPU(),
+    hasKokoroAssets: (await weightsStatus()).state === 'ready',
+  });
+  el('engine').textContent = describeEngine(choice);
 }
 
 // ── The neural voices ──────────────────────────────────────────────────────────────────────

@@ -193,11 +193,29 @@ export async function downloadWeights({ onProgress = () => {}, fetchImpl = fetch
   let bytes = 0;
   let done = 0;
 
+  /**
+   * Reports progress without letting the caller's UI break the download.
+   *
+   * **`onProgress` is somebody else's code and must not be inside our try.** In the loop below
+   * a throw from it would be filed as a failure of the *file*, so a broken status line would
+   * report a network problem — and on the already-stored path it was not caught at all, which
+   * is an uncaught TypeError from a function that had just succeeded.
+   *
+   * Neither is a download failure, and neither should be silent, so it gets its own guard.
+   */
+  const notify = (id) => {
+    try {
+      onProgress({ id, done, total: ALL.length, bytes, totalBytes: TOTAL_BYTES });
+    } catch (error) {
+      console.warn('[openposse] weights progress handler threw —', error?.message ?? error);
+    }
+  };
+
   for (const file of ALL) {
     if (await stored(file.id)) {
       done += 1;
       bytes += file.bytes;
-      onProgress({ id: file.id, done, total: ALL.length, bytes, totalBytes: TOTAL_BYTES });
+      notify(file.id);
       continue;
     }
 
@@ -219,10 +237,11 @@ export async function downloadWeights({ onProgress = () => {}, fetchImpl = fetch
       await cache.put(file.url, new Response(buffer));
       done += 1;
       bytes += file.bytes;
-      onProgress({ id: file.id, done, total: ALL.length, bytes, totalBytes: TOTAL_BYTES });
     } catch (error) {
       failed.push({ id: file.id, reason: String(error?.message ?? error) });
+      continue;
     }
+    notify(file.id);
   }
 
   return { ok: failed.length === 0, failed };

@@ -153,6 +153,20 @@ test('progress accounts for every file exactly once', async () => {
   assert.equal(store.size, ALL.length);
 });
 
+test("a broken progress handler is not reported as a download failure", async () => {
+  // It is the caller's code, not ours, and putting it inside the try made a broken status line
+  // look like a network problem. On the already-stored path it was not caught at all — an
+  // uncaught TypeError thrown by a download that had just succeeded.
+  fakeCaches();
+  const buffer = new TextEncoder().encode('x').buffer;
+  const result = await withServedBytes(buffer, () => downloadWeights({
+    fetchImpl: async () => response(buffer),
+    onProgress: () => { throw new TypeError("Cannot read properties of null (reading 'classList')"); },
+  }));
+  assert.equal(result.ok, true, 'the files still downloaded');
+  assert.deepEqual(result.failed, []);
+});
+
 test('an already-downloaded file is counted but not fetched again', async () => {
   // Pressing Download after an interrupted attempt finishes the job rather than restarting it.
   const store = fakeCaches();
