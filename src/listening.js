@@ -209,6 +209,34 @@ export async function say(text, agentID) {
   });
 }
 
+/**
+ * Says why an answer was not read out.
+ *
+ * **An answer that silently fails to be spoken is indistinguishable from one that was never
+ * meant to be**, and from a muted laptop. The turn still worked — the text is on screen — so
+ * there is nothing loud to notice and nothing to search for, which is the worst shape a bug
+ * can have.
+ *
+ * Split in two on purpose. A person only needs telling when there is something they could do
+ * about it, and only on the panel they are already looking at; everything else is a code in a
+ * console for whoever is debugging. `cancelled` is neither — it is what happens every time
+ * somebody interrupts, which is a feature.
+ */
+const UNSPOKEN_COPY = {
+  'no-local-voice': 'No on-device voice is available — the answer is above.',
+  'kokoro-not-implemented': 'The neural voice is selected but not installed.',
+  'audio-busy': 'Something else is using the audio output.',
+  'synthesis-unavailable': 'This browser could not speak the answer.',
+};
+
+function reportUnspoken(reason) {
+  if (reason === 'cancelled') return;
+  // A reason code, never the text that failed to be spoken.
+  console.warn('[openposse] answer was not spoken:', reason ?? 'unknown');
+  const copy = UNSPOKEN_COPY[reason];
+  if (copy) panel({ sub: copy });
+}
+
 /** Stops mid-sentence. Starting a new turn while one is being read out is a cancel. */
 export async function hush() {
   await tell('openposse.hush');
@@ -387,6 +415,7 @@ export function handleOffscreenMessage(message) {
       // mid-sentence, and drops the orb back to rest.
       panelSpeaking(false);
       panelLevel(0);
+      if (!message.ok) reportUnspoken(message.reason);
       return true;
 
     case 'openposse.level':

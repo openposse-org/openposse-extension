@@ -349,7 +349,16 @@ async function speak({ text, agentID, roster = [] }) {
     return;
   }
 
-  const assigned = assignVoices(roster, await voices());
+  const available = await voices();
+  if (available.length === 0) {
+    // Nothing at all, rather than nothing *local*. A different problem with a different fix,
+    // and reporting both as "no local voice" would send someone to check a setting that is
+    // not the one at fault.
+    send('openposse.spoke', { ok: false, reason: 'synthesis-unavailable' });
+    return;
+  }
+
+  const assigned = assignVoices(roster, available);
   const voice = assigned.get(agentID) ?? null;
 
   const utterance = new SpeechSynthesisUtterance(text);
