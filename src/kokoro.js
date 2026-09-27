@@ -40,7 +40,15 @@ async function connect() {
   const engine = new HeadTTS({
     endpoints: ['webgpu'],
     transformersModule: chrome.runtime.getURL('vendor/transformers/transformers.web.min.js'),
-    workerModule: chrome.runtime.getURL('vendor/headtts/worker-tts.mjs'),
+    // **`workerModule` is deliberately not set**, and setting it was the first thing that
+    // broke. Given one, HeadTTS wraps it in `import "<url>"` inside a Blob and starts a worker
+    // from a `blob:` URL — which MV3's CSP refuses, because `script-src 'self'` does not cover
+    // `blob:` and an extension may not widen it. The failure reads "Failed to start Module Web
+    // Worker" and says nothing about why.
+    //
+    // Left null, it falls back to `new URL("./worker-tts.mjs", import.meta.url)` — a direct
+    // `chrome-extension://` URL beside this module, which *is* `'self'`. The upstream default
+    // is the path that works here; being explicit chose the one that does not.
     dictionaryURL: chrome.runtime.getURL('dictionaries'),
     // Pointed at the URLs we cached, so the shim finds them by exact match rather than by
     // falling back to a path-tail comparison.
