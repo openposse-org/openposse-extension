@@ -120,8 +120,14 @@ async function tell(kind, body = {}) {
   try {
     return await chrome.runtime.sendMessage({ kind, ...body });
   } catch {
+    // The first failure is expected — that is what the retry is for — so it says nothing.
+    // The second is not: the offscreen document never received the instruction, which means no
+    // listening, or no speech, with nothing anywhere to say so.
     await new Promise((resolve) => setTimeout(resolve, 60));
-    return chrome.runtime.sendMessage({ kind, ...body }).catch(() => null);
+    return chrome.runtime.sendMessage({ kind, ...body }).catch((error) => {
+      console.warn(`[openposse] offscreen did not receive ${kind} —`, error?.message ?? error);
+      return null;
+    });
   }
 }
 
