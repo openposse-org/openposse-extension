@@ -18,6 +18,9 @@
 // name, an error code or a duration — except `text`, which goes to exactly one place: a live
 // message to whoever is displaying it.
 
+import { assignVoices } from './voices.js';
+import { chooseEngine, hasWebGPU } from './tts.js';
+
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const Phrase = globalThis.SpeechRecognitionPhrase;
 
@@ -281,8 +284,125 @@ function stop() {
   recognition.abort();
 }
 
+// ── Speaking ──────────────────────────────────────────────────────────────────────────────
+//
+// Here rather than in the worker for the same reason the microphone is: a service worker has no
+// DOM and therefore no `speechSynthesis`. Here rather than in the page for a better one — an
+// utterance started in a tab is cancelled when that tab navigates or closes, and the whole
+// point of this product is that you can ask a question and then look at something else.
+
+/**
+ * `getVoices()` is empty until the engine has enumerated, and on a cold start that is *after*
+ * the first call returns. Waiting on `voiceschanged` once is the difference between an agent
+ * having a voice and everybody getting the browser default on the first answer of a session.
+ */
+function voices() {
+  const now = speechSynthesis.getVoices();
+  if (now.length > 0) return Promise.resolve(now);
+  return new Promise((resolve) => {
+    const done = () => resolve(speechSynthesis.getVoices());
+    speechSynthesis.addEventListener('voiceschanged', done, { once: true });
+    // Some builds never fire it when there is genuinely nothing to report.
+    setTimeout(done, 1000);
+  });
+}
+
+/**
+ * Whether Kokoro's weights are actually present.
+ *
+ * A **real check against the bundle**, not a flag: the assets are not shipped yet, and a
+ * hardcoded `false` would have to be remembered and flipped by hand on the day they are. This
+ * answers correctly today and correctly the moment the files land, which is the difference
+ * between a gate and a note to self.
+ */
+async function hasKokoroAssets() {
+  try {
+    const res = await fetch(chrome.runtime.getURL('models/kokoro/model.onnx'), { method: 'HEAD' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Decided per turn rather than cached: a GPU can be lost, and assets can be added. */
+async function engine() {
+  return chooseEngine({
+    hasWebGPU: await hasWebGPU(),
+    hasKokoroAssets: await hasKokoroAssets(),
+  });
+}
+
+async function speak({ text, agentID, roster = [] }) {
+  if (!text) return;
+  speechSynthesis.cancel();                 // never two agents at once
+
+  // E6's fork. `chooseEngine` routes to Kokoro when WebGPU *and* the weights are both present,
+  // and to the system voices otherwise — which is every machine today, because the weights are
+  // not bundled yet. The branch is live rather than hypothetical, so adding the assets is the
+  // whole of the remaining change.
+  const { engine: chosen } = await engine();
+  if (chosen === 'kokoro') {
+    // Unreachable until `models/kokoro/` exists. Deliberately not a silent fall-through: if
+    // this is ever reached without an implementation, that is a bug worth hearing about
+    // rather than quietly getting the voices E6 exists to replace.
+    send('openposse.spoke', { ok: false, reason: 'kokoro-not-implemented' });
+    return;
+  }
+
+  const available = await voices();
+  if (available.length === 0) {
+    // Nothing at all, rather than nothing *local*. A different problem with a different fix,
+    // and reporting both as "no local voice" would send someone to check a setting that is
+    // not the one at fault.
+    send('openposse.spoke', { ok: false, reason: 'synthesis-unavailable' });
+    return;
+  }
+
+  const assigned = assignVoices(roster, available);
+  const voice = assigned.get(agentID) ?? null;
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  // No voice means nothing local could be found. Speaking anyway would use the browser default,
+  // which may be a network voice — the exact thing `localVoices` exists to prevent — so this
+  // stays silent and says why. A missing voice is a setup problem, not a reason to leak.
+  if (!voice) {
+    send('openposse.spoke', { ok: false, reason: 'no-local-voice' });
+    return;
+  }
+  utterance.voice = voice;
+  utterance.lang = voice.lang;
+
+  // The orb's `agent` mode, driven by a real signal rather than a synthetic one — though a
+  // coarser signal than the microphone's. `speechSynthesis` renders straight to the output
+  // device and exposes no audio node, so there is no amplitude to read; `boundary` fires per
+  // word, which is speech *rate* rather than loudness. It is honestly synchronised with what is
+  // being said, which is what the orb is for, and E6's own audio can be metered properly.
+  utterance.addEventListener('boundary', () => send('openposse.speaking', { pulse: true }));
+  utterance.addEventListener('start', () => send('openposse.speaking', { started: true }));
+  utterance.addEventListener('end', () => send('openposse.spoke', { ok: true }));
+  utterance.addEventListener('error', (event) => {
+    // `interrupted` and `canceled` are us stopping it on purpose, not faults.
+    const ours = event.error === 'interrupted' || event.error === 'canceled';
+    send('openposse.spoke', { ok: ours, reason: ours ? 'cancelled' : event.error });
+  });
+
+  speechSynthesis.speak(utterance);
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, respond) => {
   switch (message?.kind) {
+    case 'openposse.speak':
+      speak(message).then(() => respond({ ok: true }));
+      return true;
+    case 'openposse.hush':
+      speechSynthesis.cancel();
+      respond({ ok: true });
+      return true;
+    case 'openposse.engine.query':
+      // Asked by setup. This document is the only place that can answer — WebGPU and the voice
+      // list both live here.
+      engine().then(respond);
+      return true;
     case 'openposse.listen.start':
       start(message.options).then(() => respond({ ok: true }));
       return true;                              // keeps the channel open for the async reply

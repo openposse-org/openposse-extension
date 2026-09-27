@@ -11,7 +11,7 @@
 
 import { loadRoster, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
-import { panel, panelLevel } from './panel.js';
+import { panel, panelLevel, panelSpeaking } from './panel.js';
 
 /**
  * How much of an interim result to show as still-being-revised.
@@ -94,8 +94,11 @@ async function ensureOffscreen() {
   try {
     await chrome.offscreen.createDocument({
       url: chrome.runtime.getURL(OFFSCREEN_PATH),
-      reasons: [chrome.offscreen.Reason.USER_MEDIA],
-      justification: 'on-device speech recognition for voice input',
+      // Both, because this document now does both. `AUDIO_PLAYBACK` is what keeps it alive
+      // while an answer is being read out — an offscreen document whose stated reason has
+      // finished is a candidate for closing, and losing it mid-sentence would cut the agent off.
+      reasons: [chrome.offscreen.Reason.USER_MEDIA, chrome.offscreen.Reason.AUDIO_PLAYBACK],
+      justification: 'on-device speech recognition and speaking answers aloud',
     });
   } catch (error) {
     // Two documents cannot coexist, and two calls can race here — a shortcut press while a
@@ -162,6 +165,10 @@ export async function startListening() {
 
   turn = null;
   failure = null;
+  // Starting a turn stops whatever is being read out. Barge-in's cheap half: the microphone is
+  // about to open, and an agent still talking would be heard by it — and speaking over someone
+  // who has just pressed the key to interrupt is the rudest thing this could do.
+  await tell('openposse.hush');
   await chrome.storage.session.set({ [LISTENING]: true });
   await setBadge('listening');
   // Before the panel, not after. The panel's injection can take a moment, and until this runs
@@ -184,6 +191,55 @@ export async function startListening() {
   await tell('openposse.listen.start', { options: { phrases } });
   await broadcastState();
   return null;
+}
+
+/**
+ * Says an answer out loud, in that agent's voice.
+ *
+ * The whole roster's voice hints travel with it, because distinctness is a property of the
+ * *set* — `assignVoices` has to see everyone to guarantee two agents never sound alike, and
+ * the offscreen document is where the voice list lives.
+ */
+export async function say(text, agentID) {
+  const { agents } = await loadRoster();
+  await tell('openposse.speak', {
+    text,
+    agentID,
+    roster: agents.map((a) => ({ id: a.id, voice: a.voice })),
+  });
+}
+
+/**
+ * Says why an answer was not read out.
+ *
+ * **An answer that silently fails to be spoken is indistinguishable from one that was never
+ * meant to be**, and from a muted laptop. The turn still worked — the text is on screen — so
+ * there is nothing loud to notice and nothing to search for, which is the worst shape a bug
+ * can have.
+ *
+ * Split in two on purpose. A person only needs telling when there is something they could do
+ * about it, and only on the panel they are already looking at; everything else is a code in a
+ * console for whoever is debugging. `cancelled` is neither — it is what happens every time
+ * somebody interrupts, which is a feature.
+ */
+const UNSPOKEN_COPY = {
+  'no-local-voice': 'No on-device voice is available — the answer is above.',
+  'kokoro-not-implemented': 'The neural voice is selected but not installed.',
+  'audio-busy': 'Something else is using the audio output.',
+  'synthesis-unavailable': 'This browser could not speak the answer.',
+};
+
+function reportUnspoken(reason) {
+  if (reason === 'cancelled') return;
+  // A reason code, never the text that failed to be spoken.
+  console.warn('[openposse] answer was not spoken:', reason ?? 'unknown');
+  const copy = UNSPOKEN_COPY[reason];
+  if (copy) panel({ sub: copy });
+}
+
+/** Stops mid-sentence. Starting a new turn while one is being read out is a cancel. */
+export async function hush() {
+  await tell('openposse.hush');
 }
 
 export async function stopListening() {
@@ -327,9 +383,15 @@ export function handleOffscreenMessage(message) {
       console.info(
         '[openposse] turn ended —',
         message.tailMs == null ? 'nothing was said'
-          : message.speechEndFired
+          : message.waitMs != null
             ? `${message.waitMs} ms from you stopping to the final · ${message.tailMs} ms final to end`
-            : `speechend never fired despite speech · ${message.tailMs} ms final to end`,
+            // `speechend` fired, but *after* the final result rather than before it — so there
+            // is no interval to report and "null ms" is not a measurement. Worth naming rather
+            // than papering over: the ordering is not guaranteed, and it means the recogniser
+            // sometimes commits before it decides you stopped.
+            : message.speechEndFired
+              ? `speechend arrived after the final · ${message.tailMs} ms final to end`
+              : `speechend never fired despite speech · ${message.tailMs} ms final to end`,
       );
       settle();
       return true;
@@ -344,6 +406,22 @@ export function handleOffscreenMessage(message) {
       // nothing, and a surface showing the last thing heard would otherwise keep showing a
       // previous utterance as though it had just been said.
       if (message.note === 'no-speech') { turn = null; failure = { code: 'no-speech', message: "Didn't hear anything." }; }
+      return true;
+
+    case 'openposse.speaking':
+      // A word boundary. Pulsed rather than metered: `speechSynthesis` exposes no audio node,
+      // so this is speech *rate*, and the orb eases between pulses into something that reads
+      // as a voice. Honest, and honestly coarser than the microphone's real amplitude.
+      if (message.started) panelSpeaking(true);
+      panelLevel(message.pulse ? 0.85 : 0.4);
+      return true;
+
+    case 'openposse.spoke':
+      // Releases the panel's dismiss timer, which was held open so it could not fade out
+      // mid-sentence, and drops the orb back to rest.
+      panelSpeaking(false);
+      panelLevel(0);
+      if (!message.ok) reportUnspoken(message.reason);
       return true;
 
     case 'openposse.level':

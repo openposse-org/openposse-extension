@@ -14,8 +14,10 @@
 import { loadRoster, recipeFor, findAgent } from './storage.js';
 import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
-  isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone,
+  isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone, say,
 } from './listening.js';
+import { needsShortening, spokenForm } from './saying.js';
+import { summarise } from './summariser.js';
 import { route, navigationTarget, productName, FLOOR_MS } from './routing.js';
 import { panel, hidePanel, primePanel } from './panel.js';
 import { channelFor } from './channels.js';
@@ -247,8 +249,10 @@ async function putQuestion(agent, prompt, matched) {
     // already been shown not to work.
     await holdFloor(agent.name);
     markDone(null);
-    panel({ phase: 'answering', agentName: agent.name, answer: result.payload?.text ?? '' });
-    announceTurn({ phase: 'answered', agentName: agent.name, text: result.payload?.text ?? '' });
+    const answer = result.payload?.text ?? '';
+    panel({ phase: 'answering', agentName: agent.name, answer });
+    announceTurn({ phase: 'answered', agentName: agent.name, text: answer });
+    await readAloud(answer, agent);
   } else {
     markDone(result.payload?.code ?? 'failed');
     panel({
@@ -262,6 +266,30 @@ async function putQuestion(agent, prompt, matched) {
       message: result.payload?.message ?? `${agent.name} could not answer.`,
     });
   }
+}
+
+/**
+ * Speaks an answer, shortening it first if it is long enough to be tiring.
+ *
+ * **The full answer stays on screen either way.** What is spoken and what is shown are
+ * different things, and conflating them is how a voice assistant becomes a screen reader —
+ * which was the observation that started this whole architecture.
+ *
+ * Summarising is attempted but never waited on hopefully: `summarise` returns null on every
+ * machine that fails Gemini Nano's hardware gate, which is a great many of them, and
+ * `spokenForm` treats that as the ordinary case with a first-sentence fallback that says where
+ * the rest is.
+ */
+async function readAloud(answer, agent) {
+  if (!answer) return;
+  const summary = needsShortening(answer) ? await summarise(answer) : null;
+  const { text, shortened } = spokenForm(answer, summary);
+  if (!text) return;
+
+  // The panel says when it is reading a shortened version, because someone hearing one sentence
+  // about a six-paragraph answer should know that is what happened.
+  if (shortened) panel({ sub: 'Shortened — the full answer is above.' });
+  await say(text, agent.id);
 }
 
 /** Tells any open surface where the turn has got to. Nothing is stored and nothing is logged. */
