@@ -19,8 +19,9 @@
 // message to whoever is displaying it.
 
 import { assignVoices } from './voices.js';
-import { chooseEngine, hasWebGPU } from './tts.js';
+import { chooseEngine, hasWebGPU, assignKokoroVoices } from './tts.js';
 import { weightsStatus } from './weights.js';
+import { speak as speakWithKokoro, cancel as cancelKokoro } from './kokoro.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const Phrase = globalThis.SpeechRecognitionPhrase;
@@ -335,6 +336,7 @@ async function engine() {
 async function speak({ text, agentID, roster = [] }) {
   if (!text) return;
   speechSynthesis.cancel();                 // never two agents at once
+  cancelKokoro();
 
   // E6's fork. `chooseEngine` routes to Kokoro when WebGPU *and* the weights are both present,
   // and to the system voices otherwise — which is every machine today, because the weights are
@@ -342,10 +344,17 @@ async function speak({ text, agentID, roster = [] }) {
   // whole of the remaining change.
   const { engine: chosen } = await engine();
   if (chosen === 'kokoro') {
-    // Unreachable until `models/kokoro/` exists. Deliberately not a silent fall-through: if
-    // this is ever reached without an implementation, that is a bug worth hearing about
-    // rather than quietly getting the voices E6 exists to replace.
-    send('openposse.spoke', { ok: false, reason: 'kokoro-not-implemented' });
+    const voice = assignKokoroVoices(roster).get(agentID) ?? 'bm_george';
+    send('openposse.speaking', { started: true });
+    const result = await speakWithKokoro(text, voice, {
+      onPulse: () => send('openposse.speaking', { pulse: true }),
+    });
+
+    // **No silent fall-through to the system voices.** Getting the other voices when Kokoro
+    // fails would be a quieter failure than it deserves: somebody who downloaded 89 MB for
+    // better voices and is hearing the old ones needs telling, not soothing. The reason
+    // reaches the console and, where it is actionable, the panel.
+    send('openposse.spoke', result);
     return;
   }
 
@@ -395,7 +404,10 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
       speak(message).then(() => respond({ ok: true }));
       return true;
     case 'openposse.hush':
+      // Both engines, unconditionally. Which one is speaking depends on state this does not
+      // have, and stopping the wrong one is worse than stopping one that was already silent.
       speechSynthesis.cancel();
+      cancelKokoro();
       respond({ ok: true });
       return true;
     case 'openposse.engine.query':

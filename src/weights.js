@@ -43,6 +43,16 @@ const TS_REVISION = 'dd4401a9add81ac692d20e240d22ec9dda82cc29';
 const TS_REPO = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX-timestamped/resolve';
 
 /**
+ * What the engine must be told to ask for, exported so it cannot drift from what was fetched.
+ *
+ * `kokoro.js` configures HeadTTS with these. Two copies of a model id or a voice base — one
+ * here and one there — is how the engine ends up requesting a file nobody downloaded, which is
+ * a failure at first use rather than at build time.
+ */
+export const MODEL_REPO = 'onnx-community/Kokoro-82M-v1.0-ONNX-timestamped';
+export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
+
+/**
  * The model: q8f16, the smallest variant that is not visibly degraded.
  *
  * 86 MB against 326 MB for fp32 and 163 MB for fp16. The full-precision model is better and
