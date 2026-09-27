@@ -233,11 +233,23 @@ async function refreshWeights() {
 
 el('get-weights').addEventListener('click', async () => {
   el('get-weights').disabled = true;
-  const result = await downloadWeights({
-    onProgress: ({ bytes, totalBytes, done, total }) => {
-      setStatus('weights-status', `${mb(bytes)} of ${mb(totalBytes)} · file ${done} of ${total}`);
-    },
-  });
+  setStatus('weights-status', 'starting…');
+
+  let result;
+  try {
+    result = await downloadWeights({
+      onProgress: ({ bytes, totalBytes, done, total }) => {
+        setStatus('weights-status', `${mb(bytes)} of ${mb(totalBytes)} · file ${done} of ${total}`);
+      },
+    });
+  } catch (error) {
+    // A button that does nothing is the worst outcome available, so nothing gets to throw
+    // past here silently — the page says what happened and the console says it precisely.
+    console.error('[openposse] weights download threw —', error?.message ?? error);
+    setStatus('weights-status', `could not start: ${error?.message ?? error}`);
+    el('get-weights').disabled = false;
+    return;
+  }
   el('get-weights').disabled = false;
 
   if (!result.ok) {
@@ -310,13 +322,28 @@ async function refreshRoster() {
 
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
 
-await refreshMic();
-await refreshModel();
-await refreshShortcut();
-await refreshPanelAccess();
-await refreshEngine();
-await refreshWeights();
-await refreshRoster();
+// Each section independently, and loudly when one fails.
+//
+// **This was a bare sequence of awaits, and that is how the weights section shipped broken.**
+// `markDone` was given an id that did not exist, threw on null, and took every later step with
+// it — so the page sat on "checking…" with a button that appeared to do nothing and nothing in
+// the console to say why. A setup page is a list of independent facts about a machine; one of
+// them being unreadable is no reason to stop reporting the rest.
+for (const [name, refresh] of Object.entries({
+  microphone: refreshMic,
+  'speech model': refreshModel,
+  shortcut: refreshShortcut,
+  'panel access': refreshPanelAccess,
+  'voice engine': refreshEngine,
+  weights: refreshWeights,
+  roster: refreshRoster,
+})) {
+  try {
+    await refresh();
+  } catch (error) {
+    console.error(`[openposse] setup: ${name} could not be read —`, error?.message ?? error);
+  }
+}
 
 // Shortcuts are changed on another tab, so this page is stale the moment they leave it. Chrome
 // has no event for a rebinding — re-reading on focus is the only way the status can be true
