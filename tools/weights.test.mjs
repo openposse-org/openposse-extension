@@ -13,13 +13,29 @@ import {
   MODEL, VOICES, ALL, TOTAL_BYTES, verify, digest, downloadWeights,
 } from '../src/weights.js';
 
-/** Minimal Cache Storage, so the download path can be exercised without a browser. */
+/**
+ * Minimal Cache Storage, so the download path can be exercised without a browser.
+ *
+ * **It enforces the scheme rule, and the first version did not.** Keying entries by our short
+ * id passed every test here and failed all seven files in the browser with *"Request scheme
+ * 'chrome-extension' is unsupported"* — because Cache Storage resolves a bare `'model'` against
+ * the page and then refuses the result. A double more permissive than the thing it stands for
+ * does not test the code; it agrees with it.
+ */
 function fakeCaches() {
   const store = new Map();
   globalThis.caches = {
     open: async () => ({
-      match: async (k) => store.get(k) ?? null,
-      put: async (k, v) => { store.set(k, v); },
+      match: async (k) => store.get(String(k)) ?? null,
+      put: async (k, v) => {
+        const key = String(k);
+        if (!/^https?:\/\//.test(key)) {
+          throw new TypeError(
+            `Failed to execute 'put' on 'Cache': Request scheme '${key.split(':')[0]}' is unsupported`,
+          );
+        }
+        store.set(key, v);
+      },
     }),
     delete: async () => { store.clear(); return true; },
   };
@@ -140,7 +156,7 @@ test('progress accounts for every file exactly once', async () => {
 test('an already-downloaded file is counted but not fetched again', async () => {
   // Pressing Download after an interrupted attempt finishes the job rather than restarting it.
   const store = fakeCaches();
-  store.set(MODEL.id, new Response(new Uint8Array([1]).buffer));
+  store.set(MODEL.url, new Response(new Uint8Array([1]).buffer));
 
   const asked = [];
   const buffer = new TextEncoder().encode('x').buffer;

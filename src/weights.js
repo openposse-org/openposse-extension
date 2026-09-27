@@ -128,10 +128,23 @@ export async function verify(file, buffer) {
 // without a serialisation step. Version in the cache name, so a future model is a new cache
 // rather than a migration.
 
+/**
+ * Cached entries are keyed by their **source URL**, not by our short id.
+ *
+ * Cache Storage rejects any request scheme that is not http(s), and a bare `'model'` resolves
+ * against the page — `chrome-extension://…/model` — so `put` fails with *"Request scheme
+ * 'chrome-extension' is unsupported"*. The real URL is both a legal key and a better one: it
+ * carries the pinned revision, so bumping `REVISION` invalidates the old entry by itself rather
+ * than needing a migration.
+ */
+const keyFor = (id) => ALL.find((f) => f.id === id)?.url ?? null;
+
 export async function stored(id) {
+  const key = keyFor(id);
+  if (!key) return null;
   try {
     const cache = await caches.open(CACHE);
-    return (await cache.match(id)) ?? null;
+    return (await cache.match(key)) ?? null;
   } catch {
     return null;
   }
@@ -203,7 +216,7 @@ export async function downloadWeights({ onProgress = () => {}, fetchImpl = fetch
       }
 
       const cache = await caches.open(CACHE);
-      await cache.put(file.id, new Response(buffer));
+      await cache.put(file.url, new Response(buffer));
       done += 1;
       bytes += file.bytes;
       onProgress({ id: file.id, done, total: ALL.length, bytes, totalBytes: TOTAL_BYTES });
