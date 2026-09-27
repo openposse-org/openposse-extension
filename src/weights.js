@@ -24,6 +24,25 @@ const REPO = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve
 const at = (path) => `${REPO}/${REVISION}/${path}`;
 
 /**
+ * The model comes from the **timestamped** repository, and the voices do not.
+ *
+ * Two repositories publish `model_q8f16.onnx` at the same 86.1 MB with different bytes, and the
+ * first version of this file pinned the wrong one — it downloaded and verified perfectly, and
+ * would have been loaded by an engine asking for the other. The hash check cannot save you from
+ * correctly verifying the wrong file.
+ *
+ * `Kokoro-82M-v1.0-ONNX-timestamped` is what HeadTTS requests by default, and it emits
+ * phoneme-level timings, which is what would let the orb follow real speech instead of a
+ * synthesised envelope.
+ *
+ * The **voices are style vectors rather than model weights** and are shared between the two, so
+ * they stay where they are — which also means the six already downloaded do not have to be
+ * fetched again. Keying the cache by URL makes that automatic: only the model reads as missing.
+ */
+const TS_REVISION = 'dd4401a9add81ac692d20e240d22ec9dda82cc29';
+const TS_REPO = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX-timestamped/resolve';
+
+/**
  * The model: q8f16, the smallest variant that is not visibly degraded.
  *
  * 86 MB against 326 MB for fp32 and 163 MB for fp16. The full-precision model is better and
@@ -38,9 +57,9 @@ const at = (path) => `${REPO}/${REVISION}/${path}`;
  */
 export const MODEL = {
   id: 'model',
-  url: at('onnx/model_q8f16.onnx'),
-  bytes: 86_033_585,
-  sha256: '04c658aec1b6008857c2ad10f8c589d4180d0ec427e7e6118ceb487e215c3cd0',
+  url: `${TS_REPO}/${TS_REVISION}/onnx/model_q8f16.onnx`,
+  bytes: 86_072_942,
+  sha256: 'db06e3f12daac36b13638ff6f6c4541241705405dac6d23126a7827dadf4c677',
 };
 
 /**
