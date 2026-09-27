@@ -71,6 +71,35 @@ export const TOTAL_BYTES = ALL.reduce((sum, f) => sum + f.bytes, 0);
 
 const CACHE = 'openposse-kokoro-v1';
 
+/**
+ * The hosts a download actually touches — **both of them**.
+ *
+ * `huggingface.co/…/resolve/…` answers with a **302 to `us.aws.cdn.hf.co`**, and that response
+ * carries `access-control-allow-origin: https://huggingface.co` rather than `*`. So a fetch
+ * from an extension page is refused unless we hold host permission, and holding it for
+ * `huggingface.co` alone is not enough — the bytes come from the CDN.
+ *
+ * Measured rather than assumed, after every file failed with a message the UI was throwing
+ * away. A redirect to a second origin is invisible from the URL you wrote down.
+ */
+export const HOSTS = { origins: ['https://huggingface.co/*', 'https://*.hf.co/*'] };
+
+/**
+ * Asks for those hosts, if we do not already have them.
+ *
+ * **Must be called straight from the click.** `permissions.request` needs a live user gesture,
+ * and an await before it spends one — the same trap that made the orb appear on Notion and
+ * nowhere else. `contains` first, so a second download does not re-prompt.
+ */
+export async function ensureAccess() {
+  try {
+    if (await chrome.permissions.contains(HOSTS)) return true;
+    return await chrome.permissions.request(HOSTS);
+  } catch {
+    return false;
+  }
+}
+
 // ── Verification ──────────────────────────────────────────────────────────────────────────
 
 /** Hex SHA-256 of a buffer, via WebCrypto. */

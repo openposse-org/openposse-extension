@@ -8,7 +8,9 @@
 import { loadRoster, importFromMacApp, setMicGranted, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
 import { describeEngine, REASONS } from './tts.js';
-import { weightsStatus, downloadWeights, removeWeights, TOTAL_BYTES } from './weights.js';
+import {
+  weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES,
+} from './weights.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const LANGS = { langs: ['en-US'], processLocally: true };
@@ -232,6 +234,15 @@ async function refreshWeights() {
 }
 
 el('get-weights').addEventListener('click', async () => {
+  // First, before any await: `permissions.request` needs this click to still be a live user
+  // gesture. HuggingFace redirects to a CDN on another host and neither sends `*` for CORS, so
+  // without both origins every file fails with a message that says nothing useful.
+  const allowed = await ensureAccess();
+  if (!allowed) {
+    setStatus('weights-status', 'needs access to huggingface.co to download — not granted');
+    return;
+  }
+
   el('get-weights').disabled = true;
   setStatus('weights-status', 'starting…');
 
@@ -253,13 +264,17 @@ el('get-weights').addEventListener('click', async () => {
   el('get-weights').disabled = false;
 
   if (!result.ok) {
-    // Named, not counted. A hash mismatch and a failed request need different reactions —
-    // one is "try again", the other is "something served you the wrong file" — and this is the
-    // one place in the product where the difference is worth spelling out.
+    // **The reason, not a count of failures.** The first version said "could not download
+    // model, bm_george, … — try again" for every cause there is, and the actual message —
+    // which named a CORS refusal — was thrown away by this very line. Listing the files told
+    // nobody anything; they had all failed for one reason.
+    for (const f of result.failed) console.warn('[openposse] weights:', f.id, '—', f.reason);
+
     const mismatched = result.failed.filter((f) => f.reason === 'mismatch');
+    const reasons = [...new Set(result.failed.map((f) => f.reason))];
     setStatus('weights-status', mismatched.length
       ? `refused: ${mismatched.map((f) => f.id).join(', ')} did not match the expected contents`
-      : `could not download ${result.failed.map((f) => f.id).join(', ')} — try again`);
+      : `${result.failed.length} of ${result.failed.length} failed — ${reasons.join(' · ')}`);
     el('drop-weights').hidden = false;
     return;
   }
