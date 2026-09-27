@@ -383,9 +383,15 @@ export function handleOffscreenMessage(message) {
       console.info(
         '[openposse] turn ended —',
         message.tailMs == null ? 'nothing was said'
-          : message.speechEndFired
+          : message.waitMs != null
             ? `${message.waitMs} ms from you stopping to the final · ${message.tailMs} ms final to end`
-            : `speechend never fired despite speech · ${message.tailMs} ms final to end`,
+            // `speechend` fired, but *after* the final result rather than before it — so there
+            // is no interval to report and "null ms" is not a measurement. Worth naming rather
+            // than papering over: the ordering is not guaranteed, and it means the recogniser
+            // sometimes commits before it decides you stopped.
+            : message.speechEndFired
+              ? `speechend arrived after the final · ${message.tailMs} ms final to end`
+              : `speechend never fired despite speech · ${message.tailMs} ms final to end`,
       );
       settle();
       return true;
