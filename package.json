@@ -10,6 +10,7 @@
     "test": "eslint src tools && node --test tools/*.test.mjs"
   },
   "devDependencies": {
+    "@huggingface/transformers": "^4.0.0",
     "esbuild": "^0.25.0",
     "eslint": "^10.10.0"
   }

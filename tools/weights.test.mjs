@@ -179,5 +179,5 @@ test('an already-downloaded file is counted but not fetched again', async () => 
   }));
 
   assert.ok(!asked.some((u) => u.includes('model_q8f16')), 'the model was not re-fetched');
-  assert.equal(asked.length, VOICES.length);
+  assert.equal(asked.length, ALL.length - 1, 'everything else was');
 });

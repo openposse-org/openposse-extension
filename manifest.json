@@ -19,6 +19,20 @@
   "optional_host_permissions": [
     "https://*/*"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "vendor/transformers/*",
+        "vendor/headtts/*",
+        "dictionaries/*"
+      ],
+      "matches": [],
+      "extension_ids": []
+    }
+  ],
   "action": {
     "default_title": "OpenPosse",
     "default_popup": "popup.html"

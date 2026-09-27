@@ -83,7 +83,29 @@ export const VOICES = Object.entries({
   sha256,
 }));
 
-export const ALL = [MODEL, ...VOICES];
+/**
+ * The model's own paperwork, which transformers.js loads before the weights.
+ *
+ * Tiny — 3.6 kB between them — and completely load-bearing: `from_pretrained` reads
+ * `config.json` to know what architecture it is building, and `AutoTokenizer` needs the other
+ * two to turn phonemes into the ids the model expects. Without them the engine cannot start,
+ * and the first version of this manifest had 89 MB of weights and none of these.
+ *
+ * Hashed here rather than read from the API, because these are stored inline in the repository
+ * rather than through Git-LFS, so there is no object id to borrow. Fetched once and digested.
+ */
+const CONFIG = Object.entries({
+  'config.json': 'df34b4f930b23447cd4dc410fabfb42eb3f24e803e6c3f97d618fb359380a36f',
+  'tokenizer.json': '77a02c8e164413299b4b4c403b14f8e0e1c1b727db4d46a09d6327b861060a34',
+  'tokenizer_config.json': 'be1cb066d6ef6b074b3f15e6a6dd21ac88ff3cdaedf325f0aaed686c70f75d20',
+}).map(([name, sha256]) => ({
+  id: name,
+  url: `${TS_REPO}/${TS_REVISION}/${name}`,
+  bytes: 4_000,
+  sha256,
+}));
+
+export const ALL = [MODEL, ...CONFIG, ...VOICES];
 
 /** Total download, for a sentence in setup that does not surprise anyone on a slow connection. */
 export const TOTAL_BYTES = ALL.reduce((sum, f) => sum + f.bytes, 0);
