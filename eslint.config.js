@@ -53,6 +53,12 @@ export default [
         // would breach the project's "no third-party model downloads at runtime" rule, so a
         // `fetch` here with an outside host in it is a bug, not a feature.
         fetch: 'readonly',
+        // Kokoro's weights: fetched once from setup, verified against a pinned hash, and kept
+        // in Cache Storage — large immutable blobs from HTTP, which is what it is for.
+        caches: 'readonly',
+        Response: 'readonly',
+        Uint8Array: 'readonly',
+        TextEncoder: 'readonly',
         KeyboardEvent: 'readonly',
         MouseEvent: 'readonly',
         Event: 'readonly',

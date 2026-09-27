@@ -142,6 +142,27 @@
           — the full text stays on screen. Everything here runs on this machine.
         </p>
         <div id="engine" class="card">checking…</div>
+
+        <div class="step" style="margin-top:18px">
+          <div class="num">5</div>
+          <div style="flex:1">
+            <h2>Better voices <span class="kind">— optional, 89 MB</span></h2>
+            <p>
+              The system voices are your operating system's, and they sound like it. Kokoro is a
+              neural voice model that runs <em>on this machine</em> — nothing you say or hear
+              goes anywhere. It is a one-off download of about 89 MB, kept locally afterwards.
+            </p>
+            <p>
+              It needs WebGPU to be fast enough for conversation. Without it OpenPosse keeps
+              using the system voices, which is the status quo rather than a failure.
+            </p>
+            <div class="row">
+              <button class="secondary" id="get-weights">Download</button>
+              <button class="secondary" id="drop-weights" hidden>Remove</button>
+              <span class="status mono" id="weights-status">checking…</span>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section>

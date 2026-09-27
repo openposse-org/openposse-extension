@@ -8,6 +8,7 @@
 import { loadRoster, importFromMacApp, setMicGranted, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
 import { describeEngine, REASONS } from './tts.js';
+import { weightsStatus, downloadWeights, removeWeights, TOTAL_BYTES } from './weights.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const LANGS = { langs: ['en-US'], processLocally: true };
@@ -201,6 +202,65 @@ async function refreshEngine() {
   }
 }
 
+// ── The neural voices ──────────────────────────────────────────────────────────────────────
+//
+// **This button is the amended rule's entire justification, so it has to behave like it.** The
+// rule now permits a model download that the user starts, from a pinned URL, verified against a
+// hash in the build — and each of those is only true because this page does it that way. A
+// download that started itself, or that installed whatever arrived, would make the amendment a
+// piece of paperwork.
+//
+// Sizes are shown before anything is fetched, and progress while it is, because 89 MB on a
+// hotel connection is a decision and not a detail.
+
+const mb = (bytes) => `${Math.round(bytes / 1e6)} MB`;
+
+async function refreshWeights() {
+  const { state, have, want } = await weightsStatus();
+  const done = state === 'ready';
+
+  el('drop-weights').hidden = !have;
+  el('get-weights').hidden = done;
+  el('get-weights').textContent = state === 'partial' ? 'Resume' : 'Download';
+  setStatus('weights-status', done
+    ? 'installed — used whenever WebGPU is available'
+    : state === 'partial'
+      ? `${have} of ${want} files — interrupted`
+      : `not downloaded · ${mb(TOTAL_BYTES)}`);
+  markDone('step-weights', done);
+  return state;
+}
+
+el('get-weights').addEventListener('click', async () => {
+  el('get-weights').disabled = true;
+  const result = await downloadWeights({
+    onProgress: ({ bytes, totalBytes, done, total }) => {
+      setStatus('weights-status', `${mb(bytes)} of ${mb(totalBytes)} · file ${done} of ${total}`);
+    },
+  });
+  el('get-weights').disabled = false;
+
+  if (!result.ok) {
+    // Named, not counted. A hash mismatch and a failed request need different reactions —
+    // one is "try again", the other is "something served you the wrong file" — and this is the
+    // one place in the product where the difference is worth spelling out.
+    const mismatched = result.failed.filter((f) => f.reason === 'mismatch');
+    setStatus('weights-status', mismatched.length
+      ? `refused: ${mismatched.map((f) => f.id).join(', ')} did not match the expected contents`
+      : `could not download ${result.failed.map((f) => f.id).join(', ')} — try again`);
+    el('drop-weights').hidden = false;
+    return;
+  }
+  await refreshWeights();
+  await refreshEngine();
+});
+
+el('drop-weights').addEventListener('click', async () => {
+  await removeWeights();
+  await refreshWeights();
+  await refreshEngine();
+});
+
 // ── Roster ─────────────────────────────────────────────────────────────────────────────────
 
 async function refreshRoster() {
@@ -255,6 +315,7 @@ await refreshModel();
 await refreshShortcut();
 await refreshPanelAccess();
 await refreshEngine();
+await refreshWeights();
 await refreshRoster();
 
 // Shortcuts are changed on another tab, so this page is stale the moment they leave it. Chrome
