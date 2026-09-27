@@ -7,7 +7,10 @@
 
 import { loadRoster, importFromMacApp, setMicGranted, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
-import { describeEngine, REASONS } from './tts.js';
+import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
+import {
+  weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES,
+} from './weights.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const LANGS = { langs: ['en-US'], processLocally: true };
@@ -191,15 +194,109 @@ el('folder').addEventListener('change', async (event) => {
 // live there, and it is created on demand by the worker.
 
 async function refreshEngine() {
-  try {
-    const choice = await chrome.runtime.sendMessage({ kind: 'openposse.engine.query' });
-    el('engine').textContent = choice ? describeEngine(choice) : REASONS.system;
-  } catch {
-    // No offscreen document yet — it is made when a turn starts. Saying what will happen is
-    // more use than an error about a document nobody asked for.
-    el('engine').textContent = REASONS.system;
-  }
+  // **Worked out here rather than asked of the offscreen document.**
+  //
+  // The first version messaged that document for the answer, and it usually does not exist —
+  // it is created when a turn starts, and opening settings is not a turn. So the send threw,
+  // the catch fell back to the bland "System voices", and the page never showed the *reason*,
+  // which is the only part worth reading. It looked like the line was not updating.
+  //
+  // This page is a Window, so it has `navigator.gpu` and can read the weights itself. Nothing
+  // about the choice needs a microphone, and asking something that may not be there for an
+  // answer we can compute was the whole mistake.
+  const choice = chooseEngine({
+    hasWebGPU: await hasWebGPU(),
+    hasKokoroAssets: (await weightsStatus()).state === 'ready',
+  });
+  el('engine').textContent = describeEngine(choice);
 }
+
+// ── The neural voices ──────────────────────────────────────────────────────────────────────
+//
+// **This button is the amended rule's entire justification, so it has to behave like it.** The
+// rule now permits a model download that the user starts, from a pinned URL, verified against a
+// hash in the build — and each of those is only true because this page does it that way. A
+// download that started itself, or that installed whatever arrived, would make the amendment a
+// piece of paperwork.
+//
+// Sizes are shown before anything is fetched, and progress while it is, because 89 MB on a
+// hotel connection is a decision and not a detail.
+
+const mb = (bytes) => `${Math.round(bytes / 1e6)} MB`;
+
+async function refreshWeights() {
+  const { state, have, want } = await weightsStatus();
+  const done = state === 'ready';
+
+  el('drop-weights').hidden = !have;
+  el('get-weights').hidden = done;
+  el('get-weights').textContent = state === 'partial' ? 'Resume' : 'Download';
+  // Says what is on disk, and nothing about whether it is being used — the engine line above
+  // owns that, and this claiming "used whenever WebGPU is available" directly contradicted it
+  // while the engine was still unbuilt. One fact, one place.
+  setStatus('weights-status', done
+    ? `installed — ${want} files, verified`
+    : state === 'partial'
+      ? `${have} of ${want} files — interrupted`
+      : `not downloaded · ${mb(TOTAL_BYTES)}`);
+  markDone('step-weights', done);
+  return state;
+}
+
+el('get-weights').addEventListener('click', async () => {
+  // First, before any await: `permissions.request` needs this click to still be a live user
+  // gesture. HuggingFace redirects to a CDN on another host and neither sends `*` for CORS, so
+  // without both origins every file fails with a message that says nothing useful.
+  const allowed = await ensureAccess();
+  if (!allowed) {
+    setStatus('weights-status', 'needs access to huggingface.co to download — not granted');
+    return;
+  }
+
+  el('get-weights').disabled = true;
+  setStatus('weights-status', 'starting…');
+
+  let result;
+  try {
+    result = await downloadWeights({
+      onProgress: ({ bytes, totalBytes, done, total }) => {
+        setStatus('weights-status', `${mb(bytes)} of ${mb(totalBytes)} · file ${done} of ${total}`);
+      },
+    });
+  } catch (error) {
+    // A button that does nothing is the worst outcome available, so nothing gets to throw
+    // past here silently — the page says what happened and the console says it precisely.
+    console.error('[openposse] weights download threw —', error?.message ?? error);
+    setStatus('weights-status', `could not start: ${error?.message ?? error}`);
+    el('get-weights').disabled = false;
+    return;
+  }
+  el('get-weights').disabled = false;
+
+  if (!result.ok) {
+    // **The reason, not a count of failures.** The first version said "could not download
+    // model, bm_george, … — try again" for every cause there is, and the actual message —
+    // which named a CORS refusal — was thrown away by this very line. Listing the files told
+    // nobody anything; they had all failed for one reason.
+    for (const f of result.failed) console.warn('[openposse] weights:', f.id, '—', f.reason);
+
+    const mismatched = result.failed.filter((f) => f.reason === 'mismatch');
+    const reasons = [...new Set(result.failed.map((f) => f.reason))];
+    setStatus('weights-status', mismatched.length
+      ? `refused: ${mismatched.map((f) => f.id).join(', ')} did not match the expected contents`
+      : `${result.failed.length} of ${result.failed.length} failed — ${reasons.join(' · ')}`);
+    el('drop-weights').hidden = false;
+    return;
+  }
+  await refreshWeights();
+  await refreshEngine();
+});
+
+el('drop-weights').addEventListener('click', async () => {
+  await removeWeights();
+  await refreshWeights();
+  await refreshEngine();
+});
 
 // ── Roster ─────────────────────────────────────────────────────────────────────────────────
 
@@ -250,12 +347,28 @@ async function refreshRoster() {
 
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
 
-await refreshMic();
-await refreshModel();
-await refreshShortcut();
-await refreshPanelAccess();
-await refreshEngine();
-await refreshRoster();
+// Each section independently, and loudly when one fails.
+//
+// **This was a bare sequence of awaits, and that is how the weights section shipped broken.**
+// `markDone` was given an id that did not exist, threw on null, and took every later step with
+// it — so the page sat on "checking…" with a button that appeared to do nothing and nothing in
+// the console to say why. A setup page is a list of independent facts about a machine; one of
+// them being unreadable is no reason to stop reporting the rest.
+for (const [name, refresh] of Object.entries({
+  microphone: refreshMic,
+  'speech model': refreshModel,
+  shortcut: refreshShortcut,
+  'panel access': refreshPanelAccess,
+  'voice engine': refreshEngine,
+  weights: refreshWeights,
+  roster: refreshRoster,
+})) {
+  try {
+    await refresh();
+  } catch (error) {
+    console.error(`[openposse] setup: ${name} could not be read —`, error?.message ?? error);
+  }
+}
 
 // Shortcuts are changed on another tab, so this page is stale the moment they leave it. Chrome
 // has no event for a rebinding — re-reading on focus is the only way the status can be true

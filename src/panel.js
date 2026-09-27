@@ -112,9 +112,14 @@ export async function panel(patch, { create = false } = {}) {
 
   try {
     await chrome.tabs.sendMessage(panelTabId, { kind: 'openposse.orb', state: patch });
-  } catch {
+  } catch (error) {
     // The tab navigated, closed, or the grant lapsed. Forget it rather than retrying into
     // nothing; the next turn injects again.
+    //
+    // Logged despite being routine, because those three are not the same story — a lapsed
+    // grant means the panel will keep failing and a closed tab means nothing at all. It fires
+    // at most once per turn, since the next call returns early on the null below.
+    console.warn('[openposse] panel unreachable —', error?.message ?? error);
     panelTabId = null;
   }
 }

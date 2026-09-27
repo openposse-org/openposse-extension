@@ -20,6 +20,7 @@
 
 import { assignVoices } from './voices.js';
 import { chooseEngine, hasWebGPU } from './tts.js';
+import { weightsStatus } from './weights.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const Phrase = globalThis.SpeechRecognitionPhrase;
@@ -80,8 +81,12 @@ async function startMeter() {
     }, LEVEL_MS);
 
     meter = { ctx, stream, timer };
-  } catch {
-    // No meter. `orb.js` falls back to the synthetic amplitude, which is where it started.
+  } catch (error) {
+    // No meter. `orb.js` falls back to the synthetic amplitude, which is where it started — but
+    // **the fallback is invisible**, so without this "the orb does not follow my voice" has
+    // four possible causes and no way to tell them apart: a refused second capture, a blocked
+    // AudioContext, an autoplay policy, or the orb simply being wrong.
+    console.warn('[openposse] no level meter —', error?.message ?? error);
     meter = null;
   }
 }
@@ -310,18 +315,13 @@ function voices() {
 /**
  * Whether Kokoro's weights are actually present.
  *
- * A **real check against the bundle**, not a flag: the assets are not shipped yet, and a
- * hardcoded `false` would have to be remembered and flipped by hand on the day they are. This
- * answers correctly today and correctly the moment the files land, which is the difference
- * between a gate and a note to self.
+ * Reads the local store rather than the bundle: the weights are downloaded from setup, once,
+ * verified, and kept — so "is this machine ready" is a question about what has been installed
+ * and not about what shipped. It answers correctly before the download and after it, with
+ * nothing to remember to flip.
  */
 async function hasKokoroAssets() {
-  try {
-    const res = await fetch(chrome.runtime.getURL('models/kokoro/model.onnx'), { method: 'HEAD' });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  return (await weightsStatus()).state === 'ready';
 }
 
 /** Decided per turn rather than cached: a GPU can be lost, and assets can be added. */

@@ -340,9 +340,14 @@ async function frameOwningAssistant(tabId, selector) {
       func: (sel) => Boolean(globalThis.__openposseSeesAssistant?.(sel)),
     });
     return results.find((entry) => entry.result === true)?.frameId;
-  } catch {
+  } catch (error) {
     // A frame we are not allowed to inject into, or a tab that has gone. Falling back to the
     // top frame is what the code did before this existed, so this is never worse.
+    //
+    // Said out loud anyway: frame targeting is what fixed the bug where a frame with no
+    // composer answered first and won by timing out. Degrading back to the top frame silently
+    // is how that bug would return looking brand new.
+    console.warn('[openposse] could not locate the assistant frame —', error?.message ?? error);
     return undefined;
   }
 }
@@ -820,12 +825,22 @@ async function dispatchIntent(request) {
       });
     }
   } catch (error) {
-    // `sendMessage` rejects when no content script is listening — almost always a tab that
-    // was open before the extension was installed or reloaded. Say that, rather than letting
-    // it read as a page problem.
+    // `sendMessage` rejects for several reasons and only one of them is "no content script".
+    // The first version asserted that one for all of them and told everybody to reload the
+    // page — advice that is right for a stale tab and useless for a tab that navigated
+    // mid-exchange, which is the other common case.
+    //
+    // So the guess is checked against the error rather than substituted for it, and the error
+    // is logged either way. A message, not page content: Chrome writes these itself.
+    const detail = String(error?.message ?? error);
+    const noListener = detail.includes('Receiving end does not exist');
+    console.warn('[openposse] dispatch failed —', detail);
+
     reply('error', {
       code: ERROR.tabNotFound,
-      message: 'the tab has no OpenPosse content script — reload the page',
+      message: noListener
+        ? 'the tab has no OpenPosse content script — reload the page'
+        : `could not reach the tab — ${detail}`,
     });
   } finally {
     chrome.runtime.onMessage.removeListener(onStream);

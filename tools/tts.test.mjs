@@ -12,10 +12,31 @@ import {
   chooseEngine, describeEngine, assignKokoroVoices, KOKORO_VOICES, REASONS,
 } from '../src/tts.js';
 
-test('Kokoro needs both WebGPU and the files', () => {
-  assert.equal(chooseEngine({ hasWebGPU: true, hasKokoroAssets: true }).engine, 'kokoro');
-  assert.equal(chooseEngine({ hasWebGPU: true, hasKokoroAssets: false }).engine, 'system');
-  assert.equal(chooseEngine({ hasWebGPU: false, hasKokoroAssets: true }).engine, 'system');
+test('Kokoro needs WebGPU, the files, and an engine to read them', () => {
+  const both = { hasWebGPU: true, hasKokoroAssets: true };
+  assert.equal(chooseEngine({ ...both, implemented: true }).engine, 'kokoro');
+  assert.equal(chooseEngine({ hasWebGPU: true, hasKokoroAssets: false, implemented: true }).engine, 'system');
+  assert.equal(chooseEngine({ hasWebGPU: false, hasKokoroAssets: true, implemented: true }).engine, 'system');
+});
+
+test('downloaded weights with no engine to read them does not claim Kokoro', () => {
+  // The lie this prevents. The weights became downloadable before the engine existed, so a
+  // machine with WebGPU passed both gates and would have been told "Kokoro — neural voices,
+  // running on this machine" — then failed to speak, reporting that the model was not
+  // installed, which was untrue twice over.
+  const choice = chooseEngine({ hasWebGPU: true, hasKokoroAssets: true, implemented: false });
+  assert.equal(choice.engine, 'system');
+  assert.equal(choice.reason, 'not-built');
+  assert.match(describeEngine(choice), /downloaded, but the engine/);
+});
+
+test('the nearest obstacle is the one named', () => {
+  // Someone without WebGPU should be told that, not told we have not finished building
+  // something they could not have run anyway.
+  assert.equal(
+    chooseEngine({ hasWebGPU: false, hasKokoroAssets: true, implemented: false }).reason,
+    'no-webgpu',
+  );
 });
 
 test('WebGPU is a hard gate rather than a preference', () => {
@@ -30,7 +51,7 @@ test('WebGPU is a hard gate rather than a preference', () => {
 test('each reason sends someone somewhere different', () => {
   // "Your machine cannot do this", "it can but the files are missing" and "you chose this" need
   // different actions. One generic "using system voices" would be true and useless.
-  const reasons = ['no-webgpu', 'no-assets', 'preference', 'kokoro'];
+  const reasons = ['no-webgpu', 'no-assets', 'not-built', 'preference', 'kokoro'];
   const said = reasons.map((r) => describeEngine({ reason: r }));
   assert.equal(new Set(said).size, reasons.length, 'every reason reads differently');
   for (const s of said) assert.ok(s.length > 10, s);
