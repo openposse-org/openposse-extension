@@ -36,14 +36,45 @@ function api() {
  * download because somebody asked an assistant a question would be a surprising thing to do
  * with their disk and their network, and there is nowhere in a spoken turn to show progress.
  */
-export async function canSummarise() {
+/**
+ * Why summarising is or is not possible, as a code.
+ *
+ * Four outcomes that look identical from the outside — every one of them just means answers get
+ * read out with "the rest is on screen" — and they need completely different responses:
+ *
+ * - `no-api` — this Chrome does not have the API at all. Nothing to be done but update.
+ * - `downloadable` — the hardware is fine and the model simply has not been fetched. **The one
+ *   that is actionable**, and the reason this distinction is worth drawing: setup already
+ *   downloads the speech model, and this belongs next to it.
+ * - `downloading` — in progress, so it will start working by itself.
+ * - `unavailable` — the machine does not meet the gate: 22 GB free plus 4 GB of VRAM or 16 GB
+ *   of RAM. Permanent, and the product is designed to be fine without it.
+ */
+export async function summariserStatus() {
   const Summarizer = api();
-  if (!Summarizer?.availability || unavailable) return false;
+  if (!Summarizer?.availability) return 'no-api';
   try {
-    return (await Summarizer.availability(OPTIONS)) === 'available';
+    return await Summarizer.availability(OPTIONS);
   } catch {
-    return false;
+    return 'unavailable';
   }
+}
+
+/** Logged once, because the answer cannot change within a session without a download. */
+let announced = false;
+
+export async function canSummarise() {
+  if (unavailable) return false;
+  const status = await summariserStatus();
+
+  if (!announced) {
+    announced = true;
+    // A status code, not content. Without it, "long answers are never summarised" has four
+    // possible causes and no way to tell them apart — and one of the four is fixable in a
+    // click.
+    console.info('[openposse] summariser:', status);
+  }
+  return status === 'available';
 }
 
 /**
@@ -81,4 +112,5 @@ export async function summarise(text) {
 export function resetSummariser() {
   session = null;
   unavailable = false;
+  announced = false;
 }
