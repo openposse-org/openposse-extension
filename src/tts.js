@@ -50,9 +50,24 @@ export const REASONS = {
   'kokoro': 'Kokoro — neural voices, running on this machine',
   'no-webgpu': 'System voices — this browser has no WebGPU, and Kokoro without it is too slow to hold a conversation',
   'no-assets': 'System voices — the Kokoro voice model is not installed',
+  'not-built': 'System voices — the Kokoro model is downloaded, but the engine that reads it is not built yet',
   'preference': 'System voices — chosen in settings',
   'system': 'System voices',
 };
+
+/**
+ * Whether there is anything here that can actually run the model.
+ *
+ * **False until HeadTTS is vendored and wired**, and it has to be checked or the product lies:
+ * the weights are downloadable *now*, so a machine with WebGPU would otherwise pass both gates,
+ * be told "Kokoro — neural voices, running on this machine", and then fail to speak with
+ * "the model is not installed" — which would be untrue twice over.
+ *
+ * A constant rather than a probe, unlike the asset check, because there is no file to look for
+ * until the code exists. It flips in one place on the day it does, and the test below makes
+ * sure the copy stays honest either way.
+ */
+export const KOKORO_IMPLEMENTED = false;
 
 /**
  * Picks an engine from what is actually available.
@@ -67,10 +82,16 @@ export const REASONS = {
  * @param hasKokoroAssets  the model and voices are actually on disk
  * @param preference       `'system'` to force it, anything else to allow the best available
  */
-export function chooseEngine({ hasWebGPU = false, hasKokoroAssets = false, preference = 'auto' } = {}) {
+export function chooseEngine({
+  hasWebGPU = false, hasKokoroAssets = false, preference = 'auto',
+  implemented = KOKORO_IMPLEMENTED,
+} = {}) {
   if (preference === 'system') return { engine: 'system', reason: 'preference' };
   if (!hasWebGPU) return { engine: 'system', reason: 'no-webgpu' };
   if (!hasKokoroAssets) return { engine: 'system', reason: 'no-assets' };
+  // Checked last, so the reason names the *nearest* obstacle: somebody without WebGPU should be
+  // told that, not told we have not finished building something they could not have run anyway.
+  if (!implemented) return { engine: 'system', reason: 'not-built' };
   return { engine: 'kokoro', reason: 'kokoro' };
 }
 
