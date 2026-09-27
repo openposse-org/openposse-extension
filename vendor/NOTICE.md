@@ -33,6 +33,33 @@ distinction is this project's standing rule and it has already caught one real p
   [microsoft/onnxruntime](https://github.com/microsoft/onnxruntime/blob/main/LICENSE), and it
   should be included by hand before this is published.
 
+## Updating these files
+
+The packages are **not** dependencies of this extension — they were installed once, three files
+were copied out, and they were removed again. That is deliberate: Chrome loads the whole
+unpacked directory, so `node_modules` counts toward what it reports, and installing
+transformers.js takes `onnxruntime-web` (131 MB) and `sharp` with it. The extension read
+**437 MB** in `chrome://extensions` until they were uninstalled.
+
+To take a newer version:
+
+```bash
+cd extension
+npm i --no-save @huggingface/transformers@<version>
+cp node_modules/@huggingface/transformers/dist/transformers.web.min.js vendor/transformers/
+cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs vendor/transformers/
+cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm vendor/transformers/
+npm uninstall @huggingface/transformers
+```
+
+Re-run the licence scan afterwards, and expect the `WeSpeaker` false positive described below.
+
+HeadTTS is fetched from GitHub rather than npm because it is not published there. Take
+`modules/{headtts,worker-tts,language,language-en-us,utils}.mjs` and
+`dictionaries/en-us.txt`, then **re-apply the two-line patch** at the top of
+`worker-tts.mjs` — it is the only local change and a clean copy would silently restore network
+access from inside the worker.
+
 ## Why these exact files
 
 Only the WebGPU path is vendored. `onnxruntime-web` unpacks to **131 MB** across every build
