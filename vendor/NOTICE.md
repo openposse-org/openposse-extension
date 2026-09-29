@@ -13,8 +13,9 @@ distinction is this project's standing rule and it has already caught one real p
 | Path | Version | Licence | Source |
 |---|---|---|---|
 | `headtts/` | `main` @ 2026-09-27 | MIT | [met4citizen/HeadTTS](https://github.com/met4citizen/HeadTTS) |
-| `transformers/transformers.web.min.js` | 4.0.0 | Apache-2.0 | [@huggingface/transformers](https://www.npmjs.com/package/@huggingface/transformers) |
-| `transformers/ort-wasm-simd-threaded.jsep.*` | 1.25.0-dev | MIT | [onnxruntime-web](https://www.npmjs.com/package/onnxruntime-web) |
+| `headtts/openposse-local-only.mjs` | — | **OpenPosse's own** | not third-party; see below |
+| `transformers/transformers.min.js` | 4.0.0 | Apache-2.0 | [@huggingface/transformers](https://www.npmjs.com/package/@huggingface/transformers) |
+| `transformers/ort-wasm-simd-threaded.asyncify.*` | 1.25.0-dev | MIT | [onnxruntime-web](https://www.npmjs.com/package/onnxruntime-web) |
 | `../dictionaries/en-us.txt` | with HeadTTS | see below | CMU Pronouncing Dictionary, via HeadTTS |
 
 ## What was checked, and what was found
@@ -46,25 +47,52 @@ To take a newer version:
 ```bash
 cd extension
 npm i --no-save @huggingface/transformers@<version>
-cp node_modules/@huggingface/transformers/dist/transformers.web.min.js vendor/transformers/
-cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs vendor/transformers/
-cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm vendor/transformers/
+cp node_modules/@huggingface/transformers/dist/transformers.min.js vendor/transformers/
+cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.mjs vendor/transformers/
+cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm vendor/transformers/
 npm uninstall @huggingface/transformers
 ```
+
+**Both of those filenames are the ones that were got wrong first**, and each cost a round:
+
+- **`transformers.min.js`, not `transformers.web.min.js`.** The `.web.` build carries bare
+  import specifiers (`onnxruntime-web/webgpu`) that a bundler is expected to resolve and a
+  browser cannot — `import()` of it dies with *"Failed to resolve module specifier"*. It is the
+  file HeadTTS loads from a CDN by default, which is what makes it the tempting one to copy.
+- **`asyncify`, not `jsep`** — see *Why these exact files* below.
 
 Re-run the licence scan afterwards, and expect the `WeSpeaker` false positive described below.
 
 HeadTTS is fetched from GitHub rather than npm because it is not published there. Take
 `modules/{headtts,worker-tts,language,language-en-us,utils}.mjs` and
-`dictionaries/en-us.txt`, then **re-apply both local patches**, each marked `OpenPosse patch`
-in the source:
+`dictionaries/en-us.txt`, then **re-apply all four local patches**. They occupy **six marked
+sites across the two files** — `grep -n "OpenPosse patch" vendor/headtts/*.mjs` should find
+three in each — because three of the four have a sending half in the worker and a receiving
+half in `headtts.mjs`. Applying only the half you happen to find leaves the other end silent,
+which is the failure these patches exist to prevent.
 
-1. `worker-tts.mjs`, two lines at the top — installs the local-only `fetch`. A clean copy
-   silently restores network access from inside the worker.
-2. `headtts.mjs`, in the worker-startup `catch` — includes the `ErrorEvent`'s detail in the
+`openposse-local-only.mjs` is **not** upstream and is not replaced when taking a new version.
+It is OpenPosse's own file, sitting in this directory because it is imported by the worker.
+
+The first two patches are load-bearing; a clean copy without them reaches the network and
+cannot start.
+
+1. `worker-tts.mjs`, at the top — installs the local-only `fetch` and forwards unhandled
+   rejections; received by `headtts.mjs`'s `onmessage`. A clean copy silently restores network
+   access from inside the worker, and an async setup failure becomes a 30-second connection
+   timeout instead of an error, because a rejected promise never fires `Worker.onerror`.
+2. `worker-tts.mjs`, after the transformers import — points ONNX Runtime's WASM at the
+   extension and turns off remote models, so `from_pretrained` builds a `chrome-extension://`
+   URL and **never assembles a huggingface.co one at all**. Belt and braces with the shim,
+   deliberately: ONNX Runtime spawns its own worker with its own `fetch` and a synchronous
+   `XMLHttpRequest`, neither of which the shim covers.
+3. `headtts.mjs`, in the worker-startup `catch` — includes the `ErrorEvent`'s detail in the
    connection error. Upstream pushes `"Failed to start Module Web Worker."` and discards the
    error, so one sentence covers a CSP refusal, a 404 on the worker and a syntax error inside
    it. Three problems, three different fixes, one message.
+4. `worker-tts.mjs` after the model loads, and `headtts.mjs`'s `onmessage` — reports the dtype
+   and bound execution providers. Diagnostics only; it may be dropped when taking a new version
+   if it does not apply cleanly.
 
 ## Why these exact files
 
