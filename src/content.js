@@ -93,19 +93,33 @@ async function openAssistant(recipe) {
  * selector may have drifted — and in all three the honest answer is "I don't know", which is
  * what the clock is for.
  */
-function watchBusy(selector, { timeoutMs }) {
+function watchBusy(selector, { timeoutMs, steadyMs = 900 }) {
   if (!selector) {
     return { selector: null, settled: async () => ({ finished: false, waited: 0 }), stop() {} };
   }
 
   let seen = false;
   let gone = false;
+  // **When it went away, not merely that it did.** An answer is not one continuous act: Notion
+  // reports "Working on your request", then "Taking a closer look", and the stop control goes
+  // away *between* those phases. Treating the first disappearance as the end made the settle
+  // fire while a status row was still the newest thing on the page, and that row was read out
+  // as the answer.
+  //
+  // So the control has to be absent and *stay* absent. A gap between phases resets the clock;
+  // only a steady absence counts as finished.
+  let goneSince = null;
   const startedAt = Date.now();
 
   const timer = setInterval(() => {
     if (gone) return;
-    if (deepQuerySelectorAll(selector).length > 0) seen = true;
-    else if (seen) { gone = true; clearInterval(timer); }
+    if (deepQuerySelectorAll(selector).length > 0) {
+      seen = true;
+      goneSince = null;
+    } else if (seen) {
+      goneSince ??= Date.now();
+      if (Date.now() - goneSince >= steadyMs) { gone = true; clearInterval(timer); }
+    }
     if (Date.now() - startedAt > timeoutMs) clearInterval(timer);
   }, 150);
 
@@ -303,7 +317,12 @@ async function askAssistant({ recipe, prompt }, emit) {
   // the first pass spends a quiet period reading the first row, and a fast answer can have
   // come and gone inside it. "Never appeared" and "appeared and finished" need opposite
   // responses, and only something watching the whole time can tell them apart.
-  const busy = watchBusy(recipe.busySelector, { timeoutMs: responseTimeoutMs });
+  // `steadyMs` is the vendor's own measured quiet period, so "it has stopped for as long as it
+  // ever pauses mid-answer" is the test, rather than a number invented here.
+  const busy = watchBusy(recipe.busySelector, {
+    timeoutMs: responseTimeoutMs,
+    steadyMs: recipe.quietPeriodMs ?? 900,
+  });
 
   // Timed and returned, not logged. This runs in the vendor's page, so a console line lands in
   // *their* DevTools — which is why "vendor answered +8068ms" could not be split into how much
