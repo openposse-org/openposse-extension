@@ -18,6 +18,10 @@ distinction is this project's standing rule and it has already caught one real p
 | `transformers/ort-wasm-simd-threaded.asyncify.*` | 1.25.0-dev | MIT | [onnxruntime-web](https://www.npmjs.com/package/onnxruntime-web) |
 | `../dictionaries/en-us.txt` | with HeadTTS | see below | CMU Pronouncing Dictionary, via HeadTTS |
 
+Each licence text travels with the code it covers: `headtts/LICENSE`,
+`transformers/LICENSE-transformers` and `transformers/LICENSE-onnxruntime`. OpenPosse's own
+licence is Apache-2.0, at the repository root.
+
 ## What was checked, and what was found
 
 - **HeadTTS** states it *"doesn't use eSpeak or any other GPL-licensed module"*, converting
@@ -29,10 +33,13 @@ distinction is this project's standing rule and it has already caught one real p
   speaker-recognition model family. A word-boundary scan finds **zero**. Noted because the
   false positive is convincing and the next person will hit it too.
 - **ONNX Runtime Web** ships **no LICENSE file in its npm package** — only `"license": "MIT"`
-  in `package.json` and a README. Nothing is invented here to fill the gap: the canonical text
-  is the MIT licence in
-  [microsoft/onnxruntime](https://github.com/microsoft/onnxruntime/blob/main/LICENSE), and it
-  should be included by hand before this is published.
+  in `package.json` and a README. Nothing was invented to fill the gap: the canonical text was
+  taken from
+  [microsoft/onnxruntime](https://github.com/microsoft/onnxruntime/blob/main/LICENSE) on
+  2026-09-30 and is committed as `transformers/LICENSE-onnxruntime`. **Copy it again by hand
+  whenever the WASM files are updated** — `npm i` will not bring it, which is what made it
+  missing in the first place. MIT requires the notice to travel with the code, so vendoring the
+  binary without it is a licence breach rather than an untidy directory.
 
 ## Updating these files
 

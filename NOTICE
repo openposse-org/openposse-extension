@@ -1,0 +1,34 @@
+OpenPosse
+Copyright 2026 The OpenPosse Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+--------------------------------------------------------------------------------
+
+This product bundles third-party code, each under its own licence, with the
+licence text committed beside the code it covers:
+
+  extension/vendor/headtts/                  HeadTTS, MIT
+  extension/vendor/transformers/
+    transformers.min.js                      transformers.js, Apache-2.0
+    ort-wasm-simd-threaded.asyncify.*        ONNX Runtime Web, MIT
+  extension/dictionaries/en-us.txt           CMU Pronouncing Dictionary,
+                                             simplified BSD, via HeadTTS
+
+What was checked in each case, and the one package that failed the check, is in
+extension/vendor/NOTICE.md. That file is the record, not this one.
+
+Kokoro's model weights and voices (Apache-2.0, onnx-community/Kokoro-82M-v1.0-ONNX
+and its timestamped sibling) are NOT bundled. They are downloaded from the setup
+page when the user asks for them, from URLs pinned in extension/src/weights.js,
+and verified against SHA-256 digests baked into the build before use.
