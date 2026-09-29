@@ -739,13 +739,19 @@ function recordAnswer(element, firstSeenAt, vanished = []) {
     return b.length - a.length;
   });
   const busySelector = ranked[0] ?? null;
+  // Which of the two found it, shown on the card. They are not equally trustworthy, so "we have
+  // one" is not the whole answer — a button state is the vendor saying what it is doing, and a
+  // vanished element is an inference from what the page happened to remove.
+  const busyFrom = busySelector && fromButton && busySelector.startsWith(fromButton)
+    ? 'button'
+    : (busySelector ? 'element' : null);
 
   // Timed and measured from the *second* answer, which is the one seen under normal
   // conditions: the first often lands on a freshly opened panel that is still warming up.
-  emitReply(selector, second.element, second.firstSeenAt, busySelector);
+  emitReply(selector, second.element, second.firstSeenAt, busySelector, busyFrom);
 }
 
-function emitReply(selector, element, firstSeenAt, busySelector = null) {
+function emitReply(selector, element, firstSeenAt, busySelector = null, busyFrom = null) {
   const matches = deepQuerySelectorAll(selector.css);
 
   // The check the whole design turns on. `matchesBefore` counts only those matches that were
@@ -779,6 +785,7 @@ function emitReply(selector, element, firstSeenAt, busySelector = null) {
       // What the vendor showed while it was working, if anything. Null is an ordinary answer,
       // not a failure — see `recordAnswer`.
       busySelector,
+      busyFrom,
     },
   });
 }

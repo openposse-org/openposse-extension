@@ -197,8 +197,21 @@ export function captures(draft) {
     // It is also the difference between a turn that waits ~900 ms after an answer and one that
     // waits ~4 s, so it is worth a line on the card that says which of those you just bought.
     rows.push(draft.reply.busySelector
-      ? { id: 'busy', label: 'Knows when done', detail: draft.reply.busySelector }
-      : { id: 'busy', label: 'Knows when done', detail: 'nothing to watch — using a timer', absent: true });
+      ? {
+        id: 'busy',
+        label: 'Knows when done',
+        detail: draft.reply.busySelector,
+        // Which signal found it. A send-button state is the vendor saying what it is doing; a
+        // vanished element is an inference from what the page happened to remove, and the two
+        // deserve different amounts of confidence when one of them turns out to be wrong.
+        kind: draft.reply.busyFrom === 'button' ? 'SEND BUTTON' : 'APPEARS WHILE BUSY',
+      }
+      : {
+        id: 'busy',
+        label: 'Knows when done',
+        detail: 'nothing to watch — using a timer',
+        absent: true,
+      });
   }
 
   return rows;

@@ -346,10 +346,19 @@ if (!globalThis.__openposseOrb) {
     .coach .row .tick.none { color: rgba(235,235,245,.35); }
     .coach .row .detail.none { color: rgba(235,235,245,.42); font-family: inherit; }
     .coach .row .label { color: rgba(235,235,245,.55); flex: 0 0 92px; }
+    .coach .row .kind {
+      font: 600 8.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .06em; color: rgba(235,235,245,.34); flex: 0 0 auto;
+      align-self: center;
+    }
+    /* **Wraps rather than truncates.** These are the recording's whole output, and the one
+       thing somebody might want to check against their page. An ellipsis put the interesting
+       half of a selector out of reach — and "hover for the rest" is no answer to a screenshot.
+       A taller card is the cheaper cost. */
     .coach .row .detail {
       font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
-      color: rgba(255,255,255,.75); overflow: hidden; text-overflow: ellipsis;
-      white-space: nowrap; flex: 1 1 auto;
+      color: rgba(255,255,255,.75); flex: 1 1 auto;
+      white-space: normal; overflow-wrap: anywhere;
     }
     /* A shortcut is something you pressed, not page structure, so it is not a code chip. */
     .coach .row .detail.keys { font-family: inherit; font-size: 13px; letter-spacing: .12em; }
@@ -612,6 +621,12 @@ if (!globalThis.__openposseOrb) {
       if (!row.isKeys && !row.absent) detail.title = row.detail;
 
       el.append(tick, label, detail);
+      if (row.kind) {
+        const kind = document.createElement('span');
+        kind.className = 'kind';
+        kind.textContent = row.kind;
+        el.append(kind);
+      }
       list.append(el);
     }
 
