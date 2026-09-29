@@ -59,6 +59,20 @@
          look for a fault that is not there. -->
     <button id="mic-warning" hidden class="card bad mic-fix"></button>
 
+    <!-- A recording that passed its dry run and has not been named yet.
+         The name is asked for in the orb first, because that is where the person already is.
+         But the orb sits inside the vendor's page, and a page is entitled to manage its own
+         focus — Notion pulls focus back to its body the moment our field takes it, measured
+         2026-09-29. This is the same question asked somewhere no page can reach. -->
+    <div id="pending" hidden class="card">
+      <div id="pending-say">Recorded. Give it a name.</div>
+      <div class="row">
+        <input type="text" id="pending-name" placeholder="Give it a name" maxlength="24"
+               autocomplete="off" spellcheck="false" />
+        <button id="pending-add">Add</button>
+      </div>
+    </div>
+
     <div id="agents"></div>
     <div id="empty" hidden>
       No assistants yet. Open a page with an AI assistant on it, then record it.

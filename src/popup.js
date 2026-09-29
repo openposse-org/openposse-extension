@@ -169,6 +169,55 @@ el('prompt').addEventListener('keydown', (event) => {
   if (event.key === 'Enter') send();
 });
 
+// ── Naming a recording the page would not let us name ──────────────────────────────────────
+//
+// The orb asks first, because that is where the person already is. But the orb lives inside the
+// vendor's page and a page manages its own focus: measured on 2026-09-29, Notion takes focus
+// back to its `body` within 150 ms of our field receiving it, every time. The panel fights that
+// three times and then gives up, which is the right number — an unbounded fight against an
+// application that insists is a frozen tab.
+//
+// Here there is nothing to fight. This document is ours.
+async function refreshPending() {
+  const pending = await chrome.runtime
+    .sendMessage({ kind: 'openposse.record.pending' })
+    .catch(() => null);
+
+  el('pending').hidden = !pending?.waiting;
+  if (!pending?.waiting) return;
+
+  if (pending.wontHold) {
+    el('pending-say').textContent = 'Recorded — that page wouldn’t let us type there, '
+      + 'so name it here.';
+  }
+  el('pending-name').focus();
+}
+
+{
+  const input = el('pending-name');
+  const add = el('pending-add');
+  const submit = async () => {
+    const name = input.value.trim();
+    if (!name) return;
+    add.disabled = true;
+    const result = await chrome.runtime
+      .sendMessage({ kind: 'openposse.record.name', name })
+      .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+
+    if (!result?.ok) {
+      // A name that could not be saved has to say so. Silently closing would look like success
+      // and leave a recording that never became an agent.
+      el('pending-say').textContent = `Couldn’t save that — ${result?.reason ?? 'unknown'}`;
+      add.disabled = false;
+      return;
+    }
+    window.close();
+  };
+
+  input.addEventListener('keydown', (event) => { if (event.key === 'Enter') submit(); });
+  add.addEventListener('click', submit);
+}
+
 // ── Recording, and the gesture it needs ────────────────────────────────────────────────────
 
 /**
@@ -234,6 +283,11 @@ chrome.commands.getAll().then((commands) => {
   const summon = commands.find((c) => c.name === 'summon');
   if (summon?.shortcut) el('shortcut').textContent = summon.shortcut;
 });
+
+// Asked on every open, not only after the orb gives up: a recording waiting to be named can
+// also be stranded by closing the tab or reloading the extension, and the toolbar icon is the
+// one thing still there in all three cases.
+refreshPending();
 
 // The turn may already be running — the shortcut works with nothing on screen, so a popup opened
 // afterwards has to catch up rather than assume it is starting from idle.

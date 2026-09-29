@@ -623,6 +623,20 @@ if (!globalThis.__openposseOrb) {
     if (appearing) naming.querySelector('input').focus();
   }
 
+  // ── Keeping our clicks to ourselves ─────────────────────────────────────────────────────
+  //
+  // Stopped at `.wrap`, which every interactive part of the panel is inside, so our own
+  // handlers (the orb, the avatars, the header's drag, the name field) have all run by the time
+  // this fires. What it prevents is the event continuing out of the shadow root and into the
+  // vendor's document-level listeners — where "a click landed outside my editor" is answered by
+  // taking focus back, which is exactly what stopped the name field being typed into.
+  //
+  // Bubble phase only, so a vendor listening in the capture phase still sees it. That is not
+  // fixable from here and is why the popup path exists.
+  for (const type of ['pointerdown', 'mousedown', 'mouseup', 'click']) {
+    wrap.addEventListener(type, (event) => event.stopPropagation());
+  }
+
   // ── Moving it out of the way ────────────────────────────────────────────────────────────
   //
   // The panel sits over somebody else's application, and where it sits is sometimes exactly
@@ -731,35 +745,43 @@ if (!globalThis.__openposseOrb) {
     });
     button.addEventListener('click', submit);
 
-    // ── Why this field would not take typing ──────────────────────────────────────────────
+    // ── Holding on to focus ───────────────────────────────────────────────────────────────
     //
-    // Reported twice, and I have now given two explanations for it without measuring either.
-    // The candidates need different fixes and look identical from outside: the click never
-    // reaches the field (hit-testing), or it reaches it and something takes the focus straight
-    // back (a vendor's focus manager). So each stage says whether it happened.
+    // **Measured, after two wrong guesses.** The pointer reaches the field and focus lands —
+    // so hit-testing was fine — and Notion then pulls focus to its own `body` within the same
+    // interaction, every time. A vendor's focus manager, not our CSS.
     //
-    // Nothing here logs what was typed — only that a key arrived. The name of an agent is the
-    // user's, and the promise is that page content never reaches a console.
-    const where = () => {
-      const active = document.activeElement;
-      if (active === host) return 'inside our panel';
-      return active ? `${active.tagName.toLowerCase()} in the page` : 'nothing';
-    };
+    // Two defences, because neither is guaranteed against an application we do not control:
+    //
+    // 1. The page never sees the click. Pointer events are stopped at `.wrap` below, so a
+    //    document-level handler watching for "somebody clicked outside the editor" is not
+    //    told. This is the fix that addresses the cause.
+    // 2. If focus is taken anyway, take it back — **at most three times**, and only for a
+    //    blur that follows its focus within 150 ms. A slower one is a person clicking away,
+    //    and refocusing that would trap them in a field they are trying to leave. Unbounded
+    //    retries against a vendor that insists would be an infinite loop with a frozen tab.
+    //
+    // When both fail, `wontHold` is dispatched, and the popup offers the name instead. That
+    // path is not a fallback bolted on for Notion — focus management differs per vendor, and
+    // something that always works has to exist somewhere we own.
+    let focusedAt = 0;
+    let recoveries = 0;
 
-    input.addEventListener('pointerdown', () => {
-      console.info('[openposse] name field: pointer reached it');
-    });
-    input.addEventListener('focus', () => {
-      console.info('[openposse] name field: focused');
-    });
+    const row = $('.coach .name');
+    input.addEventListener('focus', () => { focusedAt = Date.now(); });
     input.addEventListener('blur', () => {
-      // The interesting one. If this fires immediately after `focused` with the page named as
-      // the new holder, the vendor is taking focus back and hit-testing was never the problem.
-      console.info('[openposse] name field: lost focus to', where());
+      if (row.hidden) return;
+      const stolen = Date.now() - focusedAt < 150 && document.activeElement !== host;
+      if (!stolen) return;
+
+      if (recoveries >= 3) {
+        console.warn('[openposse] this page keeps taking focus back — name it from the toolbar');
+        chrome.runtime.sendMessage({ kind: 'openposse.record.wontHold' }).catch(() => {});
+        return;
+      }
+      recoveries += 1;
+      input.focus();
     });
-    input.addEventListener('keydown', () => {
-      console.info('[openposse] name field: a key arrived');
-    }, { once: true });
   }
 
   // Clicking the orb re-arms listening, per the design. The one control the panel has.

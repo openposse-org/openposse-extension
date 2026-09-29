@@ -940,6 +940,34 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
     return true;
   }
 
+  if (request?.kind === 'openposse.record.pending') {
+    // The popup asks this on every open. A recording can be stranded by a page that will not
+    // give up focus, by the tab closing, or by the extension reloading — and the toolbar icon
+    // is the one surface still present in all three.
+    respond({
+      waiting: Boolean(wizard?.verified && !wizard.agentId),
+      wontHold: Boolean(wizard?.wontHold),
+    });
+    return true;
+  }
+
+  if (request?.kind === 'openposse.record.wontHold') {
+    // The orb tried three times and the page took focus back each time. Say so where the person
+    // is looking, rather than leaving them clicking a field that will never accept anything.
+    if (wizard) wizard.wontHold = true;
+    panel({
+      phase: 'recording',
+      coach: {
+        label: 'SETTING UP · ALMOST',
+        instruction: 'This page keeps taking the keyboard back, so we can’t name it here. '
+          + 'Click the OpenPosse icon in the toolbar and name it there.',
+        captures: captures(wizard?.draft ?? newDraft('')),
+        naming: false,
+      },
+    }).catch(() => {});
+    return false;
+  }
+
   if (request?.kind === 'openposse.record.name') {
     nameAndSave(request.name).then(respond, (error) => {
       console.error('[openposse] naming failed —', error);
