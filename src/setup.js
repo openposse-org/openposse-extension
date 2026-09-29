@@ -9,8 +9,9 @@ import { loadRoster, importFromMacApp, setMicGranted, micGranted } from './stora
 import { channelFor, initialFor } from './channels.js';
 import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
 import {
-  weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES,
+  weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES, VOICES,
 } from './weights.js';
+import { speak as speakWithKokoro } from './kokoro.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const LANGS = { langs: ['en-US'], processLocally: true };
@@ -290,6 +291,7 @@ el('get-weights').addEventListener('click', async () => {
   }
   await refreshWeights();
   await refreshEngine();
+  await refreshVoices();
 });
 
 el('drop-weights').addEventListener('click', async () => {
@@ -297,6 +299,72 @@ el('drop-weights').addEventListener('click', async () => {
   await refreshWeights();
   await refreshEngine();
 });
+
+// ── Trying the voices ──────────────────────────────────────────────────────────────────────
+//
+// **One sentence, not six.** Different lines per voice would sample them; the same line lets
+// them be compared, which is the actual question — "which of these should Ivan be" is a
+// judgement nobody can make from six different sentences.
+//
+// Chosen to exercise the things voices differ on: a number, a hyphenated compound, a proper
+// noun, and a clause boundary. Also what an assistant here actually says, rather than a pangram.
+const SAMPLE = 'Fourteen of your applications are marked end of life — mostly in Finance.';
+
+const ACCENT = { a: 'American', b: 'British' };
+const GENDER = { f: 'female', m: 'male' };
+
+function describeVoice(id) {
+  const [accent, gender] = id;
+  const name = id.slice(3);
+  return {
+    name: name.charAt(0).toUpperCase() + name.slice(1),
+    accent: `${ACCENT[accent] ?? '?'} ${GENDER[gender] ?? ''}`.trim(),
+  };
+}
+
+async function refreshVoices() {
+  const ready = (await weightsStatus()).state === 'ready';
+  el('voices-section').hidden = !ready;
+  if (!ready) return;
+
+  const list = el('voice-list');
+  list.textContent = '';
+
+  for (const { id } of VOICES) {
+    const { name, accent } = describeVoice(id);
+    const row = document.createElement('div');
+    row.className = 'voice';
+
+    const label = document.createElement('div');
+    label.className = 'name';
+    label.textContent = name;
+    const sub = document.createElement('div');
+    sub.className = 'accent';
+    sub.textContent = accent;
+
+    const play = document.createElement('button');
+    play.className = 'secondary';
+    play.textContent = 'Play';
+    play.addEventListener('click', async () => {
+      // Every button disabled, not just this one: two voices over each other tells you nothing
+      // about either, and the engine speaks one utterance at a time anyway.
+      const buttons = [...list.querySelectorAll('button')];
+      for (const b of buttons) b.disabled = true;
+      play.textContent = 'Loading…';
+
+      const result = await speakWithKokoro(SAMPLE, id);
+      if (!result.ok) {
+        sub.textContent = result.reason;
+        sub.style.color = 'var(--error)';
+      }
+      play.textContent = 'Play';
+      for (const b of buttons) b.disabled = false;
+    });
+
+    row.append(label, sub, play);
+    list.append(row);
+  }
+}
 
 // ── Roster ─────────────────────────────────────────────────────────────────────────────────
 
@@ -361,6 +429,7 @@ for (const [name, refresh] of Object.entries({
   'panel access': refreshPanelAccess,
   'voice engine': refreshEngine,
   weights: refreshWeights,
+  voices: refreshVoices,
   roster: refreshRoster,
 })) {
   try {

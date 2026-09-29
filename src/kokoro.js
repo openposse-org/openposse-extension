@@ -71,9 +71,29 @@ async function connect() {
   return engine;
 }
 
-/** Whether the engine can be built at all, without building it. Used by the gate's copy. */
-export function available() {
-  return typeof MODEL_REPO === 'string';
+/**
+ * Loads the model before anything needs it.
+ *
+ * Measured at ~1.7 s to reach ready — the model onto the GPU, the tokenizer, the dictionary.
+ * Noticeable if it happens when an answer arrives, and invisible if it happens earlier.
+ *
+ * **Called when a turn starts, not at browser launch**, and that is the whole design. A turn is
+ * already several seconds of somebody speaking and a vendor thinking, so the load hides
+ * completely inside it. Warming at launch would put 92 MB on the GPU of every Chrome session
+ * whether or not OpenPosse is used in it, to save time nobody was going to notice.
+ *
+ * Fire and forget: failures are the speaking path's business, and a warm-up that reported
+ * problems would report them before there was anything to say.
+ */
+export async function warm() {
+  try {
+    session ??= connect();
+    await session;
+    return true;
+  } catch {
+    session = null;
+    return false;
+  }
 }
 
 /**

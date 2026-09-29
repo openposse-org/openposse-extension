@@ -21,7 +21,7 @@
 import { assignVoices } from './voices.js';
 import { chooseEngine, hasWebGPU, assignKokoroVoices } from './tts.js';
 import { weightsStatus } from './weights.js';
-import { speak as speakWithKokoro, cancel as cancelKokoro } from './kokoro.js';
+import { speak as speakWithKokoro, cancel as cancelKokoro, warm as warmKokoro } from './kokoro.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const Phrase = globalThis.SpeechRecognitionPhrase;
@@ -273,6 +273,11 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
   speechEndAt = 0;
   waitMs = null;
   startMeter();
+
+  // Loads the model while the turn is still happening, so the ~1.7 s never lands on the answer.
+  // Not awaited and not reported: if it fails, the speaking path will say so with a reason, and
+  // a warm-up complaining before anything needs it would be noise.
+  engine().then(({ engine: chosen }) => { if (chosen === 'kokoro') warmKokoro(); });
   send('openposse.listen.started', { biased: Boolean(Phrase) && phrases.length > 0 });
 }
 
