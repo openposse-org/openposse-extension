@@ -12,7 +12,7 @@
 // set on one event still exists on the next.
 
 import {
-  loadRoster, recipeFor, findAgent, addAgent, replaceRecipe, freeName, renameAgent,
+  loadRoster, recipeFor, findAgent, addAgent, replaceRecipe, freeName, renameAgent, removeAgent,
 } from './storage.js';
 import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
@@ -946,6 +946,32 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   // Renaming is an edit to an agent that already exists, from Settings. It is deliberately not
   // part of recording any more: a recording that cannot finish without a name is a recording
   // held hostage by whatever the vendor's page does about focus.
+  if (request?.kind === 'openposse.agent.recipe') {
+    // What a recording actually captured, for the Settings page to show. Read straight from
+    // storage rather than reconstructed, so what is displayed is what the runtime will use.
+    findAgent2(request.agentId).then(
+      async (agent) => respond({ ok: Boolean(agent), recipe: agent ? await recipeFor(agent) : null }),
+      (error) => respond({ ok: false, reason: String(error?.message ?? error) }),
+    );
+    return true;
+  }
+
+  if (request?.kind === 'openposse.agent.remove') {
+    removeAgent(request.agentId).then(
+      () => respond({ ok: true }),
+      (error) => respond({ ok: false, reason: String(error?.message ?? error) }),
+    );
+    return true;
+  }
+
+  if (request?.kind === 'openposse.agent.rerecord') {
+    rerecord(request.agentId).then(respond, (error) => {
+      console.error('[openposse] re-record could not start —', error);
+      respond({ ok: false, reason: String(error?.message ?? error) });
+    });
+    return true;
+  }
+
   if (request?.kind === 'openposse.agent.rename') {
     renameAgent(request.agentId, request.name).then(respond, (error) => {
       console.error('[openposse] rename failed —', error);
@@ -968,6 +994,43 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
 
 /** The wizard in progress, or null. `{ draft, tabId, armedAt, agentId, alreadyOpen }`. */
 let wizard = null;
+
+/** An agent by id, since `findAgent` matches on the spoken name. */
+async function findAgent2(agentId) {
+  const { agents } = await loadRoster();
+  return agents.find((a) => a.id === agentId) ?? null;
+}
+
+/**
+ * Re-records an existing agent, replacing its recipe and keeping its name and voice.
+ *
+ * **No permission prompt and no user gesture**, which is why this can be driven from Settings
+ * at all: the origin was granted when the agent was first recorded, and a grant does not need
+ * asking for twice. What it does need is one of that vendor's pages open, because a recording
+ * is somebody demonstrating the assistant — so a missing tab is reported as the plain fact it
+ * is rather than as a failure.
+ */
+async function rerecord(agentId) {
+  const agent = await findAgent2(agentId);
+  if (!agent) return { ok: false, reason: 'no such agent' };
+
+  const recipe = await recipeFor(agent);
+  const pattern = recipe?.domainPattern;
+  if (!pattern) return { ok: false, reason: `${agent.name} has no recipe to re-record` };
+
+  const [tab] = await chrome.tabs.query({ url: matchPattern(pattern) });
+  if (!tab) {
+    return { ok: false, reason: `open a ${productName(pattern)} tab first, then try again` };
+  }
+
+  // Brought forward, because the next thing asked of the user is to demonstrate the assistant
+  // and they cannot do that on a tab they are not looking at.
+  await chrome.tabs.update(tab.id, { active: true });
+  await chrome.windows.update(tab.windowId, { focused: true });
+
+  await beginWizard({ tabId: tab.id, pattern, agentId });
+  return { ok: true, tabId: tab.id };
+}
 
 async function beginWizard({ tabId, pattern, agentId = null }) {
   if (!pattern) throw new Error('no domain pattern');

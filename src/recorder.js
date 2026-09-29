@@ -57,11 +57,75 @@ let session = null;
  *
  * `emit` receives `RecordingEvent`-shaped objects (`Sources/OpenPosseShared/Recording.swift`).
  */
+/**
+ * Says what the recorder just captured, in the console of the page being recorded.
+ *
+ * **Here rather than in the service worker**, and not as a second-best. This code runs in the
+ * vendor's page, so this is its own console — the same window the person recording already has
+ * open, and one that does not vanish when an idle service worker is terminated. A recording is
+ * minutes long with no traffic of ours, which is exactly the condition MV3 kills a worker in,
+ * and its DevTools detaches with it.
+ *
+ * **Event kinds, selectors and counts only — never page text.** `CLAUDE.md` puts it as "log
+ * event types and error codes only", and a recorder is the one place that rule is easy to
+ * break: the thing being captured is somebody's own question to their own assistant.
+ */
+function note(what, detail) {
+  if (detail === undefined) console.info(`[openposse] recording: ${what}`);
+  else console.info(`[openposse] recording: ${what}`, detail);
+}
+
+/** The parts of a capture worth reading, with nothing in them that came from the page's text. */
+function summarise(event) {
+  switch (event.kind) {
+    case 'armed':
+      return { assistantAlreadyOpen: event.alreadyOpen };
+    case 'open':
+      return event.openMethod === 'shortcut'
+        ? { by: 'shortcut', keys: keyDescription(event.shortcut) }
+        : { by: 'click', control: event.selector?.css };
+    case 'input':
+      return { box: event.selector?.css };
+    case 'submit':
+      return { by: event.submitMethod, button: event.selector?.css };
+    case 'reply_pending':
+      return {
+        answersSoFar: event.repliesSoFar,
+        ...(event.noCommonSelector ? { problem: 'no selector described both answers' } : {}),
+        ...(event.noAnswerFound ? { problem: 'nothing on the page looked like an answer' } : {}),
+        ...(event.shape ? { shape: event.shape } : {}),
+      };
+    case 'reply':
+      return {
+        answer: event.reply?.selector?.css,
+        matches: `${event.reply?.matchesBefore} → ${event.reply?.matchesAfter}`,
+        tookMs: event.reply?.elapsedMs,
+        // The characters, never the characters themselves.
+        answerLength: event.reply?.textLength,
+        knowsWhenDone: event.reply?.busySelector ?? 'nothing found — a timer will be used',
+        foundBy: event.reply?.busyFrom ?? 'n/a',
+      };
+    default:
+      return undefined;
+  }
+}
+
+function keyDescription(shortcut) {
+  if (!shortcut) return '';
+  return [shortcut.ctrlKey && '⌃', shortcut.altKey && '⌥', shortcut.shiftKey && '⇧',
+    shortcut.metaKey && '⌘', shortcut.key?.toUpperCase()].filter(Boolean).join(' ');
+}
+
 export function arm({ emit }) {
   disarm();
+  note('armed — watching this page');
 
   session = {
-    emit,
+    emit: (event) => {
+      // Logged as it goes out, so what the panel shows and what the console says cannot drift.
+      note(event.kind, summarise(event));
+      emit(event);
+    },
     input: null,
     opened: false,
     /// The most recent click, so a composer that appears just after one can be attributed to
@@ -419,6 +483,20 @@ function watchForReply() {
     const windowMs = Math.max(1, now - session.submittedAt);
     vanished.push(...submitStates.finish()
       .map((sig) => ({ sig, span: windowMs, fromButton: true })));
+
+    // **Everything that was considered, not only what was chosen.** Four attempts at this
+    // capture were spent reasoning about why a mechanism found nothing, when the list it built
+    // would have said so immediately. A candidate is only recorded if both exchanges produce
+    // it, so a selector appearing here once and not in the recipe is the ordinary case rather
+    // than a fault — and an empty list on both exchanges is the answer to "why is there no
+    // indicator?".
+    note('busy candidates', vanished.length === 0
+      ? 'none — nothing appeared and left during this answer'
+      : vanished.map(({ sig, span, fromButton }) => ({
+        selector: sig,
+        onScreenMs: span,
+        from: fromButton ? 'the send control' : 'appeared while busy',
+      })));
 
     const pool = [...addedSinceSubmit.keys()];
     const reply = chooseReplyElement(pool);

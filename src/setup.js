@@ -484,10 +484,110 @@ async function refreshRoster() {
       if (event.key === 'Escape') { rename.value = agent.name; rename.blur(); }
     });
 
-    text.append(problemLine);
-    row.append(rename);
+    // ── What it captured, re-recording, and removing ───────────────────────────────────
+    const tools = document.createElement('div');
+    tools.className = 'tools';
+
+    const say = (message, bad = false) => {
+      problemLine.textContent = message;
+      problemLine.className = bad ? 'kind bad' : 'kind';
+      problemLine.hidden = false;
+    };
+
+    // **See** — the recipe as the runtime will read it, not a reconstruction of it.
+    const details = document.createElement('pre');
+    details.className = 'recipe';
+    details.hidden = true;
+
+    const see = document.createElement('button');
+    see.className = 'ghost';
+    see.textContent = 'See';
+    see.addEventListener('click', async () => {
+      if (!details.hidden) { details.hidden = true; see.textContent = 'See'; return; }
+
+      const result = await chrome.runtime
+        .sendMessage({ kind: 'openposse.agent.recipe', agentId: agent.id })
+        .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+
+      if (!result?.ok || !result.recipe) {
+        say(result?.reason ?? 'its recipe is missing', true);
+        return;
+      }
+      details.textContent = describeRecipe(result.recipe);
+      details.hidden = false;
+      see.textContent = 'Hide';
+    });
+
+    // **Re-record** — same wizard, keeping this agent's name and voice.
+    const again = document.createElement('button');
+    again.className = 'ghost';
+    again.textContent = 'Re-record';
+    again.addEventListener('click', async () => {
+      again.disabled = true;
+      say('opening the page…');
+      const result = await chrome.runtime
+        .sendMessage({ kind: 'openposse.agent.rerecord', agentId: agent.id })
+        .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+
+      again.disabled = false;
+      if (!result?.ok) { say(result?.reason ?? 'could not start', true); return; }
+      say('recording — the panel is on that tab now');
+    });
+
+    // **Delete** — confirmed in place. A dialog would be a second surface to build and would
+    // still be a yes/no; turning the button itself into the confirmation keeps the question
+    // attached to the row it is about, so there is no chance of confirming the wrong one.
+    const remove = document.createElement('button');
+    remove.className = 'ghost bad';
+    remove.textContent = 'Delete';
+    let armed = false;
+    remove.addEventListener('click', async () => {
+      if (!armed) {
+        armed = true;
+        remove.textContent = 'Sure?';
+        // Disarms itself, so a stray click cannot leave a loaded button waiting for the next one.
+        setTimeout(() => { armed = false; remove.textContent = 'Delete'; }, 4000);
+        return;
+      }
+      const result = await chrome.runtime
+        .sendMessage({ kind: 'openposse.agent.remove', agentId: agent.id })
+        .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+
+      if (!result?.ok) { say(result?.reason ?? 'could not delete', true); return; }
+      await refreshRoster();
+    });
+
+    tools.append(see, again, remove);
+    text.append(problemLine, details);
+    row.append(rename, tools);
     target.append(row);
   }
+}
+
+/**
+ * A recipe as something a person can read.
+ *
+ * Every field, including the ones that are null: "there is no busy indicator" is a fact about
+ * this recording worth seeing, and a list that silently omits what it does not have cannot be
+ * used to check anything.
+ */
+function describeRecipe(recipe) {
+  const rows = [
+    ['site', recipe.domainPattern],
+    ['opens with', recipe.openMethod === 'shortcut'
+      ? [recipe.shortcut?.metaKey && '⌘', recipe.shortcut?.ctrlKey && '⌃',
+        recipe.shortcut?.altKey && '⌥', recipe.shortcut?.shiftKey && '⇧',
+        recipe.shortcut?.key?.toUpperCase()].filter(Boolean).join(' ')
+      : recipe.openSelector],
+    ['message box', recipe.inputSelector],
+    ['sends with', recipe.submitMethod === 'enterKey' ? '↩ Enter' : recipe.submitSelector],
+    ['answer appears', recipe.responseContainerSelector],
+    ['knows when done', recipe.busySelector ?? '— none, so a timer is used'],
+    ['quiet period', `${recipe.quietPeriodMs ?? 900} ms`],
+    ['gives up after', `${Math.round((recipe.responseTimeoutMs ?? 60000) / 1000)} s`],
+  ];
+  const width = Math.max(...rows.map(([label]) => label.length));
+  return rows.map(([label, value]) => `${label.padEnd(width)}  ${value ?? '—'}`).join('\n');
 }
 
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
