@@ -245,8 +245,10 @@ async function putQuestion(agent, prompt, matched) {
 
   trace('asking the vendor');
   const result = await ask(agent.name, prompt);
+  const vms = result.payload?.ms;
   trace('vendor answered', result.type === 'response'
     ? `${result.payload?.text?.length ?? 0} chars`
+      + (vms ? ` · thinking ${vms.firstRow}ms, settling ${vms.settling}ms over ${vms.passes} passes` : '')
     : (result.payload?.code ?? 'error'));
 
   if (result.type === 'response') {
@@ -824,6 +826,7 @@ async function dispatchIntent(request) {
         repliesBefore: result.repliesBefore,
         repliesAfter: result.repliesAfter,
         openedBy: result.openedBy,
+        ms: result.ms,
       });
     } else {
       reply('error', {

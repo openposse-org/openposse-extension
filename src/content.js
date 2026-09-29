@@ -218,6 +218,12 @@ async function askAssistant({ recipe, prompt }, emit) {
     return pool[pool.length - 1] ?? null;
   };
 
+  // Timed and returned, not logged. This runs in the vendor's page, so a console line lands in
+  // *their* DevTools — which is why "vendor answered +8068ms" could not be split into how much
+  // was the model thinking and how much was us waiting out quiet periods.
+  const waitedAt = Date.now();
+  let passes = 0;
+
   let container = await waitForNewMatch(
     recipe.responseContainerSelector, repliesBefore,
     // `quietPeriodMs` is the vendor's own measured "things have stopped changing", recorded
@@ -229,6 +235,7 @@ async function askAssistant({ recipe, prompt }, emit) {
       choose: withoutOurQuestion,
     }
   );
+  const firstRowAt = Date.now();
   if (!container) {
     // Distinguish "sent, and the vendor never answered" from "never actually sent".
     //
@@ -301,6 +308,7 @@ async function askAssistant({ recipe, prompt }, emit) {
         },
       );
 
+    passes = pass + 1;
     // The same row twice means the page has settled on it. That is the answer.
     if (!current || current === readFrom) break;
 
@@ -325,6 +333,10 @@ async function askAssistant({ recipe, prompt }, emit) {
     repliesBefore,
     repliesAfter: deepQuerySelectorAll(recipe.responseContainerSelector).length,
     openedBy,
+    // How long the first row took to appear against how long the re-pick loop then spent. The
+    // first is the vendor thinking and is not ours to fix; the second is quiet periods and
+    // grace windows, and is entirely ours.
+    ms: { firstRow: firstRowAt - waitedAt, settling: Date.now() - firstRowAt, passes },
   };
 }
 

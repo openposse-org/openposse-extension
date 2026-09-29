@@ -107,28 +107,45 @@ export async function warm() {
 export async function speak(text, voice, { onLevel = () => {} } = {}) {
   if (!text) return { ok: true };
 
+  // Measured and handed back rather than logged here: this runs in the offscreen document, so
+  // a `console` line would land in a different DevTools window from the rest of the turn —
+  // which is exactly why "speaking" read as one 21-second step with nothing inside it.
+  const ms = {};
+  const started = performance.now();
+
   try {
+    const cold = session === null;
     session ??= connect();
     const engine = await session;
+    ms.load = Math.round(performance.now() - started);
+    ms.cold = cold;
 
     await engine.setup({ voice, language: 'en-us', audioEncoding: 'wav' });
 
     // Collected rather than streamed into the speakers by HeadTTS itself, because playback has
     // to be ours: `cancel` must be able to stop mid-sentence when somebody presses the shortcut
     // to interrupt, and an engine that owns its own output gives us nothing to stop.
+    const synthAt = performance.now();
     const chunks = [];
     await engine.synthesize({ input: text }, (message) => {
       if (message?.data?.audio) chunks.push(message.data.audio);
     });
+    ms.synth = Math.round(performance.now() - synthAt);
+    ms.chunks = chunks.length;
+    ms.audio = Math.round(chunks.reduce((n, b) => n + b.duration, 0) * 1000);
 
-    if (chunks.length === 0) return { ok: false, reason: 'kokoro-no-audio' };
-    return play(chunks, onLevel);
+    if (chunks.length === 0) return { ok: false, reason: 'kokoro-no-audio', ms };
+
+    const playAt = performance.now();
+    const result = await play(chunks, onLevel);
+    ms.play = Math.round(performance.now() - playAt);
+    return { ...result, ms };
   } catch (error) {
     // The session is dropped rather than latched, so one bad load does not disable neural
     // voices for the rest of the browser session. The reason is passed up: a refused network
     // request from the shim and a WASM compile failure read very differently.
     session = null;
-    return { ok: false, reason: `kokoro: ${error?.message ?? error}` };
+    return { ok: false, reason: `kokoro: ${error?.message ?? error}`, ms };
   }
 }
 

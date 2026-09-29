@@ -420,7 +420,11 @@ export function handleOffscreenMessage(message) {
       return true;
 
     case 'openposse.speaking':
-      if (message.started) trace('speaking started');
+      // Renamed, because it was a lie that cost a round trip: this fires *before* the model
+      // loads and before a sample is synthesised, so "speaking started … speaking ended
+      // +21057ms" looked like twenty-one seconds of audio for twenty words. It is the moment
+      // the speaking *path* begins.
+      if (message.started) trace('handing to the voice');
       // Two engines, two grades of signal, one channel.
       //
       // Kokoro sends a real `level` measured off the audio on its way to the speakers, so the
@@ -436,7 +440,14 @@ export function handleOffscreenMessage(message) {
     case 'openposse.spoke':
       // Releases the panel's dismiss timer, which was held open so it could not fade out
       // mid-sentence, and drops the orb back to rest.
-      trace('speaking ended', message.ok ? '' : (message.reason ?? 'failed'));
+      // The breakdown the previous version could not show, because it happens in the offscreen
+      // document and its console is a different window. Load, synthesis and playback answer
+      // three different questions: a cold model, a slow engine, or simply a long answer.
+      trace('voice finished', message.ms
+        ? `load ${message.ms.load ?? '?'}ms${message.ms.cold ? ' (cold)' : ''} · `
+          + `synth ${message.ms.synth ?? '?'}ms → ${message.ms.audio ?? '?'}ms audio `
+          + `in ${message.ms.chunks ?? '?'} chunks · play ${message.ms.play ?? '?'}ms`
+        : (message.ok ? '' : (message.reason ?? 'failed')));
       panelSpeaking(false);
       panelLevel(0);
       if (!message.ok) reportUnspoken(message.reason);
