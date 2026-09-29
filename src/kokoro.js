@@ -39,7 +39,12 @@ async function connect() {
 
   const engine = new HeadTTS({
     endpoints: ['webgpu'],
-    transformersModule: chrome.runtime.getURL('vendor/transformers/transformers.web.min.js'),
+    // **`transformers.min.js`, not `transformers.web.min.js`.** The `.web.` build carries bare
+    // import specifiers — `onnxruntime-web/webgpu`, `onnxruntime-common` — which a bundler is
+    // expected to resolve and a browser cannot: `import()` of it dies with "Failed to resolve
+    // module specifier". This is the file HeadTTS loads from a CDN by default, and it is
+    // self-contained for exactly that reason.
+    transformersModule: chrome.runtime.getURL('vendor/transformers/transformers.min.js'),
     // **`workerModule` is deliberately not set**, and setting it was the first thing that
     // broke. Given one, HeadTTS wraps it in `import "<url>"` inside a Blob and starts a worker
     // from a `blob:` URL — which MV3's CSP refuses, because `script-src 'self'` does not cover

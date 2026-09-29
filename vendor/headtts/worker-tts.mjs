@@ -135,6 +135,14 @@ async function connect() {
     // Set log level to ERROR
     env.logLevel = LogLevel.ERROR;
 
+    // ── OpenPosse patch ──────────────────────────────────────────────────────────────────
+    // Tell ONNX Runtime where its WASM lives, or it fetches from a CDN — which the shim
+    // above refuses, correctly, and which would be remotely hosted code besides. Resolved
+    // from this module's own URL rather than through `chrome.runtime`, which is not reliably
+    // present in a dedicated worker.
+    env.backends.onnx.wasm.wasmPaths = new URL("../transformers/", import.meta.url).href;
+    // ── end patch ────────────────────────────────────────────────────────────────────────
+
   } catch(error) {
     console.error("HeadTTS Worker: Importing modules failed, error=", error);
     throw new Error("Importing modules failed.");
