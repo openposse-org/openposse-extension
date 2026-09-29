@@ -359,9 +359,20 @@ class HeadTTS {
             this.ww = null;
           }
           if ( isTraceConnection ) {
-            utils.trace( "Failed to start Module Web Worker." );
+            utils.trace( "Failed to start Module Web Worker.", error );
           }
-          connectionErrorLog.push( "Failed to start Module Web Worker." );
+          // ── OpenPosse patch ──────────────────────────────────────────────────────────────
+          // Upstream pushes "Failed to start Module Web Worker." and drops `error` on the
+          // floor. That is a casualty message, not a cause: the rejection here is the
+          // worker's own ErrorEvent, whose `filename` and `message` say which file failed to
+          // load and why. Without them the same sentence covers a CSP refusal, a 404 on the
+          // worker, and a syntax error inside it — three problems with three different fixes.
+          connectionErrorLog.push(
+            "Failed to start Module Web Worker: " +
+            [ error?.message, error?.filename, error?.type, String(error) ]
+              .filter( x => x && x !== "[object Object]" ).join(" · ")
+          );
+          // ── end patch ────────────────────────────────────────────────────────────────────
         }
 
       } else {

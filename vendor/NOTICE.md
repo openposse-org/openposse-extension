@@ -56,9 +56,15 @@ Re-run the licence scan afterwards, and expect the `WeSpeaker` false positive de
 
 HeadTTS is fetched from GitHub rather than npm because it is not published there. Take
 `modules/{headtts,worker-tts,language,language-en-us,utils}.mjs` and
-`dictionaries/en-us.txt`, then **re-apply the two-line patch** at the top of
-`worker-tts.mjs` — it is the only local change and a clean copy would silently restore network
-access from inside the worker.
+`dictionaries/en-us.txt`, then **re-apply both local patches**, each marked `OpenPosse patch`
+in the source:
+
+1. `worker-tts.mjs`, two lines at the top — installs the local-only `fetch`. A clean copy
+   silently restores network access from inside the worker.
+2. `headtts.mjs`, in the worker-startup `catch` — includes the `ErrorEvent`'s detail in the
+   connection error. Upstream pushes `"Failed to start Module Web Worker."` and discards the
+   error, so one sentence covers a CSP refusal, a 404 on the worker and a syntax error inside
+   it. Three problems, three different fixes, one message.
 
 ## Why these exact files
 
