@@ -69,9 +69,14 @@ in the source:
 ## Why these exact files
 
 Only the WebGPU path is vendored. `onnxruntime-web` unpacks to **131 MB** across every build
-variant; the three files needed for a WebGPU browser build come to **24.7 MB**, almost all of it
-`ort-wasm-simd-threaded.jsep.wasm`. The `asyncify`, `jspi` and non-JSEP WASM builds, the WebGL
-backend, the Node bindings and every source map are deliberately absent.
+variant; the WebGL backend, the Node bindings, the plain and `jspi` WASM builds and every source
+map are deliberately absent.
+
+**Which WASM build is needed was measured, not assumed.** The first attempt vendored the `jsep`
+pair, and `ort.webgpu` asked for `ort-wasm-simd-threaded.asyncify.mjs` — *"no available backend
+found"*. `asyncify` (21.8 MB) is what this version of the WebGPU backend loads. The `jsep` pair
+(24.2 MB) is still present because nothing has yet proved it unused, and removing it is worth
+doing once the loop runs: it is the single largest file here.
 
 ## CMU dictionary
 
