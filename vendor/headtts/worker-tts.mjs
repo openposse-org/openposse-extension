@@ -199,6 +199,29 @@ async function connect() {
     ]);
     model = results[0];
     tokenizer = results[1];
+
+    // ── OpenPosse patch ──────────────────────────────────────────────────────────────────
+    // **Answers "is it actually on the GPU" from the session itself**, rather than from the
+    // fact that we asked for it. Synthesis measured 1.6x real time — between WebGPU's ~0.3x
+    // and WASM's ~3x — and the reason that was hard to diagnose is that `device: "webgpu"`
+    // was set and believed, while part of the graph could still be running on the CPU for
+    // want of int8 kernels.
+    //
+    // `executionProviders` is what ONNX Runtime actually bound, which is the only statement
+    // here that is not an intention.
+    try {
+      const sessions = Object.values(model?.sessions ?? {});
+      const providers = sessions.flatMap((s) => s?.handler?._executionProviders
+        ?? s?.executionProviders ?? []);
+      eventHandler.postMessage({
+        type: "openposse-backend",
+        requested: settings.device,
+        dtype: settings.dtype,
+        providers: providers.map((p) => (typeof p === "string" ? p : p?.name)).filter(Boolean),
+        sessions: sessions.length,
+      });
+    } catch { /* diagnostics must never break loading */ }
+    // ── end patch ────────────────────────────────────────────────────────────────────────
   } catch(error) {
     console.error("HeadTTS Worker: Loading models failed, error=", error, " settings=", settings);
     throw new Error("Loading models failed.");

@@ -443,6 +443,15 @@ export function handleOffscreenMessage(message) {
       // The breakdown the previous version could not show, because it happens in the offscreen
       // document and its console is a different window. Load, synthesis and playback answer
       // three different questions: a cold model, a slow engine, or simply a long answer.
+      // Once per engine, and the line that settles the question. `requested` is what we asked
+      // for; `providers` is what ONNX Runtime actually bound. The two disagreeing — or a
+      // `wasm` in that list — is the whole answer to why synthesis is slow.
+      if (message.ms?.backend) {
+        const b = message.ms.backend;
+        trace('BACKEND',
+          `requested ${b.requested ?? '?'} · bound [${(b.providers ?? []).join(', ') || 'unknown'}] `
+          + `· dtype ${b.dtype ?? '?'} · ${b.sessions ?? '?'} sessions · gpu: ${b.adapter ?? 'none'}`);
+      }
       trace('voice finished', message.ms
         ? `load ${message.ms.load ?? '?'}ms${message.ms.cold ? ' (cold)' : ''} · `
           + `synth ${message.ms.synth ?? '?'}ms → ${message.ms.audio ?? '?'}ms audio `

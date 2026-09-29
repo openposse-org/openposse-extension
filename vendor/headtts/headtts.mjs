@@ -291,6 +291,14 @@ class HeadTTS {
               // does not reach `onerror` — so upstream waits out its 30 second timeout and
               // reports "Connection timed out" while the real reason sits in the worker's own
               // console. `openposse-local-only.mjs` forwards it; this rejects on it.
+              // ── OpenPosse patch ────────────────────────────────────────────────────────
+              // Forwarded so the backend report reaches the one console that has the rest of
+              // the turn in it. Does not resolve or reject — loading is still in progress.
+              if ( ev.data?.type === 'openposse-backend' ) {
+                this.openposseBackend = ev.data;
+                return;
+              }
+              // ── end patch ──────────────────────────────────────────────────────────────
               if ( ev.data?.type === 'openposse-error' ) {
                 if (timeout) { clearTimeout(timeout); timeout = null; }
                 reject( ev.data.message );

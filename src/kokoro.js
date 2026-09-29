@@ -20,6 +20,9 @@ let session = null;
 /** What `speak` is currently playing, so it can be stopped. */
 let playing = null;
 
+/** So the backend report goes out once rather than on every answer. */
+let reportedBackend = false;
+
 /**
  * Builds and connects the engine.
  *
@@ -68,6 +71,19 @@ async function connect() {
   });
 
   await engine.connect();
+
+  // What the adapter actually is, alongside what the session actually bound. Together these
+  // answer "is it running on WebGPU" with facts rather than with the setting we passed in.
+  let adapter = null;
+  try {
+    const gpu = await globalThis.navigator?.gpu?.requestAdapter();
+    const info = await gpu?.requestAdapterInfo?.();
+    adapter = info
+      ? [info.vendor, info.architecture, info.description].filter(Boolean).join(' ')
+      : (gpu ? 'adapter (no info exposed)' : null);
+  } catch { /* diagnostics only */ }
+
+  engine.openposseAdapter = adapter;
   return engine;
 }
 
@@ -119,6 +135,16 @@ export async function speak(text, voice, { onLevel = () => {} } = {}) {
     const engine = await session;
     ms.load = Math.round(performance.now() - started);
     ms.cold = cold;
+
+    // Reported once per engine, on the first thing it says. Repeating it every turn would be
+    // noise; never reporting it is how 1.6× real time went undiagnosed.
+    if (!reportedBackend) {
+      reportedBackend = true;
+      ms.backend = {
+        adapter: engine.openposseAdapter,
+        ...(engine.openposseBackend ?? {}),
+      };
+    }
 
     await engine.setup({ voice, language: 'en-us', audioEncoding: 'wav' });
 
