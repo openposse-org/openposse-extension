@@ -230,17 +230,25 @@ export function finish(draft, { triggerMethod }) {
   const found = problems(draft);
   if (found.length > 0) return { ok: false, problems: found };
 
+  // **Selectors flatten to plain CSS strings here**, and this is the one conversion in the
+  // file. A draft holds `selectorFor`'s full result — `{ css, via, isStable, matchCount }`,
+  // which is what the wizard's checklist and the two-sample comparison need — while the runtime
+  // passes `recipe.inputSelector` straight into `deepQuerySelectorAll`. Handing it the object
+  // would stringify to `[object Object]`, match nothing, and report `ELEMENT_NOT_FOUND` on a
+  // recipe that had just been recorded and verified.
+  const css = (selector) => selector?.css ?? null;
+
   return {
     ok: true,
     recipe: {
       domainPattern: draft.domainPattern,
       openMethod: draft.openMethod,
       shortcut: draft.shortcut,
-      openSelector: draft.openSelector,
-      inputSelector: draft.input,
+      openSelector: css(draft.openSelector),
+      inputSelector: css(draft.input),
       submitMethod: draft.submitMethod,
-      submitSelector: draft.submitSelector,
-      responseContainerSelector: draft.reply.selector,
+      submitSelector: css(draft.submitSelector),
+      responseContainerSelector: css(draft.reply.selector),
       triggerMethod,
       quietPeriodMs: draft.quietPeriodMs,
       responseTimeoutMs: draft.responseTimeoutMs,

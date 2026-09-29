@@ -311,6 +311,41 @@ if (!globalThis.__openposseOrb) {
     }
     @keyframes rise { from { opacity: 0; transform: translateY(5px); } }
     .sub { font-size: 12px; color: rgba(235,235,245,.55); margin-top: 4px; }
+
+    /* ── Recording ──────────────────────────────────────────────────────────────────────── */
+    /* The card is the same glass and the same type as a turn; only the contents differ. The
+       person is standing in the vendor's page being coached, and a surface that looked like a
+       different product would read as having left OpenPosse behind. */
+    .coach { padding: 2px 0 4px; }
+    .coach .step {
+      font: 600 9.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .08em; color: rgba(235,235,245,.42); margin-bottom: 10px;
+    }
+    .coach .say { font-size: 14px; line-height: 1.45; color: rgba(255,255,255,.92); }
+    .coach .say.bad { color: #FF453A; }
+    .coach .list { margin-top: 14px; display: flex; flex-direction: column; gap: 7px; }
+    .coach .row { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
+    .coach .row .tick { color: #30D158; font-size: 11px; }
+    .coach .row .label { color: rgba(235,235,245,.55); flex: 0 0 92px; }
+    .coach .row .detail {
+      font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: rgba(255,255,255,.75); overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; flex: 1 1 auto;
+    }
+    /* A shortcut is something you pressed, not page structure, so it is not a code chip. */
+    .coach .row .detail.keys { font-family: inherit; font-size: 13px; letter-spacing: .12em; }
+    .coach .name { margin-top: 14px; display: flex; gap: 8px; }
+    .coach .name input {
+      flex: 1 1 auto; background: rgba(255,255,255,.08); color: #fff;
+      border: .5px solid rgba(255,255,255,.18); border-radius: 8px;
+      padding: 8px 10px; font: inherit; font-size: 14px; outline: none;
+    }
+    .coach .name input:focus { border-color: rgba(255,255,255,.4); }
+    .coach .name button {
+      background: rgba(255,255,255,.14); color: #fff; border: none; border-radius: 8px;
+      padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 590; cursor: pointer;
+    }
+    .coach .name button:disabled { opacity: .35; cursor: default; }
   `;
 
   const host = document.createElement('div');
@@ -339,6 +374,16 @@ if (!globalThis.__openposseOrb) {
           <div class="status"></div>
         </div>
         <div class="answer"></div>
+        <div class="coach" hidden>
+          <div class="step"></div>
+          <div class="say"></div>
+          <div class="list"></div>
+          <div class="name" hidden>
+            <input type="text" placeholder="Give it a name" maxlength="24"
+                   autocomplete="off" spellcheck="false">
+            <button disabled>Add</button>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -410,6 +455,17 @@ if (!globalThis.__openposseOrb) {
   function render() {
     $('.key').textContent = state.shortcut ?? '';
 
+    // **Recording takes the whole card**, because it is a different activity rather than a
+    // different turn state: there is no transcript, no roster to re-route to, and an orb
+    // pulsing at a microphone nobody is speaking into would be an animation pretending to be
+    // an instrument. `renderCoach` returns early for that reason.
+    const recording = state.phase === 'recording';
+    for (const part of ['.orbwrap', '.transcript', '.divider', '.roster', '.answer']) {
+      $(part).hidden = recording;
+    }
+    $('.coach').hidden = !recording;
+    if (recording) return renderCoach();
+
     // Transcript: committed white, the tail the recogniser is still revising dimmed, and a
     // caret only while actually listening.
     const tr = $('.transcript');
@@ -478,6 +534,93 @@ if (!globalThis.__openposseOrb) {
         answer.append(sub);
       }
     }
+  }
+
+  /**
+   * The wizard, drawn from what `coaching.js` decided.
+   *
+   * Nothing here judges anything — the step, the sentence and the tick-list all arrive in the
+   * patch. That is the same split the Mac side had, and the reason it is worth keeping is that
+   * the rules are testable without a window and this is not.
+   */
+  function renderCoach() {
+    const coach = state.coach ?? {};
+
+    $('.coach .step').textContent = coach.label ?? '';
+
+    const say = $('.coach .say');
+    say.textContent = coach.instruction ?? '';
+    say.classList.toggle('bad', coach.bad === true);
+
+    // **Every capture stays on screen once it is made.** Confirmation is the whole reason the
+    // list exists: somebody who cannot see that their shortcut registered will press it again,
+    // and on a toggle the second press closes the assistant and records the wrong thing.
+    const list = $('.coach .list');
+    list.textContent = '';
+    for (const row of coach.captures ?? []) {
+      const el = document.createElement('div');
+      el.className = 'row';
+
+      const tick = document.createElement('span');
+      tick.className = 'tick';
+      tick.textContent = '✓';
+
+      const label = document.createElement('span');
+      label.className = 'label';
+      label.textContent = row.label;
+
+      const detail = document.createElement('span');
+      detail.className = `detail${row.isKeys ? ' keys' : ''}`;
+      detail.textContent = row.detail;
+      // The full selector on hover, since the row truncates and a truncated selector is not
+      // something anyone can check.
+      if (!row.isKeys) detail.title = row.detail;
+
+      el.append(tick, label, detail);
+      list.append(el);
+    }
+
+    const naming = $('.coach .name');
+    naming.hidden = !coach.naming;
+    if (coach.naming && document.activeElement !== host) {
+      const input = naming.querySelector('input');
+      // Focused once, not on every patch: re-focusing mid-typing would move the caret to the
+      // end of what somebody is halfway through writing.
+      if (!input.dataset.focused) {
+        input.dataset.focused = '1';
+        input.focus();
+      }
+    }
+  }
+
+  // ── Naming ─────────────────────────────────────────────────────────────────────────────
+  //
+  // A text field in the panel, which the Mac app could not have: the summon panel was never
+  // key by construction (D16), so it could not receive a keystroke. A closed shadow root has no
+  // such constraint, and keeping the name here means the recording never leaves the page it
+  // was made on.
+  {
+    const input = $('.coach .name input');
+    const button = $('.coach .name button');
+    const trimmed = () => input.value.trim();
+    const submit = () => {
+      if (!trimmed()) return;
+      button.disabled = true;
+      chrome.runtime
+        .sendMessage({ kind: 'openposse.record.name', name: trimmed() })
+        .catch(() => { button.disabled = false; });
+    };
+
+    // Whitespace is not a name.
+    input.addEventListener('input', () => { button.disabled = trimmed() === ''; });
+    input.addEventListener('keydown', (event) => {
+      // The page never sees these keystrokes: this input is inside a closed shadow root, and
+      // stopping propagation keeps a vendor's own global shortcut handler out of the way of
+      // somebody typing "Ivan".
+      event.stopPropagation();
+      if (event.key === 'Enter') submit();
+    });
+    button.addEventListener('click', submit);
   }
 
   // Clicking the orb re-arms listening, per the design. The one control the panel has.

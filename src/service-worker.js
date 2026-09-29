@@ -11,7 +11,9 @@
 // to reconstruct its state from nothing after any idle gap, and must never assume a variable
 // set on one event still exists on the next.
 
-import { loadRoster, recipeFor, findAgent } from './storage.js';
+import {
+  loadRoster, recipeFor, findAgent, addAgent, replaceRecipe,
+} from './storage.js';
 import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
   isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone, say,
@@ -19,6 +21,11 @@ import {
 import { needsShortening, spokenForm } from './saying.js';
 import { summarise } from './summariser.js';
 import { route, navigationTarget, productName, FLOOR_MS } from './routing.js';
+import { matchPattern } from './domain.js';
+import { newDraft, applyCapture, isComplete, finish } from './draft.js';
+import {
+  derive, stepLabel, instruction, captures, PATIENCE_MS,
+} from './coaching.js';
 import { panel, hidePanel, primePanel } from './panel.js';
 import { trace } from './trace.js';
 import { channelFor } from './channels.js';
@@ -511,6 +518,13 @@ chrome.runtime.onMessage.addListener((message, _sender, _respond) => {
     // path; losing a capture nobody is watching for is not a failure.
   });
 
+  // The wizard now lives in this worker rather than in a Mac app across a socket, so captures
+  // are handed to it directly. The broadcast above is kept because it is what any *other*
+  // surface would listen to, and it costs nothing when nothing does.
+  onCapture(message.event).catch((error) => {
+    console.error('[openposse] capture could not be folded in —', error);
+  });
+
   // The page is gone, so the listeners went with it. Stopping here means the keepalive does
   // not outlive the thing it was keeping alive.
   if (message.event?.kind === 'navigated_away') stopRecording();
@@ -738,9 +752,10 @@ const WORKER_INTENTS = {
  * is, and it is static. This only decides which already-permitted tab to talk to, so a recipe
  * naming a domain we were not built for finds no tab rather than injecting anywhere.
  */
-function matchPattern(domainPattern) {
-  return `https://${domainPattern.replace(/^\*\./, '*.')}/*`;
-}
+// **Moved to `domain.js` and imported**, so the tab query, the content-script registration and
+// the optional host-permission request build the same string from one definition. The copy that
+// used to live here also carried a `.replace(/^\*\./, '*.')` that replaced `*.` with `*.` — a
+// no-op that read as though it were doing something.
 
 /**
  * Runs one intent against the right tab and reports the outcome to the app.
@@ -918,14 +933,245 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
     return true;
   }
   if (request?.kind === 'openposse.record') {
-    // E8 wires the recorder's own UI to this. Acknowledged rather than silently dropped, so
-    // the popup's button is honest about doing nothing yet.
-    console.info('[openposse] record requested for tab', request.tabId, '— not wired until E8');
-    respond({ ok: false, reason: 'not-wired' });
+    beginWizard(request).then(respond, (error) => {
+      console.error('[openposse] recording could not start —', error);
+      respond({ ok: false, reason: String(error?.message ?? error) });
+    });
+    return true;
+  }
+
+  if (request?.kind === 'openposse.record.name') {
+    nameAndSave(request.name).then(respond, (error) => {
+      console.error('[openposse] naming failed —', error);
+      respond({ ok: false, reason: String(error?.message ?? error) });
+    });
     return true;
   }
   return false;
 });
+
+// ── The wizard (E8) ────────────────────────────────────────────────────────────────────────
+//
+// Four beats: **grant → record (coached) → dry run → name.** The grant already happened in the
+// popup, because that is where the user gesture is — see `popup.js`.
+//
+// The rules live elsewhere on purpose. `draft.js` decides what has been captured and what is
+// still wrong with it, `coaching.js` decides what to say about that, and both are pure and
+// tested without a browser. This file is the part that cannot be: permissions, tabs, timers and
+// the orb.
+
+/** The wizard in progress, or null. `{ draft, tabId, armedAt, agentId, alreadyOpen }`. */
+let wizard = null;
+
+async function beginWizard({ tabId, pattern, agentId = null }) {
+  if (!pattern) throw new Error('no domain pattern');
+
+  // Registered for every *future* load of this site; `armRecording` handles the one tab already
+  // in front of the user, which has no content script because it was open before the grant.
+  await registerFor(pattern);
+
+  wizard = {
+    draft: newDraft(pattern),
+    tabId,
+    armedAt: Date.now(),
+    // Re-recording an existing agent keeps its name and voice and replaces only the recipe, so
+    // the naming beat is skipped for it. The popup's "needs re-recording" is what leads here.
+    agentId,
+    alreadyOpen: false,
+  };
+
+  const id = crypto.randomUUID();
+  await armRecording({ tabId }, { id, agent: agentId });
+
+  // The orb goes over the tab being recorded rather than whatever is in front — that is where
+  // the person is about to be working, and it is an origin we now hold a permission for, so it
+  // persists for the whole recording instead of being spent like `activeTab`.
+  await primePanel(tabId);
+  await showCoaching();
+
+  // The open step is the only one with a deadline, so it is the only one that needs a tick. It
+  // fires once: `derive` is what decides whether 45 s has meaning yet, not this timer.
+  wizard.patience = setTimeout(() => { showCoaching().catch(() => {}); }, PATIENCE_MS + 500);
+
+  return { ok: true };
+}
+
+/** Pushes whatever `coaching.js` decided into the orb. */
+async function showCoaching() {
+  if (!wizard) return;
+  const state = derive(wizard.draft, {
+    alreadyOpen: wizard.alreadyOpen,
+    sinceArmedMs: Date.now() - wizard.armedAt,
+  });
+
+  await panel({
+    phase: 'recording',
+    visible: true,
+    coach: {
+      step: state.step,
+      label: stepLabel(state),
+      instruction: instruction(state, wizard.draft),
+      captures: captures(wizard.draft),
+      // Only after the dry run has *passed*. A recipe that has never been executed is a guess,
+      // and naming one would put a broken agent in the roster with a name somebody chose.
+      naming: wizard.verified === true && !wizard.agentId,
+      bad: state.step === 'replies-share-nothing' || state.step === 'abandoned',
+    },
+  }, { create: true });
+}
+
+/**
+ * Folds one capture in, and moves the wizard on when there is nothing left to capture.
+ *
+ * Called from the capture relay below rather than from a request/response pair, because
+ * captures arrive over minutes and are events on an open channel.
+ */
+async function onCapture(event) {
+  if (!wizard) return;
+  if (event?.kind === 'armed') wizard.alreadyOpen = event.alreadyOpen === true;
+
+  wizard.draft = applyCapture(wizard.draft, event);
+  await showCoaching();
+
+  if (isComplete(wizard.draft) && !wizard.verifying && !wizard.verified) {
+    wizard.verifying = true;
+    await dryRun();
+  }
+}
+
+/**
+ * Executes the fresh recipe twice, before anyone is asked to name it.
+ *
+ * **The dry run is not the two-answer recording**, and conflating them is easy. The recorder
+ * needs two answers to find a selector describing *both*; this executes the finished recipe on
+ * exchanges it did not witness, and it is the only place two things can be settled, because
+ * both are questions about what *we* can do rather than what the user did:
+ *
+ * - **Whether a synthetic trigger works.** The recorder watched a real keypress, which always
+ *   works. Whether a dispatched event opens the same panel is a different question with a
+ *   different answer per vendor, and the only way to find out is to try.
+ * - **Whether the reply selector names one answer repeatedly.** Notion broke this once: a
+ *   per-message id made the recipe name *one message*, and the recorder's own 0→1 count passed
+ *   it, because 0→1 is exactly what a genuine per-reply container looks like on a conversation
+ *   holding one reply.
+ *
+ * Two questions, deliberately different words, both bland: they go into the user's real
+ * assistant against their real workspace, so they must not create anything or ask for anything.
+ */
+async function dryRun() {
+  const built = finish(wizard.draft, { triggerMethod: 'synthetic' });
+  if (!built.ok) { wizard.verifying = false; return; }
+
+  await panel({ phase: 'recording', coach: { label: 'SETTING UP · CHECKING', instruction: 'Checking it works — asking it two questions…', captures: captures(wizard.draft), naming: false } });
+
+  const questions = ['Hello.', 'What can you help me with?'];
+  const answers = [];
+  for (const prompt of questions) {
+    // Sequential on purpose: two at once would race the same composer, and the second answer
+    // has to *follow* the first to prove the selector finds a new one rather than re-reading
+    // the old one.
+    const result = await askOnce(wizard.tabId, built.recipe, prompt)
+      .catch((e) => ({ error: e }));
+    if (!result || result.error || !result.text) {
+      wizard.verifying = false;
+      wizard.verified = false;
+      await panel({
+        phase: 'recording',
+        coach: {
+          label: 'SETTING UP · DIDN’T WORK',
+          instruction: 'We recorded it, but driving it ourselves didn’t work. That usually means '
+            + 'this assistant ignores clicks it didn’t get from a person. Nothing has been saved.',
+          captures: captures(wizard.draft),
+          naming: false,
+          bad: true,
+        },
+      });
+      return;
+    }
+    answers.push(result.text);
+  }
+
+  // Two identical answers mean the selector is reading the same element twice rather than
+  // finding the new one — the failure the second question exists to catch.
+  wizard.verified = answers[0] !== answers[1];
+  wizard.verifying = false;
+  wizard.recipe = built.recipe;
+
+  if (!wizard.verified) {
+    await panel({
+      phase: 'recording',
+      coach: {
+        label: 'SETTING UP · DIDN’T WORK',
+        instruction: 'We read the same answer twice, so we wouldn’t be able to tell one reply '
+          + 'from the next. This assistant may not be one we can drive yet.',
+        captures: captures(wizard.draft),
+        naming: false,
+        bad: true,
+      },
+    });
+    return;
+  }
+
+  // Re-recording keeps the agent it belongs to, so there is nothing to name.
+  if (wizard.agentId) { await nameAndSave(null); return; }
+  await showCoaching();
+}
+
+/** One exchange through the recorded recipe, in the tab it was recorded in. */
+async function askOnce(tabId, recipe, prompt) {
+  // The *input* selector, not the recipe: `frameOwningAssistant` runs one probe per frame and
+  // asks each whether it can see that element. Notion has two frames and only one holds the
+  // composer, and without this the promise resolves with whichever answers first.
+  const frameId = await frameOwningAssistant(tabId, recipe.inputSelector);
+  return chrome.tabs.sendMessage(
+    tabId,
+    { intent: 'ask_assistant', recipe, prompt },
+    frameId == null ? undefined : { frameId },
+  );
+}
+
+/** The last beat: a name, a voice, and a roster entry. */
+async function nameAndSave(name) {
+  if (!wizard?.recipe) return { ok: false, reason: 'nothing-to-save' };
+
+  if (wizard.agentId) {
+    await replaceRecipe(wizard.agentId, wizard.recipe);
+  } else {
+    if (!name?.trim()) return { ok: false, reason: 'no-name' };
+    // The voice is assigned rather than chosen here, so the wizard stays four beats. Settings
+    // has the picker, with previews and the sample sentence, for anyone who wants a different
+    // one.
+    await addAgent({ name: name.trim(), voice: null, recipe: wizard.recipe });
+  }
+
+  await endWizard();
+  await panel({ phase: 'idle', visible: false });
+  return { ok: true };
+}
+
+async function endWizard() {
+  if (!wizard) return;
+  clearTimeout(wizard.patience);
+  const { tabId } = wizard;
+  wizard = null;
+  await disarmRecording({ tabId }).catch(() => {});
+}
+
+/** Registers the content script for a newly granted pattern, without duplicating an existing one. */
+async function registerFor(pattern) {
+  const id = `openposse-${pattern}`;
+  const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [id] })
+    .catch(() => []);
+  if (existing.length > 0) return;
+
+  await chrome.scripting.registerContentScripts([{
+    id,
+    matches: [matchPattern(pattern)],
+    js: ['dist/content.js'],
+    allFrames: true,
+    runAt: 'document_idle',
+  }]);
+}
 
 /**
  * The summon shortcut — **⌥V where the user has set it, ⌘⇧9 out of the box.**

@@ -96,8 +96,27 @@ test('a complete draft has no problems and finishes', () => {
 
   const result = finish(draft, { triggerMethod: 'synthetic' });
   assert.ok(result.ok);
-  assert.equal(result.recipe.responseContainerSelector.css, '.reply');
   assert.equal(result.recipe.triggerMethod, 'synthetic');
+});
+
+test('a finished recipe carries plain CSS strings, not selector objects', () => {
+  // The runtime passes these straight into `deepQuerySelectorAll`, while a draft holds
+  // `selectorFor`'s full result because the checklist and the two-sample comparison need it.
+  // Handing the object through would stringify to "[object Object]", match nothing, and report
+  // ELEMENT_NOT_FOUND on a recipe that had just been recorded *and verified* — a failure that
+  // would look like vendor drift rather than like a type.
+  let draft = complete();
+  draft = applyCapture(draft, { kind: 'open', openMethod: 'click', selector: sel('.btn') });
+  draft = applyCapture(draft, { kind: 'submit', submitMethod: 'click', selector: sel('.send') });
+
+  const { recipe } = finish(draft, { triggerMethod: 'synthetic' });
+  for (const key of [
+    'openSelector', 'inputSelector', 'submitSelector', 'responseContainerSelector',
+  ]) {
+    assert.equal(typeof recipe[key], 'string', `${key} must be a CSS string`);
+  }
+  assert.equal(recipe.responseContainerSelector, '.reply');
+  assert.equal(recipe.inputSelector, 'div[contenteditable]');
 });
 
 test('an answer container that did not gain a match is the transcript, not a reply', () => {
