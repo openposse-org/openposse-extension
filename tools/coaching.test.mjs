@@ -234,9 +234,35 @@ test('a complete draft lists every capture, in the order they were made', () => 
   assert.equal(stepLabel(state), 'SETTING UP · DONE');
   assert.ok(!isCancellable(state), 'done is already leaving');
 
-  assert.deepEqual(state.captures.map((c) => c.id), ['open', 'input', 'submit', 'reply']);
+  assert.deepEqual(state.captures.map((c) => c.id), ['open', 'input', 'submit', 'reply', 'busy']);
   assert.equal(state.captures[0].isKeys, true);
   assert.equal(state.captures[0].detail, '⌘ O');
+});
+
+test('the busy indicator is listed whether or not it was found', () => {
+  // The one optional capture, so its absence is the thing that needs saying. A row that only
+  // appeared on success could not answer "did it get it?" — and it decides whether every later
+  // turn waits ~900ms after an answer or ~4s, which is worth knowing at the moment of recording
+  // rather than by reading a console afterwards.
+  const without = captures(complete()).find((row) => row.id === 'busy');
+  assert.ok(without, 'the row exists even when nothing was captured');
+  assert.equal(without.absent, true);
+  assert.match(without.detail, /timer/);
+
+  let draft = complete();
+  draft = applyCapture(draft, {
+    kind: 'reply',
+    reply: {
+      selector: sel('.reply'),
+      matchesBefore: 1,
+      matchesAfter: 2,
+      busySelector: 'div[data-testid="stop"]',
+    },
+  });
+
+  const found = captures(draft).find((row) => row.id === 'busy');
+  assert.equal(found.detail, 'div[data-testid="stop"]');
+  assert.notEqual(found.absent, true);
 });
 
 test('navigating away abandons rather than silently mixing two pages', () => {

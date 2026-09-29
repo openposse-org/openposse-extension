@@ -343,6 +343,8 @@ if (!globalThis.__openposseOrb) {
     .coach .list { margin-top: 14px; display: flex; flex-direction: column; gap: 7px; }
     .coach .row { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
     .coach .row .tick { color: #30D158; font-size: 11px; }
+    .coach .row .tick.none { color: rgba(235,235,245,.35); }
+    .coach .row .detail.none { color: rgba(235,235,245,.42); font-family: inherit; }
     .coach .row .label { color: rgba(235,235,245,.55); flex: 0 0 92px; }
     .coach .row .detail {
       font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -591,19 +593,23 @@ if (!globalThis.__openposseOrb) {
       el.className = 'row';
 
       const tick = document.createElement('span');
-      tick.className = 'tick';
-      tick.textContent = '✓';
+      // A dash rather than a tick for something optional that was not found: a red cross would
+      // say a recording had failed when it has not, and a green tick would claim something we
+      // do not have.
+      tick.className = row.absent ? 'tick none' : 'tick';
+      tick.textContent = row.absent ? '–' : '✓';
 
       const label = document.createElement('span');
       label.className = 'label';
       label.textContent = row.label;
 
       const detail = document.createElement('span');
-      detail.className = `detail${row.isKeys ? ' keys' : ''}`;
+      // Plain type, not the mono face, when it is a sentence rather than page structure.
+      detail.className = `detail${row.isKeys ? ' keys' : ''}${row.absent ? ' none' : ''}`;
       detail.textContent = row.detail;
       // The full selector on hover, since the row truncates and a truncated selector is not
       // something anyone can check.
-      if (!row.isKeys) detail.title = row.detail;
+      if (!row.isKeys && !row.absent) detail.title = row.detail;
 
       el.append(tick, label, detail);
       list.append(el);

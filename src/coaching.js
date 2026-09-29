@@ -186,6 +186,19 @@ export function captures(draft) {
 
   if (draft.reply) {
     rows.push({ id: 'reply', label: 'Answer appears', detail: draft.reply.selector?.css ?? '' });
+
+    // **Shown whether or not it was found, which is the point of the row.**
+    //
+    // This is the one capture that is optional — a vendor showing nothing while it works is
+    // ordinary, not a failure — and that is exactly why its absence has to be visible. A row
+    // that only appears on success cannot answer "did it get it?", and the alternative was
+    // reading a service-worker console that is not always there to read.
+    //
+    // It is also the difference between a turn that waits ~900 ms after an answer and one that
+    // waits ~4 s, so it is worth a line on the card that says which of those you just bought.
+    rows.push(draft.reply.busySelector
+      ? { id: 'busy', label: 'Knows when done', detail: draft.reply.busySelector }
+      : { id: 'busy', label: 'Knows when done', detail: 'nothing to watch — using a timer', absent: true });
   }
 
   return rows;
