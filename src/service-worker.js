@@ -20,6 +20,7 @@ import { needsShortening, spokenForm } from './saying.js';
 import { summarise } from './summariser.js';
 import { route, navigationTarget, productName, FLOOR_MS } from './routing.js';
 import { panel, hidePanel, primePanel } from './panel.js';
+import { trace } from './trace.js';
 import { channelFor } from './channels.js';
 
 /**
@@ -233,6 +234,7 @@ async function handleUtterance(text) {
  * and the popup's was an E2 stopgap from when there was no orb to put anything on.
  */
 async function putQuestion(agent, prompt, matched) {
+  trace('routed', `${agent.name} (${matched}), ${prompt.length} chars`);
   await rememberPrompt(prompt);
   markThinking(agent.name);
   panel({
@@ -241,7 +243,13 @@ async function putQuestion(agent, prompt, matched) {
   }, { create: true });
   announceTurn({ phase: 'thinking', agentName: agent.name, matched });
 
+  trace('asking the vendor');
   const result = await ask(agent.name, prompt);
+  const vms = result.payload?.ms;
+  trace('vendor answered', result.type === 'response'
+    ? `${result.payload?.text?.length ?? 0} chars`
+      + (vms ? ` · thinking ${vms.firstRow}ms, settling ${vms.settling}ms over ${vms.passes} passes` : '')
+    : (result.payload?.code ?? 'error'));
 
   if (result.type === 'response') {
     // The floor moves only on a real answer. An agent that failed did not take part in the
@@ -282,7 +290,9 @@ async function putQuestion(agent, prompt, matched) {
  */
 async function readAloud(answer, agent) {
   if (!answer) return;
-  const summary = needsShortening(answer) ? await summarise(answer) : null;
+  const long = needsShortening(answer);
+  const summary = long ? await summarise(answer) : null;
+  if (long) trace('shortened', summary ? 'by the summariser' : 'first sentence (no summariser)');
   const { text, shortened } = spokenForm(answer, summary);
   if (!text) return;
 
@@ -816,6 +826,7 @@ async function dispatchIntent(request) {
         repliesBefore: result.repliesBefore,
         repliesAfter: result.repliesAfter,
         openedBy: result.openedBy,
+        ms: result.ms,
       });
     } else {
       reply('error', {

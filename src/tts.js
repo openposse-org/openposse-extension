@@ -67,7 +67,7 @@ export const REASONS = {
  * until the code exists. It flips in one place on the day it does, and the test below makes
  * sure the copy stays honest either way.
  */
-export const KOKORO_IMPLEMENTED = false;
+export const KOKORO_IMPLEMENTED = true;
 
 /**
  * Picks an engine from what is actually available.

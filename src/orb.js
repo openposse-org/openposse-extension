@@ -518,9 +518,12 @@ if (!globalThis.__openposseOrb) {
     }
     if (message?.kind === 'openposse.orb.speaking') {
       speaking = message.speaking === true;
-      // Re-armed from here, so the countdown starts when the agent stops rather than when the
-      // answer arrived.
-      if (!speaking) armDismiss(state.phase);
+      // **Cancelled, not merely suppressed.** `armDismiss` refuses to *start* a timer while
+      // speaking, but the answer arrives before the voice does — so the timer was already
+      // running by the time this said "an agent is talking", and the guard had nothing to
+      // stop. The panel faded out mid-sentence.
+      if (speaking) clearTimeout(dismiss);
+      else armDismiss(state.phase);
       return false;
     }
     if (message?.kind !== 'openposse.orb') return false;

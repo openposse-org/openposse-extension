@@ -168,7 +168,19 @@ async function askAssistant({ recipe, prompt }, emit) {
   // The honest fix is to record the vendor's own "still generating" indicator during setup —
   // Notion shows one — and wait on that disappearing instead of on a clock. That is a recorder
   // change, so it belongs to E8. Until then this is a guess with a ceiling.
-  const ANSWER_GRACE_MS = 10_000;
+  // **2.5 s, down from 10.** The first version was a guess with a ceiling and the ceiling was
+  // being paid on every successful exchange: `settling 11998ms over 3 passes` for an answer
+  // already sitting in the tab. Pass 1 waits for a row *beyond* the one just read, and when
+  // pass 0 already had the answer — the common case — no such row is ever coming, so the whole
+  // window is spent discovering that.
+  //
+  // The replacement is measured rather than guessed. The same trace reports the vendor's own
+  // thinking time at 1.5–2 s, so the status-row-to-answer gap is that order, and 2.5 s covers
+  // it with margin. Worst case is now ~4 s of settling instead of ~12.
+  //
+  // Still a clock, and still the wrong instrument. The honest fix is the vendor's own "still
+  // generating" indicator, recorded during setup — E8.
+  const ANSWER_GRACE_MS = 2_500;
 
   /**
    * Which of the rows that appeared is the answer.
@@ -218,6 +230,12 @@ async function askAssistant({ recipe, prompt }, emit) {
     return pool[pool.length - 1] ?? null;
   };
 
+  // Timed and returned, not logged. This runs in the vendor's page, so a console line lands in
+  // *their* DevTools — which is why "vendor answered +8068ms" could not be split into how much
+  // was the model thinking and how much was us waiting out quiet periods.
+  const waitedAt = Date.now();
+  let passes = 0;
+
   let container = await waitForNewMatch(
     recipe.responseContainerSelector, repliesBefore,
     // `quietPeriodMs` is the vendor's own measured "things have stopped changing", recorded
@@ -229,6 +247,7 @@ async function askAssistant({ recipe, prompt }, emit) {
       choose: withoutOurQuestion,
     }
   );
+  const firstRowAt = Date.now();
   if (!container) {
     // Distinguish "sent, and the vendor never answered" from "never actually sent".
     //
@@ -286,12 +305,22 @@ async function askAssistant({ recipe, prompt }, emit) {
         recipe.responseContainerSelector,
         deepQuerySelectorAll(recipe.responseContainerSelector).length,
         {
-          timeoutMs: Math.min(ANSWER_GRACE_MS, responseTimeoutMs),
+          // **The grace shrinks after the first extra pass.** It exists for the gap between a
+          // status row and the answer, which is the model thinking — seconds, and only once.
+          // Applying it again on every later pass meant a successful exchange still paid the
+          // full ceiling before reporting, so an answer visible in the vendor's tab took ten
+          // more seconds to reach the panel. That was measured as lag by the person using it,
+          // not by a test.
+          timeoutMs: Math.min(
+            pass === 1 ? ANSWER_GRACE_MS : (recipe.quietPeriodMs ?? 900),
+            responseTimeoutMs,
+          ),
           settleMs: recipe.quietPeriodMs ?? 900,
           choose: withoutOurQuestion,
         },
       );
 
+    passes = pass + 1;
     // The same row twice means the page has settled on it. That is the answer.
     if (!current || current === readFrom) break;
 
@@ -316,6 +345,10 @@ async function askAssistant({ recipe, prompt }, emit) {
     repliesBefore,
     repliesAfter: deepQuerySelectorAll(recipe.responseContainerSelector).length,
     openedBy,
+    // How long the first row took to appear against how long the re-pick loop then spent. The
+    // first is the vendor thinking and is not ours to fix; the second is quiet periods and
+    // grace windows, and is entirely ours.
+    ms: { firstRow: firstRowAt - waitedAt, settling: Date.now() - firstRowAt, passes },
   };
 }
 

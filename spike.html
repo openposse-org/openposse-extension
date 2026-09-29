@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>OpenPosse — Kokoro spike</title>
+    <link rel="stylesheet" href="ui.css" />
+    <style>
+      body { padding: 32px 36px 60px; }
+      main { max-width: 760px; }
+      .step { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+      .dot {
+        width: 20px; height: 20px; flex: 0 0 20px; border-radius: 50%;
+        display: grid; place-items: center; font-size: 11px; font-weight: 700;
+        border: 1px solid var(--line); color: var(--text-faint); margin-top: 2px;
+      }
+      .step.ok .dot { background: var(--green); border-color: var(--green); color: #00250c; }
+      .step.bad .dot { background: var(--error); border-color: var(--error); color: #2a0000; }
+      .what { font-size: 13.5px; font-weight: 600; }
+      .detail {
+        font-family: "SF Mono", ui-monospace, monospace; font-size: 11px;
+        color: var(--text-dim); margin-top: 4px; white-space: pre-wrap; word-break: break-word;
+      }
+      .step.bad .detail { color: var(--error); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Kokoro, one layer at a time</h1>
+      <p>
+        Each step is the smallest thing that can fail on its own. The loop tests all of them at
+        once and can only report that the outermost one gave up — this says <em>which</em>.
+        It runs in the real extension, so the CSP, the origin and the cache are the live ones.
+      </p>
+      <button id="run">Run</button>
+      <div id="steps" style="margin-top:22px"></div>
+    </main>
+    <script type="module" src="dist/spike.js"></script>
+  </body>
+</html>

@@ -12,6 +12,7 @@
 import { loadRoster, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
 import { panel, panelLevel, panelSpeaking } from './panel.js';
+import { beginTurn, trace } from './trace.js';
 
 /**
  * How much of an interim result to show as still-being-revised.
@@ -193,7 +194,8 @@ export async function startListening() {
   // How many names and at what weight — a count and a number, not the names. Paired with the
   // tail measurement below it, this is what makes a boost sweep readable: each turn says what
   // it was listening with before it says how it ended.
-  console.info('[openposse] listening —', phrases.length, 'phrases at boost', phrases[0]?.boost ?? 0);
+  beginTurn('turn');
+  trace('listening', `${phrases.length} phrases at boost ${phrases[0]?.boost ?? 0}`);
   await tell('openposse.listen.start', { options: { phrases } });
   await broadcastState();
   return null;
@@ -233,6 +235,7 @@ const UNSPOKEN_COPY = {
   'kokoro-not-implemented': 'The neural voice is selected but not installed.',
   'audio-busy': 'Something else is using the audio output.',
   'synthesis-unavailable': 'This browser could not speak the answer.',
+  'kokoro-silent-audio': 'The neural voice produced no sound — the answer is above.',
 };
 
 function reportUnspoken(reason) {
@@ -372,7 +375,12 @@ export function handleOffscreenMessage(message) {
       // agent's initial then appears a moment later. A flicker, not a wrong state, and worth
       // saying out loud rather than leaving `settle`'s check looking like it guarantees more
       // than it does.
-      if (message.isFinal) turnHandler?.(message.text);
+      if (message.isFinal) {
+        // Length, not the words. It is the one number that tells a mis-heard fragment from a
+        // full sentence when routing then refuses it.
+        trace('heard (final)', `${message.text.length} chars`);
+        turnHandler?.(message.text);
+      }
       return true;
 
     case 'openposse.listen.ended':
@@ -386,19 +394,17 @@ export function handleOffscreenMessage(message) {
       // at all there was nothing to end, and blaming the API for a silent room sends the next
       // reader looking for a browser bug — the same shape as the measurements that came back
       // 0 ms and meant nothing.
-      console.info(
-        '[openposse] turn ended —',
+      trace('recogniser closed',
         message.tailMs == null ? 'nothing was said'
           : message.waitMs != null
-            ? `${message.waitMs} ms from you stopping to the final · ${message.tailMs} ms final to end`
+            ? `${message.waitMs}ms you-stopped→final, ${message.tailMs}ms final→end`
             // `speechend` fired, but *after* the final result rather than before it — so there
             // is no interval to report and "null ms" is not a measurement. Worth naming rather
             // than papering over: the ordering is not guaranteed, and it means the recogniser
             // sometimes commits before it decides you stopped.
             : message.speechEndFired
-              ? `speechend arrived after the final · ${message.tailMs} ms final to end`
-              : `speechend never fired despite speech · ${message.tailMs} ms final to end`,
-      );
+              ? `speechend after the final, ${message.tailMs}ms final→end`
+              : `speechend never fired, ${message.tailMs}ms final→end`);
       settle();
       return true;
 
@@ -415,16 +421,57 @@ export function handleOffscreenMessage(message) {
       return true;
 
     case 'openposse.speaking':
-      // A word boundary. Pulsed rather than metered: `speechSynthesis` exposes no audio node,
-      // so this is speech *rate*, and the orb eases between pulses into something that reads
-      // as a voice. Honest, and honestly coarser than the microphone's real amplitude.
+      // Renamed, because it was a lie that cost a round trip: this fires *before* the model
+      // loads and before a sample is synthesised, so "speaking started … speaking ended
+      // +21057ms" looked like twenty-one seconds of audio for twenty words. It is the moment
+      // the speaking *path* begins.
+      if (message.started) trace('handing to the voice');
+      // Two engines, two grades of signal, one channel.
+      //
+      // Kokoro sends a real `level` measured off the audio on its way to the speakers, so the
+      // orb follows an answering agent exactly as it follows you. `speechSynthesis` cannot:
+      // it renders straight to the device and exposes no audio node, so all it can offer is a
+      // word boundary — speech *rate* — which the orb eases between into something that at
+      // least moves with the words.
       if (message.started) panelSpeaking(true);
-      panelLevel(message.pulse ? 0.85 : 0.4);
+      if (typeof message.level === 'number') panelLevel(message.level);
+      else panelLevel(message.pulse ? 0.85 : 0.4);
       return true;
 
     case 'openposse.spoke':
       // Releases the panel's dismiss timer, which was held open so it could not fade out
       // mid-sentence, and drops the orb back to rest.
+      // The breakdown the previous version could not show, because it happens in the offscreen
+      // document and its console is a different window. Load, synthesis and playback answer
+      // three different questions: a cold model, a slow engine, or simply a long answer.
+      // Once per engine, and the line that settles the question. `requested` is what we asked
+      // for; `providers` is what ONNX Runtime actually bound. The two disagreeing — or a
+      // `wasm` in that list — is the whole answer to why synthesis is slow.
+      if (message.ms?.backend) {
+        const b = message.ms.backend;
+        trace('BACKEND',
+          `requested ${b.requested ?? '?'} · bound [${(b.providers ?? []).join(', ') || 'not exposed'}] `
+          + `· dtype ${b.dtype ?? '?'} · ${b.sessions ?? '?'} sessions · gpu: ${b.adapter ?? 'none'}`);
+        // Only when the providers could not be read: says where to look rather than repeating
+        // that they were not found.
+        if (b.error) trace('BACKEND probe failed', b.error);
+        else if (!b.providers?.length && b.shape) trace('BACKEND shape', b.shape);
+      }
+      // **`first word` leads, because it is what is actually waited through.** Synthesis and
+      // playback now overlap, so `synth` and `spoke` no longer add up to anything and reading
+      // them as two consecutive stages would misstate the turn: `spoke` is the whole speaking
+      // period, `synth` a part of it that mostly happens during the rest.
+      //
+      // `peak` is here because "played for the right number of milliseconds" and "was audible"
+      // turned out to be different claims, and only the first was ever measured.
+      trace('voice finished', message.ms
+        ? `first word ${message.ms.firstWord ?? '?'}ms · `
+          + `load ${message.ms.load ?? '?'}ms${message.ms.cold ? ' (cold)' : ''} · `
+          + `synth ${message.ms.synth ?? '?'}ms → ${message.ms.audio ?? '?'}ms audio `
+          + `in ${message.ms.chunks ?? '?'} chunks at ${message.ms.rate ?? '?'}Hz · `
+          + `peak ${message.ms.peak ?? '?'} · spoke ${message.ms.play ?? '?'}ms`
+          + (message.ok ? '' : ` · ${message.reason ?? 'failed'}`)
+        : (message.ok ? '' : (message.reason ?? 'failed')));
       panelSpeaking(false);
       panelLevel(0);
       if (!message.ok) reportUnspoken(message.reason);

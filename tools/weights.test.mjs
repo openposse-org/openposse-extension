@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  MODEL, VOICES, ALL, TOTAL_BYTES, verify, digest, downloadWeights,
+  MODEL, VOICES, ALL, TOTAL_BYTES, verify, digest, downloadWeights, DTYPE, KNOWN_DTYPES,
 } from '../src/weights.js';
 
 /**
@@ -54,6 +54,27 @@ test('the URLs are pinned to a revision, not to a branch', () => {
   }
 });
 
+test('the dtype and the model file agree, and the dtype is one that exists', () => {
+  // The bug this earns its keep on, found three layers away at first use. `q8f16` names a real
+  // published file — 6 MB smaller — but is not a dtype transformers.js recognises, so it was
+  // **ignored rather than rejected** and the 326 MB fp32 default was requested instead.
+  //
+  // An unrecognised dtype is silent by design, which is why the pairing has to be asserted
+  // here: nothing downstream will ever complain that the two disagree.
+  assert.ok(KNOWN_DTYPES.includes(DTYPE), `${DTYPE} is not a dtype transformers.js accepts`);
+
+  // transformers.js has **two** names that do not follow the pattern, and both are load-bearing
+  // here: fp32 is the unsuffixed `model.onnx`, because it is the default the others are derived
+  // from, and q8 is `model_quantized.onnx` from before the dtype names were generalised.
+  // Everything else is `model_<dtype>.onnx`.
+  const expected = {
+    fp32: /(^|\/)model\.onnx$/,
+    q8: /model_quantized\.onnx$/,
+  }[DTYPE] ?? new RegExp(`model_${DTYPE}\\.onnx$`);
+
+  assert.match(MODEL.url, expected, `the pinned file does not match dtype ${DTYPE}`);
+});
+
 test('six voices, split so accents and genders both survive', () => {
   // Enough for any plausible roster at ~3 MB, against 28.7 MB for all 28. Both accents must be
   // present or assignKokoroVoices cannot keep a British agent British.
@@ -65,9 +86,19 @@ test('six voices, split so accents and genders both survive', () => {
 });
 
 test('the advertised total matches what is actually listed', () => {
-  // The number setup shows before somebody commits their connection to it.
+  // The number setup shows before somebody commits their connection to it, so it has to be the
+  // real sum rather than a figure that was true once.
   assert.equal(TOTAL_BYTES, ALL.reduce((n, f) => n + f.bytes, 0));
-  assert.ok(TOTAL_BYTES > 80e6 && TOTAL_BYTES < 100e6, `${TOTAL_BYTES} bytes`);
+
+  // A sanity band, not an expectation, and it has now caught the model changing twice: ~89 MB
+  // to ~166 MB (q8 → fp16, for GPU kernels), then to ~329 MB (fp16 → fp32, because fp16 turned
+  // out to synthesise silence on WebGPU). Both were deliberate, and the test is doing its job
+  // by making each one an explicit edit here rather than a number that drifted.
+  //
+  // The upper bound is where a download stops being something to offer casually. 329 MB is
+  // already past that — it is offered on purpose, with the figure shown, and the ceiling is set
+  // just above it so the *next* increase still has to be argued for.
+  assert.ok(TOTAL_BYTES > 50e6 && TOTAL_BYTES < 400e6, `${Math.round(TOTAL_BYTES / 1e6)} MB`);
 });
 
 test('every file has a hash, and they look like hashes', () => {
@@ -179,5 +210,5 @@ test('an already-downloaded file is counted but not fetched again', async () => 
   }));
 
   assert.ok(!asked.some((u) => u.includes('model_q8f16')), 'the model was not re-fetched');
-  assert.equal(asked.length, VOICES.length);
+  assert.equal(asked.length, ALL.length - 1, 'everything else was');
 });

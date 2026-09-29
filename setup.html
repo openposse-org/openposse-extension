@@ -29,6 +29,21 @@
       }
       .status { margin-top: 9px; }
       .row { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+      .voice {
+        display: flex; align-items: center; gap: 11px;
+        padding: 9px 0; border-bottom: 1px solid var(--line);
+      }
+      .voice:last-child { border-bottom: 0; }
+      .voice .name { font-size: 13.5px; font-weight: 500; flex: 1; }
+      .voice .accent { color: var(--text-faint); font-size: 11.5px; }
+      .voice button { padding: 5px 13px; font-size: 12px; }
+      textarea {
+        font: inherit; width: 100%; resize: vertical;
+        color: var(--text); background: rgba(0, 0, 0, 0.3);
+        border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+        line-height: 1.5;
+      }
+      textarea:focus { outline: 1px solid var(--blue); }
     </style>
   </head>
   <body>
@@ -146,11 +161,14 @@
         <div class="step" id="step-weights" style="margin-top:18px">
           <div class="num">6</div>
           <div style="flex:1">
-            <h2>Better voices <span class="kind">— optional, 89 MB</span></h2>
+            <!-- The size is filled in from `TOTAL_BYTES` rather than written here. It has
+                 already moved twice — 89 MB to 166 MB when the model changed for GPU kernel
+                 coverage — and a number typed into copy is a number that goes stale silently. -->
+            <h2>Better voices <span class="kind">— optional, <span id="weights-size">…</span></span></h2>
             <p>
               The system voices are your operating system's, and they sound like it. Kokoro is a
               neural voice model that runs <em>on this machine</em> — nothing you say or hear
-              goes anywhere. It is a one-off download of about 89 MB, kept locally afterwards.
+              goes anywhere. It is a one-off download, kept locally afterwards.
             </p>
             <p>
               It needs WebGPU to be fast enough for conversation. Without it OpenPosse keeps
@@ -163,6 +181,17 @@
             </div>
           </div>
         </div>
+      </section>
+
+      <section id="voices-section" hidden>
+        <h2>Try the voices</h2>
+        <p>
+          Whatever is in the box, in each voice — the same words every time, so they can be
+          compared rather than just sampled. The first one takes a moment while the model
+          loads; the rest are immediate.
+        </p>
+        <textarea id="sample" rows="4" spellcheck="false"></textarea>
+        <div id="voice-list" style="margin-top:14px"></div>
       </section>
 
       <section>

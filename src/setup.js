@@ -9,8 +9,9 @@ import { loadRoster, importFromMacApp, setMicGranted, micGranted } from './stora
 import { channelFor, initialFor } from './channels.js';
 import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
 import {
-  weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES,
+  weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES, VOICES,
 } from './weights.js';
+import { speak as speakWithKokoro } from './kokoro.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const LANGS = { langs: ['en-US'], processLocally: true };
@@ -227,6 +228,7 @@ const mb = (bytes) => `${Math.round(bytes / 1e6)} MB`;
 async function refreshWeights() {
   const { state, have, want } = await weightsStatus();
   const done = state === 'ready';
+  el('weights-size').textContent = mb(TOTAL_BYTES);
 
   el('drop-weights').hidden = !have;
   el('get-weights').hidden = done;
@@ -290,6 +292,7 @@ el('get-weights').addEventListener('click', async () => {
   }
   await refreshWeights();
   await refreshEngine();
+  await refreshVoices();
 });
 
 el('drop-weights').addEventListener('click', async () => {
@@ -297,6 +300,97 @@ el('drop-weights').addEventListener('click', async () => {
   await refreshWeights();
   await refreshEngine();
 });
+
+// ── Trying the voices ──────────────────────────────────────────────────────────────────────
+//
+// **The same words in every voice**, whatever they are. Different lines per voice would sample
+// them; one line lets them be compared, which is the actual question — "which of these should
+// Ivan be" is a judgement nobody can make from six different sentences.
+//
+// Editable, because the right sample depends on what you are listening for. A default that
+// suits prosody is no use to somebody checking how a voice handles their own product's
+// vocabulary, and vice versa.
+//
+// This one runs long on purpose: several clauses, a colon, and shifts of pace that a short
+// line cannot show. It also crosses HeadTTS's sentence split, so it exercises chunk chaining —
+// the thing that made the spike say "Hello" and stop.
+const DEFAULT_SAMPLE = 'All men dream, but not equally. Those who dream by night in the dusty '
+  + 'recesses of their minds wake in the day to find that it was vanity: but the dreamers of '
+  + 'the day are dangerous men, for they may act their dream with open eyes, to make it '
+  + 'possible.';
+
+/** What to speak: the box, or the default if it has been emptied. */
+function sample() {
+  const typed = el('sample').value.trim();
+  return typed || DEFAULT_SAMPLE;
+}
+
+const ACCENT = { a: 'American', b: 'British' };
+const GENDER = { f: 'female', m: 'male' };
+
+function describeVoice(id) {
+  const [accent, gender] = id;
+  const name = id.slice(3);
+  return {
+    name: name.charAt(0).toUpperCase() + name.slice(1),
+    accent: `${ACCENT[accent] ?? '?'} ${GENDER[gender] ?? ''}`.trim(),
+  };
+}
+
+async function refreshVoices() {
+  const ready = (await weightsStatus()).state === 'ready';
+  el('voices-section').hidden = !ready;
+  if (!ready) return;
+
+  // Only on the first render, so re-rendering after a download does not discard something the
+  // user has typed.
+  if (!el('sample').value) el('sample').value = DEFAULT_SAMPLE;
+
+  const list = el('voice-list');
+  list.textContent = '';
+
+  for (const { id } of VOICES) {
+    const { name, accent } = describeVoice(id);
+    const row = document.createElement('div');
+    row.className = 'voice';
+
+    const label = document.createElement('div');
+    label.className = 'name';
+    label.textContent = name;
+    const sub = document.createElement('div');
+    sub.className = 'accent';
+    sub.textContent = accent;
+
+    const play = document.createElement('button');
+    play.className = 'secondary';
+    play.textContent = 'Play';
+    play.addEventListener('click', async () => {
+      // Every button disabled, not just this one: two voices over each other tells you nothing
+      // about either, and the engine speaks one utterance at a time anyway.
+      const buttons = [...list.querySelectorAll('button')];
+      for (const b of buttons) b.disabled = true;
+      play.textContent = 'Loading…';
+
+      const result = await speakWithKokoro(sample(), id);
+      // The same breakdown the turn logs, because this page is where a voice gets judged and
+      // "it played and I heard nothing" needs the same two numbers to be answerable here.
+      const m = result.ms ?? {};
+      console.info(`[openposse] voice ${id} · first word ${m.firstWord ?? '?'}ms · `
+        + `synth ${m.synth ?? '?'}ms → ${m.audio ?? '?'}ms `
+        + `audio in ${m.chunks ?? '?'} chunks at ${m.rate ?? '?'}Hz · peak ${m.peak ?? '?'} · `
+        + `spoke ${m.play ?? '?'}ms${result.ok ? '' : ` · ${result.reason}`}`);
+      if (!result.ok) {
+        sub.textContent = result.reason;
+        sub.style.color = 'var(--error)';
+      }
+      play.textContent = 'Play';
+      for (const b of buttons) b.disabled = false;
+    });
+
+    row.append(label, sub, play);
+    list.append(row);
+  }
+}
 
 // ── Roster ─────────────────────────────────────────────────────────────────────────────────
 
@@ -361,6 +455,7 @@ for (const [name, refresh] of Object.entries({
   'panel access': refreshPanelAccess,
   'voice engine': refreshEngine,
   weights: refreshWeights,
+  voices: refreshVoices,
   roster: refreshRoster,
 })) {
   try {

@@ -24,10 +24,83 @@ const REPO = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve
 const at = (path) => `${REPO}/${REVISION}/${path}`;
 
 /**
- * The model: q8f16, the smallest variant that is not visibly degraded.
+ * The model comes from the **timestamped** repository, and the voices do not.
  *
- * 86 MB against 326 MB for fp32 and 163 MB for fp16. The full-precision model is better and
- * nobody is going to download a third of a gigabyte to hear a joke read out.
+ * Two repositories publish `model_q8f16.onnx` at the same 86.1 MB with different bytes, and the
+ * first version of this file pinned the wrong one — it downloaded and verified perfectly, and
+ * would have been loaded by an engine asking for the other. The hash check cannot save you from
+ * correctly verifying the wrong file.
+ *
+ * `Kokoro-82M-v1.0-ONNX-timestamped` is what HeadTTS requests by default, and it emits
+ * phoneme-level timings, which is what would let the orb follow real speech instead of a
+ * synthesised envelope.
+ *
+ * The **voices are style vectors rather than model weights** and are shared between the two, so
+ * they stay where they are — which also means the six already downloaded do not have to be
+ * fetched again. Keying the cache by URL makes that automatic: only the model reads as missing.
+ */
+const TS_REVISION = 'dd4401a9add81ac692d20e240d22ec9dda82cc29';
+const TS_REPO = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX-timestamped/resolve';
+
+/**
+ * What the engine must be told to ask for, exported so it cannot drift from what was fetched.
+ *
+ * `kokoro.js` configures HeadTTS with these. Two copies of a model id or a voice base — one
+ * here and one there — is how the engine ends up requesting a file nobody downloaded, which is
+ * a failure at first use rather than at build time.
+ */
+export const MODEL_REPO = 'onnx-community/Kokoro-82M-v1.0-ONNX-timestamped';
+export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
+
+/**
+ * The model: **fp32**, the only variant that is both numerically sound on the GPU and fully
+ * accelerated by it. 326 MB, chosen knowingly.
+ *
+ * ## Do not switch this to fp16. It was tried, and it is silent.
+ *
+ * The reasoning that leads there is sound, which is what makes it worth writing down. int8
+ * graphs frequently have no WebGPU kernels, so part of the graph falls back to the CPU — true,
+ * and why q8 measured ~1.6× real time. fp16 fixes exactly that: 5.3 seconds of speech in
+ * 660 ms, **0.12× real time**, thirteen times faster.
+ *
+ * Every sample was zero. Peak amplitude `0` on a buffer of the correct duration, at the correct
+ * rate, from a session that ran on the GPU and reported no error.
+ *
+ * That is not this codebase's bug. **ONNX Runtime's WebGPU backend produces NaN for Kokoro at
+ * fp16**, an open upstream issue across several transformers.js versions and several GPU
+ * vendors — see microsoft/onnxruntime#29807 ("fp32 corrupts a subset of inputs, fp16 corrupts
+ * all; same model clean on WASM") and #26732 for the same fp16-overflow shape in another model.
+ * NaN reaches the WAV encoder and lands as silence, which is why the failure presents as a
+ * voice that plays for exactly the right number of milliseconds and cannot be heard.
+ *
+ * So there is no free corner:
+ *
+ * | | size | speed | correct on WebGPU |
+ * |---|---|---|---|
+ * | `q8` | 92 MB | ~1.6× real time | yes |
+ * | `fp16` | 156 MB | ~0.12× real time | **no — all NaN** |
+ * | `q4f16` | 147 MB | fast | no — same fp16 path |
+ * | **`fp32`** | **326 MB** | **fast, full GPU kernels** | **yes** |
+ *
+ * **fp32 is not unconditionally safe either**, and the same issue says so: it corrupts a subset
+ * of inputs on Intel Iris Xe, while staying clean on WASM and on Qualcomm Adreno. It is correct
+ * on Apple Silicon, which is where it was measured. That is a reason to keep the guard below,
+ * not a reason to pick a slower default for everyone.
+ *
+ * q8 remains the fallback worth remembering: 92 MB, audible everywhere, and one line away
+ * (`model_quantized.onnx`, sha256 `c0c02b3299fd97c34ea92a98e6d41eaa1a739c8f77bf685aac34bd7b34c1132c`).
+ *
+ * `model_q8f16.onnx` is 86 MB and would have been ideal, but transformers.js 4.0.0 has no such
+ * dtype — it was silently ignored and the 326 MB fp32 default requested instead.
+ *
+ * **The guard against all of this is `peak` in `kokoro.js`**, which refuses a buffer of zeros
+ * and falls back to a system voice. That matters beyond this machine: the upstream issue says
+ * fp32 corrupts *a subset of inputs* on Intel Iris Xe, so a user whose GPU we cannot test can
+ * hit this with a dtype that is correct here. A voice that checks its own output is the only
+ * version of this that ships.
+ *
+ * `DTYPE` is exported so `kokoro.js` cannot disagree with what was downloaded, and the test
+ * below ties the two together: an unrecognised dtype fails at first use, not at build time.
  *
  * **The hashes are read, not guessed.** They come from HuggingFace's own API, which reports the
  * Git-LFS object id — and an LFS oid *is* the SHA-256 of the file's contents. Cross-checked:
@@ -36,12 +109,23 @@ const at = (path) => `${REPO}/${REVISION}/${path}`;
  *
  * Sizes are exact for the same reason, so a progress bar cannot overshoot.
  */
+export const DTYPE = 'fp32';
+
 export const MODEL = {
   id: 'model',
-  url: at('onnx/model_q8f16.onnx'),
-  bytes: 86_033_585,
-  sha256: '04c658aec1b6008857c2ad10f8c589d4180d0ec427e7e6118ceb487e215c3cd0',
+  url: `${TS_REPO}/${TS_REVISION}/onnx/model.onnx`,
+  bytes: 325_532_171,
+  sha256: '651ea8291843a92276a4a003581a215cb07d15e47dde6fcfb1b768f9a1682054',
 };
+
+/**
+ * What transformers.js 4.0.0 will accept, read from the bundled build rather than the docs.
+ *
+ * Kept so the test can assert `DTYPE` is one of them. An unrecognised name does not throw — it
+ * is ignored, and the default fp32 model is requested instead, which surfaces as a refused
+ * network request for a file nobody downloaded.
+ */
+export const KNOWN_DTYPES = ['fp32', 'fp16', 'q8', 'int8', 'uint8', 'q4', 'bnb4', 'q4f16'];
 
 /**
  * Six voices, which is more than any plausible roster and about 3 MB.
@@ -64,7 +148,29 @@ export const VOICES = Object.entries({
   sha256,
 }));
 
-export const ALL = [MODEL, ...VOICES];
+/**
+ * The model's own paperwork, which transformers.js loads before the weights.
+ *
+ * Tiny — 3.6 kB between them — and completely load-bearing: `from_pretrained` reads
+ * `config.json` to know what architecture it is building, and `AutoTokenizer` needs the other
+ * two to turn phonemes into the ids the model expects. Without them the engine cannot start,
+ * and the first version of this manifest had 89 MB of weights and none of these.
+ *
+ * Hashed here rather than read from the API, because these are stored inline in the repository
+ * rather than through Git-LFS, so there is no object id to borrow. Fetched once and digested.
+ */
+const CONFIG = Object.entries({
+  'config.json': 'df34b4f930b23447cd4dc410fabfb42eb3f24e803e6c3f97d618fb359380a36f',
+  'tokenizer.json': '77a02c8e164413299b4b4c403b14f8e0e1c1b727db4d46a09d6327b861060a34',
+  'tokenizer_config.json': 'be1cb066d6ef6b074b3f15e6a6dd21ac88ff3cdaedf325f0aaed686c70f75d20',
+}).map(([name, sha256]) => ({
+  id: name,
+  url: `${TS_REPO}/${TS_REVISION}/${name}`,
+  bytes: 4_000,
+  sha256,
+}));
+
+export const ALL = [MODEL, ...CONFIG, ...VOICES];
 
 /** Total download, for a sentence in setup that does not surprise anyone on a slow connection. */
 export const TOTAL_BYTES = ALL.reduce((sum, f) => sum + f.bytes, 0);
