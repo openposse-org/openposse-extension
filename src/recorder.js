@@ -350,6 +350,9 @@ function watchForReply() {
   // The timestamp is what `elapsedMs` reports: when the chosen element *appeared*, which is
   // what the runtime's `waitForNewMatch` actually waits for — not when the answer finished.
   const addedSinceSubmit = new Map();
+  // When each of them left, so how long it was on screen can be measured. That span is what
+  // separates a vendor's "working" indicator from the churn around it — see `decide`.
+  const removedAt = new Map();
   let settleTimer = null;
 
   // **The send button is the better signal, and it was invisible to the one above.**
@@ -383,17 +386,34 @@ function watchForReply() {
     // a candidate by counting matches, and a element that has left the page matches nothing.
     // `roleAttributes` names identifying attributes without their values, which is exactly what
     // survives the element itself — and two exchanges are what make a value unnecessary.
+    // **How long it was on screen is what tells a busy indicator from the churn around it.**
+    //
+    // A spinner or a stop button exists from the question until the answer: it spans nearly the
+    // whole window. A composer that re-renders produces an element that lives for a few
+    // hundred milliseconds and is replaced by an identical one — which looks the same to a
+    // "did it appear and leave?" test and is not an indicator at all.
+    //
+    // Notion produced exactly that: `agent-service-approval-mode-button`, a control that is
+    // present whether or not it is working, captured because the node behind it was swapped.
+    // Ranking by selector length picked it over anything else, which was never a reason for
+    // preferring one element over an unrelated one — that tiebreak was about a container
+    // versus its child and had no business deciding this.
+    const now = Date.now();
     const vanished = [];
     for (const el of [...addedSinceSubmit.keys()]) {
       if (el.isConnected) continue;
-      const signature = busySignature(el);
-      if (signature) vanished.push(signature);
+      const sig = busySignature(el);
+      if (sig) {
+        vanished.push({ sig, span: (removedAt.get(el) ?? now) - addedSinceSubmit.get(el) });
+      }
       addedSinceSubmit.delete(el);
     }
 
     // The send button's own transitions, in the same currency: selectors that matched during
-    // the answer and do not match now that it is over.
-    vanished.push(...submitStates.finish());
+    // the answer and do not match now that it is over. Credited with the full window, because
+    // a state the control wore and has taken off *is* the vendor describing the whole answer.
+    const windowMs = Math.max(1, now - session.submittedAt);
+    vanished.push(...submitStates.finish().map((sig) => ({ sig, span: windowMs })));
 
     const pool = [...addedSinceSubmit.keys()];
     const reply = chooseReplyElement(pool);
@@ -448,6 +468,21 @@ function watchForReply() {
         if (descendants.length > 2000) continue;
         for (const child of descendants) {
           if (!addedSinceSubmit.has(child)) addedSinceSubmit.set(child, now);
+        }
+      }
+    }
+
+    // When things leave, for the same elements. Only those we already know about, because an
+    // element removed that was never added since the submit was part of the page before the
+    // question and tells us nothing about answering it.
+    for (const record of records) {
+      for (const node of record.removedNodes) {
+        if (node.nodeType !== 1) continue;
+        if (addedSinceSubmit.has(node) && !removedAt.has(node)) removedAt.set(node, now);
+        const descendants = node.querySelectorAll?.('*') ?? [];
+        if (descendants.length > 2000) continue;
+        for (const child of descendants) {
+          if (addedSinceSubmit.has(child) && !removedAt.has(child)) removedAt.set(child, now);
         }
       }
     }
@@ -720,7 +755,14 @@ function recordAnswer(element, firstSeenAt, vanished = []) {
   //
   // Optional throughout: a vendor that shows nothing while it works simply has no such element,
   // and the runtime falls back to the quiet period it uses today.
-  const shared = first.vanished.filter((sig) => second.vanished.includes(sig));
+  // Matched on the selector and kept at its *shorter* span, so a candidate has to have covered
+  // the answer in both exchanges rather than in the lucky one.
+  const shared = first.vanished
+    .map((a) => {
+      const b = second.vanished.find((other) => other.sig === a.sig);
+      return b ? { sig: a.sig, span: Math.min(a.span, b.span) } : null;
+    })
+    .filter(Boolean);
 
   // **A send-button state beats a vanishing element**, and the reason is provenance rather than
   // shape. The button is an element the recording already captured and the dry run is about to
@@ -732,13 +774,25 @@ function recordAnswer(element, firstSeenAt, vanished = []) {
   // bare `[attr]` may also match its container — and stopping on a container means calling the
   // answer finished while the spinner inside it is still turning.
   const fromButton = session.submitButton?.css;
-  const ranked = [...shared].sort((a, b) => {
-    const aFromButton = fromButton && a.startsWith(fromButton) ? 1 : 0;
-    const bFromButton = fromButton && b.startsWith(fromButton) ? 1 : 0;
-    if (aFromButton !== bFromButton) return bFromButton - aFromButton;
-    return b.length - a.length;
-  });
-  const busySelector = ranked[0] ?? null;
+  const isButton = (sig) => Boolean(fromButton && sig.startsWith(fromButton));
+
+  // **Anything that covered less than half the answer is thrown away, not merely ranked last.**
+  // A candidate that was on screen for 300 ms of a four-second answer is not describing that
+  // answer, and recording it would leave the runtime watching for something that says nothing.
+  // Having no indicator is an honest state with a working fallback; having a meaningless one is
+  // a wrong answer wearing a tick.
+  const answerMs = Math.max(1, second.firstSeenAt - session.submittedAt);
+  const ranked = shared
+    .filter(({ sig, span }) => isButton(sig) || span >= answerMs * 0.5)
+    .sort((a, b) => {
+      // The vendor's own control first — it says what it is doing, where an element that came
+      // and went is only ever an inference about what the page was up to.
+      if (isButton(a.sig) !== isButton(b.sig)) return isButton(b.sig) ? 1 : -1;
+      // Then whichever covered more of the answer.
+      return b.span - a.span;
+    });
+
+  const busySelector = ranked[0]?.sig ?? null;
   // Which of the two found it, shown on the card. They are not equally trustworthy, so "we have
   // one" is not the whole answer — a button state is the vendor saying what it is doing, and a
   // vanished element is an inference from what the page happened to remove.
