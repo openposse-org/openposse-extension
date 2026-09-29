@@ -209,18 +209,50 @@ async function connect() {
     //
     // `executionProviders` is what ONNX Runtime actually bound, which is the only statement
     // here that is not an intention.
+    // The first attempt guessed at two field names, found neither, and reported "unknown" —
+    // which says only that the guess was wrong. So when no known shape matches, this reports
+    // the **key names it actually found**, and the next run says where the answer lives instead
+    // of whether a third guess was lucky.
     try {
       const sessions = Object.values(model?.sessions ?? {});
-      const providers = sessions.flatMap((s) => s?.handler?._executionProviders
-        ?? s?.executionProviders ?? []);
+      const found = [];
+      let shape = null;
+      for ( const s of sessions ) {
+        const handler = s?.handler ?? s?._handler ?? null;
+        const candidate = handler?._executionProviders ?? handler?.executionProviders
+          ?? s?._executionProviders ?? s?.executionProviders ?? null;
+        if ( candidate ) {
+          found.push(...(Array.isArray(candidate) ? candidate : [candidate]));
+        } else if ( !shape ) {
+          // Not a fallback value — a description of where to look next time.
+          shape = {
+            session: Object.keys(s ?? {}).slice(0, 24),
+            handler: handler ? Object.keys(handler).slice(0, 24) : null,
+            handlerName: handler?.constructor?.name ?? null,
+          };
+        }
+      }
       eventHandler.postMessage({
         type: "openposse-backend",
         requested: settings.device,
         dtype: settings.dtype,
-        providers: providers.map((p) => (typeof p === "string" ? p : p?.name)).filter(Boolean),
+        providers: found.map((p) => (typeof p === "string" ? p : (p?.name ?? String(p))))
+          .filter(Boolean),
         sessions: sessions.length,
+        shape,
       });
-    } catch { /* diagnostics must never break loading */ }
+    } catch(error) {
+      // Diagnostics must never break loading — but a diagnostic that fails silently is the
+      // exact fault it was added to cure.
+      console.error("OpenPosse: backend report failed, error=", error);
+      eventHandler.postMessage({
+        type: "openposse-backend",
+        requested: settings.device,
+        dtype: settings.dtype,
+        providers: [],
+        error: String(error?.message ?? error),
+      });
+    }
     // ── end patch ────────────────────────────────────────────────────────────────────────
   } catch(error) {
     console.error("HeadTTS Worker: Loading models failed, error=", error, " settings=", settings);

@@ -372,6 +372,12 @@ async function refreshVoices() {
       play.textContent = 'Loading…';
 
       const result = await speakWithKokoro(sample(), id);
+      // The same breakdown the turn logs, because this page is where a voice gets judged and
+      // "it played and I heard nothing" needs the same two numbers to be answerable here.
+      const m = result.ms ?? {};
+      console.info(`[openposse] voice ${id} · synth ${m.synth ?? '?'}ms → ${m.audio ?? '?'}ms `
+        + `audio in ${m.chunks ?? '?'} chunks at ${m.rate ?? '?'}Hz · peak ${m.peak ?? '?'} · `
+        + `play ${m.play ?? '?'}ms${result.ok ? '' : ` · ${result.reason}`}`);
       if (!result.ok) {
         sub.textContent = result.reason;
         sub.style.color = 'var(--error)';

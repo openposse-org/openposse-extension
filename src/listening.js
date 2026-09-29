@@ -235,6 +235,7 @@ const UNSPOKEN_COPY = {
   'kokoro-not-implemented': 'The neural voice is selected but not installed.',
   'audio-busy': 'Something else is using the audio output.',
   'synthesis-unavailable': 'This browser could not speak the answer.',
+  'kokoro-silent-audio': 'The neural voice produced no sound — the answer is above.',
 };
 
 function reportUnspoken(reason) {
@@ -449,13 +450,21 @@ export function handleOffscreenMessage(message) {
       if (message.ms?.backend) {
         const b = message.ms.backend;
         trace('BACKEND',
-          `requested ${b.requested ?? '?'} · bound [${(b.providers ?? []).join(', ') || 'unknown'}] `
+          `requested ${b.requested ?? '?'} · bound [${(b.providers ?? []).join(', ') || 'not exposed'}] `
           + `· dtype ${b.dtype ?? '?'} · ${b.sessions ?? '?'} sessions · gpu: ${b.adapter ?? 'none'}`);
+        // Only when the providers could not be read: says where to look rather than repeating
+        // that they were not found.
+        if (b.error) trace('BACKEND probe failed', b.error);
+        else if (!b.providers?.length && b.shape) trace('BACKEND shape', b.shape);
       }
+      // `peak` is here because "played for the right number of milliseconds" and "was audible"
+      // turned out to be different claims, and only the first was ever measured.
       trace('voice finished', message.ms
         ? `load ${message.ms.load ?? '?'}ms${message.ms.cold ? ' (cold)' : ''} · `
           + `synth ${message.ms.synth ?? '?'}ms → ${message.ms.audio ?? '?'}ms audio `
-          + `in ${message.ms.chunks ?? '?'} chunks · play ${message.ms.play ?? '?'}ms`
+          + `in ${message.ms.chunks ?? '?'} chunks at ${message.ms.rate ?? '?'}Hz · `
+          + `peak ${message.ms.peak ?? '?'} · play ${message.ms.play ?? '?'}ms`
+          + (message.ok ? '' : ` · ${message.reason ?? 'failed'}`)
         : (message.ok ? '' : (message.reason ?? 'failed')));
       panelSpeaking(false);
       panelLevel(0);

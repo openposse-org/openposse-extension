@@ -159,8 +159,21 @@ export async function speak(text, voice, { onLevel = () => {} } = {}) {
     ms.synth = Math.round(performance.now() - synthAt);
     ms.chunks = chunks.length;
     ms.audio = Math.round(chunks.reduce((n, b) => n + b.duration, 0) * 1000);
+    ms.peak = peak(chunks);
+    ms.rate = chunks[0]?.sampleRate ?? 0;
 
     if (chunks.length === 0) return { ok: false, reason: 'kokoro-no-audio', ms };
+
+    // **"Nothing was heard" and "nothing was produced" are different faults**, and until this
+    // line existed they were the same event: buffers of the right duration played for the right
+    // number of milliseconds and resolved successfully, while the room stayed quiet. Whether the
+    // samples are zero is the one measurement that tells the two apart, so it is taken every
+    // time rather than added back whenever somebody reports silence.
+    //
+    // A model producing silence is a failed answer, not a spoken one — so it is reported as a
+    // failure and the caller falls back to a system voice. Speech that cannot be heard is worse
+    // than a plainer voice that can.
+    if (ms.peak < 1e-4) return { ok: false, reason: 'kokoro-silent-audio', ms };
 
     const playAt = performance.now();
     const result = await play(chunks, onLevel);
@@ -173,6 +186,28 @@ export async function speak(text, voice, { onLevel = () => {} } = {}) {
     session = null;
     return { ok: false, reason: `kokoro: ${error?.message ?? error}`, ms };
   }
+}
+
+/**
+ * The loudest sample in the synthesised audio, 0–1.
+ *
+ * Every channel of every chunk, rather than a sample of the first one: a model that fails
+ * partway through produces a buffer that starts fine and ends silent, and peeking at the front
+ * would call that healthy. A few hundred thousand comparisons costs well under a millisecond
+ * against synthesis measured in hundreds.
+ */
+function peak(buffers) {
+  let max = 0;
+  for (const buffer of buffers) {
+    for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+      const samples = buffer.getChannelData(channel);
+      for (let i = 0; i < samples.length; i += 1) {
+        const value = Math.abs(samples[i]);
+        if (value > max) max = value;
+      }
+    }
+  }
+  return Math.round(max * 1000) / 1000;
 }
 
 /** ~20 Hz, matching the microphone meter. The orb runs at 60 and eases between readings. */
