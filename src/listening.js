@@ -12,6 +12,7 @@
 import { loadRoster, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
 import { panel, panelLevel, panelSpeaking } from './panel.js';
+import { beginTurn, trace } from './trace.js';
 
 /**
  * How much of an interim result to show as still-being-revised.
@@ -193,7 +194,8 @@ export async function startListening() {
   // How many names and at what weight — a count and a number, not the names. Paired with the
   // tail measurement below it, this is what makes a boost sweep readable: each turn says what
   // it was listening with before it says how it ended.
-  console.info('[openposse] listening —', phrases.length, 'phrases at boost', phrases[0]?.boost ?? 0);
+  beginTurn('turn');
+  trace('listening', `${phrases.length} phrases at boost ${phrases[0]?.boost ?? 0}`);
   await tell('openposse.listen.start', { options: { phrases } });
   await broadcastState();
   return null;
@@ -372,7 +374,12 @@ export function handleOffscreenMessage(message) {
       // agent's initial then appears a moment later. A flicker, not a wrong state, and worth
       // saying out loud rather than leaving `settle`'s check looking like it guarantees more
       // than it does.
-      if (message.isFinal) turnHandler?.(message.text);
+      if (message.isFinal) {
+        // Length, not the words. It is the one number that tells a mis-heard fragment from a
+        // full sentence when routing then refuses it.
+        trace('heard (final)', `${message.text.length} chars`);
+        turnHandler?.(message.text);
+      }
       return true;
 
     case 'openposse.listen.ended':
@@ -386,19 +393,17 @@ export function handleOffscreenMessage(message) {
       // at all there was nothing to end, and blaming the API for a silent room sends the next
       // reader looking for a browser bug — the same shape as the measurements that came back
       // 0 ms and meant nothing.
-      console.info(
-        '[openposse] turn ended —',
+      trace('recogniser closed',
         message.tailMs == null ? 'nothing was said'
           : message.waitMs != null
-            ? `${message.waitMs} ms from you stopping to the final · ${message.tailMs} ms final to end`
+            ? `${message.waitMs}ms you-stopped→final, ${message.tailMs}ms final→end`
             // `speechend` fired, but *after* the final result rather than before it — so there
             // is no interval to report and "null ms" is not a measurement. Worth naming rather
             // than papering over: the ordering is not guaranteed, and it means the recogniser
             // sometimes commits before it decides you stopped.
             : message.speechEndFired
-              ? `speechend arrived after the final · ${message.tailMs} ms final to end`
-              : `speechend never fired despite speech · ${message.tailMs} ms final to end`,
-      );
+              ? `speechend after the final, ${message.tailMs}ms final→end`
+              : `speechend never fired, ${message.tailMs}ms final→end`);
       settle();
       return true;
 
@@ -415,6 +420,7 @@ export function handleOffscreenMessage(message) {
       return true;
 
     case 'openposse.speaking':
+      if (message.started) trace('speaking started');
       // Two engines, two grades of signal, one channel.
       //
       // Kokoro sends a real `level` measured off the audio on its way to the speakers, so the
@@ -430,6 +436,7 @@ export function handleOffscreenMessage(message) {
     case 'openposse.spoke':
       // Releases the panel's dismiss timer, which was held open so it could not fade out
       // mid-sentence, and drops the orb back to rest.
+      trace('speaking ended', message.ok ? '' : (message.reason ?? 'failed'));
       panelSpeaking(false);
       panelLevel(0);
       if (!message.ok) reportUnspoken(message.reason);

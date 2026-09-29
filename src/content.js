@@ -286,7 +286,16 @@ async function askAssistant({ recipe, prompt }, emit) {
         recipe.responseContainerSelector,
         deepQuerySelectorAll(recipe.responseContainerSelector).length,
         {
-          timeoutMs: Math.min(ANSWER_GRACE_MS, responseTimeoutMs),
+          // **The grace shrinks after the first extra pass.** It exists for the gap between a
+          // status row and the answer, which is the model thinking — seconds, and only once.
+          // Applying it again on every later pass meant a successful exchange still paid the
+          // full ceiling before reporting, so an answer visible in the vendor's tab took ten
+          // more seconds to reach the panel. That was measured as lag by the person using it,
+          // not by a test.
+          timeoutMs: Math.min(
+            pass === 1 ? ANSWER_GRACE_MS : (recipe.quietPeriodMs ?? 900),
+            responseTimeoutMs,
+          ),
           settleMs: recipe.quietPeriodMs ?? 900,
           choose: withoutOurQuestion,
         },
