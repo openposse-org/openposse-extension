@@ -93,12 +93,20 @@ export function installLocalOnlyFetch(self_ = self) {
     // cache was checked against a hash in the build *before it was stored*, so what is being
     // relaxed is only how a verified file is looked up, never whether it was verified.
     if (!hit) {
-      const tail = canonical(url).split('/').slice(-2).join('/');
-      for (const request of await cache.keys()) {
-        if (canonical(request.url).endsWith(`/${tail}`)) {
-          hit = await cache.match(request);
-          break;
-        }
+      const keys = await cache.keys();
+      // Two segments first, then one. `onnx/model_q8f16.onnx` and `voices/bm_george.bin` are
+      // identified by their directory; `config.json` sits at the repository root, where the
+      // second-to-last segment **is the revision** — so a two-segment tail compares
+      // `main/config.json` against `dd4401a9…/config.json` and never matches. That was a real
+      // failure, and the narrower rule alone could not express it.
+      //
+      // Filenames across everything pinned are distinct, so the one-segment pass is
+      // unambiguous. Most specific first regardless, so a future collision resolves correctly
+      // rather than alphabetically.
+      for (const depth of [2, 1]) {
+        const tail = canonical(url).split('/').slice(-depth).join('/');
+        const match = keys.find((r) => canonical(r.url).endsWith(`/${tail}`));
+        if (match) { hit = await cache.match(match); break; }
       }
     }
     if (hit) return hit;
