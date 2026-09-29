@@ -12,7 +12,7 @@
 // so the model, the tokenizer and the voices come from the cache `weights.js` verified, and a
 // request for anything else throws rather than reaching the network.
 
-import { MODEL_REPO, VOICES_BASE } from './weights.js';
+import { MODEL_REPO, VOICES_BASE, DTYPE } from './weights.js';
 
 /** The warm engine, or a promise for one. Null before first use and after a failure. */
 let session = null;
@@ -59,10 +59,11 @@ async function connect() {
     // falling back to a path-tail comparison.
     voiceURL: VOICES_BASE,
     model: MODEL_REPO,
-    // The variant that was downloaded. HeadTTS's own list does not mention q8f16, but it passes
-    // the value straight to transformers.js, which names model files `model_<dtype>.onnx` —
-    // and q8f16 is what `weights.js` pinned, at 86 MB against 326 MB for fp32.
-    dtypeWebgpu: 'q8f16',
+    // From `weights.js`, so the dtype and the file that was downloaded cannot disagree. They
+    // did: `q8f16` names a real published file but is not a dtype transformers.js recognises,
+    // so it was **ignored rather than rejected** and the 326 MB fp32 default was requested
+    // instead — surfacing three layers away as a refused network request.
+    dtypeWebgpu: DTYPE,
     languages: ['en-us'],
   });
 

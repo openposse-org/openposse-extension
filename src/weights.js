@@ -53,10 +53,19 @@ export const MODEL_REPO = 'onnx-community/Kokoro-82M-v1.0-ONNX-timestamped';
 export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
 
 /**
- * The model: q8f16, the smallest variant that is not visibly degraded.
+ * The model: **q8**, which is the smallest variant the engine can actually ask for.
  *
- * 86 MB against 326 MB for fp32 and 163 MB for fp16. The full-precision model is better and
- * nobody is going to download a third of a gigabyte to hear a joke read out.
+ * Not the smallest variant published. `model_q8f16.onnx` is 86 MB against this one's 92 MB, and
+ * it was pinned here first — but transformers.js 4.0.0 recognises only `fp32 · fp16 · q8 ·
+ * int8 · uint8 · q4 · bnb4 · q4f16`, so `q8f16` was silently ignored and it fell back to
+ * requesting the 326 MB fp32 default. Six megabytes bought a file nothing could load.
+ *
+ * `DTYPE` is exported because `kokoro.js` has to pass the matching name to HeadTTS, and the
+ * test below ties the two together — a filename and a dtype that disagree is a failure at
+ * first use, which is where this one was found.
+ *
+ * 92 MB against 326 for fp32 and 163 for fp16. The full-precision model is better and nobody is
+ * downloading a third of a gigabyte to hear a joke read out.
  *
  * **The hashes are read, not guessed.** They come from HuggingFace's own API, which reports the
  * Git-LFS object id — and an LFS oid *is* the SHA-256 of the file's contents. Cross-checked:
@@ -65,12 +74,23 @@ export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
  *
  * Sizes are exact for the same reason, so a progress bar cannot overshoot.
  */
+export const DTYPE = 'q8';
+
 export const MODEL = {
   id: 'model',
-  url: `${TS_REPO}/${TS_REVISION}/onnx/model_q8f16.onnx`,
-  bytes: 86_072_942,
-  sha256: 'db06e3f12daac36b13638ff6f6c4541241705405dac6d23126a7827dadf4c677',
+  url: `${TS_REPO}/${TS_REVISION}/onnx/model_quantized.onnx`,
+  bytes: 92_361_055,
+  sha256: 'c0c02b3299fd97c34ea92a98e6d41eaa1a739c8f77bf685aac34bd7b34c1132c',
 };
+
+/**
+ * What transformers.js 4.0.0 will accept, read from the bundled build rather than the docs.
+ *
+ * Kept so the test can assert `DTYPE` is one of them. An unrecognised name does not throw — it
+ * is ignored, and the default fp32 model is requested instead, which surfaces as a refused
+ * network request for a file nobody downloaded.
+ */
+export const KNOWN_DTYPES = ['fp32', 'fp16', 'q8', 'int8', 'uint8', 'q4', 'bnb4', 'q4f16'];
 
 /**
  * Six voices, which is more than any plausible roster and about 3 MB.

@@ -14,7 +14,7 @@
 
 import { ALL, weightsStatus } from './weights.js';
 import { hasWebGPU } from './tts.js';
-import { MODEL_REPO, VOICES_BASE } from './weights.js';
+import { MODEL_REPO, VOICES_BASE, DTYPE } from './weights.js';
 
 const steps = document.getElementById('steps');
 
@@ -112,7 +112,7 @@ document.getElementById('run').addEventListener('click', async () => {
       dictionaryURL: chrome.runtime.getURL('dictionaries'),
       voiceURL: VOICES_BASE,
       model: MODEL_REPO,
-      dtypeWebgpu: 'q8f16',
+      dtypeWebgpu: DTYPE,
       languages: ['en-us'],
     });
     const started = performance.now();

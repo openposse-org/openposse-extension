@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  MODEL, VOICES, ALL, TOTAL_BYTES, verify, digest, downloadWeights,
+  MODEL, VOICES, ALL, TOTAL_BYTES, verify, digest, downloadWeights, DTYPE, KNOWN_DTYPES,
 } from '../src/weights.js';
 
 /**
@@ -52,6 +52,23 @@ test('the URLs are pinned to a revision, not to a branch', () => {
     assert.ok(!file.url.includes('/main/'), `${file.id} points at a branch: ${file.url}`);
     assert.match(file.url, /\/resolve\/[0-9a-f]{40}\//, file.id);
   }
+});
+
+test('the dtype and the model file agree, and the dtype is one that exists', () => {
+  // The bug this earns its keep on, found three layers away at first use. `q8f16` names a real
+  // published file — 6 MB smaller — but is not a dtype transformers.js recognises, so it was
+  // **ignored rather than rejected** and the 326 MB fp32 default was requested instead.
+  //
+  // An unrecognised dtype is silent by design, which is why the pairing has to be asserted
+  // here: nothing downstream will ever complain that the two disagree.
+  assert.ok(KNOWN_DTYPES.includes(DTYPE), `${DTYPE} is not a dtype transformers.js accepts`);
+  assert.match(
+    MODEL.url,
+    // transformers.js names the q8 file `model_quantized.onnx`; every other dtype is
+    // `model_<dtype>.onnx`.
+    DTYPE === 'q8' ? /model_quantized\.onnx$/ : new RegExp(`model_${DTYPE}\\.onnx$`),
+    `the pinned file does not match dtype ${DTYPE}`,
+  );
 });
 
 test('six voices, split so accents and genders both survive', () => {

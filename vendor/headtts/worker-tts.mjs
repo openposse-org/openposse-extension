@@ -140,7 +140,22 @@ async function connect() {
     // above refuses, correctly, and which would be remotely hosted code besides. Resolved
     // from this module's own URL rather than through `chrome.runtime`, which is not reliably
     // present in a dedicated worker.
+    //
+    // **This one matters more than it looks.** ONNX Runtime spawns its own worker and uses a
+    // synchronous XMLHttpRequest in its Emscripten glue, and neither goes through the fetch
+    // shim — so this path is the *only* thing keeping the WASM load local.
     env.backends.onnx.wasm.wasmPaths = new URL("../transformers/", import.meta.url).href;
+
+    // **No remote URL is constructed in the first place.** The shim refuses them, but refusing
+    // is the second line: with this, `from_pretrained` builds
+    // `<localModelPath>/<model id>/onnx/...` — a chrome-extension:// URL — and never assembles
+    // a huggingface.co one at all. The shim then serves it from the verified cache.
+    //
+    // Belt and braces on purpose, because the shim turned out not to cover everything: it
+    // replaces `fetch` in *this* worker, and ONNX Runtime's own worker has its own.
+    env.allowRemoteModels = false;
+    env.allowLocalModels = true;
+    env.localModelPath = new URL("../models/", import.meta.url).href;
     // ── end patch ────────────────────────────────────────────────────────────────────────
 
   } catch(error) {

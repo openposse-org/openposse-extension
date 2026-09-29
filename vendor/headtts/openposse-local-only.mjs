@@ -75,12 +75,13 @@ export function installLocalOnlyFetch(self_ = self) {
   self_.fetch = async (input, init) => {
     const url = typeof input === 'string' ? input : input?.url ?? String(input);
 
-    // Our own packaged files — the dictionary, the worker's siblings. Always local, never the
-    // network, and left alone.
-    if (url.startsWith('chrome-extension://') || url.startsWith('blob:') || url.startsWith('data:')) {
-      return original(input, init);
-    }
+    if (url.startsWith('blob:') || url.startsWith('data:')) return original(input, init);
 
+    // **The cache is consulted for extension URLs too**, and that is not belt-and-braces — it
+    // is how the model is found at all now. `env.localModelPath` points transformers.js at a
+    // `chrome-extension://…/vendor/models/` prefix so it never assembles a huggingface.co URL,
+    // and nothing is actually *at* that path: the files are in the cache, keyed by where they
+    // were downloaded from. The tail match below is what bridges the two.
     const cache = await caches.open(CACHE);
     let hit = (await cache.match(url)) ?? (await cache.match(canonical(url)));
 
@@ -110,6 +111,11 @@ export function installLocalOnlyFetch(self_ = self) {
       }
     }
     if (hit) return hit;
+
+    // An extension URL that is not in the cache is one of our own packaged files — the
+    // dictionary, a worker sibling, the WASM. Local by definition, so it goes to the real
+    // fetch; a 404 here is a missing file in the build, not a privacy question.
+    if (url.startsWith('chrome-extension://')) return original(input, init);
 
     // Loud, and specific about which of the two things went wrong, because they need opposite
     // fixes: a file we never downloaded is a setup problem, and a URL we never pinned means the
