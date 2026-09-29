@@ -404,7 +404,11 @@ function watchForReply() {
       if (el.isConnected) continue;
       const sig = busySignature(el);
       if (sig) {
-        vanished.push({ sig, span: (removedAt.get(el) ?? now) - addedSinceSubmit.get(el) });
+        vanished.push({
+          sig,
+          span: (removedAt.get(el) ?? now) - addedSinceSubmit.get(el),
+          fromButton: false,
+        });
       }
       addedSinceSubmit.delete(el);
     }
@@ -413,7 +417,8 @@ function watchForReply() {
     // the answer and do not match now that it is over. Credited with the full window, because
     // a state the control wore and has taken off *is* the vendor describing the whole answer.
     const windowMs = Math.max(1, now - session.submittedAt);
-    vanished.push(...submitStates.finish().map((sig) => ({ sig, span: windowMs })));
+    vanished.push(...submitStates.finish()
+      .map((sig) => ({ sig, span: windowMs, fromButton: true })));
 
     const pool = [...addedSinceSubmit.keys()];
     const reply = chooseReplyElement(pool);
@@ -650,16 +655,41 @@ function watchSubmitState() {
 
   const WATCHED = ['aria-label', 'title', 'data-state', 'aria-disabled', 'disabled', 'role'];
   const seen = new Set();
+  const replacements = new Set();
+  let container = button.element?.parentElement ?? null;
 
   const sample = () => {
     // Re-queried rather than held, because a vendor may swap the node rather than mutate it —
-    // and a detached reference would then report the old state forever.
-    const el = deepQuerySelectorAll(button.css)[0] ?? button.element;
-    if (!el?.getAttribute) return;
-    for (const attr of WATCHED) {
-      const value = el.getAttribute(attr);
-      if (value === null || isGeneratedID(value)) continue;
-      seen.add(`${attr}=${value}`);
+    // and a detached reference would report the old state forever.
+    const el = deepQuerySelectorAll(button.css)[0];
+
+    if (el?.getAttribute) {
+      // Followed as the node is replaced, so the stand-in below is looked for in the right
+      // place even after the composer has re-rendered around it.
+      container = el.parentElement ?? container;
+      for (const attr of WATCHED) {
+        const value = el.getAttribute(attr);
+        if (value === null || isGeneratedID(value)) continue;
+        seen.add(`${attr}=${value}`);
+      }
+      return;
+    }
+
+    // **The send button is not on the page, so something is standing in for it.**
+    //
+    // This is the case the first version could not see, and it is the common one. Measured on
+    // Notion: the control is `data-testid="agent-chat-send-button"` when idle or ready, and
+    // while the model works that element is *replaced* by
+    // `data-testid="agent-chat-stop-button"`. Re-querying the send button's own selector
+    // therefore finds nothing at precisely the moment worth recording, and watching its
+    // attributes change can never work — it is not the same element.
+    //
+    // Whatever occupies its place while it is gone is the vendor saying it is busy.
+    if (!container?.isConnected) return;
+    for (const node of container.querySelectorAll('[data-testid]')) {
+      const id = node.getAttribute('data-testid');
+      if (!id || isGeneratedID(id)) continue;
+      replacements.add(`${node.tagName.toLowerCase()}[data-testid="${CSS.escape(id)}"]`);
     }
   };
 
@@ -679,15 +709,21 @@ function watchSubmitState() {
         if (value !== null) atRest.add(`${attr}=${value}`);
       }
 
-      // Anything worn during the answer and not worn now. Verified against the live page
-      // rather than trusted: a selector that still matches at rest would tell the runtime the
-      // vendor is *always* busy, which is far worse than having no indicator at all.
-      return [...seen]
+      // Anything worn during the answer and not worn now, plus anything that stood in for the
+      // control while it was away.
+      //
+      // Every one is verified against the live page rather than trusted: a selector that still
+      // matches now that the answer is over would tell the runtime the vendor is *permanently*
+      // busy, which is far worse than having no indicator at all — it would turn every future
+      // turn into a wait for the full ceiling.
+      const states = [...seen]
         .filter((pair) => !atRest.has(pair))
         .map((pair) => {
           const [attr, ...rest] = pair.split('=');
           return `${button.css}[${attr}="${CSS.escape(rest.join('='))}"]`;
-        })
+        });
+
+      return [...states, ...replacements]
         .filter((css) => deepQuerySelectorAll(css).length === 0);
     },
   };
@@ -760,7 +796,7 @@ function recordAnswer(element, firstSeenAt, vanished = []) {
   const shared = first.vanished
     .map((a) => {
       const b = second.vanished.find((other) => other.sig === a.sig);
-      return b ? { sig: a.sig, span: Math.min(a.span, b.span) } : null;
+      return b ? { sig: a.sig, span: Math.min(a.span, b.span), fromButton: a.fromButton } : null;
     })
     .filter(Boolean);
 
@@ -773,8 +809,11 @@ function recordAnswer(element, firstSeenAt, vanished = []) {
   // Within a kind, the narrowest wins: a selector carrying a value names the control, while a
   // bare `[attr]` may also match its container — and stopping on a container means calling the
   // answer finished while the spinner inside it is still turning.
-  const fromButton = session.submitButton?.css;
-  const isButton = (sig) => Boolean(fromButton && sig.startsWith(fromButton));
+  // A flag rather than a string test, because the strongest candidate of all does *not* share
+  // the send button's selector: Notion's stop button is a different element in the same place,
+  // and prefix-matching would have ranked the vendor's own "I am working" control below a
+  // random `div` that happened to come and go.
+  const isButton = (candidate) => candidate.fromButton === true;
 
   // **Anything that covered less than half the answer is thrown away, not merely ranked last.**
   // A candidate that was on screen for 300 ms of a four-second answer is not describing that
@@ -783,11 +822,11 @@ function recordAnswer(element, firstSeenAt, vanished = []) {
   // a wrong answer wearing a tick.
   const answerMs = Math.max(1, second.firstSeenAt - session.submittedAt);
   const ranked = shared
-    .filter(({ sig, span }) => isButton(sig) || span >= answerMs * 0.5)
+    .filter((candidate) => isButton(candidate) || candidate.span >= answerMs * 0.5)
     .sort((a, b) => {
       // The vendor's own control first — it says what it is doing, where an element that came
       // and went is only ever an inference about what the page was up to.
-      if (isButton(a.sig) !== isButton(b.sig)) return isButton(b.sig) ? 1 : -1;
+      if (isButton(a) !== isButton(b)) return isButton(b) ? 1 : -1;
       // Then whichever covered more of the answer.
       return b.span - a.span;
     });
@@ -796,9 +835,7 @@ function recordAnswer(element, firstSeenAt, vanished = []) {
   // Which of the two found it, shown on the card. They are not equally trustworthy, so "we have
   // one" is not the whole answer — a button state is the vendor saying what it is doing, and a
   // vanished element is an inference from what the page happened to remove.
-  const busyFrom = busySelector && fromButton && busySelector.startsWith(fromButton)
-    ? 'button'
-    : (busySelector ? 'element' : null);
+  const busyFrom = ranked[0] ? (isButton(ranked[0]) ? 'button' : 'element') : null;
 
   // Timed and measured from the *second* answer, which is the one seen under normal
   // conditions: the first often lands on a freshly opened panel that is still warming up.

@@ -204,7 +204,7 @@ export function captures(draft) {
         // Which signal found it. A send-button state is the vendor saying what it is doing; a
         // vanished element is an inference from what the page happened to remove, and the two
         // deserve different amounts of confidence when one of them turns out to be wrong.
-        kind: draft.reply.busyFrom === 'button' ? 'SEND BUTTON' : 'APPEARS WHILE BUSY',
+        kind: draft.reply.busyFrom === 'button' ? 'THE SEND CONTROL' : 'APPEARS WHILE BUSY',
       }
       : {
         id: 'busy',
