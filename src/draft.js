@@ -249,6 +249,9 @@ export function finish(draft, { triggerMethod }) {
       submitMethod: draft.submitMethod,
       submitSelector: css(draft.submitSelector),
       responseContainerSelector: css(draft.reply.selector),
+      // Already a plain string — it names an element that had left the page when it was
+      // captured, so it never went through `selectorFor` and never had a `.css` to unwrap.
+      busySelector: draft.reply.busySelector ?? null,
       triggerMethod,
       quietPeriodMs: draft.quietPeriodMs,
       responseTimeoutMs: draft.responseTimeoutMs,

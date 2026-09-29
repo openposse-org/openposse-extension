@@ -255,7 +255,10 @@ async function putQuestion(agent, prompt, matched) {
   const vms = result.payload?.ms;
   trace('vendor answered', result.type === 'response'
     ? `${result.payload?.text?.length ?? 0} chars`
-      + (vms ? ` · thinking ${vms.firstRow}ms, settling ${vms.settling}ms over ${vms.passes} passes` : '')
+      + (vms
+        ? ` · thinking ${vms.firstRow}ms, settling ${vms.settling}ms over ${vms.passes} passes`
+        + ` (busy: ${vms.busy ?? 'none'})`
+        : '')
     : (result.payload?.code ?? 'error'));
 
   if (result.type === 'response') {

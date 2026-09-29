@@ -79,6 +79,47 @@ async function openAssistant(recipe) {
  * container after a successful submit usually means the vendor renamed one class — different
  * diagnosis, different fix.
  */
+/**
+ * Follows the element a vendor shows while it is working — a spinner, a "stop generating".
+ *
+ * Polled rather than observed, at 150 ms. A `MutationObserver` would need the whole document
+ * with `subtree`, because the indicator can be anywhere and is usually nowhere near the answer,
+ * and that fires on every keystroke of a streaming reply. One `deepQuerySelectorAll` six times
+ * a second is the cheaper of the two by a wide margin, and it crosses shadow roots, which the
+ * observer would have to be told about one root at a time.
+ *
+ * `settled()` resolves **true only when the indicator was seen and then left.** Never having
+ * seen it is not the same claim: a vendor may show nothing, the recipe may predate this, or the
+ * selector may have drifted — and in all three the honest answer is "I don't know", which is
+ * what the clock is for.
+ */
+function watchBusy(selector, { timeoutMs }) {
+  if (!selector) return { settled: async () => false };
+
+  let seen = false;
+  let gone = false;
+  const startedAt = Date.now();
+
+  const timer = setInterval(() => {
+    if (gone) return;
+    if (deepQuerySelectorAll(selector).length > 0) seen = true;
+    else if (seen) { gone = true; clearInterval(timer); }
+    if (Date.now() - startedAt > timeoutMs) clearInterval(timer);
+  }, 150);
+
+  return {
+    async settled() {
+      // Already over, or never started: answer immediately rather than waiting to be told
+      // something that has already happened.
+      while (!gone && seen && Date.now() - startedAt < timeoutMs) {
+        await new Promise((resolve) => { setTimeout(resolve, 100); });
+      }
+      clearInterval(timer);
+      return gone;
+    },
+  };
+}
+
 async function askAssistant({ recipe, prompt }, emit) {
   // Open the assistant if it is closed, rather than failing.
   //
@@ -230,6 +271,14 @@ async function askAssistant({ recipe, prompt }, emit) {
     return pool[pool.length - 1] ?? null;
   };
 
+  // **Watching the vendor say it is working, from the moment the question goes in.**
+  //
+  // Started here rather than when we come to need it, because by then it may already be over:
+  // the first pass spends a quiet period reading the first row, and a fast answer can have
+  // come and gone inside it. "Never appeared" and "appeared and finished" need opposite
+  // responses, and only something watching the whole time can tell them apart.
+  const busy = watchBusy(recipe.busySelector, { timeoutMs: responseTimeoutMs });
+
   // Timed and returned, not logged. This runs in the vendor's page, so a console line lands in
   // *their* DevTools — which is why "vendor answered +8068ms" could not be split into how much
   // was the model thinking and how much was us waiting out quiet periods.
@@ -285,6 +334,17 @@ async function askAssistant({ recipe, prompt }, emit) {
   //
   // Bounded at three passes. Each ends in a quiet period, so a page that never settles is
   // still held by `responseTimeoutMs` in the wait above rather than by this loop.
+  // **The grace exists only because we could not tell when the vendor had stopped.** Where it
+  // tells us, ask it: if its own indicator has been and gone, nothing further is coming and
+  // there is nothing to wait for. Measured before this, `settling` was a flat ~4 s on every
+  // successful turn, most of it spent discovering that a row which was never going to arrive
+  // had not arrived.
+  //
+  // Falls back to the clock whenever the vendor showed nothing, which is also what every recipe
+  // recorded before this change does — `busySelector` is null in all of them.
+  const finished = await busy.settled();
+  const graceMs = finished ? (recipe.quietPeriodMs ?? 900) : ANSWER_GRACE_MS;
+
   let text = '';
   let readFrom = null;
   for (let pass = 0; pass < 3; pass += 1) {
@@ -312,7 +372,7 @@ async function askAssistant({ recipe, prompt }, emit) {
           // more seconds to reach the panel. That was measured as lag by the person using it,
           // not by a test.
           timeoutMs: Math.min(
-            pass === 1 ? ANSWER_GRACE_MS : (recipe.quietPeriodMs ?? 900),
+            pass === 1 ? graceMs : (recipe.quietPeriodMs ?? 900),
             responseTimeoutMs,
           ),
           settleMs: recipe.quietPeriodMs ?? 900,
@@ -348,7 +408,15 @@ async function askAssistant({ recipe, prompt }, emit) {
     // How long the first row took to appear against how long the re-pick loop then spent. The
     // first is the vendor thinking and is not ours to fix; the second is quiet periods and
     // grace windows, and is entirely ours.
-    ms: { firstRow: firstRowAt - waitedAt, settling: Date.now() - firstRowAt, passes },
+    ms: {
+      firstRow: firstRowAt - waitedAt,
+      settling: Date.now() - firstRowAt,
+      passes,
+      // Which of the three cases decided the settle, because they produce very different
+      // numbers and are otherwise indistinguishable from the outside: the vendor told us it had
+      // finished, it has an indicator we never saw, or it has none recorded at all.
+      busy: finished ? 'watched' : (recipe.busySelector ? 'missed' : 'none'),
+    },
   };
 }
 

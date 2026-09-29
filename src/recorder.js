@@ -21,7 +21,9 @@
 // records one bit — "they submitted with Enter" — with no payload at all.
 
 import { deepQuerySelectorAll, isVisible } from './dom.js';
-import { selectorFor, selectorForBoth, describePair, roleAttributes } from './selector.js';
+import {
+  selectorFor, selectorForBoth, describePair, roleAttributes, isGeneratedID, STABLE_ATTRS,
+} from './selector.js';
 
 /** Text long enough to be an answer rather than a label or a spinner. */
 export const MIN_ANSWER_TEXT = 40;
@@ -352,15 +354,31 @@ function watchForReply() {
     observer.disconnect();
     session.observer = null;
 
+    // **What appeared and then left is the vendor telling us it was busy.**
+    //
+    // These were already being found here and thrown away — an element added after the submit
+    // and gone by the time the page settled is, almost by definition, a "thinking" spinner or a
+    // "stop generating" control. That is the signal the runtime has been missing: without it,
+    // "the answer is finished" is a 2.5 s clock that gets paid on every single turn whether or
+    // not anything was still coming.
+    //
+    // Signatures rather than elements, because by now they are detached: `selectorFor` verifies
+    // a candidate by counting matches, and a element that has left the page matches nothing.
+    // `roleAttributes` names identifying attributes without their values, which is exactly what
+    // survives the element itself — and two exchanges are what make a value unnecessary.
+    const vanished = [];
     for (const el of [...addedSinceSubmit.keys()]) {
-      if (!el.isConnected) addedSinceSubmit.delete(el);
+      if (el.isConnected) continue;
+      const signature = busySignature(el);
+      if (signature) vanished.push(signature);
+      addedSinceSubmit.delete(el);
     }
 
     const pool = [...addedSinceSubmit.keys()];
     const reply = chooseReplyElement(pool);
 
     if (reply) {
-      recordAnswer(reply, addedSinceSubmit.get(reply) ?? Date.now());
+      recordAnswer(reply, addedSinceSubmit.get(reply) ?? Date.now(), vanished);
       return;
     }
 
@@ -554,8 +572,36 @@ function chooseReplyElement(added) {
  * The first answer emits `reply_pending` instead, so the panel can ask for one more rather than
  * looking like it has stopped noticing.
  */
-function recordAnswer(element, firstSeenAt) {
-  session.answers.push({ element, firstSeenAt });
+/**
+ * A CSS selector for an element that is no longer on the page.
+ *
+ * Deliberately **not** `selectorFor`, which proves a candidate by counting how many elements it
+ * matches. That contract is right for everything else here and useless for this one: a busy
+ * indicator is identified precisely by having gone, so it matches nothing at the moment we want
+ * to name it. Correctness comes from the other direction instead — two exchanges have to
+ * produce the same signature, and the runtime re-checks it against a live page before relying
+ * on it.
+ *
+ * A value is used where one is present and looks durable, and dropped otherwise, because
+ * `[data-x]` is a role marker where `[data-x="event_34s3…"]` is one instance of it.
+ */
+function busySignature(el) {
+  const tag = el.tagName?.toLowerCase();
+  if (!tag) return null;
+
+  for (const attr of STABLE_ATTRS) {
+    const value = el.getAttribute?.(attr);
+    if (!value || isGeneratedID(value)) continue;
+    return `${tag}[${attr}="${CSS.escape(value)}"]`;
+  }
+
+  // No usable value: fall back to the presence of a role-ish attribute name.
+  const [name] = roleAttributes(el);
+  return name ? `${tag}[${name}]` : null;
+}
+
+function recordAnswer(element, firstSeenAt, vanished = []) {
+  session.answers.push({ element, firstSeenAt, vanished });
 
   if (session.answers.length < 2) {
     session.emit({ kind: 'reply_pending', repliesSoFar: session.answers.length });
@@ -580,12 +626,26 @@ function recordAnswer(element, firstSeenAt) {
     return;
   }
 
+  // **Two exchanges have to name the same thing.** One vanished element is noise — a tooltip,
+  // a scroll shadow, a re-render — and any page produces several. The one that appeared and
+  // left during *both* answers is the vendor's own busy signal, and the same two-sample
+  // discipline that stops a per-message id being mistaken for the answer container applies
+  // here for the same reason.
+  //
+  // Optional throughout: a vendor that shows nothing while it works simply has no such element,
+  // and the runtime falls back to the quiet period it uses today.
+  const shared = first.vanished.filter((sig) => second.vanished.includes(sig));
+  // The narrowest wins. A selector with a value in it names the control; a bare `[attr]` may
+  // also match its container, and stopping early on a container means calling the answer
+  // finished while the inner spinner is still turning.
+  const busySelector = shared.sort((a, b) => b.length - a.length)[0] ?? null;
+
   // Timed and measured from the *second* answer, which is the one seen under normal
   // conditions: the first often lands on a freshly opened panel that is still warming up.
-  emitReply(selector, second.element, second.firstSeenAt);
+  emitReply(selector, second.element, second.firstSeenAt, busySelector);
 }
 
-function emitReply(selector, element, firstSeenAt) {
+function emitReply(selector, element, firstSeenAt, busySelector = null) {
   const matches = deepQuerySelectorAll(selector.css);
 
   // The check the whole design turns on. `matchesBefore` counts only those matches that were
@@ -616,6 +676,9 @@ function emitReply(selector, element, firstSeenAt) {
       // answer is hundreds of characters, a loading label is tens. Reading the selector alone
       // cannot tell those apart, which is how the 59ms capture looked fine.
       textLength: (element.innerText ?? '').length,
+      // What the vendor showed while it was working, if anything. Null is an ordinary answer,
+      // not a failure — see `recordAnswer`.
+      busySelector,
     },
   });
 }
