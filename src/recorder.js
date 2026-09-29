@@ -656,7 +656,27 @@ function watchSubmitState() {
   const WATCHED = ['aria-label', 'title', 'data-state', 'aria-disabled', 'disabled', 'role'];
   const seen = new Set();
   const replacements = new Set();
-  let container = button.element?.parentElement ?? null;
+
+  /**
+   * Every `data-testid` on the page at the moment the question was sent.
+   *
+   * **A baseline rather than a container reference, and the difference is what went wrong.**
+   * The first version held the send button's parent and scanned inside it. Notion re-renders
+   * the composer row, so that node is detached by the time the swap happens — and it was only
+   * refreshed while the send button was *present*, which is never during the very period worth
+   * watching. The scan silently did nothing for the whole answer.
+   *
+   * A set of strings cannot go stale. Anything wearing a testid that was not on the page when
+   * the question went in has arrived because of the question, and one that arrives while the
+   * send control is away has arrived *in its place*.
+   *
+   * It also excludes the near-miss that kept winning: `agent-service-approval-mode-button` is
+   * in the baseline, because it is present whether or not the agent is working — it was only
+   * ever captured because the node behind it gets swapped.
+   */
+  const baseline = new Set(
+    deepQuerySelectorAll('[data-testid]').map((el) => el.getAttribute('data-testid')),
+  );
 
   const sample = () => {
     // Re-queried rather than held, because a vendor may swap the node rather than mutate it —
@@ -664,9 +684,6 @@ function watchSubmitState() {
     const el = deepQuerySelectorAll(button.css)[0];
 
     if (el?.getAttribute) {
-      // Followed as the node is replaced, so the stand-in below is looked for in the right
-      // place even after the composer has re-rendered around it.
-      container = el.parentElement ?? container;
       for (const attr of WATCHED) {
         const value = el.getAttribute(attr);
         if (value === null || isGeneratedID(value)) continue;
@@ -684,11 +701,12 @@ function watchSubmitState() {
     // therefore finds nothing at precisely the moment worth recording, and watching its
     // attributes change can never work — it is not the same element.
     //
-    // Whatever occupies its place while it is gone is the vendor saying it is busy.
-    if (!container?.isConnected) return;
-    for (const node of container.querySelectorAll('[data-testid]')) {
+    // Whatever is new on the page while it is gone has arrived in its place. Scanned only
+    // during that window, so the cost falls on the seconds an answer takes rather than on
+    // every tick of a recording.
+    for (const node of deepQuerySelectorAll('[data-testid]')) {
       const id = node.getAttribute('data-testid');
-      if (!id || isGeneratedID(id)) continue;
+      if (!id || isGeneratedID(id) || baseline.has(id)) continue;
       replacements.add(`${node.tagName.toLowerCase()}[data-testid="${CSS.escape(id)}"]`);
     }
   };
