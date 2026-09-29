@@ -8,6 +8,7 @@
 import { loadRoster, findAgent, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
 import { FLOOR_MS } from './routing.js';
+import { patternForHost, matchPattern } from './domain.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -170,12 +171,49 @@ el('prompt').addEventListener('keydown', (event) => {
 
 // ── Recording, and the gesture it needs ────────────────────────────────────────────────────
 
+/**
+ * The tab to record, read **when the popup opens** rather than when the button is clicked.
+ *
+ * This is the whole reason recording works. `permissions.request()` needs a user gesture, and a
+ * gesture does not survive an `await` — so `chrome.tabs.query()` inside the click handler
+ * spends it before the request is made, and Chrome refuses with "This function must be called
+ * during a user gesture". It also does **not** transfer through `sendMessage`, so the service
+ * worker cannot make the request on the popup's behalf either; that is why this lives here at
+ * all, and why `chrome.action.onClicked` used to own it before `default_popup` silenced that
+ * event.
+ *
+ * Reading the tab up front leaves the click handler free to call `permissions.request()` as its
+ * very first statement, with nothing awaited in front of it.
+ */
+let recordable = null;
+
+chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+  const host = (() => {
+    try { return new URL(tab?.url ?? '').hostname; } catch { return ''; }
+  })();
+  // Only https. A `chrome://` page, a local file or the Web Store can never be driven, and a
+  // button that starts a flow which cannot finish is worse than one that is plainly disabled.
+  if (!host || !tab?.url?.startsWith('https://')) {
+    el('record').disabled = true;
+    el('record').title = 'This page can’t be recorded';
+    return;
+  }
+  recordable = { tabId: tab.id, pattern: patternForHost(host) };
+});
+
 el('record').addEventListener('click', async () => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab) return;
-  // Sent, not awaited-then-acted-on: the permission request must run while this click is
-  // still the browser's idea of a user gesture, and a round trip would spend it.
-  await chrome.runtime.sendMessage({ kind: 'openposse.record', tabId: tab.id });
+  if (!recordable) return;
+  const { tabId, pattern } = recordable;
+
+  // **First statement, nothing awaited before it.** See `recordable` above.
+  const granted = await chrome.permissions.request({ origins: [matchPattern(pattern)] });
+  if (!granted) {
+    // Declining is an answer, not a failure — the popup simply stays put and says so.
+    el('record').textContent = 'Site access is needed to record';
+    return;
+  }
+
+  await chrome.runtime.sendMessage({ kind: 'openposse.record', tabId, pattern });
   window.close();
 });
 

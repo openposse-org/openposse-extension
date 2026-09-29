@@ -128,6 +128,81 @@ input[type="text"]::placeholder { color: var(--text-faint); }
 }
 .agent .name { font-size: 13.5px; font-weight: 500; }
 .agent .kind { color: var(--text-faint); font-size: 11.5px; }
+.agent .kind.bad { color: var(--error); }
+
+/* Renaming an agent, in Settings, because the orb could not hold focus over a vendor's page.
+   Sits to the right and only looks like a field once you are in it — the roster is a list to
+   read far more often than a form to fill in. */
+.agent .rename {
+  margin-left: auto;
+  width: 132px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  text-align: right;
+}
+.agent .rename:hover { border-color: rgba(255, 255, 255, 0.14); }
+.agent .rename:focus {
+  outline: none;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.34);
+}
+
+/* The voice is always visible, unlike the buttons below: it is a property of the agent that
+   somebody would want to read at a glance, not an action. */
+.agent .voice-pick {
+  margin-left: auto;
+  padding: 4px 7px;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  max-width: 190px;
+}
+.agent .voice-pick:hover { color: var(--text); border-color: rgba(255, 255, 255, 0.3); }
+.agent .rename { margin-left: auto; }
+.agent .voice-pick ~ .tools { margin-left: 0; }
+.agent .voice-pick { margin-left: 8px; }
+
+/* The row's own controls. Quiet until the row is hovered, because a roster is read far more
+   often than it is edited and three buttons per agent would otherwise be the loudest thing on
+   the page. */
+.agent { position: relative; }
+.agent .tools { display: flex; gap: 4px; opacity: 0; transition: opacity 0.12s ease; }
+.agent:hover .tools,
+.agent:focus-within .tools { opacity: 1; }
+
+.agent .ghost {
+  background: transparent;
+  color: var(--text-faint);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  padding: 4px 9px;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.agent .ghost:hover { color: var(--text); border-color: rgba(255, 255, 255, 0.3); }
+.agent .ghost.bad:hover { color: var(--error); border-color: var(--error); }
+.agent .ghost:disabled { opacity: 0.4; cursor: default; }
+
+.agent .recipe {
+  margin: 7px 0 2px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-faint);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 /* ── States ───────────────────────────────────────────────────────────────────────────── */
 

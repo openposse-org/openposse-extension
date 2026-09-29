@@ -195,10 +195,21 @@ if (!globalThis.__openposseOrb) {
       /* Not hit-testable except where it has to be. The page underneath stays usable, which
          matters because the panel sits over someone else's application. */
       pointer-events: none;
-      opacity: 0; transform: translateX(-50%) translateY(8px);
+      /* The --dx/--dy properties are where the panel has been dragged to. Composed into the
+         transform rather than switching to explicit left/top, so the centring and the entry
+         animation keep working and a drag stays a pure offset from where the design put it.
+         (No backticks in this block: the whole stylesheet is a JS template literal.) */
+      opacity: 0;
+      transform: translateX(calc(-50% + var(--dx, 0px))) translateY(calc(8px + var(--dy, 0px)));
       transition: opacity .22s ease, transform .22s cubic-bezier(.22,1,.36,1);
     }
-    .wrap.up { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .wrap.up {
+      opacity: 1;
+      transform: translateX(calc(-50% + var(--dx, 0px))) translateY(var(--dy, 0px));
+    }
+    /* The easing is what makes the panel arrive nicely and what would make it lag a pointer,
+       so it is off for the duration of a drag only. */
+    .wrap.dragging { transition: opacity .22s ease; }
 
     .glass {
       position: relative;
@@ -222,7 +233,13 @@ if (!globalThis.__openposseOrb) {
                   transparent 72%, rgba(255,255,255,.045) 100%);
     }
 
-    header { display: flex; align-items: center; gap: 9px; }
+    /* The title bar is the handle. It opts into hit-testing, which the rest of the card does
+       not — so the page underneath stays usable everywhere except the strip you grab. */
+    header {
+      display: flex; align-items: center; gap: 9px;
+      pointer-events: auto; cursor: grab; user-select: none; touch-action: none;
+    }
+    .wrap.dragging header { cursor: grabbing; }
     .mark {
       width: 19px; height: 19px; border-radius: 6.5px;
       background: linear-gradient(150deg, #0A84FF, #30D158);
@@ -311,6 +328,63 @@ if (!globalThis.__openposseOrb) {
     }
     @keyframes rise { from { opacity: 0; transform: translateY(5px); } }
     .sub { font-size: 12px; color: rgba(235,235,245,.55); margin-top: 4px; }
+
+    /* ── Recording ──────────────────────────────────────────────────────────────────────── */
+    /* The card is the same glass and the same type as a turn; only the contents differ. The
+       person is standing in the vendor's page being coached, and a surface that looked like a
+       different product would read as having left OpenPosse behind. */
+    .coach { padding: 2px 0 4px; }
+    .coach .step {
+      font: 600 9.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .08em; color: rgba(235,235,245,.42); margin-bottom: 10px;
+    }
+    .coach .say { font-size: 14px; line-height: 1.45; color: rgba(255,255,255,.92); }
+    .coach .say.bad { color: #FF453A; }
+    .coach .list { margin-top: 14px; display: flex; flex-direction: column; gap: 7px; }
+    .coach .row { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
+    .coach .row .tick { color: #30D158; font-size: 11px; }
+    .coach .row .tick.none { color: rgba(235,235,245,.35); }
+    .coach .row .detail.none { color: rgba(235,235,245,.42); font-family: inherit; }
+    .coach .row .label { color: rgba(235,235,245,.55); flex: 0 0 92px; }
+    .coach .row .kind {
+      font: 600 8.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .06em; color: rgba(235,235,245,.34); flex: 0 0 auto;
+      align-self: center;
+    }
+    /* **Wraps rather than truncates.** These are the recording's whole output, and the one
+       thing somebody might want to check against their page. An ellipsis put the interesting
+       half of a selector out of reach — and "hover for the rest" is no answer to a screenshot.
+       A taller card is the cheaper cost. */
+    .coach .row .detail {
+      font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: rgba(255,255,255,.75); flex: 1 1 auto;
+      white-space: normal; overflow-wrap: anywhere;
+    }
+    /* A shortcut is something you pressed, not page structure, so it is not a code chip. */
+    .coach .row .detail.keys { font-family: inherit; font-size: 13px; letter-spacing: .12em; }
+    /* **Opted back in.** The wrap is pointer-events: none so the page underneath stays usable,
+       and every interactive part has to say otherwise for itself. Without this the field is
+       visible, looks focusable, and every click lands in the vendor's page behind it — which
+       reads as the panel being frozen rather than as it not being there. */
+    .coach .name { margin-top: 14px; display: flex; gap: 8px; pointer-events: auto; }
+    /* **[hidden] is only a UA rule, so any author display declaration outranks it on origin.**
+       The line above would otherwise leave this row on screen through every step of the
+       recording, offering a name field before there is anything to name. This is the same bug
+       that opened the project — a .mic-fix { display: block } that outranked [hidden] and put
+       an empty red card in the popup — and it is worth a rule per shadow root rather than
+       remembering it each time. */
+    [hidden] { display: none !important; }
+    .coach .name input {
+      flex: 1 1 auto; background: rgba(255,255,255,.08); color: #fff;
+      border: .5px solid rgba(255,255,255,.18); border-radius: 8px;
+      padding: 8px 10px; font: inherit; font-size: 14px; outline: none;
+    }
+    .coach .name input:focus { border-color: rgba(255,255,255,.4); }
+    .coach .name button {
+      background: rgba(255,255,255,.14); color: #fff; border: none; border-radius: 8px;
+      padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 590; cursor: pointer;
+    }
+    .coach .name button:disabled { opacity: .35; cursor: default; }
   `;
 
   const host = document.createElement('div');
@@ -339,6 +413,11 @@ if (!globalThis.__openposseOrb) {
           <div class="status"></div>
         </div>
         <div class="answer"></div>
+        <div class="coach" hidden>
+          <div class="step"></div>
+          <div class="say"></div>
+          <div class="list"></div>
+        </div>
       </div>
     </div>
   `;
@@ -379,11 +458,17 @@ if (!globalThis.__openposseOrb) {
 
   function tick() {
     t += 1;
-    // Eased here rather than smoothed harder at the source: the meter already has the design's
-    // 80 ms attack and 250 ms release, and this only bridges 20 Hz of messages to 60 Hz of
-    // frames. Doing it twice would add lag the person would read as the orb being slow.
-    shown += (target - shown) * 0.25;
-    draw(canvas, t, modeFor(state.phase), state.channel ?? 'none');
+    // **Nothing is drawn while recording**, because the canvas is hidden behind the coaching
+    // card and a recording lasts minutes. Sixty frames a second of an invisible sphere is real
+    // CPU taken from the vendor's own page, at exactly the moment somebody is trying to use it.
+    // The loop itself keeps running so the orb is animating again the instant it reappears.
+    if (state.phase !== 'recording') {
+      // Eased here rather than smoothed harder at the source: the meter already has the
+      // design's 80 ms attack and 250 ms release, and this only bridges 20 Hz of messages to
+      // 60 Hz of frames. Doing it twice would add lag somebody would read as the orb being slow.
+      shown += (target - shown) * 0.25;
+      draw(canvas, t, modeFor(state.phase), state.channel ?? 'none');
+    }
     raf = requestAnimationFrame(tick);
   }
 
@@ -409,6 +494,17 @@ if (!globalThis.__openposseOrb) {
 
   function render() {
     $('.key').textContent = state.shortcut ?? '';
+
+    // **Recording takes the whole card**, because it is a different activity rather than a
+    // different turn state: there is no transcript, no roster to re-route to, and an orb
+    // pulsing at a microphone nobody is speaking into would be an animation pretending to be
+    // an instrument. `renderCoach` returns early for that reason.
+    const recording = state.phase === 'recording';
+    for (const part of ['.orbwrap', '.transcript', '.divider', '.roster', '.answer']) {
+      $(part).hidden = recording;
+    }
+    $('.coach').hidden = !recording;
+    if (recording) return renderCoach();
 
     // Transcript: committed white, the tail the recogniser is still revising dimmed, and a
     // caret only while actually listening.
@@ -479,6 +575,168 @@ if (!globalThis.__openposseOrb) {
       }
     }
   }
+
+  /**
+   * The wizard, drawn from what `coaching.js` decided.
+   *
+   * Nothing here judges anything — the step, the sentence and the tick-list all arrive in the
+   * patch. That is the same split the Mac side had, and the reason it is worth keeping is that
+   * the rules are testable without a window and this is not.
+   */
+  function renderCoach() {
+    const coach = state.coach ?? {};
+
+    $('.coach .step').textContent = coach.label ?? '';
+
+    const say = $('.coach .say');
+    say.textContent = coach.instruction ?? '';
+    say.classList.toggle('bad', coach.bad === true);
+
+    // **Every capture stays on screen once it is made.** Confirmation is the whole reason the
+    // list exists: somebody who cannot see that their shortcut registered will press it again,
+    // and on a toggle the second press closes the assistant and records the wrong thing.
+    const list = $('.coach .list');
+    list.textContent = '';
+    for (const row of coach.captures ?? []) {
+      const el = document.createElement('div');
+      el.className = 'row';
+
+      const tick = document.createElement('span');
+      // A dash rather than a tick for something optional that was not found: a red cross would
+      // say a recording had failed when it has not, and a green tick would claim something we
+      // do not have.
+      tick.className = row.absent ? 'tick none' : 'tick';
+      tick.textContent = row.absent ? '–' : '✓';
+
+      const label = document.createElement('span');
+      label.className = 'label';
+      label.textContent = row.label;
+
+      const detail = document.createElement('span');
+      // Plain type, not the mono face, when it is a sentence rather than page structure.
+      detail.className = `detail${row.isKeys ? ' keys' : ''}${row.absent ? ' none' : ''}`;
+      detail.textContent = row.detail;
+      // The full selector on hover, since the row truncates and a truncated selector is not
+      // something anyone can check.
+      if (!row.isKeys && !row.absent) detail.title = row.detail;
+
+      el.append(tick, label, detail);
+      if (row.kind) {
+        const kind = document.createElement('span');
+        kind.className = 'kind';
+        kind.textContent = row.kind;
+        el.append(kind);
+      }
+      list.append(el);
+    }
+
+  }
+
+  // ── Keeping our clicks to ourselves ─────────────────────────────────────────────────────
+  //
+  // Stopped at `.wrap`, which every interactive part of the panel is inside, so our own
+  // handlers (the orb, the avatars, the header's drag, the name field) have all run by the time
+  // this fires. What it prevents is the event continuing out of the shadow root and into the
+  // vendor's document-level listeners — where "a click landed outside my editor" is answered by
+  // taking focus back, which is exactly what stopped the name field being typed into.
+  //
+  // Bubble phase only, so a vendor listening in the capture phase still sees it. That is not
+  // fixable from here and is why the popup path exists.
+  for (const type of ['pointerdown', 'mousedown', 'mouseup', 'click']) {
+    wrap.addEventListener(type, (event) => event.stopPropagation());
+  }
+
+  // ── Moving it out of the way ────────────────────────────────────────────────────────────
+  //
+  // The panel sits over somebody else's application, and where it sits is sometimes exactly
+  // where they need to look — during a recording especially, since the whole task is reading
+  // and clicking the page underneath.
+  //
+  // The offset is kept in `chrome.storage.local`, which is **ours**: the panel is injected
+  // fresh on every turn, so a position held in a variable would be forgotten between them, and
+  // writing to the page's own `localStorage` would leave our furniture in a vendor's storage.
+  {
+    const header = $('header');
+    let dx = 0;
+    let dy = 0;
+    let grab = null;
+
+    const apply = () => {
+      wrap.style.setProperty('--dx', `${Math.round(dx)}px`);
+      wrap.style.setProperty('--dy', `${Math.round(dy)}px`);
+    };
+
+    /**
+     * Keeps the panel reachable.
+     *
+     * Dragging something entirely off screen is easy and there is no way back — the panel has
+     * no chrome of its own to drag it home by, and a recording in progress would be stranded
+     * with it. So at least a corner stays on screen, measured from where the panel actually is
+     * rather than from where it was designed to be.
+     */
+    const clamp = () => {
+      const rect = wrap.getBoundingClientRect();
+      const width = rect.width || 452;
+      const height = rect.height || 400;
+      const restLeft = (window.innerWidth - width) / 2;
+      const restTop = window.innerHeight - 40 - height;
+      const keep = 80;
+
+      dx = Math.min(Math.max(dx, keep - width - restLeft), window.innerWidth - keep - restLeft);
+      // Upward is bounded by the top of the viewport; downward by keeping the header visible,
+      // since the header is the only part you can grab.
+      dy = Math.min(Math.max(dy, -restTop), window.innerHeight - 48 - restTop);
+    };
+
+    chrome.storage?.local?.get('orbOffset').then(({ orbOffset }) => {
+      if (!orbOffset) return;
+      dx = orbOffset.dx ?? 0;
+      dy = orbOffset.dy ?? 0;
+      clamp();                      // the window may be a different size than last time
+      apply();
+    }).catch(() => { /* no stored position is the normal first case, not a failure */ });
+
+    header.addEventListener('pointerdown', (event) => {
+      grab = { x: event.clientX - dx, y: event.clientY - dy };
+      header.setPointerCapture(event.pointerId);
+      wrap.classList.add('dragging');
+      // Or the gesture starts a text selection across the title, which then drags instead.
+      event.preventDefault();
+    });
+
+    header.addEventListener('pointermove', (event) => {
+      if (!grab) return;
+      dx = event.clientX - grab.x;
+      dy = event.clientY - grab.y;
+      clamp();
+      apply();
+    });
+
+    const release = (event) => {
+      if (!grab) return;
+      grab = null;
+      wrap.classList.remove('dragging');
+      try { header.releasePointerCapture(event.pointerId); } catch { /* already released */ }
+      chrome.storage?.local?.set({ orbOffset: { dx, dy } })
+        .catch((error) => console.warn('[openposse] panel position not saved —', error));
+    };
+
+    header.addEventListener('pointerup', release);
+    header.addEventListener('pointercancel', release);
+  }
+
+  // ── There is no name field here, and that is the design ────────────────────────────────
+  //
+  // There was one, and it could not be typed into. Measured rather than guessed in the end:
+  // the pointer reached it and focus landed, and Notion pulled focus back to its own `body`
+  // within 150 ms, every time. Stopping the click reaching the page helped; taking focus back
+  // helped; neither held.
+  //
+  // **The right reading of that is not "win the fight harder".** A page is entitled to manage
+  // its own focus, every vendor will do it differently, and a recording that cannot finish
+  // without a text field is a recording held hostage by whichever application it was made in.
+  // The recording is complete and verified without a name — so it is saved under the vendor's
+  // product name, and renaming happens in Settings, where nothing can interfere.
 
   // Clicking the orb re-arms listening, per the design. The one control the panel has.
   $('.orbwrap').addEventListener('click', () => {

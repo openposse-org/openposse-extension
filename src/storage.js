@@ -114,6 +114,67 @@ export function isNameTaken(agents, name, exceptID = null) {
  * recipe costs a few kilobytes; an agent whose recipe never landed is a roster entry that
  * routes and then fails — the state `broken` exists to describe, and worth not creating.
  */
+/**
+ * A name nothing else is using, by adding a number rather than refusing.
+ *
+ * Recording ends with an agent that exists, so there is nobody to ask at the moment a
+ * collision happens — a second recording of Notion must not fail because the first is called
+ * Notion. The number is visible and the name is editable, which between them say what happened
+ * without a dialog.
+ */
+export function freeName(agents, wanted) {
+  const base = wanted.trim() || 'Assistant';
+  if (!isNameTaken(agents, base)) return base;
+  for (let n = 2; n < 100; n += 1) {
+    if (!isNameTaken(agents, `${base} ${n}`)) return `${base} ${n}`;
+  }
+  return `${base} ${Date.now()}`;
+}
+
+/**
+ * Gives an agent a voice, or clears it back to being chosen for them.
+ *
+ * An empty `voice` is a real choice rather than a failure to choose: it puts the agent back
+ * under the accent heuristic, which keeps every agent sounding different as the roster changes.
+ * Somebody who picks a voice is opting out of that, and out of it being reconsidered later.
+ */
+export async function setAgentVoice(agentID, voice) {
+  const { agents } = await loadRoster();
+  if (!agents.some((a) => a.id === agentID)) return { ok: false, reason: 'no such agent' };
+
+  await chrome.storage.local.set({
+    [AGENTS_KEY]: agents.map(
+      (a) => (a.id === agentID ? { ...a, voice: voice || null } : a),
+    ),
+  });
+  return { ok: true, voice: voice || null };
+}
+
+/** Renames an agent. The recipe keeps its own copy, so both are updated. */
+export async function renameAgent(agentID, name) {
+  const { agents } = await loadRoster();
+  const agent = agents.find((a) => a.id === agentID);
+  if (!agent) return { ok: false, reason: 'no such agent' };
+
+  const wanted = name.trim();
+  if (!wanted) return { ok: false, reason: 'a name is needed' };
+  if (isNameTaken(agents, wanted, agentID)) return { ok: false, reason: `${wanted} is taken` };
+
+  await chrome.storage.local.set({
+    [AGENTS_KEY]: agents.map((a) => (a.id === agentID ? { ...a, name: wanted } : a)),
+  });
+
+  // `agentName` is denormalised into the recipe, so leaving it would make the two disagree —
+  // and the recipe's copy is what the recorder's own diagnostics read back.
+  if (agent.recipeID) {
+    const key = recipeKey(agent.recipeID);
+    const stored = (await chrome.storage.local.get(key))[key];
+    if (stored) await chrome.storage.local.set({ [key]: { ...stored, agentName: wanted } });
+  }
+
+  return { ok: true, name: wanted };
+}
+
 export async function addAgent({ name, voice, recipe }) {
   const recipeID = newID();
   const stored = { ...recipe, agentName: name };

@@ -79,6 +79,73 @@ async function openAssistant(recipe) {
  * container after a successful submit usually means the vendor renamed one class — different
  * diagnosis, different fix.
  */
+/**
+ * Follows the element a vendor shows while it is working — a spinner, a "stop generating".
+ *
+ * Polled rather than observed, at 150 ms. A `MutationObserver` would need the whole document
+ * with `subtree`, because the indicator can be anywhere and is usually nowhere near the answer,
+ * and that fires on every keystroke of a streaming reply. One `deepQuerySelectorAll` six times
+ * a second is the cheaper of the two by a wide margin, and it crosses shadow roots, which the
+ * observer would have to be told about one root at a time.
+ *
+ * `settled()` resolves **true only when the indicator was seen and then left.** Never having
+ * seen it is not the same claim: a vendor may show nothing, the recipe may predate this, or the
+ * selector may have drifted — and in all three the honest answer is "I don't know", which is
+ * what the clock is for.
+ */
+function watchBusy(selector, { timeoutMs, steadyMs = 900 }) {
+  if (!selector) {
+    return { selector: null, settled: async () => ({ finished: false, waited: 0 }), stop() {} };
+  }
+
+  let seen = false;
+  let gone = false;
+  // **When it went away, not merely that it did.** An answer is not one continuous act: Notion
+  // reports "Working on your request", then "Taking a closer look", and the stop control goes
+  // away *between* those phases. Treating the first disappearance as the end made the settle
+  // fire while a status row was still the newest thing on the page, and that row was read out
+  // as the answer.
+  //
+  // So the control has to be absent and *stay* absent. A gap between phases resets the clock;
+  // only a steady absence counts as finished.
+  let goneSince = null;
+  const startedAt = Date.now();
+
+  const timer = setInterval(() => {
+    if (gone) return;
+    if (deepQuerySelectorAll(selector).length > 0) {
+      seen = true;
+      goneSince = null;
+    } else if (seen) {
+      goneSince ??= Date.now();
+      if (Date.now() - goneSince >= steadyMs) { gone = true; clearInterval(timer); }
+    }
+    if (Date.now() - startedAt > timeoutMs) clearInterval(timer);
+  }, 150);
+
+  return {
+    selector,
+    /**
+     * Whether the vendor has finished — **read, never waited on.**
+     *
+     * The first version blocked here until the indicator cleared, and that was the mistake
+     * that made a recorded vendor worse than an unrecorded one. It sat between reading the
+     * first row and the re-pick loop, so every row that arrived during it was already counted
+     * as "before" by the time the loop took its baseline — and the loop then waited for a
+     * further row that was never coming, breaking with a status row as the answer. Measured:
+     * two passes where the same vendor without an indicator took three and answered correctly.
+     *
+     * An indicator is information about the wait, not a substitute for it. Read at the moment
+     * the loop decides how long to be patient, it can only ever shorten that patience, and it
+     * cannot consume the window the loop needs.
+     */
+    finished() { return gone; },
+    /** Whether it was ever there, so "no indicator" can be told from "still working". */
+    everSeen() { return seen; },
+    stop() { clearInterval(timer); },
+  };
+}
+
 async function askAssistant({ recipe, prompt }, emit) {
   // Open the assistant if it is closed, rather than failing.
   //
@@ -103,7 +170,18 @@ async function askAssistant({ recipe, prompt }, emit) {
       ERROR.timeout,
       recipe.openMethod === 'click'
         ? 'the assistant did not open when its button was clicked'
-        : 'assistant did not open from a synthetic shortcut — needs the app to post a real event',
+        // **The old text here told the user to rely on the Mac app**, which is parked — it
+        // said "needs the app to post a real event", describing a retry path that no longer
+        // exists and cannot be reached. A message naming a fix that is unavailable is worse
+        // than a bare failure: it sends somebody looking for a setting they do not have.
+        //
+        // What is true: some vendors check `isTrusted` and ignore keystrokes that came from a
+        // script, and there is nothing this extension can do about that. Notion is one of
+        // them, and it also offers a button — so the fix is a re-recording that opens it by
+        // clicking, which is exactly what the message now says.
+        : 'this assistant ignores keyboard shortcuts it did not get from a person. '
+          + 'Re-record it from Settings and open the assistant by clicking its button '
+          + 'instead of using the shortcut.',
       { openedBy: null }
     );
   }
@@ -230,6 +308,19 @@ async function askAssistant({ recipe, prompt }, emit) {
     return pool[pool.length - 1] ?? null;
   };
 
+  // **Watching the vendor say it is working, from the moment the question goes in.**
+  //
+  // Started here rather than when we come to need it, because by then it may already be over:
+  // the first pass spends a quiet period reading the first row, and a fast answer can have
+  // come and gone inside it. "Never appeared" and "appeared and finished" need opposite
+  // responses, and only something watching the whole time can tell them apart.
+  // `steadyMs` is the vendor's own measured quiet period, so "it has stopped for as long as it
+  // ever pauses mid-answer" is the test, rather than a number invented here.
+  const busy = watchBusy(recipe.busySelector, {
+    timeoutMs: responseTimeoutMs,
+    steadyMs: recipe.quietPeriodMs ?? 900,
+  });
+
   // Timed and returned, not logged. This runs in the vendor's page, so a console line lands in
   // *their* DevTools — which is why "vendor answered +8068ms" could not be split into how much
   // was the model thinking and how much was us waiting out quiet periods.
@@ -285,6 +376,14 @@ async function askAssistant({ recipe, prompt }, emit) {
   //
   // Bounded at three passes. Each ends in a quiet period, so a page that never settles is
   // still held by `responseTimeoutMs` in the wait above rather than by this loop.
+  // **The grace exists only because we could not tell when the vendor had stopped.** Where it
+  // tells us, ask it: if its own indicator has been and gone, nothing further is coming and
+  // there is nothing to wait for. Measured before this, `settling` was a flat ~4 s on every
+  // successful turn, most of it spent discovering that a row which was never going to arrive
+  // had not arrived.
+  //
+  // **Nothing is awaited here.** The grace is decided inside the loop, from the indicator's
+  // state at the moment each pass begins — see `watchBusy.finished`.
   let text = '';
   let readFrom = null;
   for (let pass = 0; pass < 3; pass += 1) {
@@ -311,8 +410,11 @@ async function askAssistant({ recipe, prompt }, emit) {
           // full ceiling before reporting, so an answer visible in the vendor's tab took ten
           // more seconds to reach the panel. That was measured as lag by the person using it,
           // not by a test.
+          // **The grace only shrinks once the vendor has actually stopped**, read here rather
+          // than waited for earlier. While it is still working, this pass is the one that
+          // catches the answer row, and shortening it is how a status row got spoken instead.
           timeoutMs: Math.min(
-            pass === 1 ? ANSWER_GRACE_MS : (recipe.quietPeriodMs ?? 900),
+            pass === 1 && !busy.finished() ? ANSWER_GRACE_MS : (recipe.quietPeriodMs ?? 900),
             responseTimeoutMs,
           ),
           settleMs: recipe.quietPeriodMs ?? 900,
@@ -335,6 +437,10 @@ async function askAssistant({ recipe, prompt }, emit) {
     });
   }
 
+  // The poll is only useful while a turn is in flight, and a turn that ended without stopping
+  // it would leave one running every 150 ms for the life of the page.
+  busy.stop();
+
   // Transport diagnostics, not content: how many reply elements existed before and after.
   // Without these, "Andy answered" and "Andy re-read the previous answer" are the same
   // observation — the text alone cannot distinguish them, especially when the question is
@@ -348,7 +454,21 @@ async function askAssistant({ recipe, prompt }, emit) {
     // How long the first row took to appear against how long the re-pick loop then spent. The
     // first is the vendor thinking and is not ours to fix; the second is quiet periods and
     // grace windows, and is entirely ours.
-    ms: { firstRow: firstRowAt - waitedAt, settling: Date.now() - firstRowAt, passes },
+    ms: {
+      firstRow: firstRowAt - waitedAt,
+      settling: Date.now() - firstRowAt,
+      passes,
+      // Which of the three cases decided the settle, because they produce very different
+      // numbers and are otherwise indistinguishable from the outside: the vendor told us it had
+      // finished, it has an indicator we never saw, or it has none recorded at all.
+      // The selector is included when it did not work, because "there is an indicator recorded
+      // and it never cleared" is only actionable if you can see which element was recorded.
+      busy: !recipe.busySelector
+        ? 'none'
+        : (busy.finished()
+          ? 'watched'
+          : `never cleared: ${recipe.busySelector}`),
+    },
   };
 }
 
@@ -381,12 +501,13 @@ async function invokeViaShortcut({ recipe }) {
 
   const input = await waitForElement(recipe.inputSelector, { timeoutMs: 3000 });
   if (!input) {
-    // For a shortcut this is very likely `isTrusted: false` being rejected. Say so truthfully
-    // and stop — the app owns the CGEventPost fallback, and the extension cannot post a
-    // trusted event at all.
+    // For a shortcut this is very likely `isTrusted: false` being rejected. There is no
+    // fallback: the `CGEventPost` retry belonged to the Mac app, which is parked, and nothing
+    // in a browser can post a trusted event. So the honest remedy is a different recording.
     return failure(ERROR.timeout, recipe.openMethod === 'click'
       ? 'the assistant did not open when its button was clicked'
-      : 'assistant did not open from a synthetic shortcut');
+      : 'this assistant ignores keyboard shortcuts it did not get from a person — '
+        + 'record it again, opening the assistant by clicking its button');
   }
   return { ok: true, openedBy };
 }

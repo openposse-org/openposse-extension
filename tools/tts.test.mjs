@@ -89,6 +89,48 @@ test('an agent with no stored voice gets an American one', () => {
   assert.equal(KOKORO_VOICES.find((v) => v.id === chosen).lang, 'en-US');
 });
 
+test('a voice somebody chose is kept, and the rest fill in around it', () => {
+  // **The failure this prevents is silent and delayed.** The assignment hands out distinct
+  // voices so no two agents sound alike, and left to itself it would reassign on every roster
+  // change — so the agent you deliberately gave a voice to acquires a different one because
+  // somebody else was recorded, days later, with nothing to connect cause to effect.
+  const agents = [
+    { id: 'first', voice: null },
+    { id: 'chosen', voice: 'bm_george' },
+    { id: 'third', voice: null },
+  ];
+
+  const got = assignKokoroVoices(agents);
+  assert.equal(got.get('chosen'), 'bm_george');
+  // Still all different: an explicit choice is taken out of the pool rather than ignored by it.
+  assert.equal(new Set(got.values()).size, 3);
+  assert.notEqual(got.get('first'), 'bm_george');
+  assert.notEqual(got.get('third'), 'bm_george');
+});
+
+test('a chosen voice survives an agent being added before it', () => {
+  // The same rule stated as the thing a user would actually notice.
+  const before = assignKokoroVoices([{ id: 'a', voice: 'bf_emma' }]).get('a');
+  const after = assignKokoroVoices([
+    { id: 'new', voice: null }, { id: 'a', voice: 'bf_emma' },
+  ]).get('a');
+  assert.equal(before, 'bf_emma');
+  assert.equal(after, 'bf_emma');
+});
+
+test('a voice that is not installed is not handed out', () => {
+  // All 28 ship today, so this guards a rule rather than a current fact — and the rule is what
+  // was broken when they were six: the heuristic must stay inside the list it was handed, never
+  // reaching for its own default. Assigning a voice that is not on disk fails at the first
+  // answer, three layers from anything that could explain it.
+  const installed = [{ id: 'bm_george', lang: 'en-GB' }, { id: 'af_heart', lang: 'en-US' }];
+  const agents = [{ id: '1' }, { id: '2' }, { id: '3', voice: 'bf_isabella' }];
+
+  for (const chosen of assignKokoroVoices(agents, installed).values()) {
+    assert.ok(installed.some((v) => v.id === chosen), `${chosen} is not installed`);
+  }
+});
+
 test('more agents than voices collide rather than falling silent', () => {
   const two = [{ id: 'a', lang: 'en-US' }, { id: 'b', lang: 'en-GB' }];
   const agents = [{ id: '1' }, { id: '2' }, { id: '3' }];
@@ -100,6 +142,10 @@ test('the voice list is the published Apache-2.0 set', () => {
   // 28 voices, which is what the plan's licence work was done against. A list that has quietly
   // grown means somebody added voices from somewhere else, and where they came from is the
   // whole question.
+  //
+  // This is now derived from `weights.js` rather than written out here, so what it really
+  // guards is that nothing was added to the *download manifest* from outside the published set.
+  // That is the same question asked one layer closer to where the answer would be wrong.
   assert.equal(KOKORO_VOICES.length, 28);
   assert.ok(KOKORO_VOICES.every((v) => /^[ab][fm]_[a-z]+$/.test(v.id)), 'naming is <accent><gender>_<name>');
   assert.ok(KOKORO_VOICES.some((v) => v.lang === 'en-GB'));

@@ -226,21 +226,28 @@ async function refreshEngine() {
 const mb = (bytes) => `${Math.round(bytes / 1e6)} MB`;
 
 async function refreshWeights() {
-  const { state, have, want } = await weightsStatus();
+  const { state, have, want, core, missingBytes } = await weightsStatus();
   const done = state === 'ready';
   el('weights-size').textContent = mb(TOTAL_BYTES);
 
   el('drop-weights').hidden = !have;
   el('get-weights').hidden = done;
-  el('get-weights').textContent = state === 'partial' ? 'Resume' : 'Download';
+  // **"Resume" is wrong for an install that grew.** Nothing stopped: the voice set went from
+  // six to 28, so a complete install is now short some files it never had. `core` distinguishes
+  // the two, and the word has to follow — "Resume" and "interrupted" send somebody looking for
+  // a failure that did not happen.
+  const extending = state === 'partial' && core;
+  el('get-weights').textContent = extending ? 'Add them' : state === 'partial' ? 'Resume' : 'Download';
   // Says what is on disk, and nothing about whether it is being used — the engine line above
   // owns that, and this claiming "used whenever WebGPU is available" directly contradicted it
   // while the engine was still unbuilt. One fact, one place.
   setStatus('weights-status', done
     ? `installed — ${want} files, verified`
-    : state === 'partial'
-      ? `${have} of ${want} files — interrupted`
-      : `not downloaded · ${mb(TOTAL_BYTES)}`);
+    : extending
+      ? `${want - have} more voices available · ${mb(missingBytes)}`
+      : state === 'partial'
+        ? `${have} of ${want} files — interrupted`
+        : `not downloaded · ${mb(TOTAL_BYTES)}`);
   markDone('step-weights', done);
   return state;
 }
@@ -337,6 +344,21 @@ function describeVoice(id) {
   };
 }
 
+/**
+ * The four accent groups, in the order they are offered.
+ *
+ * Fixed here rather than derived from `VOICES`, whose order is the *assignment* order and puts
+ * the six original voices first so nobody's agent changes voice — see the note on `VOICES`.
+ * Reading that order into the UI would produce four groups interleaved by history.
+ */
+const VOICE_GROUPS = ['British female', 'British male', 'American female', 'American male'];
+
+/** Every voice in one accent group, by name, because that is how somebody scans 28 of them. */
+const voicesIn = (accent) => VOICES
+  .map(({ id }) => ({ id, ...describeVoice(id) }))
+  .filter((v) => v.accent === accent)
+  .sort((a, b) => a.name.localeCompare(b.name));
+
 async function refreshVoices() {
   const ready = (await weightsStatus()).state === 'ready';
   el('voices-section').hidden = !ready;
@@ -349,47 +371,61 @@ async function refreshVoices() {
   const list = el('voice-list');
   list.textContent = '';
 
-  for (const { id } of VOICES) {
-    const { name, accent } = describeVoice(id);
-    const row = document.createElement('div');
-    row.className = 'voice';
+  // Grouped, because 28 rows of "Play" with the accent repeated on every one is a wall. The
+  // heading carries the accent, so the row's second line is free to carry a failure instead —
+  // which is what it is really for.
+  for (const accent of VOICE_GROUPS) {
+    const voices = voicesIn(accent);
+    if (voices.length === 0) continue;
 
-    const label = document.createElement('div');
-    label.className = 'name';
-    label.textContent = name;
-    const sub = document.createElement('div');
-    sub.className = 'accent';
-    sub.textContent = accent;
+    const heading = document.createElement('div');
+    heading.className = 'voice-group';
+    heading.textContent = accent;
+    list.append(heading);
 
-    const play = document.createElement('button');
-    play.className = 'secondary';
-    play.textContent = 'Play';
-    play.addEventListener('click', async () => {
-      // Every button disabled, not just this one: two voices over each other tells you nothing
-      // about either, and the engine speaks one utterance at a time anyway.
-      const buttons = [...list.querySelectorAll('button')];
-      for (const b of buttons) b.disabled = true;
-      play.textContent = 'Loading…';
-
-      const result = await speakWithKokoro(sample(), id);
-      // The same breakdown the turn logs, because this page is where a voice gets judged and
-      // "it played and I heard nothing" needs the same two numbers to be answerable here.
-      const m = result.ms ?? {};
-      console.info(`[openposse] voice ${id} · first word ${m.firstWord ?? '?'}ms · `
-        + `synth ${m.synth ?? '?'}ms → ${m.audio ?? '?'}ms `
-        + `audio in ${m.chunks ?? '?'} chunks at ${m.rate ?? '?'}Hz · peak ${m.peak ?? '?'} · `
-        + `spoke ${m.play ?? '?'}ms${result.ok ? '' : ` · ${result.reason}`}`);
-      if (!result.ok) {
-        sub.textContent = result.reason;
-        sub.style.color = 'var(--error)';
-      }
-      play.textContent = 'Play';
-      for (const b of buttons) b.disabled = false;
-    });
-
-    row.append(label, sub, play);
-    list.append(row);
+    for (const { id, name } of voices) renderVoice(list, id, name);
   }
+}
+
+/** One row of the try-it list: a name, a line for whatever goes wrong, and a Play button. */
+function renderVoice(list, id, name) {
+  const row = document.createElement('div');
+  row.className = 'voice';
+
+  const label = document.createElement('div');
+  label.className = 'name';
+  label.textContent = name;
+  const sub = document.createElement('div');
+  sub.className = 'accent';
+
+  const play = document.createElement('button');
+  play.className = 'secondary';
+  play.textContent = 'Play';
+  play.addEventListener('click', async () => {
+    // Every button disabled, not just this one: two voices over each other tells you nothing
+    // about either, and the engine speaks one utterance at a time anyway.
+    const buttons = [...list.querySelectorAll('button')];
+    for (const b of buttons) b.disabled = true;
+    play.textContent = 'Loading…';
+
+    const result = await speakWithKokoro(sample(), id);
+    // The same breakdown the turn logs, because this page is where a voice gets judged and
+    // "it played and I heard nothing" needs the same two numbers to be answerable here.
+    const m = result.ms ?? {};
+    console.info(`[openposse] voice ${id} · first word ${m.firstWord ?? '?'}ms · `
+      + `synth ${m.synth ?? '?'}ms → ${m.audio ?? '?'}ms `
+      + `audio in ${m.chunks ?? '?'} chunks at ${m.rate ?? '?'}Hz · peak ${m.peak ?? '?'} · `
+      + `spoke ${m.play ?? '?'}ms${result.ok ? '' : ` · ${result.reason}`}`);
+    if (!result.ok) {
+      sub.textContent = result.reason;
+      sub.style.color = 'var(--error)';
+    }
+    play.textContent = 'Play';
+    for (const b of buttons) b.disabled = false;
+  });
+
+  row.append(label, sub, play);
+  list.append(row);
 }
 
 // ── Roster ─────────────────────────────────────────────────────────────────────────────────
@@ -435,8 +471,207 @@ async function refreshRoster() {
 
     text.append(name, kind);
     row.append(avatar, text);
+
+    // ── Renaming lives here, and that is deliberate ────────────────────────────────────
+    //
+    // Recording used to end with a name field in the orb, over the vendor's page. It could not
+    // be typed into: a page manages its own focus, and Notion takes it straight back. Rather
+    // than fight that per vendor forever, a recording now saves itself under the vendor's
+    // product name and the name becomes an edit — here, in our own page, where nothing
+    // competes for the keyboard.
+    //
+    // A plain input rather than a dialog: there is one field and it already shows the current
+    // value, so a modal would add a step to confirm something the user can already see.
+    const rename = document.createElement('input');
+    rename.type = 'text';
+    rename.className = 'rename';
+    rename.value = agent.name;
+    rename.maxLength = 24;
+    rename.setAttribute('aria-label', `Rename ${agent.name}`);
+
+    const problemLine = document.createElement('div');
+    problemLine.className = 'kind bad';
+    problemLine.hidden = true;
+
+    const commit = async () => {
+      const wanted = rename.value.trim();
+      if (!wanted || wanted === agent.name) { rename.value = agent.name; return; }
+
+      const result = await chrome.runtime
+        .sendMessage({ kind: 'openposse.agent.rename', agentId: agent.id, name: wanted })
+        .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+
+      if (!result?.ok) {
+        // A rename that did not happen must not look like one that did — the roster is what
+        // the user says out loud, so believing a stale name means addressing an agent that
+        // does not answer.
+        problemLine.textContent = result?.reason ?? 'could not rename';
+        problemLine.hidden = false;
+        rename.value = agent.name;
+        return;
+      }
+      await refreshRoster();
+    };
+
+    rename.addEventListener('blur', commit);
+    rename.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') rename.blur();
+      // Escape puts back what was there, so a half-typed name is not committed by clicking away.
+      if (event.key === 'Escape') { rename.value = agent.name; rename.blur(); }
+    });
+
+    // ── Its voice ──────────────────────────────────────────────────────────────────────
+    //
+    // **Only the voices that are actually downloaded**, because offering one that is not on
+    // disk would fail at the first answer, three layers from anything that could explain it.
+    // Empty is a real choice rather than an absence: it hands the agent back to the accent
+    // heuristic, which keeps every agent sounding different as the roster grows.
+    //
+    // Grouped by accent now that there are 28 of them. A flat list of six was a list; a flat
+    // list of 28 is a search, and the first thing anyone narrows by is whether they want a
+    // British voice or an American one.
+    const voice = document.createElement('select');
+    voice.className = 'voice-pick';
+    voice.setAttribute('aria-label', `Voice for ${agent.name}`);
+
+    const auto = document.createElement('option');
+    auto.value = '';
+    auto.textContent = 'Chosen for me';
+    voice.append(auto);
+
+    for (const accent of VOICE_GROUPS) {
+      const group = document.createElement('optgroup');
+      group.label = accent;
+      for (const { id, name } of voicesIn(accent)) {
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = name;
+        group.append(option);
+      }
+      voice.append(group);
+    }
+    voice.value = VOICES.some((v) => v.id === agent.voice) ? agent.voice : '';
+
+    voice.addEventListener('change', async () => {
+      const result = await chrome.runtime
+        .sendMessage({ kind: 'openposse.agent.voice', agentId: agent.id, voice: voice.value })
+        .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+
+      if (!result?.ok) {
+        problemLine.textContent = result?.reason ?? 'could not set that voice';
+        problemLine.className = 'kind bad';
+        problemLine.hidden = false;
+        return;
+      }
+      // Spoken back rather than only saved. A voice is the one setting here you cannot judge
+      // by reading, and hearing it immediately is the difference between choosing and guessing.
+      if (voice.value) speakWithKokoro(sample(), voice.value).catch(() => {});
+    });
+
+    // ── What it captured, re-recording, and removing ───────────────────────────────────
+    const tools = document.createElement('div');
+    tools.className = 'tools';
+
+    const say = (message, bad = false) => {
+      problemLine.textContent = message;
+      problemLine.className = bad ? 'kind bad' : 'kind';
+      problemLine.hidden = false;
+    };
+
+    // **See** — the recipe as the runtime will read it, not a reconstruction of it.
+    const details = document.createElement('pre');
+    details.className = 'recipe';
+    details.hidden = true;
+
+    const see = document.createElement('button');
+    see.className = 'ghost';
+    see.textContent = 'See';
+    see.addEventListener('click', async () => {
+      if (!details.hidden) { details.hidden = true; see.textContent = 'See'; return; }
+
+      const result = await chrome.runtime
+        .sendMessage({ kind: 'openposse.agent.recipe', agentId: agent.id })
+        .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+
+      if (!result?.ok || !result.recipe) {
+        say(result?.reason ?? 'its recipe is missing', true);
+        return;
+      }
+      details.textContent = describeRecipe(result.recipe);
+      details.hidden = false;
+      see.textContent = 'Hide';
+    });
+
+    // **Re-record** — same wizard, keeping this agent's name and voice.
+    const again = document.createElement('button');
+    again.className = 'ghost';
+    again.textContent = 'Re-record';
+    again.addEventListener('click', async () => {
+      again.disabled = true;
+      say('opening the page…');
+      const result = await chrome.runtime
+        .sendMessage({ kind: 'openposse.agent.rerecord', agentId: agent.id })
+        .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+
+      again.disabled = false;
+      if (!result?.ok) { say(result?.reason ?? 'could not start', true); return; }
+      say('recording — the panel is on that tab now');
+    });
+
+    // **Delete** — confirmed in place. A dialog would be a second surface to build and would
+    // still be a yes/no; turning the button itself into the confirmation keeps the question
+    // attached to the row it is about, so there is no chance of confirming the wrong one.
+    const remove = document.createElement('button');
+    remove.className = 'ghost bad';
+    remove.textContent = 'Delete';
+    let armed = false;
+    remove.addEventListener('click', async () => {
+      if (!armed) {
+        armed = true;
+        remove.textContent = 'Sure?';
+        // Disarms itself, so a stray click cannot leave a loaded button waiting for the next one.
+        setTimeout(() => { armed = false; remove.textContent = 'Delete'; }, 4000);
+        return;
+      }
+      const result = await chrome.runtime
+        .sendMessage({ kind: 'openposse.agent.remove', agentId: agent.id })
+        .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+
+      if (!result?.ok) { say(result?.reason ?? 'could not delete', true); return; }
+      await refreshRoster();
+    });
+
+    tools.append(see, again, remove);
+    text.append(problemLine, details);
+    row.append(rename, voice, tools);
     target.append(row);
   }
+}
+
+/**
+ * A recipe as something a person can read.
+ *
+ * Every field, including the ones that are null: "there is no busy indicator" is a fact about
+ * this recording worth seeing, and a list that silently omits what it does not have cannot be
+ * used to check anything.
+ */
+function describeRecipe(recipe) {
+  const rows = [
+    ['site', recipe.domainPattern],
+    ['opens with', recipe.openMethod === 'shortcut'
+      ? [recipe.shortcut?.metaKey && '⌘', recipe.shortcut?.ctrlKey && '⌃',
+        recipe.shortcut?.altKey && '⌥', recipe.shortcut?.shiftKey && '⇧',
+        recipe.shortcut?.key?.toUpperCase()].filter(Boolean).join(' ')
+      : recipe.openSelector],
+    ['message box', recipe.inputSelector],
+    ['sends with', recipe.submitMethod === 'enterKey' ? '↩ Enter' : recipe.submitSelector],
+    ['answer appears', recipe.responseContainerSelector],
+    ['knows when done', recipe.busySelector ?? '— none, so a timer is used'],
+    ['quiet period', `${recipe.quietPeriodMs ?? 900} ms`],
+    ['gives up after', `${Math.round((recipe.responseTimeoutMs ?? 60000) / 1000)} s`],
+  ];
+  const width = Math.max(...rows.map(([label]) => label.length));
+  return rows.map(([label, value]) => `${label.padEnd(width)}  ${value ?? '—'}`).join('\n');
 }
 
 // ── Start ──────────────────────────────────────────────────────────────────────────────────

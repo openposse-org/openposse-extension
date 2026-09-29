@@ -21,7 +21,9 @@
 // records one bit — "they submitted with Enter" — with no payload at all.
 
 import { deepQuerySelectorAll, isVisible } from './dom.js';
-import { selectorFor, selectorForBoth, describePair, roleAttributes } from './selector.js';
+import {
+  selectorFor, selectorForBoth, describePair, roleAttributes, isGeneratedID, STABLE_ATTRS,
+} from './selector.js';
 
 /** Text long enough to be an answer rather than a label or a spinner. */
 export const MIN_ANSWER_TEXT = 40;
@@ -55,11 +57,75 @@ let session = null;
  *
  * `emit` receives `RecordingEvent`-shaped objects (`Sources/OpenPosseShared/Recording.swift`).
  */
+/**
+ * Says what the recorder just captured, in the console of the page being recorded.
+ *
+ * **Here rather than in the service worker**, and not as a second-best. This code runs in the
+ * vendor's page, so this is its own console — the same window the person recording already has
+ * open, and one that does not vanish when an idle service worker is terminated. A recording is
+ * minutes long with no traffic of ours, which is exactly the condition MV3 kills a worker in,
+ * and its DevTools detaches with it.
+ *
+ * **Event kinds, selectors and counts only — never page text.** `CLAUDE.md` puts it as "log
+ * event types and error codes only", and a recorder is the one place that rule is easy to
+ * break: the thing being captured is somebody's own question to their own assistant.
+ */
+function note(what, detail) {
+  if (detail === undefined) console.info(`[openposse] recording: ${what}`);
+  else console.info(`[openposse] recording: ${what}`, detail);
+}
+
+/** The parts of a capture worth reading, with nothing in them that came from the page's text. */
+function summarise(event) {
+  switch (event.kind) {
+    case 'armed':
+      return { assistantAlreadyOpen: event.alreadyOpen };
+    case 'open':
+      return event.openMethod === 'shortcut'
+        ? { by: 'shortcut', keys: keyDescription(event.shortcut) }
+        : { by: 'click', control: event.selector?.css };
+    case 'input':
+      return { box: event.selector?.css };
+    case 'submit':
+      return { by: event.submitMethod, button: event.selector?.css };
+    case 'reply_pending':
+      return {
+        answersSoFar: event.repliesSoFar,
+        ...(event.noCommonSelector ? { problem: 'no selector described both answers' } : {}),
+        ...(event.noAnswerFound ? { problem: 'nothing on the page looked like an answer' } : {}),
+        ...(event.shape ? { shape: event.shape } : {}),
+      };
+    case 'reply':
+      return {
+        answer: event.reply?.selector?.css,
+        matches: `${event.reply?.matchesBefore} → ${event.reply?.matchesAfter}`,
+        tookMs: event.reply?.elapsedMs,
+        // The characters, never the characters themselves.
+        answerLength: event.reply?.textLength,
+        knowsWhenDone: event.reply?.busySelector ?? 'nothing found — a timer will be used',
+        foundBy: event.reply?.busyFrom ?? 'n/a',
+      };
+    default:
+      return undefined;
+  }
+}
+
+function keyDescription(shortcut) {
+  if (!shortcut) return '';
+  return [shortcut.ctrlKey && '⌃', shortcut.altKey && '⌥', shortcut.shiftKey && '⇧',
+    shortcut.metaKey && '⌘', shortcut.key?.toUpperCase()].filter(Boolean).join(' ');
+}
+
 export function arm({ emit }) {
   disarm();
+  note('armed — watching this page');
 
   session = {
-    emit,
+    emit: (event) => {
+      // Logged as it goes out, so what the panel shows and what the console says cannot drift.
+      note(event.kind, summarise(event));
+      emit(event);
+    },
     input: null,
     opened: false,
     /// The most recent click, so a composer that appears just after one can be attributed to
@@ -296,7 +362,12 @@ function armSubmit() {
     // buttons and emoji pickers all live there.
     if (session.input.contains(button)) return;
 
-    onSubmitted({ kind: 'submit', submitMethod: 'click', selector: selectorFor(button) });
+    const selector = selectorFor(button);
+    // Kept so the reply window can watch it change. A send control usually cycles
+    // enabled → stop → enabled across one answer, which is the vendor saying when it is
+    // working — see `watchSubmitState`.
+    session.submitButton = { element: button, css: selector.css };
+    onSubmitted({ kind: 'submit', submitMethod: 'click', selector });
   };
 
   // Enter, and only Enter. One key, one bit, no payload — see the privacy note at the top.
@@ -343,7 +414,22 @@ function watchForReply() {
   // The timestamp is what `elapsedMs` reports: when the chosen element *appeared*, which is
   // what the runtime's `waitForNewMatch` actually waits for — not when the answer finished.
   const addedSinceSubmit = new Map();
+  // When each of them left, so how long it was on screen can be measured. That span is what
+  // separates a vendor's "working" indicator from the churn around it — see `decide`.
+  const removedAt = new Map();
   let settleTimer = null;
+
+  // **The send button is the better signal, and it was invisible to the one above.**
+  //
+  // A vendor's "working" state is usually not a new element at all: the send control changes —
+  // enabled, then a stop button, then enabled again. Nothing appears and nothing leaves, so
+  // watching for a vanishing element finds nothing and reports "nothing to watch", which is
+  // what Notion did.
+  //
+  // Both reduce to the same thing for the runtime, which is why this needs no new concept:
+  // a selector that matches while the vendor is busy and stops matching when it is done.
+  // `div[data-testid="send"][aria-label="Stop"]` behaves exactly like a spinner that goes away.
+  const submitStates = watchSubmitState();
 
   const decide = () => {
     clearTimeout(settleTimer);
@@ -352,15 +438,71 @@ function watchForReply() {
     observer.disconnect();
     session.observer = null;
 
+    // **What appeared and then left is the vendor telling us it was busy.**
+    //
+    // These were already being found here and thrown away — an element added after the submit
+    // and gone by the time the page settled is, almost by definition, a "thinking" spinner or a
+    // "stop generating" control. That is the signal the runtime has been missing: without it,
+    // "the answer is finished" is a 2.5 s clock that gets paid on every single turn whether or
+    // not anything was still coming.
+    //
+    // Signatures rather than elements, because by now they are detached: `selectorFor` verifies
+    // a candidate by counting matches, and a element that has left the page matches nothing.
+    // `roleAttributes` names identifying attributes without their values, which is exactly what
+    // survives the element itself — and two exchanges are what make a value unnecessary.
+    // **How long it was on screen is what tells a busy indicator from the churn around it.**
+    //
+    // A spinner or a stop button exists from the question until the answer: it spans nearly the
+    // whole window. A composer that re-renders produces an element that lives for a few
+    // hundred milliseconds and is replaced by an identical one — which looks the same to a
+    // "did it appear and leave?" test and is not an indicator at all.
+    //
+    // Notion produced exactly that: `agent-service-approval-mode-button`, a control that is
+    // present whether or not it is working, captured because the node behind it was swapped.
+    // Ranking by selector length picked it over anything else, which was never a reason for
+    // preferring one element over an unrelated one — that tiebreak was about a container
+    // versus its child and had no business deciding this.
+    const now = Date.now();
+    const vanished = [];
     for (const el of [...addedSinceSubmit.keys()]) {
-      if (!el.isConnected) addedSinceSubmit.delete(el);
+      if (el.isConnected) continue;
+      const sig = busySignature(el);
+      if (sig) {
+        vanished.push({
+          sig,
+          span: (removedAt.get(el) ?? now) - addedSinceSubmit.get(el),
+          fromButton: false,
+        });
+      }
+      addedSinceSubmit.delete(el);
     }
+
+    // The send button's own transitions, in the same currency: selectors that matched during
+    // the answer and do not match now that it is over. Credited with the full window, because
+    // a state the control wore and has taken off *is* the vendor describing the whole answer.
+    const windowMs = Math.max(1, now - session.submittedAt);
+    vanished.push(...submitStates.finish()
+      .map((sig) => ({ sig, span: windowMs, fromButton: true })));
+
+    // **Everything that was considered, not only what was chosen.** Four attempts at this
+    // capture were spent reasoning about why a mechanism found nothing, when the list it built
+    // would have said so immediately. A candidate is only recorded if both exchanges produce
+    // it, so a selector appearing here once and not in the recipe is the ordinary case rather
+    // than a fault — and an empty list on both exchanges is the answer to "why is there no
+    // indicator?".
+    note('busy candidates', vanished.length === 0
+      ? 'none — nothing appeared and left during this answer'
+      : vanished.map(({ sig, span, fromButton }) => ({
+        selector: sig,
+        onScreenMs: span,
+        from: fromButton ? 'the send control' : 'appeared while busy',
+      })));
 
     const pool = [...addedSinceSubmit.keys()];
     const reply = chooseReplyElement(pool);
 
     if (reply) {
-      recordAnswer(reply, addedSinceSubmit.get(reply) ?? Date.now());
+      recordAnswer(reply, addedSinceSubmit.get(reply) ?? Date.now(), vanished);
       return;
     }
 
@@ -409,6 +551,21 @@ function watchForReply() {
         if (descendants.length > 2000) continue;
         for (const child of descendants) {
           if (!addedSinceSubmit.has(child)) addedSinceSubmit.set(child, now);
+        }
+      }
+    }
+
+    // When things leave, for the same elements. Only those we already know about, because an
+    // element removed that was never added since the submit was part of the page before the
+    // question and tells us nothing about answering it.
+    for (const record of records) {
+      for (const node of record.removedNodes) {
+        if (node.nodeType !== 1) continue;
+        if (addedSinceSubmit.has(node) && !removedAt.has(node)) removedAt.set(node, now);
+        const descendants = node.querySelectorAll?.('*') ?? [];
+        if (descendants.length > 2000) continue;
+        for (const child of descendants) {
+          if (addedSinceSubmit.has(child) && !removedAt.has(child)) removedAt.set(child, now);
         }
       }
     }
@@ -554,8 +711,150 @@ function chooseReplyElement(added) {
  * The first answer emits `reply_pending` instead, so the panel can ask for one more rather than
  * looking like it has stopped noticing.
  */
-function recordAnswer(element, firstSeenAt) {
-  session.answers.push({ element, firstSeenAt });
+/**
+ * Watches the send control change while the vendor works.
+ *
+ * Polled at 150 ms from the submit until the answer settles, keeping every distinct
+ * attribute/value pair the button wore. At the end, whatever it wore *during* and is not
+ * wearing *now* is a description of "still working".
+ *
+ * Attributes only, never text: a label reads "Stop" in one locale and something else in
+ * another, and the promise is that page content does not leave the page. `aria-label` is a
+ * borderline case and is included deliberately — it is the attribute most vendors use to say
+ * which state a control is in, and it is the vendor's own word for its own button, not the
+ * user's content.
+ *
+ * Returns candidates in the same form as a vanished element, so `recordAnswer` can intersect
+ * the two exchanges without caring which kind it has.
+ */
+function watchSubmitState() {
+  const button = session.submitButton;
+  if (!button?.css) return { finish: () => [] };
+
+  const WATCHED = ['aria-label', 'title', 'data-state', 'aria-disabled', 'disabled', 'role'];
+  const seen = new Set();
+  const replacements = new Set();
+
+  /**
+   * Every `data-testid` on the page at the moment the question was sent.
+   *
+   * **A baseline rather than a container reference, and the difference is what went wrong.**
+   * The first version held the send button's parent and scanned inside it. Notion re-renders
+   * the composer row, so that node is detached by the time the swap happens — and it was only
+   * refreshed while the send button was *present*, which is never during the very period worth
+   * watching. The scan silently did nothing for the whole answer.
+   *
+   * A set of strings cannot go stale. Anything wearing a testid that was not on the page when
+   * the question went in has arrived because of the question, and one that arrives while the
+   * send control is away has arrived *in its place*.
+   *
+   * It also excludes the near-miss that kept winning: `agent-service-approval-mode-button` is
+   * in the baseline, because it is present whether or not the agent is working — it was only
+   * ever captured because the node behind it gets swapped.
+   */
+  const baseline = new Set(
+    deepQuerySelectorAll('[data-testid]').map((el) => el.getAttribute('data-testid')),
+  );
+
+  const sample = () => {
+    // Re-queried rather than held, because a vendor may swap the node rather than mutate it —
+    // and a detached reference would report the old state forever.
+    const el = deepQuerySelectorAll(button.css)[0];
+
+    if (el?.getAttribute) {
+      for (const attr of WATCHED) {
+        const value = el.getAttribute(attr);
+        if (value === null || isGeneratedID(value)) continue;
+        seen.add(`${attr}=${value}`);
+      }
+      return;
+    }
+
+    // **The send button is not on the page, so something is standing in for it.**
+    //
+    // This is the case the first version could not see, and it is the common one. Measured on
+    // Notion: the control is `data-testid="agent-chat-send-button"` when idle or ready, and
+    // while the model works that element is *replaced* by
+    // `data-testid="agent-chat-stop-button"`. Re-querying the send button's own selector
+    // therefore finds nothing at precisely the moment worth recording, and watching its
+    // attributes change can never work — it is not the same element.
+    //
+    // Whatever is new on the page while it is gone has arrived in its place. Scanned only
+    // during that window, so the cost falls on the seconds an answer takes rather than on
+    // every tick of a recording.
+    for (const node of deepQuerySelectorAll('[data-testid]')) {
+      const id = node.getAttribute('data-testid');
+      if (!id || isGeneratedID(id) || baseline.has(id)) continue;
+      replacements.add(`${node.tagName.toLowerCase()}[data-testid="${CSS.escape(id)}"]`);
+    }
+  };
+
+  sample();
+  const timer = setInterval(sample, 150);
+
+  return {
+    finish() {
+      clearInterval(timer);
+
+      const el = deepQuerySelectorAll(button.css)[0];
+      if (!el) return [];
+
+      const atRest = new Set();
+      for (const attr of WATCHED) {
+        const value = el.getAttribute(attr);
+        if (value !== null) atRest.add(`${attr}=${value}`);
+      }
+
+      // Anything worn during the answer and not worn now, plus anything that stood in for the
+      // control while it was away.
+      //
+      // Every one is verified against the live page rather than trusted: a selector that still
+      // matches now that the answer is over would tell the runtime the vendor is *permanently*
+      // busy, which is far worse than having no indicator at all — it would turn every future
+      // turn into a wait for the full ceiling.
+      const states = [...seen]
+        .filter((pair) => !atRest.has(pair))
+        .map((pair) => {
+          const [attr, ...rest] = pair.split('=');
+          return `${button.css}[${attr}="${CSS.escape(rest.join('='))}"]`;
+        });
+
+      return [...states, ...replacements]
+        .filter((css) => deepQuerySelectorAll(css).length === 0);
+    },
+  };
+}
+
+/**
+ * A CSS selector for an element that is no longer on the page.
+ *
+ * Deliberately **not** `selectorFor`, which proves a candidate by counting how many elements it
+ * matches. That contract is right for everything else here and useless for this one: a busy
+ * indicator is identified precisely by having gone, so it matches nothing at the moment we want
+ * to name it. Correctness comes from the other direction instead — two exchanges have to
+ * produce the same signature, and the runtime re-checks it against a live page before relying
+ * on it.
+ *
+ * A value is used where one is present and looks durable, and dropped otherwise, because
+ * `[data-x]` is a role marker where `[data-x="event_34s3…"]` is one instance of it.
+ */
+function busySignature(el) {
+  const tag = el.tagName?.toLowerCase();
+  if (!tag) return null;
+
+  for (const attr of STABLE_ATTRS) {
+    const value = el.getAttribute?.(attr);
+    if (!value || isGeneratedID(value)) continue;
+    return `${tag}[${attr}="${CSS.escape(value)}"]`;
+  }
+
+  // No usable value: fall back to the presence of a role-ish attribute name.
+  const [name] = roleAttributes(el);
+  return name ? `${tag}[${name}]` : null;
+}
+
+function recordAnswer(element, firstSeenAt, vanished = []) {
+  session.answers.push({ element, firstSeenAt, vanished });
 
   if (session.answers.length < 2) {
     session.emit({ kind: 'reply_pending', repliesSoFar: session.answers.length });
@@ -580,12 +879,66 @@ function recordAnswer(element, firstSeenAt) {
     return;
   }
 
+  // **Two exchanges have to name the same thing.** One vanished element is noise — a tooltip,
+  // a scroll shadow, a re-render — and any page produces several. The one that appeared and
+  // left during *both* answers is the vendor's own busy signal, and the same two-sample
+  // discipline that stops a per-message id being mistaken for the answer container applies
+  // here for the same reason.
+  //
+  // Optional throughout: a vendor that shows nothing while it works simply has no such element,
+  // and the runtime falls back to the quiet period it uses today.
+  // Matched on the selector and kept at its *shorter* span, so a candidate has to have covered
+  // the answer in both exchanges rather than in the lucky one.
+  const shared = first.vanished
+    .map((a) => {
+      const b = second.vanished.find((other) => other.sig === a.sig);
+      return b ? { sig: a.sig, span: Math.min(a.span, b.span), fromButton: a.fromButton } : null;
+    })
+    .filter(Boolean);
+
+  // **A send-button state beats a vanishing element**, and the reason is provenance rather than
+  // shape. The button is an element the recording already captured and the dry run is about to
+  // drive; its states are the vendor deliberately saying what it is doing. A vanished `div` is
+  // whatever the page happened to remove while we were watching, which is often a tooltip or a
+  // scroll shadow and is only ever circumstantial.
+  //
+  // Within a kind, the narrowest wins: a selector carrying a value names the control, while a
+  // bare `[attr]` may also match its container — and stopping on a container means calling the
+  // answer finished while the spinner inside it is still turning.
+  // A flag rather than a string test, because the strongest candidate of all does *not* share
+  // the send button's selector: Notion's stop button is a different element in the same place,
+  // and prefix-matching would have ranked the vendor's own "I am working" control below a
+  // random `div` that happened to come and go.
+  const isButton = (candidate) => candidate.fromButton === true;
+
+  // **Anything that covered less than half the answer is thrown away, not merely ranked last.**
+  // A candidate that was on screen for 300 ms of a four-second answer is not describing that
+  // answer, and recording it would leave the runtime watching for something that says nothing.
+  // Having no indicator is an honest state with a working fallback; having a meaningless one is
+  // a wrong answer wearing a tick.
+  const answerMs = Math.max(1, second.firstSeenAt - session.submittedAt);
+  const ranked = shared
+    .filter((candidate) => isButton(candidate) || candidate.span >= answerMs * 0.5)
+    .sort((a, b) => {
+      // The vendor's own control first — it says what it is doing, where an element that came
+      // and went is only ever an inference about what the page was up to.
+      if (isButton(a) !== isButton(b)) return isButton(b) ? 1 : -1;
+      // Then whichever covered more of the answer.
+      return b.span - a.span;
+    });
+
+  const busySelector = ranked[0]?.sig ?? null;
+  // Which of the two found it, shown on the card. They are not equally trustworthy, so "we have
+  // one" is not the whole answer — a button state is the vendor saying what it is doing, and a
+  // vanished element is an inference from what the page happened to remove.
+  const busyFrom = ranked[0] ? (isButton(ranked[0]) ? 'button' : 'element') : null;
+
   // Timed and measured from the *second* answer, which is the one seen under normal
   // conditions: the first often lands on a freshly opened panel that is still warming up.
-  emitReply(selector, second.element, second.firstSeenAt);
+  emitReply(selector, second.element, second.firstSeenAt, busySelector, busyFrom);
 }
 
-function emitReply(selector, element, firstSeenAt) {
+function emitReply(selector, element, firstSeenAt, busySelector = null, busyFrom = null) {
   const matches = deepQuerySelectorAll(selector.css);
 
   // The check the whole design turns on. `matchesBefore` counts only those matches that were
@@ -616,6 +969,10 @@ function emitReply(selector, element, firstSeenAt) {
       // answer is hundreds of characters, a loading label is tens. Reading the selector alone
       // cannot tell those apart, which is how the 59ms capture looked fine.
       textLength: (element.innerText ?? '').length,
+      // What the vendor showed while it was working, if anything. Null is an ordinary answer,
+      // not a failure — see `recordAnswer`.
+      busySelector,
+      busyFrom,
     },
   });
 }

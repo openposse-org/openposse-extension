@@ -14,30 +14,22 @@
 // one that stutters unusably on a machine that cannot keep up — and both of those are
 // invisible on whatever laptop the developer happened to use.
 
+import { VOICES, langOf } from './weights.js';
+
 /**
  * Kokoro's English voices, Apache-2.0 with the weights.
  *
- * Named `<accent><gender>_<name>`: `af_` American female, `am_` American male, `bf_`/`bm_`
- * British. Kept here rather than fetched so the roster can be assigned voices, and the engine
- * described in setup, on a machine that has never downloaded a model.
+ * **Derived from `weights.js` rather than listed again here.** This was a hand-written array of
+ * the same 28 ids with a `lang` on each, which was defensible only while the two lists genuinely
+ * differed — the published set was 28 and six were downloaded, and the gap was the whole reason
+ * `assignKokoroVoices` takes an `installed` argument. All 28 now ship, so a second copy is just
+ * somewhere for the two to disagree, and the way they would disagree is the worst kind: a voice
+ * assigned from this list that nobody downloaded fails at the first answer, three layers from
+ * anything that could explain it.
+ *
+ * Order is carried over unchanged, and it matters — see the note on `VOICES`.
  */
-export const KOKORO_VOICES = [
-  { id: 'af_heart', lang: 'en-US' }, { id: 'af_bella', lang: 'en-US' },
-  { id: 'af_nicole', lang: 'en-US' }, { id: 'af_aoede', lang: 'en-US' },
-  { id: 'af_kore', lang: 'en-US' }, { id: 'af_sarah', lang: 'en-US' },
-  { id: 'af_nova', lang: 'en-US' }, { id: 'af_sky', lang: 'en-US' },
-  { id: 'af_alloy', lang: 'en-US' }, { id: 'af_jessica', lang: 'en-US' },
-  { id: 'af_river', lang: 'en-US' },
-  { id: 'am_michael', lang: 'en-US' }, { id: 'am_fenrir', lang: 'en-US' },
-  { id: 'am_puck', lang: 'en-US' }, { id: 'am_echo', lang: 'en-US' },
-  { id: 'am_eric', lang: 'en-US' }, { id: 'am_liam', lang: 'en-US' },
-  { id: 'am_onyx', lang: 'en-US' }, { id: 'am_santa', lang: 'en-US' },
-  { id: 'am_adam', lang: 'en-US' },
-  { id: 'bf_emma', lang: 'en-GB' }, { id: 'bf_isabella', lang: 'en-GB' },
-  { id: 'bf_alice', lang: 'en-GB' }, { id: 'bf_lily', lang: 'en-GB' },
-  { id: 'bm_george', lang: 'en-GB' }, { id: 'bm_fable', lang: 'en-GB' },
-  { id: 'bm_daniel', lang: 'en-GB' }, { id: 'bm_lewis', lang: 'en-GB' },
-];
+export const KOKORO_VOICES = VOICES.map(({ id }) => ({ id, lang: langOf(id) }));
 
 /**
  * Why an engine was chosen, in words a person can act on.
@@ -130,8 +122,26 @@ export async function hasWebGPU() {
 export function assignKokoroVoices(agents, voices = KOKORO_VOICES) {
   const taken = new Set();
   const out = new Map();
+  const known = new Set(voices.map((v) => v.id));
+
+  // **A voice somebody chose is not a hint to be improved on.** The loop below hands out
+  // distinct voices so no two agents sound alike, and left to itself it would reassign a
+  // deliberate choice on the next roster change — the agent you gave a particular voice to
+  // would quietly acquire a different one because somebody else was recorded.
+  //
+  // So explicit choices are settled first and their voices marked taken. The heuristic then
+  // fills in around them, which is what it is for: nobody has said anything about those.
+  for (const agent of agents ?? []) {
+    if (known.has(agent?.voice)) {
+      taken.add(agent.voice);
+      out.set(agent.id, agent.voice);
+    }
+  }
 
   for (const agent of agents ?? []) {
+    if (out.has(agent.id)) continue;
+    // A stored *system* voice identifier is not a Kokoro id, but it does say which accent was
+    // wanted, so it is still worth reading rather than discarding.
     const wanted = /en-GB/i.test(String(agent?.voice ?? '')) ? 'en-GB' : 'en-US';
     const free = voices.filter((v) => !taken.has(v.id));
     const pool = free.length > 0 ? free : voices;
