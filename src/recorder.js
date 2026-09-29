@@ -298,7 +298,12 @@ function armSubmit() {
     // buttons and emoji pickers all live there.
     if (session.input.contains(button)) return;
 
-    onSubmitted({ kind: 'submit', submitMethod: 'click', selector: selectorFor(button) });
+    const selector = selectorFor(button);
+    // Kept so the reply window can watch it change. A send control usually cycles
+    // enabled → stop → enabled across one answer, which is the vendor saying when it is
+    // working — see `watchSubmitState`.
+    session.submitButton = { element: button, css: selector.css };
+    onSubmitted({ kind: 'submit', submitMethod: 'click', selector });
   };
 
   // Enter, and only Enter. One key, one bit, no payload — see the privacy note at the top.
@@ -347,6 +352,18 @@ function watchForReply() {
   const addedSinceSubmit = new Map();
   let settleTimer = null;
 
+  // **The send button is the better signal, and it was invisible to the one above.**
+  //
+  // A vendor's "working" state is usually not a new element at all: the send control changes —
+  // enabled, then a stop button, then enabled again. Nothing appears and nothing leaves, so
+  // watching for a vanishing element finds nothing and reports "nothing to watch", which is
+  // what Notion did.
+  //
+  // Both reduce to the same thing for the runtime, which is why this needs no new concept:
+  // a selector that matches while the vendor is busy and stops matching when it is done.
+  // `div[data-testid="send"][aria-label="Stop"]` behaves exactly like a spinner that goes away.
+  const submitStates = watchSubmitState();
+
   const decide = () => {
     clearTimeout(settleTimer);
     clearTimeout(ceiling);
@@ -373,6 +390,10 @@ function watchForReply() {
       if (signature) vanished.push(signature);
       addedSinceSubmit.delete(el);
     }
+
+    // The send button's own transitions, in the same currency: selectors that matched during
+    // the answer and do not match now that it is over.
+    vanished.push(...submitStates.finish());
 
     const pool = [...addedSinceSubmit.keys()];
     const reply = chooseReplyElement(pool);
@@ -573,6 +594,71 @@ function chooseReplyElement(added) {
  * looking like it has stopped noticing.
  */
 /**
+ * Watches the send control change while the vendor works.
+ *
+ * Polled at 150 ms from the submit until the answer settles, keeping every distinct
+ * attribute/value pair the button wore. At the end, whatever it wore *during* and is not
+ * wearing *now* is a description of "still working".
+ *
+ * Attributes only, never text: a label reads "Stop" in one locale and something else in
+ * another, and the promise is that page content does not leave the page. `aria-label` is a
+ * borderline case and is included deliberately — it is the attribute most vendors use to say
+ * which state a control is in, and it is the vendor's own word for its own button, not the
+ * user's content.
+ *
+ * Returns candidates in the same form as a vanished element, so `recordAnswer` can intersect
+ * the two exchanges without caring which kind it has.
+ */
+function watchSubmitState() {
+  const button = session.submitButton;
+  if (!button?.css) return { finish: () => [] };
+
+  const WATCHED = ['aria-label', 'title', 'data-state', 'aria-disabled', 'disabled', 'role'];
+  const seen = new Set();
+
+  const sample = () => {
+    // Re-queried rather than held, because a vendor may swap the node rather than mutate it —
+    // and a detached reference would then report the old state forever.
+    const el = deepQuerySelectorAll(button.css)[0] ?? button.element;
+    if (!el?.getAttribute) return;
+    for (const attr of WATCHED) {
+      const value = el.getAttribute(attr);
+      if (value === null || isGeneratedID(value)) continue;
+      seen.add(`${attr}=${value}`);
+    }
+  };
+
+  sample();
+  const timer = setInterval(sample, 150);
+
+  return {
+    finish() {
+      clearInterval(timer);
+
+      const el = deepQuerySelectorAll(button.css)[0];
+      if (!el) return [];
+
+      const atRest = new Set();
+      for (const attr of WATCHED) {
+        const value = el.getAttribute(attr);
+        if (value !== null) atRest.add(`${attr}=${value}`);
+      }
+
+      // Anything worn during the answer and not worn now. Verified against the live page
+      // rather than trusted: a selector that still matches at rest would tell the runtime the
+      // vendor is *always* busy, which is far worse than having no indicator at all.
+      return [...seen]
+        .filter((pair) => !atRest.has(pair))
+        .map((pair) => {
+          const [attr, ...rest] = pair.split('=');
+          return `${button.css}[${attr}="${CSS.escape(rest.join('='))}"]`;
+        })
+        .filter((css) => deepQuerySelectorAll(css).length === 0);
+    },
+  };
+}
+
+/**
  * A CSS selector for an element that is no longer on the page.
  *
  * Deliberately **not** `selectorFor`, which proves a candidate by counting how many elements it
@@ -635,10 +721,24 @@ function recordAnswer(element, firstSeenAt, vanished = []) {
   // Optional throughout: a vendor that shows nothing while it works simply has no such element,
   // and the runtime falls back to the quiet period it uses today.
   const shared = first.vanished.filter((sig) => second.vanished.includes(sig));
-  // The narrowest wins. A selector with a value in it names the control; a bare `[attr]` may
-  // also match its container, and stopping early on a container means calling the answer
-  // finished while the inner spinner is still turning.
-  const busySelector = shared.sort((a, b) => b.length - a.length)[0] ?? null;
+
+  // **A send-button state beats a vanishing element**, and the reason is provenance rather than
+  // shape. The button is an element the recording already captured and the dry run is about to
+  // drive; its states are the vendor deliberately saying what it is doing. A vanished `div` is
+  // whatever the page happened to remove while we were watching, which is often a tooltip or a
+  // scroll shadow and is only ever circumstantial.
+  //
+  // Within a kind, the narrowest wins: a selector carrying a value names the control, while a
+  // bare `[attr]` may also match its container — and stopping on a container means calling the
+  // answer finished while the spinner inside it is still turning.
+  const fromButton = session.submitButton?.css;
+  const ranked = [...shared].sort((a, b) => {
+    const aFromButton = fromButton && a.startsWith(fromButton) ? 1 : 0;
+    const bFromButton = fromButton && b.startsWith(fromButton) ? 1 : 0;
+    if (aFromButton !== bFromButton) return bFromButton - aFromButton;
+    return b.length - a.length;
+  });
+  const busySelector = ranked[0] ?? null;
 
   // Timed and measured from the *second* answer, which is the one seen under normal
   // conditions: the first often lands on a freshly opened panel that is still warming up.
