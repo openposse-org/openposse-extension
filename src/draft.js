@@ -144,10 +144,17 @@ export function problems(draft) {
   }
 
   if (!draft.openMethod) {
-    // Deliberately does not say "shortcut". Notion's assistant opens from a button and Andy's
-    // from ⌘⇧K, and nobody should have to know which kind theirs is — they do what they always
-    // do and we watch.
-    add('open', 'We didn’t see the assistant open. Open it the way you normally do.');
+    // **This used to say "open it the way you normally do", and that was wrong in consequence.**
+    // The reasoning was sound — nobody should need to know whether their assistant has a
+    // shortcut — but it led people to press one, and a recorded shortcut produces an agent that
+    // cannot open the assistant: some vendors check `isTrusted` and ignore keystrokes that came
+    // from a script. Notion is one, and the failure lands minutes later, at the first real
+    // question, reading as a broken agent rather than as a recording that went the wrong way.
+    //
+    // So the preference is stated, with the reason, and a shortcut is still accepted for the
+    // vendors that have no button.
+    add('open', 'We didn’t see the assistant open. Open it by clicking its button if it has '
+      + 'one — we can’t always press a keyboard shortcut on your behalf.');
   } else if (draft.openMethod === 'shortcut' && !draft.shortcut) {
     add('open-keys', 'We saw a shortcut but couldn’t read the keys. Try pressing it again.');
   } else if (draft.openMethod === 'click' && !usable(draft.openSelector)) {

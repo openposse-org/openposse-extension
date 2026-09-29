@@ -159,7 +159,18 @@ async function askAssistant({ recipe, prompt }, emit) {
       ERROR.timeout,
       recipe.openMethod === 'click'
         ? 'the assistant did not open when its button was clicked'
-        : 'assistant did not open from a synthetic shortcut — needs the app to post a real event',
+        // **The old text here told the user to rely on the Mac app**, which is parked — it
+        // said "needs the app to post a real event", describing a retry path that no longer
+        // exists and cannot be reached. A message naming a fix that is unavailable is worse
+        // than a bare failure: it sends somebody looking for a setting they do not have.
+        //
+        // What is true: some vendors check `isTrusted` and ignore keystrokes that came from a
+        // script, and there is nothing this extension can do about that. Notion is one of
+        // them, and it also offers a button — so the fix is a re-recording that opens it by
+        // clicking, which is exactly what the message now says.
+        : 'this assistant ignores keyboard shortcuts it did not get from a person. '
+          + 'Re-record it from Settings and open the assistant by clicking its button '
+          + 'instead of using the shortcut.',
       { openedBy: null }
     );
   }
@@ -477,12 +488,13 @@ async function invokeViaShortcut({ recipe }) {
 
   const input = await waitForElement(recipe.inputSelector, { timeoutMs: 3000 });
   if (!input) {
-    // For a shortcut this is very likely `isTrusted: false` being rejected. Say so truthfully
-    // and stop — the app owns the CGEventPost fallback, and the extension cannot post a
-    // trusted event at all.
+    // For a shortcut this is very likely `isTrusted: false` being rejected. There is no
+    // fallback: the `CGEventPost` retry belonged to the Mac app, which is parked, and nothing
+    // in a browser can post a trusted event. So the honest remedy is a different recording.
     return failure(ERROR.timeout, recipe.openMethod === 'click'
       ? 'the assistant did not open when its button was clicked'
-      : 'assistant did not open from a synthetic shortcut');
+      : 'this assistant ignores keyboard shortcuts it did not get from a person — '
+        + 'record it again, opening the assistant by clicking its button');
   }
   return { ok: true, openedBy };
 }

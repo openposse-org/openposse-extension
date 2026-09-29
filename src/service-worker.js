@@ -1237,12 +1237,28 @@ async function save() {
   // Settings has the picker with previews for anyone who wants a different one.
   await addAgent({ name, voice: null, recipe });
 
+  // **The one thing the dry run cannot check, said out loud.**
+  //
+  // Verification runs immediately after a recording, so the assistant is still open — which
+  // means `askAssistant` never has to trigger it and the opening step is the one part of the
+  // recipe that goes untested. A vendor that ignores scripted keystrokes then passes the dry
+  // run and fails at the first real question, minutes later, reading as a broken agent.
+  //
+  // Saying so here is not a substitute for testing it, and it is not marked as a failure —
+  // plenty of assistants accept a synthetic shortcut. It is the honest statement of what was
+  // and was not proven.
+  const caution = wizard.draft.openMethod === 'shortcut'
+    ? ` It opens with a shortcut, and some assistants ignore key presses that came from a `
+      + `script. If ${name} doesn’t answer, re-record it from Settings and open the assistant `
+      + `by clicking instead.`
+    : '';
+
   await panel({
     phase: 'recording',
     coach: {
       label: 'SETTING UP · DONE',
       instruction: `Saved as ${name}. You can rename it in Settings, or just say `
-        + `“${name}, …” to talk to it.`,
+        + `“${name}, …” to talk to it.${caution}`,
       captures: captures(wizard.draft),
       naming: false,
     },
