@@ -195,10 +195,21 @@ if (!globalThis.__openposseOrb) {
       /* Not hit-testable except where it has to be. The page underneath stays usable, which
          matters because the panel sits over someone else's application. */
       pointer-events: none;
-      opacity: 0; transform: translateX(-50%) translateY(8px);
+      /* The --dx/--dy properties are where the panel has been dragged to. Composed into the
+         transform rather than switching to explicit left/top, so the centring and the entry
+         animation keep working and a drag stays a pure offset from where the design put it.
+         (No backticks in this block: the whole stylesheet is a JS template literal.) */
+      opacity: 0;
+      transform: translateX(calc(-50% + var(--dx, 0px))) translateY(calc(8px + var(--dy, 0px)));
       transition: opacity .22s ease, transform .22s cubic-bezier(.22,1,.36,1);
     }
-    .wrap.up { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .wrap.up {
+      opacity: 1;
+      transform: translateX(calc(-50% + var(--dx, 0px))) translateY(var(--dy, 0px));
+    }
+    /* The easing is what makes the panel arrive nicely and what would make it lag a pointer,
+       so it is off for the duration of a drag only. */
+    .wrap.dragging { transition: opacity .22s ease; }
 
     .glass {
       position: relative;
@@ -222,7 +233,13 @@ if (!globalThis.__openposseOrb) {
                   transparent 72%, rgba(255,255,255,.045) 100%);
     }
 
-    header { display: flex; align-items: center; gap: 9px; }
+    /* The title bar is the handle. It opts into hit-testing, which the rest of the card does
+       not — so the page underneath stays usable everywhere except the strip you grab. */
+    header {
+      display: flex; align-items: center; gap: 9px;
+      pointer-events: auto; cursor: grab; user-select: none; touch-action: none;
+    }
+    .wrap.dragging header { cursor: grabbing; }
     .mark {
       width: 19px; height: 19px; border-radius: 6.5px;
       background: linear-gradient(150deg, #0A84FF, #30D158);
@@ -334,7 +351,11 @@ if (!globalThis.__openposseOrb) {
     }
     /* A shortcut is something you pressed, not page structure, so it is not a code chip. */
     .coach .row .detail.keys { font-family: inherit; font-size: 13px; letter-spacing: .12em; }
-    .coach .name { margin-top: 14px; display: flex; gap: 8px; }
+    /* **Opted back in.** The wrap is pointer-events: none so the page underneath stays usable,
+       and every interactive part has to say otherwise for itself. Without this the field is
+       visible, looks focusable, and every click lands in the vendor's page behind it — which
+       reads as the panel being frozen rather than as it not being there. */
+    .coach .name { margin-top: 14px; display: flex; gap: 8px; pointer-events: auto; }
     .coach .name input {
       flex: 1 1 auto; background: rgba(255,255,255,.08); color: #fff;
       border: .5px solid rgba(255,255,255,.18); border-radius: 8px;
@@ -424,11 +445,17 @@ if (!globalThis.__openposseOrb) {
 
   function tick() {
     t += 1;
-    // Eased here rather than smoothed harder at the source: the meter already has the design's
-    // 80 ms attack and 250 ms release, and this only bridges 20 Hz of messages to 60 Hz of
-    // frames. Doing it twice would add lag the person would read as the orb being slow.
-    shown += (target - shown) * 0.25;
-    draw(canvas, t, modeFor(state.phase), state.channel ?? 'none');
+    // **Nothing is drawn while recording**, because the canvas is hidden behind the coaching
+    // card and a recording lasts minutes. Sixty frames a second of an invisible sphere is real
+    // CPU taken from the vendor's own page, at exactly the moment somebody is trying to use it.
+    // The loop itself keeps running so the orb is animating again the instant it reappears.
+    if (state.phase !== 'recording') {
+      // Eased here rather than smoothed harder at the source: the meter already has the
+      // design's 80 ms attack and 250 ms release, and this only bridges 20 Hz of messages to
+      // 60 Hz of frames. Doing it twice would add lag somebody would read as the orb being slow.
+      shown += (target - shown) * 0.25;
+      draw(canvas, t, modeFor(state.phase), state.channel ?? 'none');
+    }
     raf = requestAnimationFrame(tick);
   }
 
@@ -591,6 +618,85 @@ if (!globalThis.__openposseOrb) {
         input.focus();
       }
     }
+  }
+
+  // ── Moving it out of the way ────────────────────────────────────────────────────────────
+  //
+  // The panel sits over somebody else's application, and where it sits is sometimes exactly
+  // where they need to look — during a recording especially, since the whole task is reading
+  // and clicking the page underneath.
+  //
+  // The offset is kept in `chrome.storage.local`, which is **ours**: the panel is injected
+  // fresh on every turn, so a position held in a variable would be forgotten between them, and
+  // writing to the page's own `localStorage` would leave our furniture in a vendor's storage.
+  {
+    const header = $('header');
+    let dx = 0;
+    let dy = 0;
+    let grab = null;
+
+    const apply = () => {
+      wrap.style.setProperty('--dx', `${Math.round(dx)}px`);
+      wrap.style.setProperty('--dy', `${Math.round(dy)}px`);
+    };
+
+    /**
+     * Keeps the panel reachable.
+     *
+     * Dragging something entirely off screen is easy and there is no way back — the panel has
+     * no chrome of its own to drag it home by, and a recording in progress would be stranded
+     * with it. So at least a corner stays on screen, measured from where the panel actually is
+     * rather than from where it was designed to be.
+     */
+    const clamp = () => {
+      const rect = wrap.getBoundingClientRect();
+      const width = rect.width || 452;
+      const height = rect.height || 400;
+      const restLeft = (window.innerWidth - width) / 2;
+      const restTop = window.innerHeight - 40 - height;
+      const keep = 80;
+
+      dx = Math.min(Math.max(dx, keep - width - restLeft), window.innerWidth - keep - restLeft);
+      // Upward is bounded by the top of the viewport; downward by keeping the header visible,
+      // since the header is the only part you can grab.
+      dy = Math.min(Math.max(dy, -restTop), window.innerHeight - 48 - restTop);
+    };
+
+    chrome.storage?.local?.get('orbOffset').then(({ orbOffset }) => {
+      if (!orbOffset) return;
+      dx = orbOffset.dx ?? 0;
+      dy = orbOffset.dy ?? 0;
+      clamp();                      // the window may be a different size than last time
+      apply();
+    }).catch(() => { /* no stored position is the normal first case, not a failure */ });
+
+    header.addEventListener('pointerdown', (event) => {
+      grab = { x: event.clientX - dx, y: event.clientY - dy };
+      header.setPointerCapture(event.pointerId);
+      wrap.classList.add('dragging');
+      // Or the gesture starts a text selection across the title, which then drags instead.
+      event.preventDefault();
+    });
+
+    header.addEventListener('pointermove', (event) => {
+      if (!grab) return;
+      dx = event.clientX - grab.x;
+      dy = event.clientY - grab.y;
+      clamp();
+      apply();
+    });
+
+    const release = (event) => {
+      if (!grab) return;
+      grab = null;
+      wrap.classList.remove('dragging');
+      try { header.releasePointerCapture(event.pointerId); } catch { /* already released */ }
+      chrome.storage?.local?.set({ orbOffset: { dx, dy } })
+        .catch((error) => console.warn('[openposse] panel position not saved —', error));
+    };
+
+    header.addEventListener('pointerup', release);
+    header.addEventListener('pointercancel', release);
   }
 
   // ── Naming ─────────────────────────────────────────────────────────────────────────────
