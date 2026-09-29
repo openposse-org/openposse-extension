@@ -974,6 +974,8 @@ async function beginWizard({ tabId, pattern, agentId = null }) {
     draft: newDraft(pattern),
     tabId,
     armedAt: Date.now(),
+    // Cleared before the dry run. See `stopCapturing`.
+    capturing: true,
     // Re-recording an existing agent keeps its name and voice and replaces only the recipe, so
     // the naming beat is skipped for it. The popup's "needs re-recording" is what leads here.
     agentId,
@@ -1012,9 +1014,15 @@ async function showCoaching() {
       label: stepLabel(state),
       instruction: instruction(state, wizard.draft),
       captures: captures(wizard.draft),
-      // Only after the dry run has *passed*. A recipe that has never been executed is a guess,
-      // and naming one would put a broken agent in the roster with a name somebody chose.
-      naming: wizard.verified === true && !wizard.agentId,
+      // Only after the dry run has *passed*, **and only while the draft is still whole.** A
+      // recipe that has never been executed is a guess, and naming one would put a broken agent
+      // in the roster under a name somebody chose.
+      //
+      // `verified` alone was not enough, and the second clause is why: it is a latch, so once
+      // set it survived the draft being broken afterwards, and a red failure message appeared
+      // above a live name field. Deriving the gate from the state being shown *right now* makes
+      // that contradiction unrepresentable rather than merely fixed.
+      naming: state.step === 'done' && wizard.verified === true && !wizard.agentId,
       bad: state.step === 'replies-share-nothing' || state.step === 'abandoned',
     },
   }, { create: true });
@@ -1027,7 +1035,7 @@ async function showCoaching() {
  * captures arrive over minutes and are events on an open channel.
  */
 async function onCapture(event) {
-  if (!wizard) return;
+  if (!wizard || !wizard.capturing) return;
   if (event?.kind === 'armed') wizard.alreadyOpen = event.alreadyOpen === true;
 
   wizard.draft = applyCapture(wizard.draft, event);
@@ -1061,6 +1069,18 @@ async function onCapture(event) {
 async function dryRun() {
   const built = finish(wizard.draft, { triggerMethod: 'synthetic' });
   if (!built.ok) { wizard.verifying = false; return; }
+
+  // **Stop watching before we start typing.** The dry run drives the page — two questions, two
+  // answers — and with the recorder still armed every one of those is captured as though the
+  // user had done it. That is not a cosmetic overlap: the extra answers go back through
+  // `selectorForBoth`, and Notion's replies have genuinely different shapes depending on
+  // whether it used a tool, so a draft that had *already passed* was being retroactively broken
+  // by its own verification. It presented as "we saw two answers but couldn't find anything
+  // they have in common" sitting above a name field.
+  //
+  // It is also the right privacy behaviour. The recorder's keydown listener must not be live
+  // while we type text into somebody's assistant.
+  await stopCapturing();
 
   await panel({ phase: 'recording', coach: { label: 'SETTING UP · CHECKING', instruction: 'Checking it works — asking it two questions…', captures: captures(wizard.draft), naming: false } });
 
@@ -1147,6 +1167,26 @@ async function nameAndSave(name) {
   await endWizard();
   await panel({ phase: 'idle', visible: false });
   return { ok: true };
+}
+
+/**
+ * Takes the recorder's listeners off the page, without ending the recording.
+ *
+ * Deliberately **not** `disarmRecording`, which also clears the keepalive — and the dry run is
+ * two full exchanges with a vendor, which is exactly the minutes of silence MV3 terminates an
+ * idle worker for. Killing the keepalive here would end the wizard partway through verifying
+ * it, with nothing to say why.
+ */
+async function stopCapturing() {
+  if (!wizard) return;
+  wizard.capturing = false;
+  try {
+    await chrome.tabs.sendMessage(wizard.tabId, { intent: 'disarm_recording' });
+  } catch (error) {
+    // Best-effort: the tab may have gone. The `capturing` flag above is what actually protects
+    // the draft, so this failing costs nothing but is worth naming rather than swallowing.
+    console.warn('[openposse] recorder would not disarm —', error?.message ?? error);
+  }
 }
 
 async function endWizard() {
