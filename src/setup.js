@@ -228,6 +228,7 @@ const mb = (bytes) => `${Math.round(bytes / 1e6)} MB`;
 async function refreshWeights() {
   const { state, have, want } = await weightsStatus();
   const done = state === 'ready';
+  el('weights-size').textContent = mb(TOTAL_BYTES);
 
   el('drop-weights').hidden = !have;
   el('get-weights').hidden = done;

@@ -53,19 +53,28 @@ export const MODEL_REPO = 'onnx-community/Kokoro-82M-v1.0-ONNX-timestamped';
 export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
 
 /**
- * The model: **q8**, which is the smallest variant the engine can actually ask for.
+ * The model: **fp16**, chosen for the GPU rather than for the download.
  *
- * Not the smallest variant published. `model_q8f16.onnx` is 86 MB against this one's 92 MB, and
- * it was pinned here first — but transformers.js 4.0.0 recognises only `fp32 · fp16 · q8 ·
- * int8 · uint8 · q4 · bnb4 · q4f16`, so `q8f16` was silently ignored and it fell back to
- * requesting the 326 MB fp32 default. Six megabytes bought a file nothing could load.
+ * This was `q8` (92 MB) on the reasoning that smaller is better, and it measured **1.6× real
+ * time** — six and a half seconds to synthesise four seconds of speech, twice in a row. That is
+ * not conversation, it is waiting.
  *
- * `DTYPE` is exported because `kokoro.js` has to pass the matching name to HeadTTS, and the
- * test below ties the two together — a filename and a dtype that disagree is a failure at
- * first use, which is where this one was found.
+ * The cause is a known shape rather than a mystery: **int8-quantized ONNX graphs frequently
+ * have no WebGPU kernels**, so those operators fall back to the CPU while the rest runs on the
+ * GPU. The result sits between WebGPU's ~0.3× and WASM's ~3×, which is exactly where the
+ * measurement landed — and is why "is it using WebGPU" was the wrong question. It was, for part
+ * of the graph.
  *
- * 92 MB against 326 for fp32 and 163 for fp16. The full-precision model is better and nobody is
- * downloading a third of a gigabyte to hear a joke read out.
+ * fp16 keeps the weights in a format the GPU has kernels for. 163 MB against 92: a real cost,
+ * and the right one, because a voice nobody waits for is worth more than 71 MB.
+ * `model_q4f16.onnx` is 155 MB and also GPU-friendly if size matters more than fidelity, though
+ * 4-bit weights degrade a voice more audibly than they degrade text.
+ *
+ * `model_q8f16.onnx` is 86 MB and would have been ideal, but transformers.js 4.0.0 has no such
+ * dtype — it was silently ignored and the 326 MB fp32 default requested instead.
+ *
+ * `DTYPE` is exported so `kokoro.js` cannot disagree with what was downloaded, and the test
+ * below ties the two together: an unrecognised dtype fails at first use, not at build time.
  *
  * **The hashes are read, not guessed.** They come from HuggingFace's own API, which reports the
  * Git-LFS object id — and an LFS oid *is* the SHA-256 of the file's contents. Cross-checked:
@@ -74,13 +83,13 @@ export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
  *
  * Sizes are exact for the same reason, so a progress bar cannot overshoot.
  */
-export const DTYPE = 'q8';
+export const DTYPE = 'fp16';
 
 export const MODEL = {
   id: 'model',
-  url: `${TS_REPO}/${TS_REVISION}/onnx/model_quantized.onnx`,
-  bytes: 92_361_055,
-  sha256: 'c0c02b3299fd97c34ea92a98e6d41eaa1a739c8f77bf685aac34bd7b34c1132c',
+  url: `${TS_REPO}/${TS_REVISION}/onnx/model_fp16.onnx`,
+  bytes: 163_232_776,
+  sha256: '220724d5c5e0cc01be30f38faa6cf0c895a7cde6e7773e91db2973c8c7e5123c',
 };
 
 /**

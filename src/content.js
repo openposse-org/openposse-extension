@@ -168,7 +168,19 @@ async function askAssistant({ recipe, prompt }, emit) {
   // The honest fix is to record the vendor's own "still generating" indicator during setup —
   // Notion shows one — and wait on that disappearing instead of on a clock. That is a recorder
   // change, so it belongs to E8. Until then this is a guess with a ceiling.
-  const ANSWER_GRACE_MS = 10_000;
+  // **2.5 s, down from 10.** The first version was a guess with a ceiling and the ceiling was
+  // being paid on every successful exchange: `settling 11998ms over 3 passes` for an answer
+  // already sitting in the tab. Pass 1 waits for a row *beyond* the one just read, and when
+  // pass 0 already had the answer — the common case — no such row is ever coming, so the whole
+  // window is spent discovering that.
+  //
+  // The replacement is measured rather than guessed. The same trace reports the vendor's own
+  // thinking time at 1.5–2 s, so the status-row-to-answer gap is that order, and 2.5 s covers
+  // it with margin. Worst case is now ~4 s of settling instead of ~12.
+  //
+  // Still a clock, and still the wrong instrument. The honest fix is the vendor's own "still
+  // generating" indicator, recorded during setup — E8.
+  const ANSWER_GRACE_MS = 2_500;
 
   /**
    * Which of the rows that appeared is the answer.

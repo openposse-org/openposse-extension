@@ -161,11 +161,14 @@
         <div class="step" id="step-weights" style="margin-top:18px">
           <div class="num">6</div>
           <div style="flex:1">
-            <h2>Better voices <span class="kind">— optional, 89 MB</span></h2>
+            <!-- The size is filled in from `TOTAL_BYTES` rather than written here. It has
+                 already moved twice — 89 MB to 166 MB when the model changed for GPU kernel
+                 coverage — and a number typed into copy is a number that goes stale silently. -->
+            <h2>Better voices <span class="kind">— optional, <span id="weights-size">…</span></span></h2>
             <p>
               The system voices are your operating system's, and they sound like it. Kokoro is a
               neural voice model that runs <em>on this machine</em> — nothing you say or hear
-              goes anywhere. It is a one-off download of about 89 MB, kept locally afterwards.
+              goes anywhere. It is a one-off download, kept locally afterwards.
             </p>
             <p>
               It needs WebGPU to be fast enough for conversation. Without it OpenPosse keeps

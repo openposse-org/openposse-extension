@@ -82,9 +82,14 @@ test('six voices, split so accents and genders both survive', () => {
 });
 
 test('the advertised total matches what is actually listed', () => {
-  // The number setup shows before somebody commits their connection to it.
+  // The number setup shows before somebody commits their connection to it, so it has to be the
+  // real sum rather than a figure that was true once.
   assert.equal(TOTAL_BYTES, ALL.reduce((n, f) => n + f.bytes, 0));
-  assert.ok(TOTAL_BYTES > 80e6 && TOTAL_BYTES < 100e6, `${TOTAL_BYTES} bytes`);
+
+  // A sanity band, not an expectation. It moved from ~89 MB to ~166 MB when the model went
+  // from q8 to fp16 for GPU kernel coverage, and this test caught that — which is the point.
+  // The upper bound is where a download stops being something to offer casually.
+  assert.ok(TOTAL_BYTES > 50e6 && TOTAL_BYTES < 250e6, `${Math.round(TOTAL_BYTES / 1e6)} MB`);
 });
 
 test('every file has a hash, and they look like hashes', () => {
