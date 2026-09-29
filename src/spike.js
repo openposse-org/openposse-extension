@@ -80,9 +80,14 @@ document.getElementById('run').addEventListener('click', async () => {
     return `${Object.keys(mod).length} exports`;
   });
 
-  // 4. The WASM binary is reachable at the path the worker will point ONNX Runtime at.
+  // 4. The WASM binary is reachable at the path the worker points ONNX Runtime at.
+  //
+  //    **The asyncify build, which is the one `ort.webgpu` actually loads.** This checked the
+  //    `jsep` pair first, found it, reported green — and the backend then failed looking for
+  //    asyncify. A reachability check against a file nothing loads is worse than no check: it
+  //    is a green tick for the wrong thing.
   await step('ONNX Runtime WASM reachable', async () => {
-    const url = chrome.runtime.getURL('vendor/transformers/ort-wasm-simd-threaded.jsep.wasm');
+    const url = chrome.runtime.getURL('vendor/transformers/ort-wasm-simd-threaded.asyncify.wasm');
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return `${Math.round((await res.blob()).size / 1e6)} MB at ${url.split('/').slice(-1)[0]}`;
@@ -129,11 +134,18 @@ document.getElementById('run').addEventListener('click', async () => {
       (m) => { if (m?.data?.audio) chunks.push(m.data.audio); });
     if (!chunks.length) throw new Error('connected and produced no audio');
 
+    // **Every chunk, in order.** HeadTTS splits on sentences, so playing `chunks[0]` alone
+    // produced "Hello." and stopped — which read as the engine truncating when it had in fact
+    // synthesised all 5.2 seconds. `kokoro.js` already chains them; this had not.
     const ctx = new AudioContext();
-    const source = ctx.createBufferSource();
-    source.buffer = chunks[0];
-    source.connect(ctx.destination);
-    source.start();
+    let at = ctx.currentTime;
+    for (const buffer of chunks) {
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(at);
+      at += buffer.duration;
+    }
     const seconds = chunks.reduce((n, b) => n + b.duration, 0).toFixed(1);
     return `${chunks.length} chunk(s), ${seconds}s — playing now`;
   });

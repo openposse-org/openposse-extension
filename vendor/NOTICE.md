@@ -73,10 +73,14 @@ variant; the WebGL backend, the Node bindings, the plain and `jspi` WASM builds 
 map are deliberately absent.
 
 **Which WASM build is needed was measured, not assumed.** The first attempt vendored the `jsep`
-pair, and `ort.webgpu` asked for `ort-wasm-simd-threaded.asyncify.mjs` — *"no available backend
-found"*. `asyncify` (21.8 MB) is what this version of the WebGPU backend loads. The `jsep` pair
-(24.2 MB) is still present because nothing has yet proved it unused, and removing it is worth
-doing once the loop runs: it is the single largest file here.
+pair on the reasoning that jsep *is* the WebGPU build; for onnxruntime-web 1.25 it is not, and
+`ort.webgpu` asked for `ort-wasm-simd-threaded.asyncify.mjs` — *"no available backend found"*.
+`asyncify` (21.8 MB) is what this version loads, and the `jsep` pair has been removed after the
+engine ran without it.
+
+If a future version reports "no available backend found", that is this again: read the missing
+filename out of the error and take that pair. Do not reason about which build WebGPU "should"
+use — that is what produced the wrong answer the first time.
 
 ## CMU dictionary
 
