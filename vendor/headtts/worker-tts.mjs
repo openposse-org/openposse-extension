@@ -10,8 +10,9 @@ import * as utils from "./utils.mjs";
 // below is itself a fetch.
 //
 // See `openposse-local-only.mjs` for why this is a shim rather than configuration.
-import { installLocalOnlyFetch } from "./openposse-local-only.mjs";
+import { installLocalOnlyFetch, reportWorkerFailures } from "./openposse-local-only.mjs";
 installLocalOnlyFetch();
+reportWorkerFailures();
 // ── end patch ──────────────────────────────────────────────────────────────────────────────
 
 // Dynamic imports

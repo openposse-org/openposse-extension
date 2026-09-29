@@ -33,6 +33,39 @@ function canonical(url) {
   }
 }
 
+/**
+ * Makes a worker that fails during setup say so, instead of being waited on for 30 seconds.
+ *
+ * HeadTTS's `setup()` is async, and both of its failure paths end in `throw`. A throw inside an
+ * async function is an **unhandled rejection**, which does not fire `Worker.onerror` — so the
+ * main thread learns nothing, waits out its timeout, and reports "Connection timed out", which
+ * is true and useless. The real message is in the worker's own console, which is a different
+ * DevTools window from the one anybody is looking at.
+ *
+ * This forwards it. `headtts.mjs` is patched to reject on these, turning a silent half-minute
+ * into an immediate, specific failure.
+ */
+export function reportWorkerFailures(self_ = self) {
+  const post = (what, detail) => {
+    try {
+      self_.postMessage({
+        type: 'openposse-error',
+        message: `${what}: ${detail?.message ?? detail ?? 'no detail'}`,
+        stack: detail?.stack ?? null,
+      });
+    } catch { /* the port is gone; the console line below is all that is left */ }
+  };
+
+  self_.addEventListener('unhandledrejection', (event) => {
+    console.error('[openposse] worker rejection —', event.reason);
+    post('worker failed', event.reason);
+  });
+  self_.addEventListener('error', (event) => {
+    console.error('[openposse] worker error —', event.message ?? event);
+    post('worker error', event.error ?? event);
+  });
+}
+
 export function installLocalOnlyFetch(self_ = self) {
   if (self_.__openposseLocalOnly) return;
   self_.__openposseLocalOnly = true;

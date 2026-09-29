@@ -286,6 +286,17 @@ class HeadTTS {
             let timeout = setTimeout(rejectedTimeout, 30000);
 
             this.ww.onmessage = (ev) => {
+              // ── OpenPosse patch ────────────────────────────────────────────────────────
+              // A failure inside the worker's async setup is an unhandled rejection, which
+              // does not reach `onerror` — so upstream waits out its 30 second timeout and
+              // reports "Connection timed out" while the real reason sits in the worker's own
+              // console. `openposse-local-only.mjs` forwards it; this rejects on it.
+              if ( ev.data?.type === 'openposse-error' ) {
+                if (timeout) { clearTimeout(timeout); timeout = null; }
+                reject( ev.data.message );
+                return;
+              }
+              // ── end patch ──────────────────────────────────────────────────────────────
               if ( ev.data?.type === 'progress' ) {
                 if (timeout) {
                   clearTimeout(timeout);
