@@ -94,7 +94,9 @@ async function openAssistant(recipe) {
  * what the clock is for.
  */
 function watchBusy(selector, { timeoutMs }) {
-  if (!selector) return { settled: async () => false };
+  if (!selector) {
+    return { selector: null, settled: async () => ({ finished: false, waited: 0 }), stop() {} };
+  }
 
   let seen = false;
   let gone = false;
@@ -108,15 +110,28 @@ function watchBusy(selector, { timeoutMs }) {
   }, 150);
 
   return {
-    async settled() {
-      // Already over, or never started: answer immediately rather than waiting to be told
-      // something that has already happened.
-      while (!gone && seen && Date.now() - startedAt < timeoutMs) {
+    selector,
+    /**
+     * Whether the vendor has finished, waiting at most `maxMs` to find out.
+     *
+     * **The budget is the caller's, and that is the whole safety property.** The first version
+     * bounded this by `responseTimeoutMs` — sixty seconds — on the reasoning that the vendor
+     * might legitimately still be working. It might; but a selector that matches something
+     * which never goes away is indistinguishable from that, and the dry run hung for a minute
+     * on its first question.
+     *
+     * So this may only ever *shorten* a wait. It spends time the caller was going to spend
+     * anyway and reports back, and the caller subtracts what was spent. A useless indicator
+     * then costs nothing at all rather than costing a minute.
+     */
+    async settled(maxMs) {
+      const deadline = Date.now() + maxMs;
+      while (!gone && seen && Date.now() < deadline) {
         await new Promise((resolve) => { setTimeout(resolve, 100); });
       }
-      clearInterval(timer);
-      return gone;
+      return { finished: gone, waited: Date.now() - startedAt };
     },
+    stop() { clearInterval(timer); },
   };
 }
 
@@ -342,8 +357,17 @@ async function askAssistant({ recipe, prompt }, emit) {
   //
   // Falls back to the clock whenever the vendor showed nothing, which is also what every recipe
   // recorded before this change does — `busySelector` is null in all of them.
-  const finished = await busy.settled();
-  const graceMs = finished ? (recipe.quietPeriodMs ?? 900) : ANSWER_GRACE_MS;
+  //
+  // **Bounded by the grace it is replacing, and the remainder is subtracted.** Waiting for the
+  // indicator and *then* paying the full grace would make a slow vendor worse than before, and
+  // an indicator that never clears would make it far worse — which is exactly what happened:
+  // bounded by `responseTimeoutMs` instead, the first dry-run question hung for a minute. The
+  // total spent here can now never exceed what the clock alone would have cost.
+  const watched = await busy.settled(ANSWER_GRACE_MS);
+  busy.stop();
+  const graceMs = watched.finished
+    ? (recipe.quietPeriodMs ?? 900)
+    : Math.max(recipe.quietPeriodMs ?? 900, ANSWER_GRACE_MS - watched.waited);
 
   let text = '';
   let readFrom = null;
@@ -415,7 +439,11 @@ async function askAssistant({ recipe, prompt }, emit) {
       // Which of the three cases decided the settle, because they produce very different
       // numbers and are otherwise indistinguishable from the outside: the vendor told us it had
       // finished, it has an indicator we never saw, or it has none recorded at all.
-      busy: finished ? 'watched' : (recipe.busySelector ? 'missed' : 'none'),
+      // The selector is included when it did not work, because "there is an indicator recorded
+      // and it never cleared" is only actionable if you can see which element was recorded.
+      busy: watched.finished
+        ? 'watched'
+        : (recipe.busySelector ? `never cleared: ${recipe.busySelector}` : 'none'),
     },
   };
 }
