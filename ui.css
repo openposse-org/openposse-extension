@@ -5,6 +5,38 @@
  * time either changed. Names match the Swift `Design.Palette` so the two can be diffed by eye.
  */
 
+/* Inter, from `vendor/inter/`, never from rsms.me.
+ *
+ * **A webfont is a network request, and this product promises there are none.** Linking the
+ * CDN would put a third-party fetch on every surface — including the orb, which is injected
+ * into somebody's Notion tab, so it would fire from inside a page the user is working in. That
+ * is the founding promise broken for a typeface. It is also remotely hosted content in a
+ * Manifest V3 extension, which the Web Store reviews for.
+ *
+ * **The family is called "OpenPosse Inter" rather than "Inter", and that matters in exactly one
+ * place.** The orb registers this face on the *vendor's* document, because `@font-face` inside
+ * a shadow root is not reliably honoured. A vendor that ships its own Inter — and plenty do —
+ * would then have two faces under one name and its own typography could change. A name nobody
+ * else uses cannot collide.
+ *
+ * One file: the variable font, 100–900, 352 kB. Static weights would be six requests and more
+ * bytes. `font-optical-sizing` is what Inter v4 asks for; it drives the `opsz` axis.
+ */
+@font-face {
+  font-family: "OpenPosse Inter";
+  src: url("vendor/inter/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Named once so the fallback cannot drift between surfaces. The system stack behind it is not
+ * decoration: a font that fails to load must leave readable text, not a serif default. */
+:root {
+  --ui: "OpenPosse Inter", -apple-system, system-ui, "Segoe UI", sans-serif;
+  --code: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
 :root {
   color-scheme: dark;
 
@@ -46,7 +78,8 @@ body {
   margin: 0;
   background: var(--stage);
   color: var(--text);
-  font: 13px/1.45 -apple-system, "SF Pro Text", system-ui, sans-serif;
+  font: 13px/1.45 var(--ui);
+  font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -55,7 +88,7 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 7px; }
 p  { color: var(--text-dim); margin: 0 0 14px; }
 
 .mono {
-  font-family: "SF Mono", ui-monospace, SFMono-Regular, monospace;
+  font-family: var(--code);
   font-size: 10.5px;
 }
 
@@ -198,7 +231,7 @@ input[type="text"]::placeholder { color: var(--text-faint); }
   padding: 9px 11px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.05);
-  font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 11px/1.6 var(--code);
   color: var(--text-faint);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -226,7 +259,7 @@ input[type="text"]::placeholder { color: var(--text-faint); }
 /* The dead-mic badge, worded exactly as the design specifies. Colour is never the only
  * signal — the words carry it too, for anyone who cannot tell red from green. */
 .dead-mic {
-  font-family: "SF Mono", ui-monospace, monospace;
+  font-family: var(--code);
   font-size: 9.5px;
   letter-spacing: 0.06em;
   color: var(--error);

@@ -181,6 +181,48 @@ if (!globalThis.__openposseOrb) {
     ring(R * 0.035, 0.92, 0);
   }
 
+  // ── The typeface ─────────────────────────────────────────────────────────────────────────
+
+  /** Registered once per page, not once per panel. */
+  let fontRegistered = false;
+
+  /**
+   * Puts Inter on **the vendor's document**, which is the one thing here that is not obvious.
+   *
+   * Everything else about this panel is sealed inside a closed shadow root. A font cannot be:
+   * `@font-face` declared inside a shadow root is not reliably honoured, and font loading is a
+   * document-level register either way. So the face is added to the page's own `document.fonts`
+   * and the shadow CSS then just names it.
+   *
+   * **Which is why the family is "OpenPosse Inter" and not "Inter".** Plenty of vendors ship
+   * their own Inter. Adding a second face under that name to their document would leave two
+   * competing definitions and could change *their* typography — this panel is a guest and must
+   * not redecorate. A name nobody else uses cannot collide, and nothing in the page references
+   * it, so the page renders exactly as it did.
+   *
+   * Failure is cosmetic — the CSS falls through to the system stack — but it is **reported**,
+   * because "the panel looks wrong on this one site" with nothing in the console is a bug
+   * somebody would spend an afternoon on.
+   */
+  function ensureFont() {
+    if (fontRegistered) return;
+    fontRegistered = true;
+    try {
+      const url = chrome.runtime.getURL('vendor/inter/InterVariable.woff2');
+      const face = new FontFace('OpenPosse Inter', `url(${url})`, {
+        weight: '100 900',
+        display: 'swap',
+      });
+      face.load()
+        .then((loaded) => document.fonts.add(loaded))
+        .catch((error) => {
+          console.warn('[openposse] Inter would not load —', error?.message ?? error);
+        });
+    } catch (error) {
+      console.warn('[openposse] Inter could not be registered —', error?.message ?? error);
+    }
+  }
+
   // ── The panel ────────────────────────────────────────────────────────────────────────────
 
   const CSS = `
@@ -189,7 +231,13 @@ if (!globalThis.__openposseOrb) {
       position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%);
       z-index: 2147483647;
       width: 452px;
-      font: 400 13px/1.45 -apple-system, "SF Pro Text", system-ui, sans-serif;
+      /* Defined here rather than on :host, which is \`all: initial\` on purpose so nothing the
+         page sets can reach in. Kept identical to \`ui.css\` — the panel and the settings page
+         disagreeing about their own typeface would be visible and pointless. */
+      --ui: "OpenPosse Inter", -apple-system, system-ui, "Segoe UI", sans-serif;
+      --code: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+      font: 400 13px/1.45 var(--ui);
+      font-optical-sizing: auto;
       -webkit-font-smoothing: antialiased;
       color: #fff;
       /* Not hit-testable except where it has to be. The page underneath stays usable, which
@@ -250,7 +298,7 @@ if (!globalThis.__openposseOrb) {
     .title { font-size: 13.5px; font-weight: 600; letter-spacing: -.008em; }
     .spacer { flex: 1; }
     .key {
-      font-family: "SF Mono", ui-monospace, SFMono-Regular, monospace;
+      font-family: var(--code);
       font-size: 10.5px; color: rgba(235,235,245,.58);
     }
 
@@ -262,7 +310,7 @@ if (!globalThis.__openposseOrb) {
     canvas { width: 168px; height: 168px; display: block; }
     .deadmic {
       position: absolute; bottom: 14px;
-      font-family: "SF Mono", ui-monospace, monospace;
+      font-family: var(--code);
       font-size: 9.5px; letter-spacing: .06em; color: #FF453A;
       background: rgba(255,69,58,.12);
       box-shadow: inset 0 0 0 .5px rgba(255,69,58,.4);
@@ -335,7 +383,7 @@ if (!globalThis.__openposseOrb) {
        different product would read as having left OpenPosse behind. */
     .coach { padding: 2px 0 4px; }
     .coach .step {
-      font: 600 9.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      font: 600 9.5px/1 var(--code);
       letter-spacing: .08em; color: rgba(235,235,245,.42); margin-bottom: 10px;
     }
     .coach .say { font-size: 14px; line-height: 1.45; color: rgba(255,255,255,.92); }
@@ -347,7 +395,7 @@ if (!globalThis.__openposseOrb) {
     .coach .row .detail.none { color: rgba(235,235,245,.42); font-family: inherit; }
     .coach .row .label { color: rgba(235,235,245,.55); flex: 0 0 92px; }
     .coach .row .kind {
-      font: 600 8.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      font: 600 8.5px/1 var(--code);
       letter-spacing: .06em; color: rgba(235,235,245,.34); flex: 0 0 auto;
       align-self: center;
     }
@@ -356,7 +404,7 @@ if (!globalThis.__openposseOrb) {
        half of a selector out of reach — and "hover for the rest" is no answer to a screenshot.
        A taller card is the cheaper cost. */
     .coach .row .detail {
-      font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      font: 11px/1.4 var(--code);
       color: rgba(255,255,255,.75); flex: 1 1 auto;
       white-space: normal; overflow-wrap: anywhere;
     }
@@ -386,6 +434,8 @@ if (!globalThis.__openposseOrb) {
     }
     .coach .name button:disabled { opacity: .35; cursor: default; }
   `;
+
+  ensureFont();
 
   const host = document.createElement('div');
   // `closed`, not `open`: nothing outside needs to reach in, and a closed root cannot be

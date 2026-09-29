@@ -22,6 +22,7 @@ licence text committed beside the code it covers:
   extension/vendor/transformers/
     transformers.min.js                      transformers.js, Apache-2.0
     ort-wasm-simd-threaded.asyncify.*        ONNX Runtime Web, MIT
+  extension/vendor/inter/                    Inter, SIL Open Font License 1.1
   extension/dictionaries/en-us.txt           CMU Pronouncing Dictionary,
                                              simplified BSD, via HeadTTS
 

@@ -44,6 +44,9 @@ export default [
         // so the orb's radius comes from a second capture of the same device through this.
         AudioContext: 'readonly',
         Float32Array: 'readonly',
+        // The orb registers Inter on the *vendor's* document, because a font face declared
+        // inside a shadow root is not reliably honoured. See `ensureFont` in `orb.js`.
+        FontFace: 'readonly',
         // Speaking, also in the offscreen document — a service worker has no DOM and so no
         // speech synthesis, and an utterance started in a tab dies when that tab navigates.
         speechSynthesis: 'readonly',
