@@ -89,6 +89,47 @@ test('an agent with no stored voice gets an American one', () => {
   assert.equal(KOKORO_VOICES.find((v) => v.id === chosen).lang, 'en-US');
 });
 
+test('a voice somebody chose is kept, and the rest fill in around it', () => {
+  // **The failure this prevents is silent and delayed.** The assignment hands out distinct
+  // voices so no two agents sound alike, and left to itself it would reassign on every roster
+  // change — so the agent you deliberately gave a voice to acquires a different one because
+  // somebody else was recorded, days later, with nothing to connect cause to effect.
+  const agents = [
+    { id: 'first', voice: null },
+    { id: 'chosen', voice: 'bm_george' },
+    { id: 'third', voice: null },
+  ];
+
+  const got = assignKokoroVoices(agents);
+  assert.equal(got.get('chosen'), 'bm_george');
+  // Still all different: an explicit choice is taken out of the pool rather than ignored by it.
+  assert.equal(new Set(got.values()).size, 3);
+  assert.notEqual(got.get('first'), 'bm_george');
+  assert.notEqual(got.get('third'), 'bm_george');
+});
+
+test('a chosen voice survives an agent being added before it', () => {
+  // The same rule stated as the thing a user would actually notice.
+  const before = assignKokoroVoices([{ id: 'a', voice: 'bf_emma' }]).get('a');
+  const after = assignKokoroVoices([
+    { id: 'new', voice: null }, { id: 'a', voice: 'bf_emma' },
+  ]).get('a');
+  assert.equal(before, 'bf_emma');
+  assert.equal(after, 'bf_emma');
+});
+
+test('a voice that is not installed is not handed out', () => {
+  // Only six of Kokoro's twenty-eight are downloaded. Assigning one of the other twenty-two
+  // fails at the first answer, three layers from anything that could explain it — so the
+  // caller passes what is on disk and the heuristic must stay inside it.
+  const installed = [{ id: 'bm_george', lang: 'en-GB' }, { id: 'af_heart', lang: 'en-US' }];
+  const agents = [{ id: '1' }, { id: '2' }, { id: '3', voice: 'bf_isabella' }];
+
+  for (const chosen of assignKokoroVoices(agents, installed).values()) {
+    assert.ok(installed.some((v) => v.id === chosen), `${chosen} is not installed`);
+  }
+});
+
 test('more agents than voices collide rather than falling silent', () => {
   const two = [{ id: 'a', lang: 'en-US' }, { id: 'b', lang: 'en-GB' }];
   const agents = [{ id: '1' }, { id: '2' }, { id: '3' }];

@@ -13,6 +13,7 @@
 
 import {
   loadRoster, recipeFor, findAgent, addAgent, replaceRecipe, freeName, renameAgent, removeAgent,
+  setAgentVoice,
 } from './storage.js';
 import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
@@ -967,6 +968,14 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   if (request?.kind === 'openposse.agent.rerecord') {
     rerecord(request.agentId).then(respond, (error) => {
       console.error('[openposse] re-record could not start —', error);
+      respond({ ok: false, reason: String(error?.message ?? error) });
+    });
+    return true;
+  }
+
+  if (request?.kind === 'openposse.agent.voice') {
+    setAgentVoice(request.agentId, request.voice).then(respond, (error) => {
+      console.error('[openposse] voice could not be set —', error);
       respond({ ok: false, reason: String(error?.message ?? error) });
     });
     return true;

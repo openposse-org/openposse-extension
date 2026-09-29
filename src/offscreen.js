@@ -20,7 +20,7 @@
 
 import { assignVoices } from './voices.js';
 import { chooseEngine, hasWebGPU, assignKokoroVoices } from './tts.js';
-import { weightsStatus } from './weights.js';
+import { weightsStatus, VOICES } from './weights.js';
 import { speak as speakWithKokoro, cancel as cancelKokoro, warm as warmKokoro } from './kokoro.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
@@ -349,7 +349,14 @@ async function speak({ text, agentID, roster = [] }) {
   // whole of the remaining change.
   const { engine: chosen } = await engine();
   if (chosen === 'kokoro') {
-    const voice = assignKokoroVoices(roster).get(agentID) ?? 'bm_george';
+    // **Only the voices actually on disk.** The default list is all 28 Kokoro publishes and
+    // six were downloaded, so the heuristic would hand a third British agent `bf_isabella` —
+    // a file the shim would refuse, correctly, three layers from anything that could explain
+    // it. What is downloadable and what is downloaded are different questions, and `weights.js`
+    // answers the second.
+    const installed = VOICES.map(({ id }) => ({ id, lang: /^b/.test(id) ? 'en-GB' : 'en-US' }));
+    const voice = assignKokoroVoices(roster, installed).get(agentID) ?? installed[0]?.id
+      ?? 'bm_george';
     send('openposse.speaking', { started: true });
     const result = await speakWithKokoro(text, voice, {
       // A real amplitude, on the same channel the microphone uses — so the orb follows an

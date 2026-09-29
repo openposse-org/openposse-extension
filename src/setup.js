@@ -484,6 +484,46 @@ async function refreshRoster() {
       if (event.key === 'Escape') { rename.value = agent.name; rename.blur(); }
     });
 
+    // ── Its voice ──────────────────────────────────────────────────────────────────────
+    //
+    // **Only the voices that are actually downloaded**, because offering one that is not on
+    // disk would fail at the first answer, three layers from anything that could explain it.
+    // Empty is a real choice rather than an absence: it hands the agent back to the accent
+    // heuristic, which keeps every agent sounding different as the roster grows.
+    const voice = document.createElement('select');
+    voice.className = 'voice-pick';
+    voice.setAttribute('aria-label', `Voice for ${agent.name}`);
+
+    const auto = document.createElement('option');
+    auto.value = '';
+    auto.textContent = 'Chosen for me';
+    voice.append(auto);
+
+    for (const { id } of VOICES) {
+      const { name, accent } = describeVoice(id);
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent = `${name} · ${accent}`;
+      voice.append(option);
+    }
+    voice.value = VOICES.some((v) => v.id === agent.voice) ? agent.voice : '';
+
+    voice.addEventListener('change', async () => {
+      const result = await chrome.runtime
+        .sendMessage({ kind: 'openposse.agent.voice', agentId: agent.id, voice: voice.value })
+        .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+
+      if (!result?.ok) {
+        problemLine.textContent = result?.reason ?? 'could not set that voice';
+        problemLine.className = 'kind bad';
+        problemLine.hidden = false;
+        return;
+      }
+      // Spoken back rather than only saved. A voice is the one setting here you cannot judge
+      // by reading, and hearing it immediately is the difference between choosing and guessing.
+      if (voice.value) speakWithKokoro(sample(), voice.value).catch(() => {});
+    });
+
     // ── What it captured, re-recording, and removing ───────────────────────────────────
     const tools = document.createElement('div');
     tools.className = 'tools';
@@ -559,7 +599,7 @@ async function refreshRoster() {
 
     tools.append(see, again, remove);
     text.append(problemLine, details);
-    row.append(rename, tools);
+    row.append(rename, voice, tools);
     target.append(row);
   }
 }

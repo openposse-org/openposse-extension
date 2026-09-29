@@ -131,6 +131,25 @@ export function freeName(agents, wanted) {
   return `${base} ${Date.now()}`;
 }
 
+/**
+ * Gives an agent a voice, or clears it back to being chosen for them.
+ *
+ * An empty `voice` is a real choice rather than a failure to choose: it puts the agent back
+ * under the accent heuristic, which keeps every agent sounding different as the roster changes.
+ * Somebody who picks a voice is opting out of that, and out of it being reconsidered later.
+ */
+export async function setAgentVoice(agentID, voice) {
+  const { agents } = await loadRoster();
+  if (!agents.some((a) => a.id === agentID)) return { ok: false, reason: 'no such agent' };
+
+  await chrome.storage.local.set({
+    [AGENTS_KEY]: agents.map(
+      (a) => (a.id === agentID ? { ...a, voice: voice || null } : a),
+    ),
+  });
+  return { ok: true, voice: voice || null };
+}
+
 /** Renames an agent. The recipe keeps its own copy, so both are updated. */
 export async function renameAgent(agentID, name) {
   const { agents } = await loadRoster();

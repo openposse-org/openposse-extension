@@ -130,8 +130,26 @@ export async function hasWebGPU() {
 export function assignKokoroVoices(agents, voices = KOKORO_VOICES) {
   const taken = new Set();
   const out = new Map();
+  const known = new Set(voices.map((v) => v.id));
+
+  // **A voice somebody chose is not a hint to be improved on.** The loop below hands out
+  // distinct voices so no two agents sound alike, and left to itself it would reassign a
+  // deliberate choice on the next roster change — the agent you gave a particular voice to
+  // would quietly acquire a different one because somebody else was recorded.
+  //
+  // So explicit choices are settled first and their voices marked taken. The heuristic then
+  // fills in around them, which is what it is for: nobody has said anything about those.
+  for (const agent of agents ?? []) {
+    if (known.has(agent?.voice)) {
+      taken.add(agent.voice);
+      out.set(agent.id, agent.voice);
+    }
+  }
 
   for (const agent of agents ?? []) {
+    if (out.has(agent.id)) continue;
+    // A stored *system* voice identifier is not a Kokoro id, but it does say which accent was
+    // wanted, so it is still worth reading rather than discarding.
     const wanted = /en-GB/i.test(String(agent?.voice ?? '')) ? 'en-GB' : 'en-US';
     const free = voices.filter((v) => !taken.has(v.id));
     const pool = free.length > 0 ? free : voices;
