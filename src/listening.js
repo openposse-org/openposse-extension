@@ -415,11 +415,16 @@ export function handleOffscreenMessage(message) {
       return true;
 
     case 'openposse.speaking':
-      // A word boundary. Pulsed rather than metered: `speechSynthesis` exposes no audio node,
-      // so this is speech *rate*, and the orb eases between pulses into something that reads
-      // as a voice. Honest, and honestly coarser than the microphone's real amplitude.
+      // Two engines, two grades of signal, one channel.
+      //
+      // Kokoro sends a real `level` measured off the audio on its way to the speakers, so the
+      // orb follows an answering agent exactly as it follows you. `speechSynthesis` cannot:
+      // it renders straight to the device and exposes no audio node, so all it can offer is a
+      // word boundary — speech *rate* — which the orb eases between into something that at
+      // least moves with the words.
       if (message.started) panelSpeaking(true);
-      panelLevel(message.pulse ? 0.85 : 0.4);
+      if (typeof message.level === 'number') panelLevel(message.level);
+      else panelLevel(message.pulse ? 0.85 : 0.4);
       return true;
 
     case 'openposse.spoke':

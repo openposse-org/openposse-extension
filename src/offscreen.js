@@ -352,7 +352,10 @@ async function speak({ text, agentID, roster = [] }) {
     const voice = assignKokoroVoices(roster).get(agentID) ?? 'bm_george';
     send('openposse.speaking', { started: true });
     const result = await speakWithKokoro(text, voice, {
-      onPulse: () => send('openposse.speaking', { pulse: true }),
+      // A real amplitude, on the same channel the microphone uses — so the orb follows an
+      // answering agent exactly as it follows you. The system-voice path can only send
+      // `pulse`, because `speechSynthesis` exposes no audio to measure.
+      onLevel: (level) => send('openposse.speaking', { level }),
     });
 
     // **No silent fall-through to the system voices.** Getting the other voices when Kokoro

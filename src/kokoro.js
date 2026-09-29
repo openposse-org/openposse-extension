@@ -104,7 +104,7 @@ export async function warm() {
  * @param onPulse  called as each chunk starts playing, for the orb
  * @returns `{ ok }` or `{ ok: false, reason }`
  */
-export async function speak(text, voice, { onPulse = () => {} } = {}) {
+export async function speak(text, voice, { onLevel = () => {} } = {}) {
   if (!text) return { ok: true };
 
   try {
@@ -122,7 +122,7 @@ export async function speak(text, voice, { onPulse = () => {} } = {}) {
     });
 
     if (chunks.length === 0) return { ok: false, reason: 'kokoro-no-audio' };
-    return play(chunks, onPulse);
+    return play(chunks, onLevel);
   } catch (error) {
     // The session is dropped rather than latched, so one bad load does not disable neural
     // voices for the rest of the browser session. The reason is passed up: a refused network
@@ -132,34 +132,61 @@ export async function speak(text, voice, { onPulse = () => {} } = {}) {
   }
 }
 
+/** ~20 Hz, matching the microphone meter. The orb runs at 60 and eases between readings. */
+const LEVEL_MS = 50;
+
 /**
- * Plays the synthesised buffers in order, pulsing as each starts.
+ * Plays the synthesised buffers in order, reporting the **real output level** as it goes.
  *
- * Sequential `AudioBufferSourceNode`s rather than one concatenation: HeadTTS splits on
- * sentences, so a chunk boundary is a sentence boundary, and starting each one is a natural
- * moment to move the orb. It is a coarser signal than a real amplitude envelope and a much
- * better one than `speechSynthesis` allows — that exposes no audio at all.
+ * This is what the design asks for and `speechSynthesis` cannot give: "the TTS output level
+ * while an agent speaks". The system-voice path has to make do with `boundary` events — speech
+ * *rate*, not loudness — because it renders straight to the device and exposes no audio node.
+ * Here the audio is ours before it is heard, so an `AnalyserNode` on the way to the speakers
+ * gives the orb the same signal the microphone gives it, and for the same reason: an orb that
+ * moves with the voice is an instrument, and one that moves on a timer is an animation.
+ *
+ * Without this, Kokoro would have driven the orb *worse* than the voices it replaces — two or
+ * three pulses across ten seconds, one per sentence.
+ *
+ * Sequential source nodes rather than one concatenation, so `cancel` can stop mid-sentence.
  */
-function play(buffers, onPulse) {
+function play(buffers, onLevel) {
   return new Promise((resolve) => {
     const ctx = new AudioContext();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.connect(ctx.destination);
+    const samples = new Float32Array(analyser.fftSize);
+
+    const meter = setInterval(() => {
+      analyser.getFloatTimeDomainData(samples);
+      let sum = 0;
+      for (let i = 0; i < samples.length; i += 1) sum += samples[i] * samples[i];
+      const rms = Math.sqrt(sum / samples.length);
+      // Same decibel mapping as the microphone, so the orb behaves identically whether it is
+      // following you or following an agent — which is the point of it being one orb.
+      const db = 20 * Math.log10(Math.max(rms, 1e-6));
+      onLevel(Math.min(1, Math.max(0, (db + 55) / 45)));
+    }, LEVEL_MS);
+
     let index = 0;
+    const finish = (result) => {
+      clearInterval(meter);
+      onLevel(0);
+      playing = null;
+      ctx.close().catch(() => {});
+      resolve(result);
+    };
 
     const next = () => {
-      if (index >= buffers.length) {
-        playing = null;
-        ctx.close().catch(() => {});
-        resolve({ ok: true });
-        return;
-      }
+      if (index >= buffers.length) return finish({ ok: true });
       const source = ctx.createBufferSource();
       source.buffer = buffers[index];
-      source.connect(ctx.destination);
+      source.connect(analyser);
       source.onended = () => { if (playing) next(); };
-      playing = { ctx, source };
+      playing = { ctx, source, meter };
       index += 1;
-      onPulse();
-      source.start();
+      return source.start();
     };
 
     next();
@@ -169,8 +196,9 @@ function play(buffers, onPulse) {
 /** Stops mid-sentence. The promise from `speak` resolves as cancelled, not as an error. */
 export function cancel() {
   if (!playing) return;
-  const { ctx, source } = playing;
+  const { ctx, source, meter } = playing;
   playing = null;
+  clearInterval(meter);          // or the orb keeps reading a context that is closing
   try { source.stop(); } catch { /* already finished */ }
   ctx.close().catch(() => {});
 }
