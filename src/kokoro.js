@@ -148,36 +148,60 @@ export async function speak(text, voice, { onLevel = () => {} } = {}) {
 
     await engine.setup({ voice, language: 'en-us', audioEncoding: 'wav' });
 
-    // Collected rather than streamed into the speakers by HeadTTS itself, because playback has
-    // to be ours: `cancel` must be able to stop mid-sentence when somebody presses the shortcut
-    // to interrupt, and an engine that owns its own output gives us nothing to stop.
+    // Playback is ours rather than HeadTTS's, because `cancel` must be able to stop
+    // mid-sentence when somebody interrupts, and an engine that owns its own output gives us
+    // nothing to stop.
+    //
+    // **Each chunk is spoken as it arrives, not after the last one.** Collecting them all first
+    // meant the wait before the first word was the time to synthesise the *whole* answer:
+    // measured at 5.1 s before a 3.3 s reply began. A sentence is playable the moment it exists,
+    // and every later sentence is then synthesised against time that is already being spent
+    // speaking. The engine only has to keep ahead of the speakers, not finish before them.
     const synthAt = performance.now();
+    const player = play(onLevel);
+    playing = player;
     const chunks = [];
+    let silent = false;
+
     await engine.synthesize({ input: text }, (message) => {
-      if (message?.data?.audio) chunks.push(message.data.audio);
+      const audio = message?.data?.audio;
+      if (!audio) return;
+      chunks.push(audio);
+
+      // **"Nothing was heard" and "nothing was produced" are different faults**, and until this
+      // existed they were the same event: buffers of the right duration played for the right
+      // number of milliseconds and resolved successfully while the room stayed quiet.
+      //
+      // Judged on the first chunk, because that is the one that can still be acted on. A dtype
+      // that computes NaN does it on every chunk, so the first is representative; waiting for
+      // the last would mean the fallback voice could only start after the silence had already
+      // been "spoken". `ms.peak` below still reports across all of them.
+      if (chunks.length === 1 && peak([audio]) < 1e-4) { silent = true; return; }
+      if (silent) return;
+
+      if (chunks.length === 1) ms.firstWord = Math.round(performance.now() - started);
+      player.push(audio);
     });
+
     ms.synth = Math.round(performance.now() - synthAt);
     ms.chunks = chunks.length;
     ms.audio = Math.round(chunks.reduce((n, b) => n + b.duration, 0) * 1000);
     ms.peak = peak(chunks);
     ms.rate = chunks[0]?.sampleRate ?? 0;
 
-    if (chunks.length === 0) return { ok: false, reason: 'kokoro-no-audio', ms };
+    if (chunks.length === 0 || silent) {
+      player.stop();
+      // A model producing silence is a failed answer, not a spoken one, so the caller falls
+      // back to a system voice. Speech that cannot be heard is worse than a plainer voice.
+      return {
+        ok: false,
+        reason: chunks.length === 0 ? 'kokoro-no-audio' : 'kokoro-silent-audio',
+        ms,
+      };
+    }
 
-    // **"Nothing was heard" and "nothing was produced" are different faults**, and until this
-    // line existed they were the same event: buffers of the right duration played for the right
-    // number of milliseconds and resolved successfully, while the room stayed quiet. Whether the
-    // samples are zero is the one measurement that tells the two apart, so it is taken every
-    // time rather than added back whenever somebody reports silence.
-    //
-    // A model producing silence is a failed answer, not a spoken one — so it is reported as a
-    // failure and the caller falls back to a system voice. Speech that cannot be heard is worse
-    // than a plainer voice that can.
-    if (ms.peak < 1e-4) return { ok: false, reason: 'kokoro-silent-audio', ms };
-
-    const playAt = performance.now();
-    const result = await play(chunks, onLevel);
-    ms.play = Math.round(performance.now() - playAt);
+    const result = await player.finish();
+    ms.play = Math.round(performance.now() - synthAt);
     return { ...result, ms };
   } catch (error) {
     // The session is dropped rather than latched, so one bad load does not disable neural
@@ -214,69 +238,108 @@ function peak(buffers) {
 const LEVEL_MS = 50;
 
 /**
- * Plays the synthesised buffers in order, reporting the **real output level** as it goes.
+ * A player that accepts buffers while it is already speaking, reporting the **real output
+ * level** as it goes.
  *
- * This is what the design asks for and `speechSynthesis` cannot give: "the TTS output level
- * while an agent speaks". The system-voice path has to make do with `boundary` events — speech
- * *rate*, not loudness — because it renders straight to the device and exposes no audio node.
- * Here the audio is ours before it is heard, so an `AnalyserNode` on the way to the speakers
- * gives the orb the same signal the microphone gives it, and for the same reason: an orb that
- * moves with the voice is an instrument, and one that moves on a timer is an animation.
+ * The level is what the design asks for and `speechSynthesis` cannot give: "the TTS output
+ * level while an agent speaks". The system-voice path has to make do with `boundary` events —
+ * speech *rate*, not loudness — because it renders straight to the device and exposes no audio
+ * node. Here the audio is ours before it is heard, so an `AnalyserNode` on the way to the
+ * speakers gives the orb the same signal the microphone gives it. An orb that moves with the
+ * voice is an instrument; one that moves on a timer is an animation.
  *
- * Without this, Kokoro would have driven the orb *worse* than the voices it replaces — two or
- * three pulses across ten seconds, one per sentence.
+ * **Chunks are scheduled on the audio clock, not chained on `onended`.** Chaining was correct
+ * while every buffer existed before playback began, and is wrong now that they arrive during
+ * it: starting each one when the previous *ends* adds a main-thread callback's worth of gap
+ * between sentences, and the gaps are audible. `start(when)` against `ctx.currentTime` hands
+ * the sequencing to the audio clock and the joins are sample-accurate.
  *
- * Sequential source nodes rather than one concatenation, so `cancel` can stop mid-sentence.
+ * `Math.max(ctx.currentTime, nextAt)` is the whole fallback for synthesis losing the race: if
+ * the speakers have already drained, the next sentence starts immediately instead of being
+ * scheduled in the past. There is a gap either way; this is where it goes, and it is the honest
+ * place for it.
  */
-function play(buffers, onLevel) {
-  return new Promise((resolve) => {
-    const ctx = new AudioContext();
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 1024;
-    analyser.connect(ctx.destination);
-    const samples = new Float32Array(analyser.fftSize);
+function play(onLevel) {
+  const ctx = new AudioContext();
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  analyser.connect(ctx.destination);
+  const samples = new Float32Array(analyser.fftSize);
 
-    const meter = setInterval(() => {
-      analyser.getFloatTimeDomainData(samples);
-      let sum = 0;
-      for (let i = 0; i < samples.length; i += 1) sum += samples[i] * samples[i];
-      const rms = Math.sqrt(sum / samples.length);
-      // Same decibel mapping as the microphone, so the orb behaves identically whether it is
-      // following you or following an agent — which is the point of it being one orb.
-      const db = 20 * Math.log10(Math.max(rms, 1e-6));
-      onLevel(Math.min(1, Math.max(0, (db + 55) / 45)));
-    }, LEVEL_MS);
+  const meter = setInterval(() => {
+    analyser.getFloatTimeDomainData(samples);
+    let sum = 0;
+    for (let i = 0; i < samples.length; i += 1) sum += samples[i] * samples[i];
+    const rms = Math.sqrt(sum / samples.length);
+    // Same decibel mapping as the microphone, so the orb behaves identically whether it is
+    // following you or following an agent — which is the point of it being one orb.
+    const db = 20 * Math.log10(Math.max(rms, 1e-6));
+    onLevel(Math.min(1, Math.max(0, (db + 55) / 45)));
+  }, LEVEL_MS);
 
-    let index = 0;
-    const finish = (result) => {
-      clearInterval(meter);
-      onLevel(0);
-      playing = null;
-      ctx.close().catch(() => {});
-      resolve(result);
-    };
+  const sources = [];
+  let nextAt = 0;
+  let outstanding = 0;
+  let noMoreComing = false;
+  let settle = null;
+  let stopped = false;
 
-    const next = () => {
-      if (index >= buffers.length) return finish({ ok: true });
+  const done = new Promise((resolve) => { settle = resolve; });
+
+  const teardown = (result) => {
+    if (stopped) return;
+    stopped = true;
+    clearInterval(meter);
+    onLevel(0);
+    if (playing === player) playing = null;
+    ctx.close().catch(() => {});
+    settle(result);
+  };
+
+  // Resolving needs *both* conditions: nothing still playing, and nothing more to come. Either
+  // one alone is wrong — the speakers drain between sentences while synthesis continues, and
+  // the last chunk arrives well before it has been spoken.
+  const maybeDone = () => {
+    if (noMoreComing && outstanding === 0) teardown({ ok: true });
+  };
+
+  const player = {
+    push(buffer) {
+      if (stopped) return;
       const source = ctx.createBufferSource();
-      source.buffer = buffers[index];
+      source.buffer = buffer;
       source.connect(analyser);
-      source.onended = () => { if (playing) next(); };
-      playing = { ctx, source, meter };
-      index += 1;
-      return source.start();
-    };
+      const at = Math.max(ctx.currentTime, nextAt);
+      nextAt = at + buffer.duration;
+      outstanding += 1;
+      source.onended = () => { outstanding -= 1; maybeDone(); };
+      sources.push(source);
+      source.start(at);
+    },
 
-    next();
-  });
+    /** No more chunks are coming. Resolves once what is already scheduled has been heard. */
+    finish() {
+      noMoreComing = true;
+      maybeDone();
+      return done;
+    },
+
+    /** Gives up without speaking what is queued — a silent model, or an interruption. */
+    stop() {
+      for (const source of sources) {
+        try { source.stop(); } catch { /* already finished, or never started */ }
+      }
+      teardown({ ok: false, reason: 'cancelled' });
+    },
+  };
+
+  return player;
 }
 
 /** Stops mid-sentence. The promise from `speak` resolves as cancelled, not as an error. */
 export function cancel() {
   if (!playing) return;
-  const { ctx, source, meter } = playing;
+  const player = playing;
   playing = null;
-  clearInterval(meter);          // or the orb keeps reading a context that is closing
-  try { source.stop(); } catch { /* already finished */ }
-  ctx.close().catch(() => {});
+  player.stop();
 }

@@ -62,13 +62,17 @@ test('the dtype and the model file agree, and the dtype is one that exists', () 
   // An unrecognised dtype is silent by design, which is why the pairing has to be asserted
   // here: nothing downstream will ever complain that the two disagree.
   assert.ok(KNOWN_DTYPES.includes(DTYPE), `${DTYPE} is not a dtype transformers.js accepts`);
-  assert.match(
-    MODEL.url,
-    // transformers.js names the q8 file `model_quantized.onnx`; every other dtype is
-    // `model_<dtype>.onnx`.
-    DTYPE === 'q8' ? /model_quantized\.onnx$/ : new RegExp(`model_${DTYPE}\\.onnx$`),
-    `the pinned file does not match dtype ${DTYPE}`,
-  );
+
+  // transformers.js has **two** names that do not follow the pattern, and both are load-bearing
+  // here: fp32 is the unsuffixed `model.onnx`, because it is the default the others are derived
+  // from, and q8 is `model_quantized.onnx` from before the dtype names were generalised.
+  // Everything else is `model_<dtype>.onnx`.
+  const expected = {
+    fp32: /(^|\/)model\.onnx$/,
+    q8: /model_quantized\.onnx$/,
+  }[DTYPE] ?? new RegExp(`model_${DTYPE}\\.onnx$`);
+
+  assert.match(MODEL.url, expected, `the pinned file does not match dtype ${DTYPE}`);
 });
 
 test('six voices, split so accents and genders both survive', () => {
@@ -86,10 +90,15 @@ test('the advertised total matches what is actually listed', () => {
   // real sum rather than a figure that was true once.
   assert.equal(TOTAL_BYTES, ALL.reduce((n, f) => n + f.bytes, 0));
 
-  // A sanity band, not an expectation. It moved from ~89 MB to ~166 MB when the model went
-  // from q8 to fp16 for GPU kernel coverage, and this test caught that — which is the point.
-  // The upper bound is where a download stops being something to offer casually.
-  assert.ok(TOTAL_BYTES > 50e6 && TOTAL_BYTES < 250e6, `${Math.round(TOTAL_BYTES / 1e6)} MB`);
+  // A sanity band, not an expectation, and it has now caught the model changing twice: ~89 MB
+  // to ~166 MB (q8 → fp16, for GPU kernels), then to ~329 MB (fp16 → fp32, because fp16 turned
+  // out to synthesise silence on WebGPU). Both were deliberate, and the test is doing its job
+  // by making each one an explicit edit here rather than a number that drifted.
+  //
+  // The upper bound is where a download stops being something to offer casually. 329 MB is
+  // already past that — it is offered on purpose, with the figure shown, and the ceiling is set
+  // just above it so the *next* increase still has to be argued for.
+  assert.ok(TOTAL_BYTES > 50e6 && TOTAL_BYTES < 400e6, `${Math.round(TOTAL_BYTES / 1e6)} MB`);
 });
 
 test('every file has a hash, and they look like hashes', () => {

@@ -53,14 +53,15 @@ export const MODEL_REPO = 'onnx-community/Kokoro-82M-v1.0-ONNX-timestamped';
 export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
 
 /**
- * The model: **q8**, and the reason is correctness rather than size.
+ * The model: **fp32**, the only variant that is both numerically sound on the GPU and fully
+ * accelerated by it. 326 MB, chosen knowingly.
  *
  * ## Do not switch this to fp16. It was tried, and it is silent.
  *
- * The obvious reasoning — int8 graphs frequently have no WebGPU kernels, so part of the graph
- * falls back to the CPU — is **true**, and it is why q8 measures ~1.6× real time. fp16 fixes
- * exactly that: it synthesised 5.3 seconds of speech in 660 ms, **0.12× real time**, thirteen
- * times faster.
+ * The reasoning that leads there is sound, which is what makes it worth writing down. int8
+ * graphs frequently have no WebGPU kernels, so part of the graph falls back to the CPU — true,
+ * and why q8 measured ~1.6× real time. fp16 fixes exactly that: 5.3 seconds of speech in
+ * 660 ms, **0.12× real time**, thirteen times faster.
  *
  * Every sample was zero. Peak amplitude `0` on a buffer of the correct duration, at the correct
  * rate, from a session that ran on the GPU and reported no error.
@@ -72,17 +73,22 @@ export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
  * NaN reaches the WAV encoder and lands as silence, which is why the failure presents as a
  * voice that plays for exactly the right number of milliseconds and cannot be heard.
  *
- * So the dtype choice is a two-way trade with no free corner:
+ * So there is no free corner:
  *
  * | | size | speed | correct on WebGPU |
  * |---|---|---|---|
- * | `q8` | 92 MB | ~1.6× real time | **yes** |
- * | `fp16` | 163 MB | ~0.12× real time | **no — all NaN** |
- * | `q4f16` | 155 MB | fast | no — same fp16 path |
- * | `fp32` | 326 MB | fast, full GPU kernels | yes here; corrupts on some Intel/AMD GPUs |
+ * | `q8` | 92 MB | ~1.6× real time | yes |
+ * | `fp16` | 156 MB | ~0.12× real time | **no — all NaN** |
+ * | `q4f16` | 147 MB | fast | no — same fp16 path |
+ * | **`fp32`** | **326 MB** | **fast, full GPU kernels** | **yes** |
  *
- * q8 is the one that is audible everywhere, so it is the default. fp32 is the upgrade if the
- * wait proves worse than the download, and it needs testing per GPU rather than assuming.
+ * **fp32 is not unconditionally safe either**, and the same issue says so: it corrupts a subset
+ * of inputs on Intel Iris Xe, while staying clean on WASM and on Qualcomm Adreno. It is correct
+ * on Apple Silicon, which is where it was measured. That is a reason to keep the guard below,
+ * not a reason to pick a slower default for everyone.
+ *
+ * q8 remains the fallback worth remembering: 92 MB, audible everywhere, and one line away
+ * (`model_quantized.onnx`, sha256 `c0c02b3299fd97c34ea92a98e6d41eaa1a739c8f77bf685aac34bd7b34c1132c`).
  *
  * `model_q8f16.onnx` is 86 MB and would have been ideal, but transformers.js 4.0.0 has no such
  * dtype — it was silently ignored and the 326 MB fp32 default requested instead.
@@ -103,13 +109,13 @@ export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
  *
  * Sizes are exact for the same reason, so a progress bar cannot overshoot.
  */
-export const DTYPE = 'q8';
+export const DTYPE = 'fp32';
 
 export const MODEL = {
   id: 'model',
-  url: `${TS_REPO}/${TS_REVISION}/onnx/model_quantized.onnx`,
-  bytes: 92_361_055,
-  sha256: 'c0c02b3299fd97c34ea92a98e6d41eaa1a739c8f77bf685aac34bd7b34c1132c',
+  url: `${TS_REPO}/${TS_REVISION}/onnx/model.onnx`,
+  bytes: 325_532_171,
+  sha256: '651ea8291843a92276a4a003581a215cb07d15e47dde6fcfb1b768f9a1682054',
 };
 
 /**

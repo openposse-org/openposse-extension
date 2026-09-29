@@ -457,13 +457,19 @@ export function handleOffscreenMessage(message) {
         if (b.error) trace('BACKEND probe failed', b.error);
         else if (!b.providers?.length && b.shape) trace('BACKEND shape', b.shape);
       }
+      // **`first word` leads, because it is what is actually waited through.** Synthesis and
+      // playback now overlap, so `synth` and `spoke` no longer add up to anything and reading
+      // them as two consecutive stages would misstate the turn: `spoke` is the whole speaking
+      // period, `synth` a part of it that mostly happens during the rest.
+      //
       // `peak` is here because "played for the right number of milliseconds" and "was audible"
       // turned out to be different claims, and only the first was ever measured.
       trace('voice finished', message.ms
-        ? `load ${message.ms.load ?? '?'}ms${message.ms.cold ? ' (cold)' : ''} · `
+        ? `first word ${message.ms.firstWord ?? '?'}ms · `
+          + `load ${message.ms.load ?? '?'}ms${message.ms.cold ? ' (cold)' : ''} · `
           + `synth ${message.ms.synth ?? '?'}ms → ${message.ms.audio ?? '?'}ms audio `
           + `in ${message.ms.chunks ?? '?'} chunks at ${message.ms.rate ?? '?'}Hz · `
-          + `peak ${message.ms.peak ?? '?'} · play ${message.ms.play ?? '?'}ms`
+          + `peak ${message.ms.peak ?? '?'} · spoke ${message.ms.play ?? '?'}ms`
           + (message.ok ? '' : ` · ${message.reason ?? 'failed'}`)
         : (message.ok ? '' : (message.reason ?? 'failed')));
       panelSpeaking(false);
