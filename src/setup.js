@@ -302,13 +302,27 @@ el('drop-weights').addEventListener('click', async () => {
 
 // ── Trying the voices ──────────────────────────────────────────────────────────────────────
 //
-// **One sentence, not six.** Different lines per voice would sample them; the same line lets
-// them be compared, which is the actual question — "which of these should Ivan be" is a
-// judgement nobody can make from six different sentences.
+// **The same words in every voice**, whatever they are. Different lines per voice would sample
+// them; one line lets them be compared, which is the actual question — "which of these should
+// Ivan be" is a judgement nobody can make from six different sentences.
 //
-// Chosen to exercise the things voices differ on: a number, a hyphenated compound, a proper
-// noun, and a clause boundary. Also what an assistant here actually says, rather than a pangram.
-const SAMPLE = 'Fourteen of your applications are marked end of life — mostly in Finance.';
+// Editable, because the right sample depends on what you are listening for. A default that
+// suits prosody is no use to somebody checking how a voice handles their own product's
+// vocabulary, and vice versa.
+//
+// This one runs long on purpose: several clauses, a colon, and shifts of pace that a short
+// line cannot show. It also crosses HeadTTS's sentence split, so it exercises chunk chaining —
+// the thing that made the spike say "Hello" and stop.
+const DEFAULT_SAMPLE = 'All men dream, but not equally. Those who dream by night in the dusty '
+  + 'recesses of their minds wake in the day to find that it was vanity: but the dreamers of '
+  + 'the day are dangerous men, for they may act their dream with open eyes, to make it '
+  + 'possible.';
+
+/** What to speak: the box, or the default if it has been emptied. */
+function sample() {
+  const typed = el('sample').value.trim();
+  return typed || DEFAULT_SAMPLE;
+}
 
 const ACCENT = { a: 'American', b: 'British' };
 const GENDER = { f: 'female', m: 'male' };
@@ -326,6 +340,10 @@ async function refreshVoices() {
   const ready = (await weightsStatus()).state === 'ready';
   el('voices-section').hidden = !ready;
   if (!ready) return;
+
+  // Only on the first render, so re-rendering after a download does not discard something the
+  // user has typed.
+  if (!el('sample').value) el('sample').value = DEFAULT_SAMPLE;
 
   const list = el('voice-list');
   list.textContent = '';
@@ -352,7 +370,7 @@ async function refreshVoices() {
       for (const b of buttons) b.disabled = true;
       play.textContent = 'Loading…';
 
-      const result = await speakWithKokoro(SAMPLE, id);
+      const result = await speakWithKokoro(sample(), id);
       if (!result.ok) {
         sub.textContent = result.reason;
         sub.style.color = 'var(--error)';

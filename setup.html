@@ -37,6 +37,13 @@
       .voice .name { font-size: 13.5px; font-weight: 500; flex: 1; }
       .voice .accent { color: var(--text-faint); font-size: 11.5px; }
       .voice button { padding: 5px 13px; font-size: 12px; }
+      textarea {
+        font: inherit; width: 100%; resize: vertical;
+        color: var(--text); background: rgba(0, 0, 0, 0.3);
+        border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+        line-height: 1.5;
+      }
+      textarea:focus { outline: 1px solid var(--blue); }
     </style>
   </head>
   <body>
@@ -176,10 +183,12 @@
       <section id="voices-section" hidden>
         <h2>Try the voices</h2>
         <p>
-          The same sentence in each, so they can be compared rather than just sampled. The
-          first one takes a moment while the model loads; the rest are immediate.
+          Whatever is in the box, in each voice — the same words every time, so they can be
+          compared rather than just sampled. The first one takes a moment while the model
+          loads; the rest are immediate.
         </p>
-        <div id="voice-list"></div>
+        <textarea id="sample" rows="4" spellcheck="false"></textarea>
+        <div id="voice-list" style="margin-top:14px"></div>
       </section>
 
       <section>
