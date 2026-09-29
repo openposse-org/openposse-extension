@@ -19,8 +19,8 @@
 // message to whoever is displaying it.
 
 import { assignVoices } from './voices.js';
-import { chooseEngine, hasWebGPU, assignKokoroVoices } from './tts.js';
-import { weightsStatus, VOICES } from './weights.js';
+import { chooseEngine, hasWebGPU, assignKokoroVoices, KOKORO_VOICES } from './tts.js';
+import { weightsStatus } from './weights.js';
 import { speak as speakWithKokoro, cancel as cancelKokoro, warm as warmKokoro } from './kokoro.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
@@ -349,12 +349,13 @@ async function speak({ text, agentID, roster = [] }) {
   // whole of the remaining change.
   const { engine: chosen } = await engine();
   if (chosen === 'kokoro') {
-    // **Only the voices actually on disk.** The default list is all 28 Kokoro publishes and
-    // six were downloaded, so the heuristic would hand a third British agent `bf_isabella` —
-    // a file the shim would refuse, correctly, three layers from anything that could explain
-    // it. What is downloadable and what is downloaded are different questions, and `weights.js`
-    // answers the second.
-    const installed = VOICES.map(({ id }) => ({ id, lang: /^b/.test(id) ? 'en-GB' : 'en-US' }));
+    // **Passed explicitly even though all 28 now ship**, because the argument is about which
+    // question is being asked rather than about the answer being different today. What is
+    // downloadable and what is downloaded are separate facts, and `weights.js` is the one that
+    // knows the second. When they were six and 28, taking the default handed a third British
+    // agent `bf_isabella` — a file the shim would refuse, correctly, three layers from anything
+    // that could explain it. Naming the source keeps that true for whatever the next subset is.
+    const installed = KOKORO_VOICES;
     const voice = assignKokoroVoices(roster, installed).get(agentID) ?? installed[0]?.id
       ?? 'bm_george';
     send('openposse.speaking', { started: true });

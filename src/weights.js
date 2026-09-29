@@ -128,25 +128,86 @@ export const MODEL = {
 export const KNOWN_DTYPES = ['fp32', 'fp16', 'q8', 'int8', 'uint8', 'q4', 'bnb4', 'q4f16'];
 
 /**
- * Six voices, which is more than any plausible roster and about 3 MB.
+ * **All 28 English voices.** 14.6 MB, every file exactly 522,240 bytes.
  *
- * Three British and three American, split by gender, so `assignKokoroVoices` can keep an
- * agent's accent and still hand every agent something different. All 28 would be 28.7 MB for
- * voices nobody has asked for.
+ * This shipped as six, and the comment justifying that said all 28 would be 28.7 MB. It is
+ * 14.6 — the figure was roughly doubled and nobody checked it, because it was only ever load
+ *-bearing for a decision that looked obvious. The six were 3.1 MB, so the other 22 cost
+ * **11.5 MB against a 326 MB model**: 3.5% more download, for four times the choice.
+ *
+ * **The bytes were never the real cost of shipping a subset.** With part of the set on disk,
+ * "which voices exist" and "which voices are installed" were different questions, and every
+ * caller had to know which one it was asking. One did not: `assignKokoroVoices` defaulted to
+ * the published 28, so a third British agent was handed `bf_isabella` — a file the local-only
+ * shim would refuse, correctly, presenting as a voice that simply did not speak. Shipping the
+ * whole set collapses the two lists into one, and `tts.js` now derives its own from this one
+ * rather than keeping a second copy of the same ids in another file.
+ *
+ * **The order is load-bearing, which is why the original six are still first and still in
+ * their original order.** An agent with no chosen voice is assigned by position — the first
+ * free voice of the right accent — so re-sorting this array would silently give every
+ * auto-assigned agent a different voice on the next roster change. Anyone who already has
+ * agents keeps the voices they have; the additions only reach the seventh agent onwards, who
+ * until now was getting a collision.
+ *
+ * **The hashes are Git-LFS object ids from HuggingFace's own API, and an LFS oid is the SHA-256
+ * of the contents.** All 28 were read together rather than the 22 being appended on faith: the
+ * six already here came back byte-identical, which is what establishes the oid and the digest
+ * are the same thing rather than assuming it a second time.
  */
 export const VOICES = Object.entries({
+  // The original six, in their original order. See above before touching this.
   bm_george: 'c4b235a4c1f2cd3b939fed08b899ce9385638b763f7b73a59616c4fc9bd6c9bc',
   bf_emma: '669fe0647f9dd04fcab92f1439a40eeb4c8b4ab1f82e4996fe3d918ce4a63b73',
   bm_daniel: '6b3194bbceffb746733cbc22c8f593dd44e401a71d53895a2dca891bc595a1e8',
   af_heart: 'd583ccff3cdca2f7fae535cb998ac07e9fcb90f09737b9a41fa2734ec44a8f0b',
   am_michael: '1d1f21dd8da39c30705cd4c75d039d265e9bc4a2a93ed09bc9e1b1225eb95ba1',
   af_bella: 'f69d836209b78eb8c66e75e3cda491e26ea838a3674257e9d4e5703cbaf55c8b',
+
+  // British female
+  bf_alice: '08afa6ba24da61ea5e8efa139e5aadc938d83f0a6da5a900adaf763ac1da5573',
+  bf_isabella: '3754352c4aaa46d17f27654ab7518d65b62ad6163a0f55a5f4330c2da2c4e94f',
+  bf_lily: '5e0ee32ebe64a467124976b14e69590746f1c4ce41a12b587a50c862edfea335',
+
+  // British male
+  bm_fable: 'f889083196807b4adb15e9204252165f503b8d33d3982e681c52443c49d798f1',
+  bm_lewis: 'b8f671cef828c30e66fdf0b0756a76bba58f6bb3398cbbf27058642acbcedb97',
+
+  // American female
+  af_alloy: 'c4a6b876047fd7fb472edf4ebd63cfac7c3b958a7cae7c106e8f038ca6308c45',
+  af_aoede: '4a004c33430762e2461eedb2013fad808ef4ab3121f5300f554476caf58d8361',
+  af_jessica: 'a240a5e3c15b43563d6e923bdca8ef5613a23471d9b77653694012435df23bd8',
+  af_kore: '9be5221b6a941c04b561959b8ff0b06e809444dcc4ab7e75a7b23606f691819e',
+  af_nicole: 'cd2191ab31b914ed7b318416b0e4440fdf392ddad9106a060819aa600a64f59a',
+  af_nova: '18778272caa0d0eebaea251c35fd635f038434f9eee5e691d02a174bd328414f',
+  af_river: '00a2bcf82b1d86e8f19902ede58c65ccf6c0e43b44b7d74fad54e5d8933c9c30',
+  af_sarah: '4409fbc125afabacc615d94db5398d847006a737b0247d6892b7a9a0007a2f0a',
+  af_sky: '4435255c9744f3f31659e0d714ab7689bf65d9e77ec1cce060f083912614f0b9',
+
+  // American male
+  am_adam: '162b035ed91cfc48b6046982184c645f72edcdd1b82843347f605d7bf7b15716',
+  am_echo: '3968b92c3c4cd1c4416dbded36c13eaa388a90d5788d02a13e4d781f5f8cf3c3',
+  am_eric: 'e8b5be17edd1e3636901ce7598baafe2dc8dd8ff707a0c23bf9e461add7e2832',
+  am_fenrir: 'c27989f741f7ee34d273a39d8a595cc0837d35f5ced9a29b7cc162614616df43',
+  am_liam: '52403be32fd047c6a44517cb0bcd6b134f2a18baa73e70ef41651e0eab921ade',
+  am_onyx: 'da5d135b424164916d75a68ffb4c2abce3d7d5ccc82dd1ee6cf447ce286145e6',
+  am_puck: 'fcf73c989033e9233e0b98713eca600c8c74dcc1614b37009d5450ff4a2274a0',
+  am_santa: '61150cf726ab6c5ed7a99f90a304f91f5a72c00c592e89ec94e5df11c319227a',
 }).map(([id, sha256]) => ({
   id,
   url: at(`voices/${id}.bin`),
   bytes: 522_240,
   sha256,
 }));
+
+/**
+ * `en-GB` or `en-US`, from the id's first letter.
+ *
+ * Kokoro names every voice `<accent><gender>_<name>`, so the accent is in the id and does not
+ * need a table beside it. It had one anyway — a hand-written `lang` per voice in `tts.js` and
+ * a `/^b/` test in `offscreen.js` — which is two copies of a rule the naming already states.
+ */
+export const langOf = (id) => (String(id).startsWith('b') ? 'en-GB' : 'en-US');
 
 /**
  * The model's own paperwork, which transformers.js loads before the weights.
@@ -261,13 +322,34 @@ export async function readWeight(id) {
   return hit ? hit.arrayBuffer() : null;
 }
 
-/** `missing` · `partial` · `ready`. Partial is worth naming: a download that was interrupted. */
+/**
+ * `missing` · `partial` · `ready`, plus **why** it is partial.
+ *
+ * `partial` used to have exactly one cause — a download that stopped — so setup called it
+ * "interrupted" and was right. Growing the voice set gave it a second cause with the same
+ * shape and a completely different meaning: an install that was complete when it was made and
+ * is now missing files that did not exist then. Both resume the same way, which is precisely
+ * the trap — *same handling is not the same cause*, and the person reacts differently. Told
+ * "interrupted" about a healthy install, they go looking for a fault that is not there.
+ *
+ * `core` is what tells them apart, and it is a fact rather than a guess: the model is 96% of
+ * the bytes and is fetched first, so a download that stopped early does not have it, while an
+ * install that predates a new voice has everything except that voice.
+ */
 export async function weightsStatus() {
   const present = await Promise.all(ALL.map(async (f) => Boolean(await stored(f.id))));
   const count = present.filter(Boolean).length;
-  if (count === 0) return { state: 'missing', have: 0, want: ALL.length };
-  if (count < ALL.length) return { state: 'partial', have: count, want: ALL.length };
-  return { state: 'ready', have: count, want: ALL.length };
+
+  const isVoice = new Set(VOICES.map((v) => v.id));
+  const core = ALL.every((f, i) => isVoice.has(f.id) || present[i]);
+  // What is still to fetch, summed from the manifest rather than from a file size repeated in
+  // the UI — the figure somebody decides on before committing a connection has to be the real
+  // one, and a constant copied into setup would be right until the day it was not.
+  const missingBytes = ALL.reduce((n, f, i) => (present[i] ? n : n + f.bytes), 0);
+
+  if (count === 0) return { state: 'missing', have: 0, want: ALL.length, core: false, missingBytes };
+  if (count < ALL.length) return { state: 'partial', have: count, want: ALL.length, core, missingBytes };
+  return { state: 'ready', have: count, want: ALL.length, core: true, missingBytes: 0 };
 }
 
 export async function removeWeights() {

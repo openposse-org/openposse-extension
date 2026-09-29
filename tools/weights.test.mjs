@@ -10,7 +10,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  MODEL, VOICES, ALL, TOTAL_BYTES, verify, digest, downloadWeights, DTYPE, KNOWN_DTYPES,
+  MODEL, VOICES, ALL, TOTAL_BYTES, verify, digest, downloadWeights, DTYPE, KNOWN_DTYPES, langOf,
+  weightsStatus,
 } from '../src/weights.js';
 
 /**
@@ -75,14 +76,63 @@ test('the dtype and the model file agree, and the dtype is one that exists', () 
   assert.match(MODEL.url, expected, `the pinned file does not match dtype ${DTYPE}`);
 });
 
-test('six voices, split so accents and genders both survive', () => {
-  // Enough for any plausible roster at ~3 MB, against 28.7 MB for all 28. Both accents must be
-  // present or assignKokoroVoices cannot keep a British agent British.
-  assert.equal(VOICES.length, 6);
-  assert.ok(VOICES.some((v) => v.id.startsWith('b')), 'a British voice');
-  assert.ok(VOICES.some((v) => v.id.startsWith('a')), 'an American voice');
-  assert.ok(VOICES.some((v) => v.id[1] === 'm'), 'a male voice');
-  assert.ok(VOICES.some((v) => v.id[1] === 'f'), 'a female voice');
+test('all 28 voices, each named once', () => {
+  // The whole published English set, 14.6 MB. It was six, on a comment claiming the full set
+  // would be 28.7 MB — it is 14.6, so the other 22 cost 11.5 MB against a 326 MB model and the
+  // saving never justified having two different answers to "which voices exist".
+  assert.equal(VOICES.length, 28);
+  assert.equal(new Set(VOICES.map((v) => v.id)).size, 28, 'no id listed twice');
+  assert.ok(VOICES.every((v) => /^[ab][fm]_[a-z]+$/.test(v.id)), 'naming is <accent><gender>_<name>');
+
+  // Both accents and both genders, or `assignKokoroVoices` cannot keep a British agent British.
+  for (const prefix of ['af', 'am', 'bf', 'bm']) {
+    assert.ok(VOICES.some((v) => v.id.startsWith(prefix)), `a ${prefix} voice`);
+  }
+});
+
+test('the first six are still the first six, in order', () => {
+  // **This is an upgrade guarantee, not tidiness.** An agent with no chosen voice is assigned
+  // by position — the first free voice of its accent — so re-sorting this array hands every
+  // auto-assigned agent a different voice on the next roster change, days later, with nothing
+  // connecting cause to effect. The 22 additions go after the six that were already shipping.
+  assert.deepEqual(
+    VOICES.slice(0, 6).map((v) => v.id),
+    ['bm_george', 'bf_emma', 'bm_daniel', 'af_heart', 'am_michael', 'af_bella'],
+  );
+});
+
+test('a half-finished download and an install that grew are told apart', async () => {
+  // **They are the same `partial` and the same fix, and that is exactly the trap.** The person
+  // is not the same: "interrupted" sends somebody to look for a failure, and an install that
+  // was complete when it was made and is now short some voices did not have one. This case
+  // arrives the moment the voice set changes, so it is the upgrade path, not a hypothetical.
+  const store = fakeCaches();
+  const put = (id) => store.set(ALL.find((f) => f.id === id).url, response(new ArrayBuffer(1)));
+
+  // Stopped early: the model is 96% of the bytes and `ALL` fetches it first, so it is exactly
+  // what a download that gave up partway is missing.
+  for (const f of ALL) if (f.id !== 'model') put(f.id);
+  assert.equal((await weightsStatus()).core, false, 'no model — this one really was interrupted');
+
+  // Grew: everything that is not a voice is here, and so are the six that used to be the set.
+  store.clear();
+  for (const f of ALL) if (!/^[ab][fm]_/.test(f.id)) put(f.id);
+  for (const id of ['bm_george', 'bf_emma', 'bm_daniel', 'af_heart', 'am_michael', 'af_bella']) put(id);
+
+  const grown = await weightsStatus();
+  assert.equal(grown.state, 'partial');
+  assert.equal(grown.core, true, 'the expensive part is already here');
+  assert.equal(grown.want - grown.have, 22);
+  assert.equal(grown.missingBytes, 22 * 522_240, 'summed from the manifest, not from a constant');
+});
+
+test('a voice id says its own accent', () => {
+  // The rule Kokoro's naming already states, which had been written out by hand in two other
+  // files. One of the two is how `bf_isabella` was offered on a machine that had six voices.
+  assert.equal(langOf('bm_george'), 'en-GB');
+  assert.equal(langOf('bf_lily'), 'en-GB');
+  assert.equal(langOf('af_heart'), 'en-US');
+  assert.equal(langOf('am_puck'), 'en-US');
 });
 
 test('the advertised total matches what is actually listed', () => {

@@ -119,9 +119,10 @@ test('a chosen voice survives an agent being added before it', () => {
 });
 
 test('a voice that is not installed is not handed out', () => {
-  // Only six of Kokoro's twenty-eight are downloaded. Assigning one of the other twenty-two
-  // fails at the first answer, three layers from anything that could explain it — so the
-  // caller passes what is on disk and the heuristic must stay inside it.
+  // All 28 ship today, so this guards a rule rather than a current fact — and the rule is what
+  // was broken when they were six: the heuristic must stay inside the list it was handed, never
+  // reaching for its own default. Assigning a voice that is not on disk fails at the first
+  // answer, three layers from anything that could explain it.
   const installed = [{ id: 'bm_george', lang: 'en-GB' }, { id: 'af_heart', lang: 'en-US' }];
   const agents = [{ id: '1' }, { id: '2' }, { id: '3', voice: 'bf_isabella' }];
 
@@ -141,6 +142,10 @@ test('the voice list is the published Apache-2.0 set', () => {
   // 28 voices, which is what the plan's licence work was done against. A list that has quietly
   // grown means somebody added voices from somewhere else, and where they came from is the
   // whole question.
+  //
+  // This is now derived from `weights.js` rather than written out here, so what it really
+  // guards is that nothing was added to the *download manifest* from outside the published set.
+  // That is the same question asked one layer closer to where the answer would be wrong.
   assert.equal(KOKORO_VOICES.length, 28);
   assert.ok(KOKORO_VOICES.every((v) => /^[ab][fm]_[a-z]+$/.test(v.id)), 'naming is <accent><gender>_<name>');
   assert.ok(KOKORO_VOICES.some((v) => v.lang === 'en-GB'));

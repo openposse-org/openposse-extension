@@ -226,21 +226,28 @@ async function refreshEngine() {
 const mb = (bytes) => `${Math.round(bytes / 1e6)} MB`;
 
 async function refreshWeights() {
-  const { state, have, want } = await weightsStatus();
+  const { state, have, want, core, missingBytes } = await weightsStatus();
   const done = state === 'ready';
   el('weights-size').textContent = mb(TOTAL_BYTES);
 
   el('drop-weights').hidden = !have;
   el('get-weights').hidden = done;
-  el('get-weights').textContent = state === 'partial' ? 'Resume' : 'Download';
+  // **"Resume" is wrong for an install that grew.** Nothing stopped: the voice set went from
+  // six to 28, so a complete install is now short some files it never had. `core` distinguishes
+  // the two, and the word has to follow — "Resume" and "interrupted" send somebody looking for
+  // a failure that did not happen.
+  const extending = state === 'partial' && core;
+  el('get-weights').textContent = extending ? 'Add them' : state === 'partial' ? 'Resume' : 'Download';
   // Says what is on disk, and nothing about whether it is being used — the engine line above
   // owns that, and this claiming "used whenever WebGPU is available" directly contradicted it
   // while the engine was still unbuilt. One fact, one place.
   setStatus('weights-status', done
     ? `installed — ${want} files, verified`
-    : state === 'partial'
-      ? `${have} of ${want} files — interrupted`
-      : `not downloaded · ${mb(TOTAL_BYTES)}`);
+    : extending
+      ? `${want - have} more voices available · ${mb(missingBytes)}`
+      : state === 'partial'
+        ? `${have} of ${want} files — interrupted`
+        : `not downloaded · ${mb(TOTAL_BYTES)}`);
   markDone('step-weights', done);
   return state;
 }
@@ -337,6 +344,21 @@ function describeVoice(id) {
   };
 }
 
+/**
+ * The four accent groups, in the order they are offered.
+ *
+ * Fixed here rather than derived from `VOICES`, whose order is the *assignment* order and puts
+ * the six original voices first so nobody's agent changes voice — see the note on `VOICES`.
+ * Reading that order into the UI would produce four groups interleaved by history.
+ */
+const VOICE_GROUPS = ['British female', 'British male', 'American female', 'American male'];
+
+/** Every voice in one accent group, by name, because that is how somebody scans 28 of them. */
+const voicesIn = (accent) => VOICES
+  .map(({ id }) => ({ id, ...describeVoice(id) }))
+  .filter((v) => v.accent === accent)
+  .sort((a, b) => a.name.localeCompare(b.name));
+
 async function refreshVoices() {
   const ready = (await weightsStatus()).state === 'ready';
   el('voices-section').hidden = !ready;
@@ -349,47 +371,61 @@ async function refreshVoices() {
   const list = el('voice-list');
   list.textContent = '';
 
-  for (const { id } of VOICES) {
-    const { name, accent } = describeVoice(id);
-    const row = document.createElement('div');
-    row.className = 'voice';
+  // Grouped, because 28 rows of "Play" with the accent repeated on every one is a wall. The
+  // heading carries the accent, so the row's second line is free to carry a failure instead —
+  // which is what it is really for.
+  for (const accent of VOICE_GROUPS) {
+    const voices = voicesIn(accent);
+    if (voices.length === 0) continue;
 
-    const label = document.createElement('div');
-    label.className = 'name';
-    label.textContent = name;
-    const sub = document.createElement('div');
-    sub.className = 'accent';
-    sub.textContent = accent;
+    const heading = document.createElement('div');
+    heading.className = 'voice-group';
+    heading.textContent = accent;
+    list.append(heading);
 
-    const play = document.createElement('button');
-    play.className = 'secondary';
-    play.textContent = 'Play';
-    play.addEventListener('click', async () => {
-      // Every button disabled, not just this one: two voices over each other tells you nothing
-      // about either, and the engine speaks one utterance at a time anyway.
-      const buttons = [...list.querySelectorAll('button')];
-      for (const b of buttons) b.disabled = true;
-      play.textContent = 'Loading…';
-
-      const result = await speakWithKokoro(sample(), id);
-      // The same breakdown the turn logs, because this page is where a voice gets judged and
-      // "it played and I heard nothing" needs the same two numbers to be answerable here.
-      const m = result.ms ?? {};
-      console.info(`[openposse] voice ${id} · first word ${m.firstWord ?? '?'}ms · `
-        + `synth ${m.synth ?? '?'}ms → ${m.audio ?? '?'}ms `
-        + `audio in ${m.chunks ?? '?'} chunks at ${m.rate ?? '?'}Hz · peak ${m.peak ?? '?'} · `
-        + `spoke ${m.play ?? '?'}ms${result.ok ? '' : ` · ${result.reason}`}`);
-      if (!result.ok) {
-        sub.textContent = result.reason;
-        sub.style.color = 'var(--error)';
-      }
-      play.textContent = 'Play';
-      for (const b of buttons) b.disabled = false;
-    });
-
-    row.append(label, sub, play);
-    list.append(row);
+    for (const { id, name } of voices) renderVoice(list, id, name);
   }
+}
+
+/** One row of the try-it list: a name, a line for whatever goes wrong, and a Play button. */
+function renderVoice(list, id, name) {
+  const row = document.createElement('div');
+  row.className = 'voice';
+
+  const label = document.createElement('div');
+  label.className = 'name';
+  label.textContent = name;
+  const sub = document.createElement('div');
+  sub.className = 'accent';
+
+  const play = document.createElement('button');
+  play.className = 'secondary';
+  play.textContent = 'Play';
+  play.addEventListener('click', async () => {
+    // Every button disabled, not just this one: two voices over each other tells you nothing
+    // about either, and the engine speaks one utterance at a time anyway.
+    const buttons = [...list.querySelectorAll('button')];
+    for (const b of buttons) b.disabled = true;
+    play.textContent = 'Loading…';
+
+    const result = await speakWithKokoro(sample(), id);
+    // The same breakdown the turn logs, because this page is where a voice gets judged and
+    // "it played and I heard nothing" needs the same two numbers to be answerable here.
+    const m = result.ms ?? {};
+    console.info(`[openposse] voice ${id} · first word ${m.firstWord ?? '?'}ms · `
+      + `synth ${m.synth ?? '?'}ms → ${m.audio ?? '?'}ms `
+      + `audio in ${m.chunks ?? '?'} chunks at ${m.rate ?? '?'}Hz · peak ${m.peak ?? '?'} · `
+      + `spoke ${m.play ?? '?'}ms${result.ok ? '' : ` · ${result.reason}`}`);
+    if (!result.ok) {
+      sub.textContent = result.reason;
+      sub.style.color = 'var(--error)';
+    }
+    play.textContent = 'Play';
+    for (const b of buttons) b.disabled = false;
+  });
+
+  row.append(label, sub, play);
+  list.append(row);
 }
 
 // ── Roster ─────────────────────────────────────────────────────────────────────────────────
@@ -490,6 +526,10 @@ async function refreshRoster() {
     // disk would fail at the first answer, three layers from anything that could explain it.
     // Empty is a real choice rather than an absence: it hands the agent back to the accent
     // heuristic, which keeps every agent sounding different as the roster grows.
+    //
+    // Grouped by accent now that there are 28 of them. A flat list of six was a list; a flat
+    // list of 28 is a search, and the first thing anyone narrows by is whether they want a
+    // British voice or an American one.
     const voice = document.createElement('select');
     voice.className = 'voice-pick';
     voice.setAttribute('aria-label', `Voice for ${agent.name}`);
@@ -499,12 +539,16 @@ async function refreshRoster() {
     auto.textContent = 'Chosen for me';
     voice.append(auto);
 
-    for (const { id } of VOICES) {
-      const { name, accent } = describeVoice(id);
-      const option = document.createElement('option');
-      option.value = id;
-      option.textContent = `${name} · ${accent}`;
-      voice.append(option);
+    for (const accent of VOICE_GROUPS) {
+      const group = document.createElement('optgroup');
+      group.label = accent;
+      for (const { id, name } of voicesIn(accent)) {
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = name;
+        group.append(option);
+      }
+      voice.append(group);
     }
     voice.value = VOICES.some((v) => v.id === agent.voice) ? agent.voice : '';
 

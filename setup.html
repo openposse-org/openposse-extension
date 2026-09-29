@@ -34,6 +34,12 @@
         padding: 9px 0; border-bottom: 1px solid var(--line);
       }
       .voice:last-child { border-bottom: 0; }
+      /* Carries the accent for the rows beneath it, so each row does not repeat it 28 times. */
+      .voice-group {
+        margin: 16px 0 2px; font-size: 9.5px; font-weight: 600;
+        letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-faint);
+      }
+      .voice-group:first-child { margin-top: 4px; }
       .voice .name { font-size: 13.5px; font-weight: 500; flex: 1; }
       .voice .accent { color: var(--text-faint); font-size: 11.5px; }
       .voice button { padding: 5px 13px; font-size: 12px; }
