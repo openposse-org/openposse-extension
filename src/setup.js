@@ -435,6 +435,57 @@ async function refreshRoster() {
 
     text.append(name, kind);
     row.append(avatar, text);
+
+    // ── Renaming lives here, and that is deliberate ────────────────────────────────────
+    //
+    // Recording used to end with a name field in the orb, over the vendor's page. It could not
+    // be typed into: a page manages its own focus, and Notion takes it straight back. Rather
+    // than fight that per vendor forever, a recording now saves itself under the vendor's
+    // product name and the name becomes an edit — here, in our own page, where nothing
+    // competes for the keyboard.
+    //
+    // A plain input rather than a dialog: there is one field and it already shows the current
+    // value, so a modal would add a step to confirm something the user can already see.
+    const rename = document.createElement('input');
+    rename.type = 'text';
+    rename.className = 'rename';
+    rename.value = agent.name;
+    rename.maxLength = 24;
+    rename.setAttribute('aria-label', `Rename ${agent.name}`);
+
+    const problemLine = document.createElement('div');
+    problemLine.className = 'kind bad';
+    problemLine.hidden = true;
+
+    const commit = async () => {
+      const wanted = rename.value.trim();
+      if (!wanted || wanted === agent.name) { rename.value = agent.name; return; }
+
+      const result = await chrome.runtime
+        .sendMessage({ kind: 'openposse.agent.rename', agentId: agent.id, name: wanted })
+        .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+
+      if (!result?.ok) {
+        // A rename that did not happen must not look like one that did — the roster is what
+        // the user says out loud, so believing a stale name means addressing an agent that
+        // does not answer.
+        problemLine.textContent = result?.reason ?? 'could not rename';
+        problemLine.hidden = false;
+        rename.value = agent.name;
+        return;
+      }
+      await refreshRoster();
+    };
+
+    rename.addEventListener('blur', commit);
+    rename.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') rename.blur();
+      // Escape puts back what was there, so a half-typed name is not committed by clicking away.
+      if (event.key === 'Escape') { rename.value = agent.name; rename.blur(); }
+    });
+
+    text.append(problemLine);
+    row.append(rename);
     target.append(row);
   }
 }

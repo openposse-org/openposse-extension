@@ -406,11 +406,6 @@ if (!globalThis.__openposseOrb) {
           <div class="step"></div>
           <div class="say"></div>
           <div class="list"></div>
-          <div class="name" hidden>
-            <input type="text" placeholder="Give it a name" maxlength="24"
-                   autocomplete="off" spellcheck="false">
-            <button disabled>Add</button>
-          </div>
         </div>
       </div>
     </div>
@@ -614,13 +609,6 @@ if (!globalThis.__openposseOrb) {
       list.append(el);
     }
 
-    const naming = $('.coach .name');
-    const appearing = Boolean(coach.naming) && naming.hidden;
-    naming.hidden = !coach.naming;
-
-    // Focused on the transition into naming, not on every patch: re-focusing while somebody is
-    // halfway through typing would move the caret to the end of what they had written.
-    if (appearing) naming.querySelector('input').focus();
   }
 
   // ── Keeping our clicks to ourselves ─────────────────────────────────────────────────────
@@ -716,73 +704,18 @@ if (!globalThis.__openposseOrb) {
     header.addEventListener('pointercancel', release);
   }
 
-  // ── Naming ─────────────────────────────────────────────────────────────────────────────
+  // ── There is no name field here, and that is the design ────────────────────────────────
   //
-  // A text field in the panel, which the Mac app could not have: the summon panel was never
-  // key by construction (D16), so it could not receive a keystroke. A closed shadow root has no
-  // such constraint, and keeping the name here means the recording never leaves the page it
-  // was made on.
-  {
-    const input = $('.coach .name input');
-    const button = $('.coach .name button');
-    const trimmed = () => input.value.trim();
-    const submit = () => {
-      if (!trimmed()) return;
-      button.disabled = true;
-      chrome.runtime
-        .sendMessage({ kind: 'openposse.record.name', name: trimmed() })
-        .catch(() => { button.disabled = false; });
-    };
-
-    // Whitespace is not a name.
-    input.addEventListener('input', () => { button.disabled = trimmed() === ''; });
-    input.addEventListener('keydown', (event) => {
-      // The page never sees these keystrokes: this input is inside a closed shadow root, and
-      // stopping propagation keeps a vendor's own global shortcut handler out of the way of
-      // somebody typing "Ivan".
-      event.stopPropagation();
-      if (event.key === 'Enter') submit();
-    });
-    button.addEventListener('click', submit);
-
-    // ── Holding on to focus ───────────────────────────────────────────────────────────────
-    //
-    // **Measured, after two wrong guesses.** The pointer reaches the field and focus lands —
-    // so hit-testing was fine — and Notion then pulls focus to its own `body` within the same
-    // interaction, every time. A vendor's focus manager, not our CSS.
-    //
-    // Two defences, because neither is guaranteed against an application we do not control:
-    //
-    // 1. The page never sees the click. Pointer events are stopped at `.wrap` below, so a
-    //    document-level handler watching for "somebody clicked outside the editor" is not
-    //    told. This is the fix that addresses the cause.
-    // 2. If focus is taken anyway, take it back — **at most three times**, and only for a
-    //    blur that follows its focus within 150 ms. A slower one is a person clicking away,
-    //    and refocusing that would trap them in a field they are trying to leave. Unbounded
-    //    retries against a vendor that insists would be an infinite loop with a frozen tab.
-    //
-    // When both fail, `wontHold` is dispatched, and the popup offers the name instead. That
-    // path is not a fallback bolted on for Notion — focus management differs per vendor, and
-    // something that always works has to exist somewhere we own.
-    let focusedAt = 0;
-    let recoveries = 0;
-
-    const row = $('.coach .name');
-    input.addEventListener('focus', () => { focusedAt = Date.now(); });
-    input.addEventListener('blur', () => {
-      if (row.hidden) return;
-      const stolen = Date.now() - focusedAt < 150 && document.activeElement !== host;
-      if (!stolen) return;
-
-      if (recoveries >= 3) {
-        console.warn('[openposse] this page keeps taking focus back — name it from the toolbar');
-        chrome.runtime.sendMessage({ kind: 'openposse.record.wontHold' }).catch(() => {});
-        return;
-      }
-      recoveries += 1;
-      input.focus();
-    });
-  }
+  // There was one, and it could not be typed into. Measured rather than guessed in the end:
+  // the pointer reached it and focus landed, and Notion pulled focus back to its own `body`
+  // within 150 ms, every time. Stopping the click reaching the page helped; taking focus back
+  // helped; neither held.
+  //
+  // **The right reading of that is not "win the fight harder".** A page is entitled to manage
+  // its own focus, every vendor will do it differently, and a recording that cannot finish
+  // without a text field is a recording held hostage by whichever application it was made in.
+  // The recording is complete and verified without a name — so it is saved under the vendor's
+  // product name, and renaming happens in Settings, where nothing can interfere.
 
   // Clicking the orb re-arms listening, per the design. The one control the panel has.
   $('.orbwrap').addEventListener('click', () => {

@@ -12,7 +12,7 @@
 // set on one event still exists on the next.
 
 import {
-  loadRoster, recipeFor, findAgent, addAgent, replaceRecipe,
+  loadRoster, recipeFor, findAgent, addAgent, replaceRecipe, freeName, renameAgent,
 } from './storage.js';
 import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
@@ -940,37 +940,12 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
     return true;
   }
 
-  if (request?.kind === 'openposse.record.pending') {
-    // The popup asks this on every open. A recording can be stranded by a page that will not
-    // give up focus, by the tab closing, or by the extension reloading — and the toolbar icon
-    // is the one surface still present in all three.
-    respond({
-      waiting: Boolean(wizard?.verified && !wizard.agentId),
-      wontHold: Boolean(wizard?.wontHold),
-    });
-    return true;
-  }
-
-  if (request?.kind === 'openposse.record.wontHold') {
-    // The orb tried three times and the page took focus back each time. Say so where the person
-    // is looking, rather than leaving them clicking a field that will never accept anything.
-    if (wizard) wizard.wontHold = true;
-    panel({
-      phase: 'recording',
-      coach: {
-        label: 'SETTING UP · ALMOST',
-        instruction: 'This page keeps taking the keyboard back, so we can’t name it here. '
-          + 'Click the OpenPosse icon in the toolbar and name it there.',
-        captures: captures(wizard?.draft ?? newDraft('')),
-        naming: false,
-      },
-    }).catch(() => {});
-    return false;
-  }
-
-  if (request?.kind === 'openposse.record.name') {
-    nameAndSave(request.name).then(respond, (error) => {
-      console.error('[openposse] naming failed —', error);
+  // Renaming is an edit to an agent that already exists, from Settings. It is deliberately not
+  // part of recording any more: a recording that cannot finish without a name is a recording
+  // held hostage by whatever the vendor's page does about focus.
+  if (request?.kind === 'openposse.agent.rename') {
+    renameAgent(request.agentId, request.name).then(respond, (error) => {
+      console.error('[openposse] rename failed —', error);
       respond({ ok: false, reason: String(error?.message ?? error) });
     });
     return true;
@@ -1042,15 +1017,8 @@ async function showCoaching() {
       label: stepLabel(state),
       instruction: instruction(state, wizard.draft),
       captures: captures(wizard.draft),
-      // Only after the dry run has *passed*, **and only while the draft is still whole.** A
-      // recipe that has never been executed is a guess, and naming one would put a broken agent
-      // in the roster under a name somebody chose.
-      //
-      // `verified` alone was not enough, and the second clause is why: it is a latch, so once
-      // set it survived the draft being broken afterwards, and a red failure message appeared
-      // above a live name field. Deriving the gate from the state being shown *right now* makes
-      // that contradiction unrepresentable rather than merely fixed.
-      naming: state.step === 'done' && wizard.verified === true && !wizard.agentId,
+      // The panel never asks for a name. See `save()`.
+      naming: false,
       bad: state.step === 'replies-share-nothing' || state.step === 'abandoned',
     },
   }, { create: true });
@@ -1160,9 +1128,49 @@ async function dryRun() {
     return;
   }
 
-  // Re-recording keeps the agent it belongs to, so there is nothing to name.
-  if (wizard.agentId) { await nameAndSave(null); return; }
-  await showCoaching();
+  // ── Saved here, not after somebody types a name ───────────────────────────────────────
+  //
+  // **The recording is complete and verified at this point; a name is decoration on top of it.**
+  // Asking for one first made the whole thing hostage to a text field inside the vendor's page,
+  // and a page is entitled to manage its own focus — Notion takes it back within 150 ms, every
+  // time, and that will differ per vendor forever. Two attempts to win that fight were two
+  // attempts too many.
+  //
+  // So it is saved under the vendor's own product name, which is what somebody would have
+  // typed anyway: "Notion", from the domain the recorder already captured. Renaming it to
+  // "Ivan" is then an edit to something that exists, in Settings, where no page can interfere.
+  await save();
+}
+
+/** Writes the verified recipe out, as a new agent or over the one being re-recorded. */
+async function save() {
+  const recipe = wizard?.recipe;
+  if (!recipe) return;
+
+  if (wizard.agentId) {
+    await replaceRecipe(wizard.agentId, recipe);
+    await endWizard();
+    await panel({ phase: 'idle', visible: false });
+    return;
+  }
+
+  const { agents } = await loadRoster();
+  const name = freeName(agents, productName(recipe.domainPattern) || 'Assistant');
+  // The voice comes from `assignVoices`' accent heuristic rather than being chosen here, and
+  // Settings has the picker with previews for anyone who wants a different one.
+  await addAgent({ name, voice: null, recipe });
+
+  await panel({
+    phase: 'recording',
+    coach: {
+      label: 'SETTING UP · DONE',
+      instruction: `Saved as ${name}. You can rename it in Settings, or just say `
+        + `“${name}, …” to talk to it.`,
+      captures: captures(wizard.draft),
+      naming: false,
+    },
+  });
+  await endWizard();
 }
 
 /** One exchange through the recorded recipe, in the tab it was recorded in. */
@@ -1179,24 +1187,6 @@ async function askOnce(tabId, recipe, prompt) {
 }
 
 /** The last beat: a name, a voice, and a roster entry. */
-async function nameAndSave(name) {
-  if (!wizard?.recipe) return { ok: false, reason: 'nothing-to-save' };
-
-  if (wizard.agentId) {
-    await replaceRecipe(wizard.agentId, wizard.recipe);
-  } else {
-    if (!name?.trim()) return { ok: false, reason: 'no-name' };
-    // The voice is assigned rather than chosen here, so the wizard stays four beats. Settings
-    // has the picker, with previews and the sample sentence, for anyone who wants a different
-    // one.
-    await addAgent({ name: name.trim(), voice: null, recipe: wizard.recipe });
-  }
-
-  await endWizard();
-  await panel({ phase: 'idle', visible: false });
-  return { ok: true };
-}
-
 /**
  * Takes the recorder's listeners off the page, without ending the recording.
  *
