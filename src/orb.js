@@ -356,6 +356,13 @@ if (!globalThis.__openposseOrb) {
        visible, looks focusable, and every click lands in the vendor's page behind it — which
        reads as the panel being frozen rather than as it not being there. */
     .coach .name { margin-top: 14px; display: flex; gap: 8px; pointer-events: auto; }
+    /* **[hidden] is only a UA rule, so any author display declaration outranks it on origin.**
+       The line above would otherwise leave this row on screen through every step of the
+       recording, offering a name field before there is anything to name. This is the same bug
+       that opened the project — a .mic-fix { display: block } that outranked [hidden] and put
+       an empty red card in the popup — and it is worth a rule per shadow root rather than
+       remembering it each time. */
+    [hidden] { display: none !important; }
     .coach .name input {
       flex: 1 1 auto; background: rgba(255,255,255,.08); color: #fff;
       border: .5px solid rgba(255,255,255,.18); border-radius: 8px;
@@ -608,16 +615,12 @@ if (!globalThis.__openposseOrb) {
     }
 
     const naming = $('.coach .name');
+    const appearing = Boolean(coach.naming) && naming.hidden;
     naming.hidden = !coach.naming;
-    if (coach.naming && document.activeElement !== host) {
-      const input = naming.querySelector('input');
-      // Focused once, not on every patch: re-focusing mid-typing would move the caret to the
-      // end of what somebody is halfway through writing.
-      if (!input.dataset.focused) {
-        input.dataset.focused = '1';
-        input.focus();
-      }
-    }
+
+    // Focused on the transition into naming, not on every patch: re-focusing while somebody is
+    // halfway through typing would move the caret to the end of what they had written.
+    if (appearing) naming.querySelector('input').focus();
   }
 
   // ── Moving it out of the way ────────────────────────────────────────────────────────────
@@ -727,6 +730,36 @@ if (!globalThis.__openposseOrb) {
       if (event.key === 'Enter') submit();
     });
     button.addEventListener('click', submit);
+
+    // ── Why this field would not take typing ──────────────────────────────────────────────
+    //
+    // Reported twice, and I have now given two explanations for it without measuring either.
+    // The candidates need different fixes and look identical from outside: the click never
+    // reaches the field (hit-testing), or it reaches it and something takes the focus straight
+    // back (a vendor's focus manager). So each stage says whether it happened.
+    //
+    // Nothing here logs what was typed — only that a key arrived. The name of an agent is the
+    // user's, and the promise is that page content never reaches a console.
+    const where = () => {
+      const active = document.activeElement;
+      if (active === host) return 'inside our panel';
+      return active ? `${active.tagName.toLowerCase()} in the page` : 'nothing';
+    };
+
+    input.addEventListener('pointerdown', () => {
+      console.info('[openposse] name field: pointer reached it');
+    });
+    input.addEventListener('focus', () => {
+      console.info('[openposse] name field: focused');
+    });
+    input.addEventListener('blur', () => {
+      // The interesting one. If this fires immediately after `focused` with the page named as
+      // the new holder, the vendor is taking focus back and hit-testing was never the problem.
+      console.info('[openposse] name field: lost focus to', where());
+    });
+    input.addEventListener('keydown', () => {
+      console.info('[openposse] name field: a key arrived');
+    }, { once: true });
   }
 
   // Clicking the orb re-arms listening, per the design. The one control the panel has.
