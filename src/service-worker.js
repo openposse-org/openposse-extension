@@ -1158,7 +1158,18 @@ async function save() {
   }
 
   const { agents } = await loadRoster();
-  const name = freeName(agents, productName(recipe.domainPattern) || 'Assistant');
+
+  // **Capitalised here, not in `productName`.** That function exists for matching — "take me to
+  // Notion" is normalised before it is compared — so lowercase is correct there and wrong the
+  // moment the same string becomes something a person reads and says out loud.
+  //
+  // The first letter only, because that is all a domain label supports honestly: `leanix`
+  // becomes `Leanix` rather than `LeanIX`, and guessing the inner capitals of a brand from its
+  // domain would be wrong more often than not. Renaming it takes one click in Settings, which
+  // is the whole reason naming moved there.
+  const product = productName(recipe.domainPattern);
+  const suggested = product ? product[0].toUpperCase() + product.slice(1) : 'Assistant';
+  const name = freeName(agents, suggested);
   // The voice comes from `assignVoices`' accent heuristic rather than being chosen here, and
   // Settings has the picker with previews for anyone who wants a different one.
   await addAgent({ name, voice: null, recipe });
