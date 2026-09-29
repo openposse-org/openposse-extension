@@ -53,25 +53,45 @@ export const MODEL_REPO = 'onnx-community/Kokoro-82M-v1.0-ONNX-timestamped';
 export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
 
 /**
- * The model: **fp16**, chosen for the GPU rather than for the download.
+ * The model: **q8**, and the reason is correctness rather than size.
  *
- * This was `q8` (92 MB) on the reasoning that smaller is better, and it measured **1.6× real
- * time** — six and a half seconds to synthesise four seconds of speech, twice in a row. That is
- * not conversation, it is waiting.
+ * ## Do not switch this to fp16. It was tried, and it is silent.
  *
- * The cause is a known shape rather than a mystery: **int8-quantized ONNX graphs frequently
- * have no WebGPU kernels**, so those operators fall back to the CPU while the rest runs on the
- * GPU. The result sits between WebGPU's ~0.3× and WASM's ~3×, which is exactly where the
- * measurement landed — and is why "is it using WebGPU" was the wrong question. It was, for part
- * of the graph.
+ * The obvious reasoning — int8 graphs frequently have no WebGPU kernels, so part of the graph
+ * falls back to the CPU — is **true**, and it is why q8 measures ~1.6× real time. fp16 fixes
+ * exactly that: it synthesised 5.3 seconds of speech in 660 ms, **0.12× real time**, thirteen
+ * times faster.
  *
- * fp16 keeps the weights in a format the GPU has kernels for. 163 MB against 92: a real cost,
- * and the right one, because a voice nobody waits for is worth more than 71 MB.
- * `model_q4f16.onnx` is 155 MB and also GPU-friendly if size matters more than fidelity, though
- * 4-bit weights degrade a voice more audibly than they degrade text.
+ * Every sample was zero. Peak amplitude `0` on a buffer of the correct duration, at the correct
+ * rate, from a session that ran on the GPU and reported no error.
+ *
+ * That is not this codebase's bug. **ONNX Runtime's WebGPU backend produces NaN for Kokoro at
+ * fp16**, an open upstream issue across several transformers.js versions and several GPU
+ * vendors — see microsoft/onnxruntime#29807 ("fp32 corrupts a subset of inputs, fp16 corrupts
+ * all; same model clean on WASM") and #26732 for the same fp16-overflow shape in another model.
+ * NaN reaches the WAV encoder and lands as silence, which is why the failure presents as a
+ * voice that plays for exactly the right number of milliseconds and cannot be heard.
+ *
+ * So the dtype choice is a two-way trade with no free corner:
+ *
+ * | | size | speed | correct on WebGPU |
+ * |---|---|---|---|
+ * | `q8` | 92 MB | ~1.6× real time | **yes** |
+ * | `fp16` | 163 MB | ~0.12× real time | **no — all NaN** |
+ * | `q4f16` | 155 MB | fast | no — same fp16 path |
+ * | `fp32` | 326 MB | fast, full GPU kernels | yes here; corrupts on some Intel/AMD GPUs |
+ *
+ * q8 is the one that is audible everywhere, so it is the default. fp32 is the upgrade if the
+ * wait proves worse than the download, and it needs testing per GPU rather than assuming.
  *
  * `model_q8f16.onnx` is 86 MB and would have been ideal, but transformers.js 4.0.0 has no such
  * dtype — it was silently ignored and the 326 MB fp32 default requested instead.
+ *
+ * **The guard against all of this is `peak` in `kokoro.js`**, which refuses a buffer of zeros
+ * and falls back to a system voice. That matters beyond this machine: the upstream issue says
+ * fp32 corrupts *a subset of inputs* on Intel Iris Xe, so a user whose GPU we cannot test can
+ * hit this with a dtype that is correct here. A voice that checks its own output is the only
+ * version of this that ships.
  *
  * `DTYPE` is exported so `kokoro.js` cannot disagree with what was downloaded, and the test
  * below ties the two together: an unrecognised dtype fails at first use, not at build time.
@@ -83,13 +103,13 @@ export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
  *
  * Sizes are exact for the same reason, so a progress bar cannot overshoot.
  */
-export const DTYPE = 'fp16';
+export const DTYPE = 'q8';
 
 export const MODEL = {
   id: 'model',
-  url: `${TS_REPO}/${TS_REVISION}/onnx/model_fp16.onnx`,
-  bytes: 163_232_776,
-  sha256: '220724d5c5e0cc01be30f38faa6cf0c895a7cde6e7773e91db2973c8c7e5123c',
+  url: `${TS_REPO}/${TS_REVISION}/onnx/model_quantized.onnx`,
+  bytes: 92_361_055,
+  sha256: 'c0c02b3299fd97c34ea92a98e6d41eaa1a739c8f77bf685aac34bd7b34c1132c',
 };
 
 /**
