@@ -126,25 +126,22 @@ function watchBusy(selector, { timeoutMs, steadyMs = 900 }) {
   return {
     selector,
     /**
-     * Whether the vendor has finished, waiting at most `maxMs` to find out.
+     * Whether the vendor has finished — **read, never waited on.**
      *
-     * **The budget is the caller's, and that is the whole safety property.** The first version
-     * bounded this by `responseTimeoutMs` — sixty seconds — on the reasoning that the vendor
-     * might legitimately still be working. It might; but a selector that matches something
-     * which never goes away is indistinguishable from that, and the dry run hung for a minute
-     * on its first question.
+     * The first version blocked here until the indicator cleared, and that was the mistake
+     * that made a recorded vendor worse than an unrecorded one. It sat between reading the
+     * first row and the re-pick loop, so every row that arrived during it was already counted
+     * as "before" by the time the loop took its baseline — and the loop then waited for a
+     * further row that was never coming, breaking with a status row as the answer. Measured:
+     * two passes where the same vendor without an indicator took three and answered correctly.
      *
-     * So this may only ever *shorten* a wait. It spends time the caller was going to spend
-     * anyway and reports back, and the caller subtracts what was spent. A useless indicator
-     * then costs nothing at all rather than costing a minute.
+     * An indicator is information about the wait, not a substitute for it. Read at the moment
+     * the loop decides how long to be patient, it can only ever shorten that patience, and it
+     * cannot consume the window the loop needs.
      */
-    async settled(maxMs) {
-      const deadline = Date.now() + maxMs;
-      while (!gone && seen && Date.now() < deadline) {
-        await new Promise((resolve) => { setTimeout(resolve, 100); });
-      }
-      return { finished: gone, waited: Date.now() - startedAt };
-    },
+    finished() { return gone; },
+    /** Whether it was ever there, so "no indicator" can be told from "still working". */
+    everSeen() { return seen; },
     stop() { clearInterval(timer); },
   };
 }
@@ -385,20 +382,8 @@ async function askAssistant({ recipe, prompt }, emit) {
   // successful turn, most of it spent discovering that a row which was never going to arrive
   // had not arrived.
   //
-  // Falls back to the clock whenever the vendor showed nothing, which is also what every recipe
-  // recorded before this change does — `busySelector` is null in all of them.
-  //
-  // **Bounded by the grace it is replacing, and the remainder is subtracted.** Waiting for the
-  // indicator and *then* paying the full grace would make a slow vendor worse than before, and
-  // an indicator that never clears would make it far worse — which is exactly what happened:
-  // bounded by `responseTimeoutMs` instead, the first dry-run question hung for a minute. The
-  // total spent here can now never exceed what the clock alone would have cost.
-  const watched = await busy.settled(ANSWER_GRACE_MS);
-  busy.stop();
-  const graceMs = watched.finished
-    ? (recipe.quietPeriodMs ?? 900)
-    : Math.max(recipe.quietPeriodMs ?? 900, ANSWER_GRACE_MS - watched.waited);
-
+  // **Nothing is awaited here.** The grace is decided inside the loop, from the indicator's
+  // state at the moment each pass begins — see `watchBusy.finished`.
   let text = '';
   let readFrom = null;
   for (let pass = 0; pass < 3; pass += 1) {
@@ -425,8 +410,11 @@ async function askAssistant({ recipe, prompt }, emit) {
           // full ceiling before reporting, so an answer visible in the vendor's tab took ten
           // more seconds to reach the panel. That was measured as lag by the person using it,
           // not by a test.
+          // **The grace only shrinks once the vendor has actually stopped**, read here rather
+          // than waited for earlier. While it is still working, this pass is the one that
+          // catches the answer row, and shortening it is how a status row got spoken instead.
           timeoutMs: Math.min(
-            pass === 1 ? graceMs : (recipe.quietPeriodMs ?? 900),
+            pass === 1 && !busy.finished() ? ANSWER_GRACE_MS : (recipe.quietPeriodMs ?? 900),
             responseTimeoutMs,
           ),
           settleMs: recipe.quietPeriodMs ?? 900,
@@ -448,6 +436,10 @@ async function askAssistant({ recipe, prompt }, emit) {
       onDelta: (delta) => emit({ kind: 'partial_result', text: delta }),
     });
   }
+
+  // The poll is only useful while a turn is in flight, and a turn that ended without stopping
+  // it would leave one running every 150 ms for the life of the page.
+  busy.stop();
 
   // Transport diagnostics, not content: how many reply elements existed before and after.
   // Without these, "Andy answered" and "Andy re-read the previous answer" are the same
@@ -471,9 +463,11 @@ async function askAssistant({ recipe, prompt }, emit) {
       // finished, it has an indicator we never saw, or it has none recorded at all.
       // The selector is included when it did not work, because "there is an indicator recorded
       // and it never cleared" is only actionable if you can see which element was recorded.
-      busy: watched.finished
-        ? 'watched'
-        : (recipe.busySelector ? `never cleared: ${recipe.busySelector}` : 'none'),
+      busy: !recipe.busySelector
+        ? 'none'
+        : (busy.finished()
+          ? 'watched'
+          : `never cleared: ${recipe.busySelector}`),
     },
   };
 }
