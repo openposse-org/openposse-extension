@@ -5,7 +5,7 @@
 // registered: pressing the shortcut grants `activeTab` for that one tab, which is exactly the
 // scope and exactly the duration this needs. No new origin is requested and nothing persists.
 //
-// Some tabs can never host it — `chrome://` pages, the Web Store, a PDF viewer, a tab that has
+// Some tabs can never host it – `chrome://` pages, the Web Store, a PDF viewer, a tab that has
 // gone. That is not a failure worth reporting: the badge already carries the state, and the
 // alternative is asking for host permission over every site the user visits, which is the one
 // thing this extension's permission model exists to avoid.
@@ -20,8 +20,8 @@ let panelTabId = null;
  * The injection this turn is waiting on.
  *
  * **It has to be shared, because the two halves of a turn start at the same moment.** The
- * command handler fires `primePanel` without awaiting it — it cannot await, the whole point is
- * that nothing comes between the keypress and `executeScript` — and then starts the listening
+ * command handler fires `primePanel` without awaiting it – it cannot await, the whole point is
+ * that nothing comes between the keypress and `executeScript` – and then starts the listening
  * path, which reaches `panel({ create })` while that injection is still in the air. Without
  * this, that call found `panelTabId` still null and dropped the state message on the floor: the
  * orb was injected, rendered, and never told to become visible.
@@ -37,8 +37,8 @@ let injection = null;
  * This is the whole reason the orb appeared on Notion and nowhere else. Notion has a standing
  * host permission, so it needs no gesture; every other tab relies on `activeTab`, which is
  * granted *by the keypress* and does not survive being spent. The first version reached
- * `executeScript` through six awaits — a storage read, a session write, a badge update, a
- * `commands.getAll()` and a `tabs.query()` — and by then the grant was gone. The symptom was a
+ * `executeScript` through six awaits – a storage read, a session write, a badge update, a
+ * `commands.getAll()` and a `tabs.query()` – and by then the grant was gone. The symptom was a
  * panel that worked on one site, which reads as the panel being broken rather than as a
  * permission being lost.
  *
@@ -56,7 +56,7 @@ async function place(tabId) {
   if (tabId != null) return injectInto(tabId);
   // No tab on the event: a global shortcut fired while Chrome was in the background. Falling
   // back to a query is right for the popup's button, and for the global case it will usually
-  // fail — correctly, since nobody is looking at a browser window to see a panel in.
+  // fail – correctly, since nobody is looking at a browser window to see a panel in.
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   return tab?.id == null ? null : injectInto(tab.id);
 }
@@ -72,7 +72,7 @@ async function injectInto(tabId) {
     return tab.id;
   } catch (error) {
     // **Said out loud, not swallowed.** The first version caught this silently, and the
-    // symptom was "the orb appears on Notion and nowhere else" with nothing to explain it —
+    // symptom was "the orb appears on Notion and nowhere else" with nothing to explain it –
     // which is indistinguishable from the panel being broken. The message tells the two apart:
     // "Cannot access contents of url" means we hold no permission for that tab, anything else
     // means the injection itself failed. A URL is not page content; it is the one fact needed
@@ -96,13 +96,13 @@ async function rosterForPanel() {
 /**
  * Pushes state to the panel, injecting it first if this is the start of a turn.
  *
- * Every field is optional and merged, so a caller says only what changed — an interim
+ * Every field is optional and merged, so a caller says only what changed – an interim
  * transcript does not have to restate the roster, and a phase change does not clear the text.
  */
 export async function panel(patch, { create = false } = {}) {
   if (create) {
     // Wait for the gesture path's injection rather than racing it, and start one here only for
-    // the routes that have no gesture — the popup's button, a typed question.
+    // the routes that have no gesture – the popup's button, a typed question.
     panelTabId = await (injection ?? primePanel());
     injection = null;             // consumed; the next turn primes its own
     const shortcut = (await chrome.commands.getAll()).find((c) => c.name === 'summon')?.shortcut;
@@ -116,10 +116,10 @@ export async function panel(patch, { create = false } = {}) {
     // The tab navigated, closed, or the grant lapsed. Forget it rather than retrying into
     // nothing; the next turn injects again.
     //
-    // Logged despite being routine, because those three are not the same story — a lapsed
+    // Logged despite being routine, because those three are not the same story – a lapsed
     // grant means the panel will keep failing and a closed tab means nothing at all. It fires
     // at most once per turn, since the next call returns early on the null below.
-    console.warn('[openposse] panel unreachable —', error?.message ?? error);
+    console.warn('[openposse] panel unreachable –', error?.message ?? error);
     panelTabId = null;
   }
 }
@@ -128,7 +128,7 @@ export async function panel(patch, { create = false } = {}) {
  * The microphone level, on its own channel.
  *
  * **Deliberately not routed through `panel()`.** That merges into the panel's state and the orb
- * re-renders its DOM on every one — rebuilding avatars, status and answer twenty times a second
+ * re-renders its DOM on every one – rebuilding avatars, status and answer twenty times a second
  * to move a sphere's radius. This is a number the renderer eases toward between frames and
  * nothing else reads, so it gets its own message and touches no state.
  */
@@ -151,7 +151,7 @@ export function panelSpeaking(speaking) {
     .catch(() => {});
 }
 
-/** Fades the panel out. The content script stays — re-showing it is then free. */
+/** Fades the panel out. The content script stays – re-showing it is then free. */
 export async function hidePanel() {
   await panel({ visible: false });
 }

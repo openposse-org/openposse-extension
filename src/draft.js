@@ -1,6 +1,6 @@
 // What has been captured so far, and everything still wrong with it.
 //
-// Ported from `Sources/OpenPosseShared/RecipeDraft.swift`, which is pure and already tested —
+// Ported from `Sources/OpenPosseShared/RecipeDraft.swift`, which is pure and already tested –
 // so this is a transcription rather than a redesign, and the reasoning in its comments is the
 // reasoning here.
 //
@@ -16,7 +16,7 @@ const QUIET_PERIOD_MS = { min: 300, max: 3000 };
  * Must comfortably exceed the vendor's measured thinking time.
  *
  * M2 shipped 15 s against a vendor measured at 7–8 s, and the cold path met it with ~200 ms to
- * spare — reported as `TIMEOUT` while the assistant was still working, which is
+ * spare – reported as `TIMEOUT` while the assistant was still working, which is
  * indistinguishable from a broken agent.
  */
 const MIN_RESPONSE_TIMEOUT_MS = 30_000;
@@ -99,7 +99,7 @@ export function applyCapture(draft, event) {
       break;
 
     case 'reply_pending':
-      // An answer arrived but the recorder cannot yet name *where* answers appear — that needs
+      // An answer arrived but the recorder cannot yet name *where* answers appear – that needs
       // two. Tracked rather than folded in, so the wizard can ask for one more question
       // instead of looking like it stopped noticing.
       next.repliesSeen = event.repliesSoFar ?? (draft.repliesSeen + 1);
@@ -113,7 +113,7 @@ export function applyCapture(draft, event) {
     default:
       // **Unknown kinds are recorded, not dropped.** The extension and this module version
       // independently, so an unfamiliar event is a routine condition rather than a corrupt
-      // message — but silence would mean the capture stream is quietly one element shorter and
+      // message – but silence would mean the capture stream is quietly one element shorter and
       // the checklist simply stops advancing, which a person reads as "I failed to press
       // something". Keeping the name lets the wizard say what it did not understand.
       if (event?.kind) next.unrecognised = [...draft.unrecognised, event.kind];
@@ -145,8 +145,8 @@ export function problems(draft) {
 
   if (!draft.openMethod) {
     // **This used to say "open it the way you normally do", and that was wrong in consequence.**
-    // The reasoning was sound — nobody should need to know whether their assistant has a
-    // shortcut — but it led people to press one, and a recorded shortcut produces an agent that
+    // The reasoning was sound – nobody should need to know whether their assistant has a
+    // shortcut – but it led people to press one, and a recorded shortcut produces an agent that
     // cannot open the assistant: some vendors check `isTrusted` and ignore keystrokes that came
     // from a script. Notion is one, and the failure lands minutes later, at the first real
     // question, reading as a broken agent rather than as a recording that went the wrong way.
@@ -154,7 +154,7 @@ export function problems(draft) {
     // So the preference is stated, with the reason, and a shortcut is still accepted for the
     // vendors that have no button.
     add('open', 'We didn’t see the assistant open. Open it by clicking its button if it has '
-      + 'one — we can’t always press a keyboard shortcut on your behalf.');
+      + 'one – we can’t always press a keyboard shortcut on your behalf.');
   } else if (draft.openMethod === 'shortcut' && !draft.shortcut) {
     add('open-keys', 'We saw a shortcut but couldn’t read the keys. Try pressing it again.');
   } else if (draft.openMethod === 'click' && !usable(draft.openSelector)) {
@@ -185,10 +185,10 @@ export function problems(draft) {
       + 'able to find the next one. This assistant may not be one we can drive yet.');
   } else if (draft.repliesSeen > 0) {
     // **Deliberately not an apology or an error.** From the user's side nothing has gone wrong
-    // — they asked a question and got an answer. Asking for a second is the price of telling
+    // – they asked a question and got an answer. Asking for a second is the price of telling
     // *that* answer apart from where answers appear, so it reads as the next step.
     add('needs-second-answer',
-      'Good — now ask it one more thing, so we can tell where answers appear.');
+      'Good – now ask it one more thing, so we can tell where answers appear.');
   } else {
     add('reply', 'We didn’t see an answer come back. Ask it something and wait for the reply.');
   }
@@ -229,7 +229,7 @@ export function outstanding(draft) {
  * `triggerMethod` is a parameter rather than a recorded field because **the recorder cannot
  * know it.** It watched a real keypress, which always works. Whether a *synthetic* event opens
  * the same panel is a different question with a different answer per vendor, and the only way
- * to find out is to try — which is the dry run's job.
+ * to find out is to try – which is the dry run's job.
  *
  * @returns `{ ok: true, recipe }` or `{ ok: false, problems }`
  */
@@ -238,8 +238,8 @@ export function finish(draft, { triggerMethod }) {
   if (found.length > 0) return { ok: false, problems: found };
 
   // **Selectors flatten to plain CSS strings here**, and this is the one conversion in the
-  // file. A draft holds `selectorFor`'s full result — `{ css, via, isStable, matchCount }`,
-  // which is what the wizard's checklist and the two-sample comparison need — while the runtime
+  // file. A draft holds `selectorFor`'s full result – `{ css, via, isStable, matchCount }`,
+  // which is what the wizard's checklist and the two-sample comparison need – while the runtime
   // passes `recipe.inputSelector` straight into `deepQuerySelectorAll`. Handing it the object
   // would stringify to `[object Object]`, match nothing, and report `ELEMENT_NOT_FOUND` on a
   // recipe that had just been recorded and verified.
@@ -256,7 +256,7 @@ export function finish(draft, { triggerMethod }) {
       submitMethod: draft.submitMethod,
       submitSelector: css(draft.submitSelector),
       responseContainerSelector: css(draft.reply.selector),
-      // Already a plain string — it names an element that had left the page when it was
+      // Already a plain string – it names an element that had left the page when it was
       // captured, so it never went through `selectorFor` and never had a `.css` to unwrap.
       busySelector: draft.reply.busySelector ?? null,
       triggerMethod,

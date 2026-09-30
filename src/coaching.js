@@ -3,7 +3,7 @@
 // Ported from `Sources/OpenPosseUI/CoachingState.swift`, pure and already tested there.
 //
 // **The overlay does the coaching because it is the only surface that can.** The recording
-// happens in the vendor's own tab, and the popup closes the moment focus leaves it — someone
+// happens in the vendor's own tab, and the popup closes the moment focus leaves it – someone
 // standing in a page with nothing telling them what to do. The orb floats above that page and
 // stays.
 //
@@ -19,7 +19,7 @@ import { isComplete, problems } from './draft.js';
 /**
  * How long to wait for the assistant to open before offering a way out.
  *
- * `design/NOTES.md` left this unset with a reason — *"wants a real observation, not a guess"* —
+ * `design/NOTES.md` left this unset with a reason – *"wants a real observation, not a guess"* –
  * so here is the observation. Arm-to-open, across five recordings on 2026-09-07:
  *
  * | Run | Seconds |
@@ -33,7 +33,7 @@ import { isComplete, problems } from './draft.js';
  * Clicking takes markedly longer than a shortcut, because finding a button is a search and
  * pressing keys you already know is not.
  *
- * **45 seconds — roughly three times the slowest observed.** The margin is deliberate and the
+ * **45 seconds – roughly three times the slowest observed.** The margin is deliberate and the
  * reason is the sample: five runs by someone who built the thing and knew exactly where to
  * click. A first-time user hunting an unfamiliar menu is the case this has to serve, and
  * nothing here measures them. Erring long costs a few seconds of an offer nobody needed;
@@ -50,7 +50,7 @@ export const PATIENCE_MS = 45_000;
  * already open when recording armed, and how long ago that was.
  *
  * `patienceMs` is a parameter rather than a read of the constant because the caller arms a
- * timer with it — and a threshold living in two places is a threshold that can disagree with
+ * timer with it – and a threshold living in two places is a threshold that can disagree with
  * itself. It did: a coordinator waiting 20 ms against a `derive` comparing 45 s never produced
  * `nothing-happened` at all.
  */
@@ -79,7 +79,7 @@ export function derive(draft, { alreadyOpen = false, sinceArmedMs = 0, patienceM
   }
 
   // Only while waiting for the *open* step. Once it is open we are waiting for a person to type
-  // a question, which has no business being hurried — the recording's own deadline covers
+  // a question, which has no business being hurried – the recording's own deadline covers
   // someone who wandered off.
   if (sinceArmedMs >= patienceMs) return { step: 'nothing-happened' };
 
@@ -122,7 +122,7 @@ export function instruction(state, draft) {
     case 'await-open':
       return says('open') ?? 'Open the assistant the way you normally do.';
     case 'already-open':
-      return 'The assistant is already open. Close it first — the shortcut usually toggles, so '
+      return 'The assistant is already open. Close it first – the shortcut usually toggles, so '
         + 'pressing it now would shut it and we’d record the wrong thing.';
     case 'opened':
       return says('input') ?? says('submit') ?? says('reply')
@@ -134,7 +134,7 @@ export function instruction(state, draft) {
     case 'nothing-happened':
       // **The `isTrusted` case and the wrong-keys case are indistinguishable from here**, so
       // this offers both answers rather than guessing which happened.
-      return 'We haven’t seen it open yet. If it opens from a button, click that instead — and '
+      return 'We haven’t seen it open yet. If it opens from a button, click that instead – and '
         + 'if you pressed a shortcut, try it once more.';
     case 'abandoned':
       return says('navigated-away');
@@ -160,7 +160,7 @@ export function keycaps(shortcut) {
 /**
  * The checklist shown when everything is in hand, in the order the captures were made.
  *
- * `isKeys` renders as keycaps rather than a code chip — a shortcut is something you pressed,
+ * `isKeys` renders as keycaps rather than a code chip – a shortcut is something you pressed,
  * not page structure.
  */
 export function captures(draft) {
@@ -189,8 +189,8 @@ export function captures(draft) {
 
     // **Shown whether or not it was found, which is the point of the row.**
     //
-    // This is the one capture that is optional — a vendor showing nothing while it works is
-    // ordinary, not a failure — and that is exactly why its absence has to be visible. A row
+    // This is the one capture that is optional – a vendor showing nothing while it works is
+    // ordinary, not a failure – and that is exactly why its absence has to be visible. A row
     // that only appears on success cannot answer "did it get it?", and the alternative was
     // reading a service-worker console that is not always there to read.
     //
@@ -209,7 +209,7 @@ export function captures(draft) {
       : {
         id: 'busy',
         label: 'Knows when done',
-        detail: 'nothing to watch — using a timer',
+        detail: 'nothing to watch – using a timer',
         absent: true,
       });
   }

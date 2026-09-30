@@ -18,7 +18,7 @@
 //      surrounding text.
 //
 // The Enter-key listener that replaces it is narrower still: it reacts to exactly one key and
-// records one bit — "they submitted with Enter" — with no payload at all.
+// records one bit – "they submitted with Enter" – with no payload at all.
 
 import { deepQuerySelectorAll, isVisible } from './dom.js';
 import {
@@ -35,8 +35,8 @@ const REPLY_WINDOW_MS = 120_000;
  * Mutations must stop for this long before we decide which element was the answer.
  *
  * **Deciding on the first qualifying element does not work**, and Notion is where that showed:
- * it recorded a reply element **59ms** after Enter — page churn, a loading state, the prompt
- * echoing back — while the actual answer was still seconds away. The capture that looked
+ * it recorded a reply element **59ms** after Enter – page churn, a loading state, the prompt
+ * echoing back – while the actual answer was still seconds away. The capture that looked
  * structurally perfect (`matches 0→1`) named the wrong thing, and the measured timing that the
  * response ceiling is derived from was nonsense.
  *
@@ -61,12 +61,12 @@ let session = null;
  * Says what the recorder just captured, in the console of the page being recorded.
  *
  * **Here rather than in the service worker**, and not as a second-best. This code runs in the
- * vendor's page, so this is its own console — the same window the person recording already has
+ * vendor's page, so this is its own console – the same window the person recording already has
  * open, and one that does not vanish when an idle service worker is terminated. A recording is
  * minutes long with no traffic of ours, which is exactly the condition MV3 kills a worker in,
  * and its DevTools detaches with it.
  *
- * **Event kinds, selectors and counts only — never page text.** `CLAUDE.md` puts it as "log
+ * **Event kinds, selectors and counts only – never page text.** `CLAUDE.md` puts it as "log
  * event types and error codes only", and a recorder is the one place that rule is easy to
  * break: the thing being captured is somebody's own question to their own assistant.
  */
@@ -102,7 +102,7 @@ function summarise(event) {
         tookMs: event.reply?.elapsedMs,
         // The characters, never the characters themselves.
         answerLength: event.reply?.textLength,
-        knowsWhenDone: event.reply?.busySelector ?? 'nothing found — a timer will be used',
+        knowsWhenDone: event.reply?.busySelector ?? 'nothing found – a timer will be used',
         foundBy: event.reply?.busyFrom ?? 'n/a',
       };
     default:
@@ -118,7 +118,7 @@ function keyDescription(shortcut) {
 
 export function arm({ emit }) {
   disarm();
-  note('armed — watching this page');
+  note('armed – watching this page');
 
   session = {
     emit: (event) => {
@@ -133,10 +133,10 @@ export function arm({ emit }) {
     lastClick: null,
     submittedAt: null,
     // Everything on the page at submit time. The reply selector's `matchesBefore` is the
-    // number of its matches that were already here — which is what proves the selector gained
+    // number of its matches that were already here – which is what proves the selector gained
     // one, rather than naming the transcript that merely grew longer.
     preexisting: null,
-    // Every answer banked so far. Two are needed before a reply selector can be computed —
+    // Every answer banked so far. Two are needed before a reply selector can be computed –
     // see `recordAnswer`.
     answers: [],
     replyTimer: null,
@@ -153,7 +153,7 @@ export function arm({ emit }) {
   // **Adopt a composer that is already focused.**
   //
   // Everything downstream keys off `session.input`, and the only thing that sets it is a
-  // `focusin` — which never fires when the assistant was already open and focused before we
+  // `focusin` – which never fires when the assistant was already open and focused before we
   // armed. The submit handler then returns early on every click, nothing starts watching for a
   // reply, and the recording runs to its deadline reporting "missing submit" for a button the
   // user plainly pressed. Worse, the first `focusin` that *does* arrive is the re-focus after
@@ -207,7 +207,7 @@ function armShortcut() {
     // A bare modifier press is not a shortcut.
     if (['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return;
 
-    // THE PRIVACY GATE. Shift alone does not count — shift+letter is capital letters, which
+    // THE PRIVACY GATE. Shift alone does not count – shift+letter is capital letters, which
     // is typing. Nothing below this line runs for ordinary keystrokes, so ordinary keystrokes
     // are never read, let alone transmitted.
     if (!event.metaKey && !event.ctrlKey && !event.altKey) return;
@@ -241,11 +241,11 @@ function armShortcut() {
  * Remembers the last click, so a composer appearing right after one can be attributed to it.
  *
  * **Not every assistant has a keyboard shortcut.** Notion's opens from a button, and requiring
- * a shortcut was LeanIX's shape generalised into a rule — it would have excluded most of the
+ * a shortcut was LeanIX's shape generalised into a rule – it would have excluded most of the
  * long tail. There is no event for "the assistant opened", so the attribution is: the composer
  * appeared, nobody pressed a shortcut, and this is what was clicked just before.
  *
- * A heuristic, and the dry run is what verifies it — the same division as everywhere else here.
+ * A heuristic, and the dry run is what verifies it – the same division as everywhere else here.
  */
 /** Shapes a control usually takes. Checked before falling back to `cursor: pointer`. */
 const CONTROL_SELECTOR =
@@ -257,7 +257,7 @@ const CONTROL_SELECTOR =
  * **`closest('button, [role=button]')` alone is not enough**, and Notion is where that showed:
  * clicking its send control captured nothing at all, so the recorder never started watching for
  * a reply and the whole recording timed out. Plenty of apps build controls from plain `div`s
- * with no role — Notion's composer buttons among them.
+ * with no role – Notion's composer buttons among them.
  *
  * `cursor: pointer` is the fallback because it is the one signal that is nearly universal:
  * a thing you can click is styled as a thing you can click, whatever element it is made of.
@@ -285,7 +285,7 @@ function armClickTracking() {
 
     // **The selector is computed now, not when it is needed.**
     //
-    // Attribution happens later, when the composer appears — and by then the control is often
+    // Attribution happens later, when the composer appears – and by then the control is often
     // gone: a click that opens a panel usually re-renders the thing that was clicked, leaving
     // a detached node. `selectorFor` on a detached element walks up to a null parent
     // immediately and returns an empty string, which is what `open click  via structure` in the
@@ -302,7 +302,7 @@ const OPEN_ATTRIBUTION_MS = 5000;
 
 function armInput() {
   // `focusin`, not `click`. The common case is that the panel opens and focuses its composer
-  // for you — no click happens at all, and a click listener would sit waiting through a
+  // for you – no click happens at all, and a click listener would sit waiting through a
   // perfectly normal interaction.
   const handler = (event) => {
     const el = event.target;
@@ -310,13 +310,13 @@ function armInput() {
     if (session.input === el) return;
 
     // The composer just appeared and no shortcut was pressed, so something was clicked to open
-    // it. Attribute it to the most recent click — excluding a click *inside* the composer,
+    // it. Attribute it to the most recent click – excluding a click *inside* the composer,
     // which is someone focusing a box that was already there rather than opening anything.
     // Only the *first* composer we ever see can have been opened by a click.
     //
     // Without `session.input === null` this misfires on a re-render: sending a message
     // re-creates the composer and refocuses it, so a second `focusin` arrives moments after
-    // the send click — and the send button gets recorded as the control that opens the
+    // the send click – and the send button gets recorded as the control that opens the
     // assistant. Measured on Notion, which recorded `agent-send-message-button` as its open
     // control while the actual submit was never captured at all.
     if (!session.opened && session.input === null && session.lastClick
@@ -324,7 +324,7 @@ function armInput() {
         && !el.contains(session.lastClick.element)
         && session.lastClick.element !== el) {
       session.opened = true;
-      // The selector was computed at click time — see `armClickTracking`. Recomputing it here
+      // The selector was computed at click time – see `armClickTracking`. Recomputing it here
       // would be too late: the control that opened the panel is usually detached by now.
       session.emit({
         kind: 'open',
@@ -354,23 +354,23 @@ function armSubmit() {
     if (!session.input) return;
     // Same broadened test as the open control. `closest('button, [role=button]')` missed
     // Notion's send button entirely, so nothing was recorded, nothing started watching for a
-    // reply, and the recording ran to its 90s deadline reporting "missing submit" — for a
+    // reply, and the recording ran to its 90s deadline reporting "missing submit" – for a
     // button the user had plainly clicked.
     const button = clickableTarget(event);
     if (!button || !isVisible(button)) return;
-    // Clicking inside the composer itself is not sending — formatting controls, attachment
+    // Clicking inside the composer itself is not sending – formatting controls, attachment
     // buttons and emoji pickers all live there.
     if (session.input.contains(button)) return;
 
     const selector = selectorFor(button);
     // Kept so the reply window can watch it change. A send control usually cycles
     // enabled → stop → enabled across one answer, which is the vendor saying when it is
-    // working — see `watchSubmitState`.
+    // working – see `watchSubmitState`.
     session.submitButton = { element: button, css: selector.css };
     onSubmitted({ kind: 'submit', submitMethod: 'click', selector });
   };
 
-  // Enter, and only Enter. One key, one bit, no payload — see the privacy note at the top.
+  // Enter, and only Enter. One key, one bit, no payload – see the privacy note at the top.
   const onEnter = (event) => {
     if (!session.input || event.key !== 'Enter' || event.shiftKey) return;
     if (event.target !== session.input && !session.input.contains(event.target)) return;
@@ -386,7 +386,7 @@ function armSubmit() {
  * Records how the message was sent, then starts watching for the answer.
  *
  * The `preexisting` snapshot is taken here rather than at arm time because it must reflect the
- * page as it was *immediately before this question* — the assistant's own greeting, and any
+ * page as it was *immediately before this question* – the assistant's own greeting, and any
  * earlier turns, are legitimately already present.
  */
 function onSubmitted(event) {
@@ -408,20 +408,20 @@ function watchForReply() {
   //
   // Accumulating rather than judging each batch on its own is load-bearing. A vendor adds the
   // reply element **empty** and fills it afterwards, so at the moment it appears in
-  // `addedNodes` it has no text and fails the "is this an answer?" test — and by the time it
+  // `addedNodes` it has no text and fails the "is this an answer?" test – and by the time it
   // has text, the mutations are happening *inside* it and it is never in `addedNodes` again.
   //
   // The timestamp is what `elapsedMs` reports: when the chosen element *appeared*, which is
-  // what the runtime's `waitForNewMatch` actually waits for — not when the answer finished.
+  // what the runtime's `waitForNewMatch` actually waits for – not when the answer finished.
   const addedSinceSubmit = new Map();
   // When each of them left, so how long it was on screen can be measured. That span is what
-  // separates a vendor's "working" indicator from the churn around it — see `decide`.
+  // separates a vendor's "working" indicator from the churn around it – see `decide`.
   const removedAt = new Map();
   let settleTimer = null;
 
   // **The send button is the better signal, and it was invisible to the one above.**
   //
-  // A vendor's "working" state is usually not a new element at all: the send control changes —
+  // A vendor's "working" state is usually not a new element at all: the send control changes –
   // enabled, then a stop button, then enabled again. Nothing appears and nothing leaves, so
   // watching for a vanishing element finds nothing and reports "nothing to watch", which is
   // what Notion did.
@@ -440,7 +440,7 @@ function watchForReply() {
 
     // **What appeared and then left is the vendor telling us it was busy.**
     //
-    // These were already being found here and thrown away — an element added after the submit
+    // These were already being found here and thrown away – an element added after the submit
     // and gone by the time the page settled is, almost by definition, a "thinking" spinner or a
     // "stop generating" control. That is the signal the runtime has been missing: without it,
     // "the answer is finished" is a 2.5 s clock that gets paid on every single turn whether or
@@ -449,18 +449,18 @@ function watchForReply() {
     // Signatures rather than elements, because by now they are detached: `selectorFor` verifies
     // a candidate by counting matches, and a element that has left the page matches nothing.
     // `roleAttributes` names identifying attributes without their values, which is exactly what
-    // survives the element itself — and two exchanges are what make a value unnecessary.
+    // survives the element itself – and two exchanges are what make a value unnecessary.
     // **How long it was on screen is what tells a busy indicator from the churn around it.**
     //
     // A spinner or a stop button exists from the question until the answer: it spans nearly the
     // whole window. A composer that re-renders produces an element that lives for a few
-    // hundred milliseconds and is replaced by an identical one — which looks the same to a
+    // hundred milliseconds and is replaced by an identical one – which looks the same to a
     // "did it appear and leave?" test and is not an indicator at all.
     //
     // Notion produced exactly that: `agent-service-approval-mode-button`, a control that is
     // present whether or not it is working, captured because the node behind it was swapped.
     // Ranking by selector length picked it over anything else, which was never a reason for
-    // preferring one element over an unrelated one — that tiebreak was about a container
+    // preferring one element over an unrelated one – that tiebreak was about a container
     // versus its child and had no business deciding this.
     const now = Date.now();
     const vanished = [];
@@ -488,10 +488,10 @@ function watchForReply() {
     // capture were spent reasoning about why a mechanism found nothing, when the list it built
     // would have said so immediately. A candidate is only recorded if both exchanges produce
     // it, so a selector appearing here once and not in the recipe is the ordinary case rather
-    // than a fault — and an empty list on both exchanges is the answer to "why is there no
+    // than a fault – and an empty list on both exchanges is the answer to "why is there no
     // indicator?".
     note('busy candidates', vanished.length === 0
-      ? 'none — nothing appeared and left during this answer'
+      ? 'none – nothing appeared and left during this answer'
       : vanished.map(({ sig, span, fromButton }) => ({
         selector: sig,
         onScreenMs: span,
@@ -508,7 +508,7 @@ function watchForReply() {
 
     // **Silence here was wrong, and it stranded a recording.** The old comment argued that
     // saying nothing was the honest option because the wizard already lists what is
-    // outstanding — but the wizard lists "reply" as outstanding whether we looked and found
+    // outstanding – but the wizard lists "reply" as outstanding whether we looked and found
     // nothing or never looked at all. A user who has sent a question and watched it answered
     // is then staring at a panel still asking for the thing they just did.
     //
@@ -516,8 +516,8 @@ function watchForReply() {
     // filters, and the panel sat on "Watching for your second question…" while the user sent
     // it three more times.
     //
-    // So: say we looked. Counts only — how many elements were added, how many were visible,
-    // how many held enough text — which is what names the filter that ate it.
+    // So: say we looked. Counts only – how many elements were added, how many were visible,
+    // how many held enough text – which is what names the filter that ate it.
     session.emit({
       kind: 'reply_pending',
       repliesSoFar: session.answers.length,
@@ -536,14 +536,14 @@ function watchForReply() {
         // **Descendants too, and this is not defensive padding.**
         //
         // `MutationRecord.addedNodes` holds only the nodes inserted *directly into the
-        // target* — never their descendants. A vendor that builds its answer and attaches it
+        // target* – never their descendants. A vendor that builds its answer and attaches it
         // in one go therefore produces a single record naming one subtree root, and every
         // element inside it is invisible to us.
         //
         // Measured on Notion: the one node reported was a plain `div` with no attributes, so
         // the only candidate had no usable selector and we fell to a 20-segment structural
         // path. The `div[data-content-editable-root="true"]` container that identifies the
-        // answer exactly was three levels inside it, and was never even a candidate — we were
+        // answer exactly was three levels inside it, and was never even a candidate – we were
         // ranking a set of one and calling it a choice.
         const descendants = node.querySelectorAll?.('*') ?? [];
         // A page-level re-render can insert thousands of elements at once. That is not an
@@ -611,7 +611,7 @@ function watchForReply() {
  *    multi-paragraph reply is not truncated to its first `<p>`.
  */
 /**
- * Why nothing qualified as an answer — counts only, never text.
+ * Why nothing qualified as an answer – counts only, never text.
  *
  * Each number is one of `chooseReplyElement`'s filters, in the order it applies them, so the
  * first one that collapses to zero is the one that ate the answer. `longest` is the decisive
@@ -653,14 +653,14 @@ function chooseReplyElement(added) {
   //
   // **"Nameable" means carrying a role attribute, not producing a stable selector on its own.**
   // Those came apart the moment per-message values were rejected: Notion's answer container is
-  // marked `data-agent-service-scroll-anchor="event_34s3…"`, whose value is correctly refused —
+  // marked `data-agent-service-scroll-anchor="event_34s3…"`, whose value is correctly refused –
   // and reading that refusal as "cannot be identified" dropped the best candidate on the page.
   // What was chosen instead was `div.xdt5ytf`: a build-generated class matching twenty-four
   // elements and gaining three per answer, which passed the dry run and would have broken on
   // Notion's next deploy.
   //
-  // Two samples are what make the value dispensable — `selectorForBoth` drops it and keeps the
-  // attribute — so the element has to survive this filter to get there.
+  // Two samples are what make the value dispensable – `selectorForBoth` drops it and keeps the
+  // attribute – so the element has to survive this filter to get there.
   const nameable = candidates.filter(
     (el) => selectorFor(el, { allowMultiple: true }).isStable || roleAttributes(el).length > 0
   );
@@ -671,16 +671,16 @@ function chooseReplyElement(added) {
   // "Outermost" was the first rule here and it is wrong in the same way `openposseDiff`'s
   // comment already warned: every ancestor up to `<body>` also contains the answer, so the
   // outermost candidate drags in the page chrome around it and the agent reads that aloud too.
-  // "Innermost" is wrong in the other direction — it lands on the first `<p>` of a
+  // "Innermost" is wrong in the other direction – it lands on the first `<p>` of a
   // multi-paragraph reply.
   //
-  // So: take the largest text any candidate holds, keep the ones within 10% of it — those all
+  // So: take the largest text any candidate holds, keep the ones within 10% of it – those all
   // contain the answer and differ only in how much extra they carry.
   const textLength = (el) => (el.innerText ?? '').length;
   const largest = Math.max(...pool.map(textLength));
   const holdsTheAnswer = pool.filter((el) => textLength(el) >= largest * 0.9);
 
-  // A custom element's tag is the most durable identifier a page can offer, so prefer one —
+  // A custom element's tag is the most durable identifier a page can offer, so prefer one –
   // but only among the elements that actually hold the answer.
   //
   // This used to be an early return on the *first* custom element found anywhere in the
@@ -699,13 +699,13 @@ function chooseReplyElement(added) {
  * Banks one answer, and emits the reply capture once there are two of them.
  *
  * **Two, because one cannot distinguish an answer from where answers appear.** Both attempts
- * against Notion named a single message — first a per-message id, then a seventeen-segment
- * positional path — and both looked healthy: `0→1 PER-REPLY`, a selector that resolved, a
+ * against Notion named a single message – first a per-message id, then a seventeen-segment
+ * positional path – and both looked healthy: `0→1 PER-REPLY`, a selector that resolved, a
  * recipe that validated. The next question matched nothing in each case. No test applied to one
  * element can separate the two, because on a page holding one answer they are the same element.
  *
  * With two, the constraint does the work: a selector matching both cannot be naming either.
- * It also makes the existing before/after check mean something — the second exchange reports
+ * It also makes the existing before/after check mean something – the second exchange reports
  * `1→2`, which is the real signal that was being approximated by `0→1`.
  *
  * The first answer emits `reply_pending` instead, so the panel can ask for one more rather than
@@ -720,7 +720,7 @@ function chooseReplyElement(added) {
  *
  * Attributes only, never text: a label reads "Stop" in one locale and something else in
  * another, and the promise is that page content does not leave the page. `aria-label` is a
- * borderline case and is included deliberately — it is the attribute most vendors use to say
+ * borderline case and is included deliberately – it is the attribute most vendors use to say
  * which state a control is in, and it is the vendor's own word for its own button, not the
  * user's content.
  *
@@ -740,7 +740,7 @@ function watchSubmitState() {
    *
    * **A baseline rather than a container reference, and the difference is what went wrong.**
    * The first version held the send button's parent and scanned inside it. Notion re-renders
-   * the composer row, so that node is detached by the time the swap happens — and it was only
+   * the composer row, so that node is detached by the time the swap happens – and it was only
    * refreshed while the send button was *present*, which is never during the very period worth
    * watching. The scan silently did nothing for the whole answer.
    *
@@ -749,7 +749,7 @@ function watchSubmitState() {
    * send control is away has arrived *in its place*.
    *
    * It also excludes the near-miss that kept winning: `agent-service-approval-mode-button` is
-   * in the baseline, because it is present whether or not the agent is working — it was only
+   * in the baseline, because it is present whether or not the agent is working – it was only
    * ever captured because the node behind it gets swapped.
    */
   const baseline = new Set(
@@ -757,7 +757,7 @@ function watchSubmitState() {
   );
 
   const sample = () => {
-    // Re-queried rather than held, because a vendor may swap the node rather than mutate it —
+    // Re-queried rather than held, because a vendor may swap the node rather than mutate it –
     // and a detached reference would report the old state forever.
     const el = deepQuerySelectorAll(button.css)[0];
 
@@ -777,7 +777,7 @@ function watchSubmitState() {
     // while the model works that element is *replaced* by
     // `data-testid="agent-chat-stop-button"`. Re-querying the send button's own selector
     // therefore finds nothing at precisely the moment worth recording, and watching its
-    // attributes change can never work — it is not the same element.
+    // attributes change can never work – it is not the same element.
     //
     // Whatever is new on the page while it is gone has arrived in its place. Scanned only
     // during that window, so the cost falls on the seconds an answer takes rather than on
@@ -810,7 +810,7 @@ function watchSubmitState() {
       //
       // Every one is verified against the live page rather than trusted: a selector that still
       // matches now that the answer is over would tell the runtime the vendor is *permanently*
-      // busy, which is far worse than having no indicator at all — it would turn every future
+      // busy, which is far worse than having no indicator at all – it would turn every future
       // turn into a wait for the full ceiling.
       const states = [...seen]
         .filter((pair) => !atRest.has(pair))
@@ -831,7 +831,7 @@ function watchSubmitState() {
  * Deliberately **not** `selectorFor`, which proves a candidate by counting how many elements it
  * matches. That contract is right for everything else here and useless for this one: a busy
  * indicator is identified precisely by having gone, so it matches nothing at the moment we want
- * to name it. Correctness comes from the other direction instead — two exchanges have to
+ * to name it. Correctness comes from the other direction instead – two exchanges have to
  * produce the same signature, and the runtime re-checks it against a live page before relying
  * on it.
  *
@@ -864,7 +864,7 @@ function recordAnswer(element, firstSeenAt, vanished = []) {
   const [first, second] = session.answers.slice(-2);
   const selector = selectorForBoth(first.element, second.element);
 
-  // Nothing described both. Say so rather than falling back to one of them — a selector for
+  // Nothing described both. Say so rather than falling back to one of them – a selector for
   // one answer is exactly the failure this whole path exists to prevent, and it is worse than
   // no capture because it validates.
   if (!selector) {
@@ -872,15 +872,15 @@ function recordAnswer(element, firstSeenAt, vanished = []) {
       kind: 'reply_pending',
       repliesSoFar: session.answers.length,
       noCommonSelector: true,
-      // Shape, not content — see `describePair`. Without it this failure is a dead end, which
+      // Shape, not content – see `describePair`. Without it this failure is a dead end, which
       // is the same gap that cost two rounds on the reply selector already.
       shape: describePair(first.element, second.element),
     });
     return;
   }
 
-  // **Two exchanges have to name the same thing.** One vanished element is noise — a tooltip,
-  // a scroll shadow, a re-render — and any page produces several. The one that appeared and
+  // **Two exchanges have to name the same thing.** One vanished element is noise – a tooltip,
+  // a scroll shadow, a re-render – and any page produces several. The one that appeared and
   // left during *both* answers is the vendor's own busy signal, and the same two-sample
   // discipline that stops a per-message id being mistaken for the answer container applies
   // here for the same reason.
@@ -903,7 +903,7 @@ function recordAnswer(element, firstSeenAt, vanished = []) {
   // scroll shadow and is only ever circumstantial.
   //
   // Within a kind, the narrowest wins: a selector carrying a value names the control, while a
-  // bare `[attr]` may also match its container — and stopping on a container means calling the
+  // bare `[attr]` may also match its container – and stopping on a container means calling the
   // answer finished while the spinner inside it is still turning.
   // A flag rather than a string test, because the strongest candidate of all does *not* share
   // the send button's selector: Notion's stop button is a different element in the same place,
@@ -920,7 +920,7 @@ function recordAnswer(element, firstSeenAt, vanished = []) {
   const ranked = shared
     .filter((candidate) => isButton(candidate) || candidate.span >= answerMs * 0.5)
     .sort((a, b) => {
-      // The vendor's own control first — it says what it is doing, where an element that came
+      // The vendor's own control first – it says what it is doing, where an element that came
       // and went is only ever an inference about what the page was up to.
       if (isButton(a) !== isButton(b)) return isButton(b) ? 1 : -1;
       // Then whichever covered more of the answer.
@@ -929,7 +929,7 @@ function recordAnswer(element, firstSeenAt, vanished = []) {
 
   const busySelector = ranked[0]?.sig ?? null;
   // Which of the two found it, shown on the card. They are not equally trustworthy, so "we have
-  // one" is not the whole answer — a button state is the vendor saying what it is doing, and a
+  // one" is not the whole answer – a button state is the vendor saying what it is doing, and a
   // vanished element is an inference from what the page happened to remove.
   const busyFrom = ranked[0] ? (isButton(ranked[0]) ? 'button' : 'element') : null;
 
@@ -956,7 +956,7 @@ function emitReply(selector, element, firstSeenAt, busySelector = null, busyFrom
       // guessed. Guessing it is how M2 shipped a 15s ceiling against a cold path that needed
       // 14.8s, which passed on every warm tab and looked intermittent.
       //
-      // When the chosen element *appeared*, not when the answer finished — that is what the
+      // When the chosen element *appeared*, not when the answer finished – that is what the
       // runtime's `waitForNewMatch` waits for, so it is the quantity the ceiling should be
       // derived from.
       //
@@ -970,7 +970,7 @@ function emitReply(selector, element, firstSeenAt, busySelector = null, busyFrom
       // cannot tell those apart, which is how the 59ms capture looked fine.
       textLength: (element.innerText ?? '').length,
       // What the vendor showed while it was working, if anything. Null is an ordinary answer,
-      // not a failure — see `recordAnswer`.
+      // not a failure – see `recordAnswer`.
       busySelector,
       busyFrom,
     },

@@ -1,7 +1,7 @@
 // Kokoro, one layer at a time.
 //
-// **This exists because debugging it end to end was the wrong shape.** Five layers deep — worker
-// → service worker → offscreen document → HeadTTS → its worker → transformers.js — and only the
+// **This exists because debugging it end to end was the wrong shape.** Five layers deep – worker
+// → service worker → offscreen document → HeadTTS → its worker → transformers.js – and only the
 // outermost one reports, so every failure arrived as "connection failed" regardless of cause.
 // Three rounds were spent establishing which layer, and each answer was one sentence from a
 // `catch` that already had it.
@@ -56,20 +56,20 @@ document.getElementById('run').addEventListener('click', async () => {
   //    a confusing failure three layers further in.
   const filesOk = await step('Weights present and verified', async () => {
     const { state, have, want } = await weightsStatus();
-    if (state !== 'ready') throw new Error(`${have} of ${want} files — open Settings and download`);
+    if (state !== 'ready') throw new Error(`${have} of ${want} files – open Settings and download`);
     return `${want} files\n${ALL.map((f) => f.id).join(', ')}`;
   });
 
   // 2. WebGPU. Asked for an adapter rather than trusting `navigator.gpu` to exist, because on
   //    some machines the object is there and the adapter is not.
   await step('WebGPU adapter', async () => {
-    if (!(await hasWebGPU())) throw new Error('no adapter — Kokoro would be too slow to use');
+    if (!(await hasWebGPU())) throw new Error('no adapter – Kokoro would be too slow to use');
     const info = await (await navigator.gpu.requestAdapter())?.requestAdapterInfo?.();
     return info ? `${info.vendor ?? '?'} ${info.architecture ?? ''}`.trim() : 'adapter acquired';
   });
 
   // 3. transformers.js as a module. **The step that was failing**, and it failed on the
-  //    bare specifier `onnxruntime-web/webgpu` in the `.web.` build — a bundler's job, not a
+  //    bare specifier `onnxruntime-web/webgpu` in the `.web.` build – a bundler's job, not a
   //    browser's. Reported here as itself rather than as "importing modules failed".
   const tf = await step('transformers.js imports', async () => {
     const url = chrome.runtime.getURL('vendor/transformers/transformers.min.js');
@@ -83,7 +83,7 @@ document.getElementById('run').addEventListener('click', async () => {
   // 4. The WASM binary is reachable at the path the worker points ONNX Runtime at.
   //
   //    **The asyncify build, which is the one `ort.webgpu` actually loads.** This checked the
-  //    `jsep` pair first, found it, reported green — and the backend then failed looking for
+  //    `jsep` pair first, found it, reported green – and the backend then failed looking for
   //    asyncify. A reachability check against a file nothing loads is worse than no check: it
   //    is a green tick for the wrong thing.
   await step('ONNX Runtime WASM reachable', async () => {
@@ -106,7 +106,7 @@ document.getElementById('run').addEventListener('click', async () => {
     return;
   }
 
-  // 6. The worker starts and reaches ready — which means the model, the tokenizer and the
+  // 6. The worker starts and reaches ready – which means the model, the tokenizer and the
   //    dictionary all loaded from the cache without a single network request.
   let engine = null;
   const connected = await step('Worker connects and loads the model', async () => {
@@ -135,7 +135,7 @@ document.getElementById('run').addEventListener('click', async () => {
     if (!chunks.length) throw new Error('connected and produced no audio');
 
     // **Every chunk, in order.** HeadTTS splits on sentences, so playing `chunks[0]` alone
-    // produced "Hello." and stopped — which read as the engine truncating when it had in fact
+    // produced "Hello." and stopped – which read as the engine truncating when it had in fact
     // synthesised all 5.2 seconds. `kokoro.js` already chains them; this had not.
     const ctx = new AudioContext();
     let at = ctx.currentTime;
@@ -147,7 +147,7 @@ document.getElementById('run').addEventListener('click', async () => {
       at += buffer.duration;
     }
     const seconds = chunks.reduce((n, b) => n + b.duration, 0).toFixed(1);
-    return `${chunks.length} chunk(s), ${seconds}s — playing now`;
+    return `${chunks.length} chunk(s), ${seconds}s – playing now`;
   });
 
   document.getElementById('run').disabled = false;

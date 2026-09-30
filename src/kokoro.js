@@ -32,7 +32,7 @@ let reportedBackend = false;
  *
  * `endpoints: ['webgpu']` with no `wasm` fallback is deliberate. `chooseEngine` has already
  * established WebGPU is present, and the WASM path is roughly ten times slower than real
- * time — falling back to it silently would produce something far worse than the system voices
+ * time – falling back to it silently would produce something far worse than the system voices
  * this was meant to improve on.
  */
 async function connect() {
@@ -43,18 +43,18 @@ async function connect() {
   const engine = new HeadTTS({
     endpoints: ['webgpu'],
     // **`transformers.min.js`, not `transformers.web.min.js`.** The `.web.` build carries bare
-    // import specifiers — `onnxruntime-web/webgpu`, `onnxruntime-common` — which a bundler is
+    // import specifiers – `onnxruntime-web/webgpu`, `onnxruntime-common` – which a bundler is
     // expected to resolve and a browser cannot: `import()` of it dies with "Failed to resolve
     // module specifier". This is the file HeadTTS loads from a CDN by default, and it is
     // self-contained for exactly that reason.
     transformersModule: chrome.runtime.getURL('vendor/transformers/transformers.min.js'),
     // **`workerModule` is deliberately not set**, and setting it was the first thing that
     // broke. Given one, HeadTTS wraps it in `import "<url>"` inside a Blob and starts a worker
-    // from a `blob:` URL — which MV3's CSP refuses, because `script-src 'self'` does not cover
+    // from a `blob:` URL – which MV3's CSP refuses, because `script-src 'self'` does not cover
     // `blob:` and an extension may not widen it. The failure reads "Failed to start Module Web
     // Worker" and says nothing about why.
     //
-    // Left null, it falls back to `new URL("./worker-tts.mjs", import.meta.url)` — a direct
+    // Left null, it falls back to `new URL("./worker-tts.mjs", import.meta.url)` – a direct
     // `chrome-extension://` URL beside this module, which *is* `'self'`. The upstream default
     // is the path that works here; being explicit chose the one that does not.
     dictionaryURL: chrome.runtime.getURL('dictionaries'),
@@ -65,7 +65,7 @@ async function connect() {
     // From `weights.js`, so the dtype and the file that was downloaded cannot disagree. They
     // did: `q8f16` names a real published file but is not a dtype transformers.js recognises,
     // so it was **ignored rather than rejected** and the 326 MB fp32 default was requested
-    // instead — surfacing three layers away as a refused network request.
+    // instead – surfacing three layers away as a refused network request.
     dtypeWebgpu: DTYPE,
     languages: ['en-us'],
   });
@@ -90,7 +90,7 @@ async function connect() {
 /**
  * Loads the model before anything needs it.
  *
- * Measured at ~1.7 s to reach ready — the model onto the GPU, the tokenizer, the dictionary.
+ * Measured at ~1.7 s to reach ready – the model onto the GPU, the tokenizer, the dictionary.
  * Noticeable if it happens when an answer arrives, and invisible if it happens earlier.
  *
  * **Called when a turn starts, not at browser launch**, and that is the whole design. A turn is
@@ -124,7 +124,7 @@ export async function speak(text, voice, { onLevel = () => {} } = {}) {
   if (!text) return { ok: true };
 
   // Measured and handed back rather than logged here: this runs in the offscreen document, so
-  // a `console` line would land in a different DevTools window from the rest of the turn —
+  // a `console` line would land in a different DevTools window from the rest of the turn –
   // which is exactly why "speaking" read as one 21-second step with nothing inside it.
   const ms = {};
   const started = performance.now();
@@ -242,8 +242,8 @@ const LEVEL_MS = 50;
  * level** as it goes.
  *
  * The level is what the design asks for and `speechSynthesis` cannot give: "the TTS output
- * level while an agent speaks". The system-voice path has to make do with `boundary` events —
- * speech *rate*, not loudness — because it renders straight to the device and exposes no audio
+ * level while an agent speaks". The system-voice path has to make do with `boundary` events –
+ * speech *rate*, not loudness – because it renders straight to the device and exposes no audio
  * node. Here the audio is ours before it is heard, so an `AnalyserNode` on the way to the
  * speakers gives the orb the same signal the microphone gives it. An orb that moves with the
  * voice is an instrument; one that moves on a timer is an animation.
@@ -272,7 +272,7 @@ function play(onLevel) {
     for (let i = 0; i < samples.length; i += 1) sum += samples[i] * samples[i];
     const rms = Math.sqrt(sum / samples.length);
     // Same decibel mapping as the microphone, so the orb behaves identically whether it is
-    // following you or following an agent — which is the point of it being one orb.
+    // following you or following an agent – which is the point of it being one orb.
     const db = 20 * Math.log10(Math.max(rms, 1e-6));
     onLevel(Math.min(1, Math.max(0, (db + 55) / 45)));
   }, LEVEL_MS);
@@ -297,7 +297,7 @@ function play(onLevel) {
   };
 
   // Resolving needs *both* conditions: nothing still playing, and nothing more to come. Either
-  // one alone is wrong — the speakers drain between sentences while synthesis continues, and
+  // one alone is wrong – the speakers drain between sentences while synthesis continues, and
   // the last chunk arrives well before it has been spoken.
   const maybeDone = () => {
     if (noMoreComing && outstanding === 0) teardown({ ok: true });
@@ -324,7 +324,7 @@ function play(onLevel) {
       return done;
     },
 
-    /** Gives up without speaking what is queued — a silent model, or an interruption. */
+    /** Gives up without speaking what is queued – a silent model, or an interruption. */
     stop() {
       for (const source of sources) {
         try { source.stop(); } catch { /* already finished, or never started */ }

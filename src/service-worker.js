@@ -1,4 +1,4 @@
-// MV3 service worker — the extension's only long-lived code.
+// MV3 service worker – the extension's only long-lived code.
 //
 // It is deliberately close to empty at M2. The job of this milestone is to prove the
 // transport: extension → native host → Unix socket → OpenPosse, and back. Vendor modules and
@@ -7,7 +7,7 @@
 // Note the lifecycle constraint that shapes everything here: an MV3 service worker is
 // **not** persistent. Chrome terminates it after roughly 30 seconds of inactivity, and a
 // native messaging port held by a dead worker dies with it. An active port does reset that
-// timer, so a port kept open for an in-flight request survives — but the worker must be able
+// timer, so a port kept open for an in-flight request survives – but the worker must be able
 // to reconstruct its state from nothing after any idle gap, and must never assume a variable
 // set on one event still exists on the next.
 
@@ -35,7 +35,7 @@ import { channelFor } from './channels.js';
  * The last thing asked, so clicking a different avatar can put it to them instead.
  *
  * **Session storage, not a module variable.** MV3 terminates an idle worker after ~30 seconds,
- * and the panel can easily still be on screen after that — so a variable here would be empty
+ * and the panel can easily still be on screen after that – so a variable here would be empty
  * exactly when someone reaches for the avatar, and the click would do nothing with no way to
  * tell that from a dead button. It expires with the floor, because re-asking a question the
  * conversation has moved on from is not a repair.
@@ -53,8 +53,8 @@ async function recallPrompt() {
  * Replies in flight, by correlation id.
  *
  * **V1 has no transport.** Intents used to arrive from a native host over a Unix socket and
- * their answers went back the same way; now they originate inside the extension — from the
- * popup, and from the voice loop — so a reply is a promise resolving in this same process.
+ * their answers went back the same way; now they originate inside the extension – from the
+ * popup, and from the voice loop – so a reply is a promise resolving in this same process.
  *
  * The correlation-id discipline is kept anyway, because `dispatchIntent` streams partial
  * results alongside its final answer and those still have to be told apart.
@@ -77,13 +77,13 @@ function replyTo(id) {
 /**
  * Puts a question to an agent and returns its answer.
  *
- * The entry point everything user-facing goes through — the popup's text box today, the voice
+ * The entry point everything user-facing goes through – the popup's text box today, the voice
  * loop at E3. It loads the recipe the recorder produced, finds the tab that recipe is for, and
  * hands the work to `dispatchIntent`.
  *
  * `onPartial` receives text as it streams. Speech can start on the first chunk rather than the
  * finished answer, which is the whole latency argument for driving a page instead of calling
- * an API — see `docs/protocol.md`.
+ * an API – see `docs/protocol.md`.
  */
 export async function ask(agentName, prompt, { onPartial } = {}) {
   const { agents } = await loadRoster();
@@ -111,10 +111,10 @@ export async function ask(agentName, prompt, { onPartial } = {}) {
 // ── The voice loop's other half (E3) ────────────────────────────────────────────────────
 //
 // E2 ends with a transcript sitting in a readout. This is what turns it into a question
-// somebody actually gets asked — and it is short, because both ends already existed: `route`
+// somebody actually gets asked – and it is short, because both ends already existed: `route`
 // picks the agent, `ask` has been driving Notion since M3.
 
-/** Session state, so it dies with the browser — a floor held across a restart is meaningless. */
+/** Session state, so it dies with the browser – a floor held across a restart is meaningless. */
 async function floorHolder(agents) {
   const { floorHolder: name, floorAt = 0 } = await chrome.storage.session.get(['floorHolder', 'floorAt']);
   if (!name || Date.now() - floorAt > FLOOR_MS) return null;
@@ -134,7 +134,7 @@ async function holdFloor(name) {
  */
 const ROUTING_COPY = {
   'heard-nothing': "Didn't catch that.",
-  'no-agents': 'No assistants yet — record one first.',
+  'no-agents': 'No assistants yet – record one first.',
   'unknown-agent': "Didn't catch who you meant. Start with an assistant's name.",
 };
 
@@ -144,14 +144,14 @@ const ROUTING_COPY = {
  * **The tab is not switched, and that is a deliberate departure from the plan.** The plan says
  * "switch to the agent's tab", inherited from the Mac app, where driving a page meant posting
  * real keystrokes and therefore meant focusing it. The content script drives the DOM directly,
- * which works in a background tab on another window — measured, not assumed. So switching would
+ * which works in a background tab on another window – measured, not assumed. So switching would
  * take somebody away from what they were doing to no purpose. The orb at E4 is how the answer
  * arrives; until then it is in the tab where it belongs.
  */
 /**
  * The roster, plus what each agent's vendor is called out loud.
  *
- * Nobody says "take me to Ivan" — they say "Notion", and only the agent's name is in the
+ * Nobody says "take me to Ivan" – they say "Notion", and only the agent's name is in the
  * roster. The other name comes from the domain the recorder already captured.
  */
 async function rosterWithProducts() {
@@ -194,7 +194,7 @@ async function goToAgent(nav) {
   await hidePanel();
   await focusTab({ tabId: tab.id });
   // Being shown an agent's tab is as much a reason to expect a follow-up as being answered by
-  // it, so the floor moves here too — "show me Notion", then "what changed last week".
+  // it, so the floor moves here too – "show me Notion", then "what changed last week".
   await holdFloor(agent.name);
   markDone(null);
   announceTurn({ phase: 'navigated', agentName: agent.name });
@@ -204,7 +204,7 @@ async function handleUtterance(text) {
   const agents = await rosterWithProducts();
   const floor = await floorHolder(agents);
 
-  // Navigation is checked first and returns null unless it is *certain* — the opening phrase
+  // Navigation is checked first and returns null unless it is *certain* – the opening phrase
   // plus a name it recognises has to consume the whole utterance. Anything left over falls
   // through to being a question, which is what stops "show me the Q3 numbers" being swallowed.
   const nav = navigationTarget(text, agents, { floorHolder: floor });
@@ -222,7 +222,7 @@ async function handleUtterance(text) {
     });
     announceTurn({
       phase: 'problem',
-      // `name-only` is answered by the agent's own name with a question mark — the spoken
+      // `name-only` is answered by the agent's own name with a question mark – the spoken
       // equivalent of looking up. It is the one "failure" that is really just a pause.
       message: decision.problem === 'name-only'
         ? `${decision.agent.name}?`
@@ -238,7 +238,7 @@ async function handleUtterance(text) {
  * Asks one agent one question, with the panel and badge along for the ride.
  *
  * Split out of `handleUtterance` so the typed path reaches it too. Before this, speaking put
- * the answer on the orb and typing put it in the popup — two answer surfaces for one product,
+ * the answer on the orb and typing put it in the popup – two answer surfaces for one product,
  * and the popup's was an E2 stopgap from when there was no orb to put anything on.
  */
 async function putQuestion(agent, prompt, matched) {
@@ -291,7 +291,7 @@ async function putQuestion(agent, prompt, matched) {
  * Speaks an answer, shortening it first if it is long enough to be tiring.
  *
  * **The full answer stays on screen either way.** What is spoken and what is shown are
- * different things, and conflating them is how a voice assistant becomes a screen reader —
+ * different things, and conflating them is how a voice assistant becomes a screen reader –
  * which was the observation that started this whole architecture.
  *
  * Summarising is attempted but never waited on hopefully: `summarise` returns null on every
@@ -309,7 +309,7 @@ async function readAloud(answer, agent) {
 
   // The panel says when it is reading a shortened version, because someone hearing one sentence
   // about a six-paragraph answer should know that is what happened.
-  if (shortened) panel({ sub: 'Shortened — the full answer is above.' });
+  if (shortened) panel({ sub: 'Shortened – the full answer is above.' });
   await say(text, agent.id);
 }
 
@@ -320,7 +320,7 @@ function announceTurn(detail) {
 
 // Wrapped, because nothing awaits this. An unhandled rejection in a service worker is silent,
 // and the visible symptom would be a badge stuck on an agent who is not thinking about
-// anything — the turn simply stopping, with no way to tell it from a slow vendor.
+// anything – the turn simply stopping, with no way to tell it from a slow vendor.
 setTurnHandler((text) => {
   handleUtterance(text).catch((error) => {
     markDone('failed');
@@ -335,17 +335,17 @@ setTurnHandler((text) => {
  * **This exists because broadcasting was silently answering with the wrong frame.**
  * `chrome.tabs.sendMessage` without a `frameId` goes to every frame, the content script is
  * registered `all_frames: true`, and the promise resolves with whichever responds *first*.
- * On Notion — two iframes — that played out the same way twice: the frame holding the
+ * On Notion – two iframes – that played out the same way twice: the frame holding the
  * composer typed the prompt, sent it, and got an answer, while a frame with no composer
  * pressed the shortcut into nothing, timed out after three seconds, and reported "the
  * assistant did not open".
  *
  * The three-second failure beats any real exchange, which needs typing, sending, model
- * latency and a quiet period. So the wrong answer did not merely sometimes win — it won by
+ * latency and a quiet period. So the wrong answer did not merely sometimes win – it won by
  * construction, every time, and the page visibly disagreed with the report.
  *
  * `executeScript` rather than another `sendMessage`, because it returns a result for *every*
- * frame with its `frameId` instead of just the first to answer — which is the whole problem.
+ * frame with its `frameId` instead of just the first to answer – which is the whole problem.
  * It runs in the same isolated world as our content script, so it can call the query the
  * content script already installed rather than duplicating a shadow-piercing visibility check
  * that would then drift from it. A frame with no content script has no such global and
@@ -368,7 +368,7 @@ async function frameOwningAssistant(tabId, selector) {
     // Said out loud anyway: frame targeting is what fixed the bug where a frame with no
     // composer answered first and won by timing out. Degrading back to the top frame silently
     // is how that bug would return looking brand new.
-    console.warn('[openposse] could not locate the assistant frame —', error?.message ?? error);
+    console.warn('[openposse] could not locate the assistant frame –', error?.message ?? error);
     return undefined;
   }
 }
@@ -386,7 +386,7 @@ const ERROR = {
 // browser-level: enumerating tabs and focusing a window are things only the worker can do, and
 // the chosen tab may not have run a content script yet.
 
-/** The recording in progress, or null. `{ id, agent, tabId, keepAlive }` — one at a time. */
+/** The recording in progress, or null. `{ id, agent, tabId, keepAlive }` – one at a time. */
 let recording = null;
 
 /** Enumerates every open tab so the wizard can offer them. */
@@ -451,12 +451,12 @@ async function armRecording({ tabId }, { id, agent }) {
  * **`registerContentScripts` only injects on page load.** The tab the user picked was open
  * before they granted access to its site, so it has no content script and every intent fails
  * with "Receiving end does not exist". Telling them to reload the page they just chose is both
- * a bad step and a lossy one — a reload can lose exactly the state that made them pick it.
+ * a bad step and a lossy one – a reload can lose exactly the state that made them pick it.
  *
  * So: ping, and inject only if nobody answers. The registration still handles every *future*
  * load; this handles the one tab already in front of the user.
  *
- * Injecting unconditionally would be simpler and wrong — a tab covered by the static manifest
+ * Injecting unconditionally would be simpler and wrong – a tab covered by the static manifest
  * already has the script, and a second copy would add a second `onMessage` listener and answer
  * every intent twice. `content.js` guards against that too, but not needing the guard is
  * better than relying on it.
@@ -481,7 +481,7 @@ async function disarmRecording({ tabId }) {
   // Best-effort: the tab may already be gone, which is not a failure of disarming.
   try {
     await chrome.tabs.sendMessage(tabId, { intent: 'disarm_recording' });
-  } catch { /* tab closed or navigated — nothing left to disarm */ }
+  } catch { /* tab closed or navigated – nothing left to disarm */ }
   return { ok: true };
 }
 
@@ -495,7 +495,7 @@ function stopRecording() {
  * Keeps the service worker alive for the length of a recording.
  *
  * MV3 terminates an idle worker after ~30 seconds, and a recording is a human being finding a
- * menu item, typing a question and waiting for an answer — minutes, with no traffic of our own.
+ * menu item, typing a question and waiting for an answer – minutes, with no traffic of our own.
  * A terminated worker takes the native port with it, so the captures would simply stop arriving
  * partway through with nothing to explain why.
  *
@@ -518,7 +518,7 @@ chrome.runtime.onMessage.addListener((message, _sender, _respond) => {
     id: recording.id,
     event: message.event,
   }).catch(() => {
-    // Nothing listening — the wizard was closed mid-recording. Disarming is handled on that
+    // Nothing listening – the wizard was closed mid-recording. Disarming is handled on that
     // path; losing a capture nobody is watching for is not a failure.
   });
 
@@ -526,7 +526,7 @@ chrome.runtime.onMessage.addListener((message, _sender, _respond) => {
   // are handed to it directly. The broadcast above is kept because it is what any *other*
   // surface would listen to, and it costs nothing when nothing does.
   onCapture(message.event).catch((error) => {
-    console.error('[openposse] capture could not be folded in —', error);
+    console.error('[openposse] capture could not be folded in –', error);
   });
 
   // The page is gone, so the listeners went with it. Stopping here means the keepalive does
@@ -548,7 +548,7 @@ chrome.runtime.onMessage.addListener((message, _sender, _respond) => {
 //
 // **The app decides which origin to ask for, not us.** It sends `prepare_access` with a
 // pattern before the user clicks, and we request exactly that. Deriving it here would mean a
-// second implementation of `DomainPattern` — and a public-suffix mistake in either copy is a
+// second implementation of `DomainPattern` – and a public-suffix mistake in either copy is a
 // grant over every site under `co.uk`. It also keeps this file to its rule: the extension
 // "never decides anything a user would care about".
 
@@ -579,7 +579,7 @@ async function checkAccess({ pattern }) {
  * the manifest declares a title and nothing else.
  */
 chrome.action.onClicked.addListener(async (tab) => {
-  // Falls back to this tab's exact origin when the app has not asked for anything — clicking
+  // Falls back to this tab's exact origin when the app has not asked for anything – clicking
   // the button outside setup should still do the obvious thing. Deliberately narrower than
   // what the wizard requests: an exact host can never be over-broad, and guessing a wildcard
   // here would be the second `DomainPattern` implementation this design exists to avoid.
@@ -598,7 +598,7 @@ chrome.action.onClicked.addListener(async (tab) => {
   } catch (error) {
     // The reported-but-unverified claim this milestone rests on: that a gesture propagates
     // into the service worker. If it does not, this throws "must be called during a user
-    // gesture" and the grant has to move to a popup page instead. Say which, loudly — the
+    // gesture" and the grant has to move to a popup page instead. Say which, loudly – the
     // difference decides the shape of the wizard's second step.
     console.error('[openposse] permissions.request failed in the worker:', error?.message ?? error);
     notifyAccess(pattern, false, String(error?.message ?? error));
@@ -625,12 +625,12 @@ function notifyAccess(pattern, granted, error) {
  * **Dynamic registrations are cleared on extension update, and the `chrome://extensions` reload
  * button counts as an update for an unpacked extension.** Permissions survive; registrations do
  * not. During development that reads as "the agent worked yesterday and does nothing today",
- * with nothing in the logs — so this runs on install, on startup, and whenever a permission is
+ * with nothing in the logs – so this runs on install, on startup, and whenever a permission is
  * added, and derives its list from `permissions.getAll()` rather than from stored state.
  * The granted origins are the durable half, which makes them the right source of truth.
  *
  * **Serialised, because the body is check-then-act.** It reads the registered scripts, decides
- * what is missing, and registers it — and two overlapping runs both read "nothing registered"
+ * what is missing, and registers it – and two overlapping runs both read "nothing registered"
  * and both register the same id, so the second fails with `Duplicate script ID`. Three events
  * can start it (install, startup, a permission being granted) and a reload fires more than one
  * of them, which is exactly when it was seen. Queuing rather than sharing one in-flight promise:
@@ -657,7 +657,7 @@ async function runReconcile() {
   //
   // This function registers `content.js` for every granted origin, so without this line
   // turning on "show the panel on any page" would silently install the vendor driver into
-  // every page the user visits — a `MutationObserver`, a message listener and a shadow-piercing
+  // every page the user visits – a `MutationObserver`, a message listener and a shadow-piercing
   // query on every tab, forever, to drive assistants that are not there.
   //
   // The panel does not need it: it is injected per turn by `executeScript`, which the host
@@ -676,8 +676,8 @@ async function runReconcile() {
 
   // One call per origin, not one call for the batch.
   //
-  // `registerContentScripts` is atomic: a single bad entry — an origin whose grant has just
-  // been revoked, or an id Chrome has already restored while an update was still settling —
+  // `registerContentScripts` is atomic: a single bad entry – an origin whose grant has just
+  // been revoked, or an id Chrome has already restored while an update was still settling –
   // rejects the whole array, and every *other* vendor silently loses its registration too.
   // Seen once during an extension reload, and it self-corrected on the next reconcile, which
   // is exactly what makes the batched version dangerous: the failure is transient, plausible,
@@ -691,13 +691,13 @@ async function runReconcile() {
     } catch (error) {
       const message = String(error?.message ?? error);
 
-      // A duplicate is not a failure — it is the state we were trying to reach, reported by
+      // A duplicate is not a failure – it is the state we were trying to reach, reported by
       // Chrome because `getRegisteredContentScripts` had not caught up. The serialisation
       // above removes the case we can cause ourselves; this covers the one we cannot, where
       // Chrome restores a persisted registration while an update is still settling.
       //
       // Updated rather than left alone, so a registration persisted from an older build is
-      // brought to the shape this build intends — `allFrames` and `matches` have both changed
+      // brought to the shape this build intends – `allFrames` and `matches` have both changed
       // during M3, and a stale registration injecting into the wrong frames would be the same
       // class of invisible bug the frame fix was for.
       if (message.includes('Duplicate script ID')) {
@@ -752,13 +752,13 @@ const WORKER_INTENTS = {
 /**
  * Turns a recipe's domain pattern into a Chrome match pattern.
  *
- * Note this is *not* the security boundary — the content script's `matches` in the manifest
+ * Note this is *not* the security boundary – the content script's `matches` in the manifest
  * is, and it is static. This only decides which already-permitted tab to talk to, so a recipe
  * naming a domain we were not built for finds no tab rather than injecting anywhere.
  */
 // **Moved to `domain.js` and imported**, so the tab query, the content-script registration and
 // the optional host-permission request build the same string from one definition. The copy that
-// used to live here also carried a `.replace(/^\*\./, '*.')` that replaced `*.` with `*.` — a
+// used to live here also carried a `.replace(/^\*\./, '*.')` that replaced `*.` with `*.` – a
 // no-op that read as though it were doing something.
 
 /**
@@ -775,7 +775,7 @@ async function dispatchIntent(request) {
 
   const reply = replyTo(id);
 
-  // Recording intents are browser-level and carry no recipe — there is not one yet. Checked
+  // Recording intents are browser-level and carry no recipe – there is not one yet. Checked
   // before the recipe guard below, which would otherwise reject every one of them as
   // "intent carried no recipe".
   const workerHandler = WORKER_INTENTS[payload?.intent];
@@ -783,7 +783,7 @@ async function dispatchIntent(request) {
     try {
       reply('response', await workerHandler(payload ?? {}, { id, agent }));
     } catch (error) {
-      // `tabs.get` and `tabs.sendMessage` both reject when the tab has gone — the user closed
+      // `tabs.get` and `tabs.sendMessage` both reject when the tab has gone – the user closed
       // it between picking it and us reaching for it. That is `TAB_NOT_FOUND` and not a
       // generic failure, because the fix is to pick a different tab.
       reply('error', {
@@ -829,7 +829,7 @@ async function dispatchIntent(request) {
     let frameId = await frameOwningAssistant(tab.id, recipe.inputSelector);
     let result = await chrome.tabs.sendMessage(tab.id, message, { frameId: frameId ?? 0 });
 
-    // The assistant was shut, so nobody owned it and the top frame took the shortcut — but
+    // The assistant was shut, so nobody owned it and the top frame took the shortcut – but
     // the panel may have opened in an iframe, where the top frame cannot see it. Re-locate
     // once and let whoever has it now finish the job.
     if (!result?.ok && frameId === undefined) {
@@ -857,20 +857,20 @@ async function dispatchIntent(request) {
   } catch (error) {
     // `sendMessage` rejects for several reasons and only one of them is "no content script".
     // The first version asserted that one for all of them and told everybody to reload the
-    // page — advice that is right for a stale tab and useless for a tab that navigated
+    // page – advice that is right for a stale tab and useless for a tab that navigated
     // mid-exchange, which is the other common case.
     //
     // So the guess is checked against the error rather than substituted for it, and the error
     // is logged either way. A message, not page content: Chrome writes these itself.
     const detail = String(error?.message ?? error);
     const noListener = detail.includes('Receiving end does not exist');
-    console.warn('[openposse] dispatch failed —', detail);
+    console.warn('[openposse] dispatch failed –', detail);
 
     reply('error', {
       code: ERROR.tabNotFound,
       message: noListener
-        ? 'the tab has no OpenPosse content script — reload the page'
-        : `could not reach the tab — ${detail}`,
+        ? 'the tab has no OpenPosse content script – reload the page'
+        : `could not reach the tab – ${detail}`,
     });
   } finally {
     chrome.runtime.onMessage.removeListener(onStream);
@@ -881,18 +881,18 @@ async function dispatchIntent(request) {
  * What the popup and the voice loop ask this worker to do.
  *
  * Everything arrives as a runtime message rather than over a socket now. The worker still has
- * to be able to reconstruct its state from nothing on every wake — MV3 terminates it after
- * about thirty seconds idle — which is why the roster is read from storage per request rather
+ * to be able to reconstruct its state from nothing on every wake – MV3 terminates it after
+ * about thirty seconds idle – which is why the roster is read from storage per request rather
  * than held in a variable.
  */
 chrome.runtime.onMessage.addListener((request, _sender, respond) => {
-  // Offscreen traffic first: it is the highest-volume kind by far — an interim result every
-  // few hundred milliseconds — and none of it wants a reply. Returning false hands the message
+  // Offscreen traffic first: it is the highest-volume kind by far – an interim result every
+  // few hundred milliseconds – and none of it wants a reply. Returning false hands the message
   // on without holding a port open for an answer nobody is going to send.
   if (handleOffscreenMessage(request)) return false;
 
   if (request?.kind === 'openposse.orb.reroute') {
-    // Clicking an avatar puts the same question to someone else, straight to thinking — the
+    // Clicking an avatar puts the same question to someone else, straight to thinking – the
     // design's own behaviour, and the fastest repair when routing picked the wrong agent.
     //
     // Straight to `putQuestion` rather than back through routing: the agent was *clicked*, so
@@ -925,7 +925,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   }
 
   if (request?.kind === 'openposse.ask') {
-    // The typed path, through the same door as the spoken one — so the answer lands on the orb
+    // The typed path, through the same door as the spoken one – so the answer lands on the orb
     // rather than in a popup that closes the moment you look away.
     loadRoster()
       .then(({ agents }) => findAgent(agents, request.agentName))
@@ -938,7 +938,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   }
   if (request?.kind === 'openposse.record') {
     beginWizard(request).then(respond, (error) => {
-      console.error('[openposse] recording could not start —', error);
+      console.error('[openposse] recording could not start –', error);
       respond({ ok: false, reason: String(error?.message ?? error) });
     });
     return true;
@@ -967,7 +967,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
 
   if (request?.kind === 'openposse.agent.rerecord') {
     rerecord(request.agentId).then(respond, (error) => {
-      console.error('[openposse] re-record could not start —', error);
+      console.error('[openposse] re-record could not start –', error);
       respond({ ok: false, reason: String(error?.message ?? error) });
     });
     return true;
@@ -975,7 +975,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
 
   if (request?.kind === 'openposse.agent.voice') {
     setAgentVoice(request.agentId, request.voice).then(respond, (error) => {
-      console.error('[openposse] voice could not be set —', error);
+      console.error('[openposse] voice could not be set –', error);
       respond({ ok: false, reason: String(error?.message ?? error) });
     });
     return true;
@@ -983,7 +983,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
 
   if (request?.kind === 'openposse.agent.rename') {
     renameAgent(request.agentId, request.name).then(respond, (error) => {
-      console.error('[openposse] rename failed —', error);
+      console.error('[openposse] rename failed –', error);
       respond({ ok: false, reason: String(error?.message ?? error) });
     });
     return true;
@@ -994,7 +994,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
 // ── The wizard (E8) ────────────────────────────────────────────────────────────────────────
 //
 // Four beats: **grant → record (coached) → dry run → name.** The grant already happened in the
-// popup, because that is where the user gesture is — see `popup.js`.
+// popup, because that is where the user gesture is – see `popup.js`.
 //
 // The rules live elsewhere on purpose. `draft.js` decides what has been captured and what is
 // still wrong with it, `coaching.js` decides what to say about that, and both are pure and
@@ -1016,7 +1016,7 @@ async function findAgent2(agentId) {
  * **No permission prompt and no user gesture**, which is why this can be driven from Settings
  * at all: the origin was granted when the agent was first recorded, and a grant does not need
  * asking for twice. What it does need is one of that vendor's pages open, because a recording
- * is somebody demonstrating the assistant — so a missing tab is reported as the plain fact it
+ * is somebody demonstrating the assistant – so a missing tab is reported as the plain fact it
  * is rather than as a failure.
  */
 async function rerecord(agentId) {
@@ -1063,7 +1063,7 @@ async function beginWizard({ tabId, pattern, agentId = null }) {
   const id = crypto.randomUUID();
   await armRecording({ tabId }, { id, agent: agentId });
 
-  // The orb goes over the tab being recorded rather than whatever is in front — that is where
+  // The orb goes over the tab being recorded rather than whatever is in front – that is where
   // the person is about to be working, and it is an origin we now hold a permission for, so it
   // persists for the whole recording instead of being spent like `activeTab`.
   await primePanel(tabId);
@@ -1141,8 +1141,8 @@ async function dryRun() {
   const built = finish(wizard.draft, { triggerMethod: 'synthetic' });
   if (!built.ok) { wizard.verifying = false; return; }
 
-  // **Stop watching before we start typing.** The dry run drives the page — two questions, two
-  // answers — and with the recorder still armed every one of those is captured as though the
+  // **Stop watching before we start typing.** The dry run drives the page – two questions, two
+  // answers – and with the recorder still armed every one of those is captured as though the
   // user had done it. That is not a cosmetic overlap: the extra answers go back through
   // `selectorForBoth`, and Notion's replies have genuinely different shapes depending on
   // whether it used a tool, so a draft that had *already passed* was being retroactively broken
@@ -1153,7 +1153,7 @@ async function dryRun() {
   // while we type text into somebody's assistant.
   await stopCapturing();
 
-  await panel({ phase: 'recording', coach: { label: 'SETTING UP · CHECKING', instruction: 'Checking it works — asking it two questions…', captures: captures(wizard.draft), naming: false } });
+  await panel({ phase: 'recording', coach: { label: 'SETTING UP · CHECKING', instruction: 'Checking it works – asking it two questions…', captures: captures(wizard.draft), naming: false } });
 
   const questions = ['Hello.', 'What can you help me with?'];
   const answers = [];
@@ -1183,7 +1183,7 @@ async function dryRun() {
   }
 
   // Two identical answers mean the selector is reading the same element twice rather than
-  // finding the new one — the failure the second question exists to catch.
+  // finding the new one – the failure the second question exists to catch.
   wizard.verified = answers[0] !== answers[1];
   wizard.verifying = false;
   wizard.recipe = built.recipe;
@@ -1207,7 +1207,7 @@ async function dryRun() {
   //
   // **The recording is complete and verified at this point; a name is decoration on top of it.**
   // Asking for one first made the whole thing hostage to a text field inside the vendor's page,
-  // and a page is entitled to manage its own focus — Notion takes it back within 150 ms, every
+  // and a page is entitled to manage its own focus – Notion takes it back within 150 ms, every
   // time, and that will differ per vendor forever. Two attempts to win that fight were two
   // attempts too many.
   //
@@ -1231,8 +1231,8 @@ async function save() {
 
   const { agents } = await loadRoster();
 
-  // **Capitalised here, not in `productName`.** That function exists for matching — "take me to
-  // Notion" is normalised before it is compared — so lowercase is correct there and wrong the
+  // **Capitalised here, not in `productName`.** That function exists for matching – "take me to
+  // Notion" is normalised before it is compared – so lowercase is correct there and wrong the
   // moment the same string becomes something a person reads and says out loud.
   //
   // The first letter only, because that is all a domain label supports honestly: `leanix`
@@ -1248,12 +1248,12 @@ async function save() {
 
   // **The one thing the dry run cannot check, said out loud.**
   //
-  // Verification runs immediately after a recording, so the assistant is still open — which
+  // Verification runs immediately after a recording, so the assistant is still open – which
   // means `askAssistant` never has to trigger it and the opening step is the one part of the
   // recipe that goes untested. A vendor that ignores scripted keystrokes then passes the dry
   // run and fails at the first real question, minutes later, reading as a broken agent.
   //
-  // Saying so here is not a substitute for testing it, and it is not marked as a failure —
+  // Saying so here is not a substitute for testing it, and it is not marked as a failure –
   // plenty of assistants accept a synthetic shortcut. It is the honest statement of what was
   // and was not proven.
   const caution = wizard.draft.openMethod === 'shortcut'
@@ -1292,7 +1292,7 @@ async function askOnce(tabId, recipe, prompt) {
 /**
  * Takes the recorder's listeners off the page, without ending the recording.
  *
- * Deliberately **not** `disarmRecording`, which also clears the keepalive — and the dry run is
+ * Deliberately **not** `disarmRecording`, which also clears the keepalive – and the dry run is
  * two full exchanges with a vendor, which is exactly the minutes of silence MV3 terminates an
  * idle worker for. Killing the keepalive here would end the wizard partway through verifying
  * it, with nothing to say why.
@@ -1305,7 +1305,7 @@ async function stopCapturing() {
   } catch (error) {
     // Best-effort: the tab may have gone. The `capturing` flag above is what actually protects
     // the draft, so this failing costs nothing but is worth naming rather than swallowing.
-    console.warn('[openposse] recorder would not disarm —', error?.message ?? error);
+    console.warn('[openposse] recorder would not disarm –', error?.message ?? error);
   }
 }
 
@@ -1334,22 +1334,22 @@ async function registerFor(pattern) {
 }
 
 /**
- * The summon shortcut — **⌥V where the user has set it, ⌘⇧9 out of the box.**
+ * The summon shortcut – **⌥V where the user has set it, ⌘⇧9 out of the box.**
  *
  * A toggle, because it is the only control available when nothing of ours is on screen: the
  * same press has to be both "listen" and "never mind". That was M1's finding and it transfers
- * unchanged, along with its consequence — cancelling discards the half-sentence rather than
+ * unchanged, along with its consequence – cancelling discards the half-sentence rather than
  * sending it (see `offscreen.js`).
  *
  * **The restriction binds what we may suggest, not what the user may assign**, and the
  * difference is the whole story. Chrome permits `global: true` in a *manifest* only on
- * `Ctrl+Shift+[0-9]`, converting `Ctrl` to Command on macOS — so the entire suggestible space
+ * `Ctrl+Shift+[0-9]`, converting `Ctrl` to Command on macOS – so the entire suggestible space
  * is ⌘⇧0 through ⌘⇧9, of which macOS Screenshot already owns **3, 4, 5 and 6**. (The plan
  * specified 5, the screenshot toolbar, so the shortcut opened screen recording and never
  * reached Chrome at all.) 9 is clear and deliberately at the far end: a slip from 2 to 3, or 7
  * to 6, takes a screenshot; a slip from 9 hits 0 and does nothing.
  *
- * At `chrome://extensions/shortcuts` **none of that applies** — confirmed by doing it, not by
+ * At `chrome://extensions/shortcuts` **none of that applies** – confirmed by doing it, not by
  * reading. ⌥V can be assigned there and marked Global, which is what M1 always wanted and what
  * `HotKeyCenter` still registers on the Mac side. So the two halves of this project use the
  * same gesture after all; we simply cannot ship it as the default.
@@ -1360,7 +1360,7 @@ async function registerFor(pattern) {
 chrome.commands.onCommand.addListener((command, tab) => {
   if (command !== 'summon') return;
   // **First, before any await.** `activeTab` is granted by this keypress and is spent by the
-  // time an async chain gets around to using it — which is why the orb only ever appeared on
+  // time an async chain gets around to using it – which is why the orb only ever appeared on
   // Notion, the one site with a standing host permission. The event carries the tab, so no
   // query is needed either.
   primePanel(tab?.id);
@@ -1370,10 +1370,10 @@ chrome.commands.onCommand.addListener((command, tab) => {
 chrome.runtime.onInstalled.addListener(() => {
   console.info('[openposse] extension installed');
   // A reload destroys the offscreen document and clears session storage, but the badge is the
-  // browser's and survives — so without this the toolbar claims a microphone is open that
+  // browser's and survives – so without this the toolbar claims a microphone is open that
   // nothing is holding.
   chrome.action.setBadgeText({ text: '' }).catch(() => {});
-  // An update — which the chrome://extensions reload button performs — clears every dynamic
+  // An update – which the chrome://extensions reload button performs – clears every dynamic
   // registration while leaving the permissions in place. Without this, every vendor added
   // through the recorder stops working after a reload, silently.
   reconcileRegistrations();
@@ -1389,10 +1389,10 @@ chrome.runtime.onStartup.addListener(() => {
 // this worker: Chrome excludes the sender from `onMessage` delivery, so it fails with
 // "Receiving end does not exist" even when everything is working. That error names the
 // messaging API rather than the thing that is actually wrong, which sends you looking in the
-// wrong place — hence a handle that can be called directly.
+// wrong place – hence a handle that can be called directly.
 globalThis.openposse = {
   roster: () => loadRoster(),
-  // Listening, without the hotkey — useful when the shortcut is taken by something else, and
+  // Listening, without the hotkey – useful when the shortcut is taken by something else, and
   // the only way to drive a turn while the popup is open to watch it. Note that none of these
   // return what was heard: the transcript goes to the popup and nowhere else, and a console
   // handle that printed it would be a logging path this project does not have.
@@ -1401,12 +1401,12 @@ globalThis.openposse = {
   listening: () => isListening(),
   /**
    * `openposse.bias(3)` to sweep the weight, `openposse.bias(false)` to hear the recogniser
-   * unbiased. The scale is logarithmic — see `NAME_BOOST` — so the steps that matter are small.
+   * unbiased. The scale is logarithmic – see `NAME_BOOST` – so the steps that matter are small.
    */
   bias: (on = true) => setBias(on),
   ask: (name, prompt) => ask(name, prompt, { onPartial: (t) => console.debug('…', t.length) }),
   // What is granted, and what is actually registered. The two disagreeing is the silent
-  // failure the recorder is built around — a grant with no registration and a registration
+  // failure the recorder is built around – a grant with no registration and a registration
   // with no grant both look like nothing happening.
   access: async () => ({
     granted: (await chrome.permissions.getAll()).origins,

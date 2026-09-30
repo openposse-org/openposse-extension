@@ -1,7 +1,7 @@
 // The one icon's surface: who exists, who is speaking, and a way in without a microphone.
 //
 // **It also owns the site-access grant**, which used to live on `chrome.action.onClicked`.
-// Adding a `default_popup` stops that event firing at all — so the gesture Chrome requires for
+// Adding a `default_popup` stops that event firing at all – so the gesture Chrome requires for
 // `permissions.request()` now comes from a button in here. That is a better place for it
 // anyway: clicking the toolbar icon and having something invisible happen was never legible.
 
@@ -14,7 +14,7 @@ import { MARK_SVG, MARK_CSS } from './mark.js';
 const el = (id) => document.getElementById(id);
 
 // The mark, from the one place it is defined. It is injected rather than written into
-// `popup.html` so the popup and the orb cannot end up showing different logos — which is
+// `popup.html` so the popup and the orb cannot end up showing different logos – which is
 // exactly what happened when each carried its own copy of the gradient tile.
 //
 // The style element carries the sizing that ships with the artwork; the placeholder in the HTML
@@ -52,7 +52,7 @@ async function render() {
   for (const agent of agents) {
     const row = document.createElement('div');
     // Dimming everyone but the floor holder is the design's own rule. With nobody holding it,
-    // all are lit — "no active agent" must not read as "every agent is broken".
+    // all are lit – "no active agent" must not read as "every agent is broken".
     const isActive = !active || agent.name === active;
     row.className = `agent${isActive ? ' active' : ''}`;
     row.style.setProperty('--channel', channelFor(agent.name));
@@ -98,15 +98,15 @@ async function render() {
  *
  * **Reads what setup recorded, not what `permissions.query` predicts.** The first version
  * asked the API and showed "not granted" on a microphone that had been granted minutes
- * earlier and worked — because `prompt` is that API's default *and* its fallback, and it
+ * earlier and worked – because `prompt` is that API's default *and* its fallback, and it
  * answers `prompt` from a popup even when the grant is live. See `storage.js`.
  *
  * `denied` is still read directly: it is the one state the API is unambiguous about, and the
  * one nothing here can fix.
  *
- * Deliberately not the design's `NOT HEARING ANYTHING — CHECK INPUT`. That badge is for a
+ * Deliberately not the design's `NOT HEARING ANYTHING – CHECK INPUT`. That badge is for a
  * microphone that is connected and silent, and belongs in the panel's not-capturing state at
- * E4 — telling someone to check their input device when they simply have not finished setup
+ * E4 – telling someone to check their input device when they simply have not finished setup
  * sends them looking for a fault that is not there.
  */
 async function checkMic() {
@@ -123,25 +123,25 @@ async function checkMic() {
 
   warning.hidden = false;
   warning.textContent = denied
-    ? 'Microphone blocked by Chrome — allow it in this extension’s site settings.'
-    : "Microphone isn't set up yet — click to finish setup.";
+    ? 'Microphone blocked by Chrome – allow it in this extension’s site settings.'
+    : "Microphone isn't set up yet – click to finish setup.";
 }
 
 // ── Listening ──────────────────────────────────────────────────────────────────────────────
 //
-// **The popup does not show the turn — the orb does.** It used to, because E2 built the
+// **The popup does not show the turn – the orb does.** It used to, because E2 built the
 // microphone before there was anywhere to put what it heard, and a readout here was the
 // difference between that milestone being demonstrable and being a claim about the console.
 // E4 made it a duplicate: two answer surfaces for one product, one of them a 320px panel that
 // closes the moment you look away.
 //
-// So what is left here is the *control* — start a turn, stop a turn — and the one piece of
+// So what is left here is the *control* – start a turn, stop a turn – and the one piece of
 // state a button has to carry, which is whether it is currently a Stop.
 
 function showState({ listening }) {
   const button = el('listen');
   button.textContent = listening ? 'Stop' : 'Listen';
-  // Losing `.secondary` fills the button with the channel blue — the same "this is live now"
+  // Losing `.secondary` fills the button with the channel blue – the same "this is live now"
   // signal the badge shows on the toolbar, so the two surfaces agree.
   button.classList.toggle('secondary', !listening);
 }
@@ -173,7 +173,7 @@ async function send() {
     kind: 'openposse.ask', agentName: agent.name, prompt,
   });
   // Closing is the honest signal that it has been handed off. Leaving the popup open would
-  // suggest the answer is coming back *here*, and it is not — typing now goes through the same
+  // suggest the answer is coming back *here*, and it is not – typing now goes through the same
   // door as speaking, so it lands on the orb over the page.
   window.close();
 }
@@ -189,7 +189,7 @@ el('prompt').addEventListener('keydown', (event) => {
  * The tab to record, read **when the popup opens** rather than when the button is clicked.
  *
  * This is the whole reason recording works. `permissions.request()` needs a user gesture, and a
- * gesture does not survive an `await` — so `chrome.tabs.query()` inside the click handler
+ * gesture does not survive an `await` – so `chrome.tabs.query()` inside the click handler
  * spends it before the request is made, and Chrome refuses with "This function must be called
  * during a user gesture". It also does **not** transfer through `sendMessage`, so the service
  * worker cannot make the request on the popup's behalf either; that is why this lives here at
@@ -222,7 +222,7 @@ el('record').addEventListener('click', async () => {
   // **First statement, nothing awaited before it.** See `recordable` above.
   const granted = await chrome.permissions.request({ origins: [matchPattern(pattern)] });
   if (!granted) {
-    // Declining is an answer, not a failure — the popup simply stays put and says so.
+    // Declining is an answer, not a failure – the popup simply stays put and says so.
     el('record').textContent = 'Site access is needed to record';
     return;
   }
@@ -249,7 +249,7 @@ chrome.commands.getAll().then((commands) => {
   if (summon?.shortcut) el('shortcut').textContent = summon.shortcut;
 });
 
-// The turn may already be running — the shortcut works with nothing on screen, so a popup opened
+// The turn may already be running – the shortcut works with nothing on screen, so a popup opened
 // afterwards has to catch up rather than assume it is starting from idle.
 const catchUp = chrome.runtime
   .sendMessage({ kind: 'openposse.listen.query' })
