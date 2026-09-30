@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>OpenPosse — setup</title>
+    <title>OpenPosse – setup</title>
     <link rel="stylesheet" href="ui.css" />
     <style>
       body { padding: 36px 40px 60px; }
@@ -10,7 +10,7 @@
       section { margin-bottom: 34px; }
 
       /* `design/assets/openposse-lockup-dark.png`, copied byte-for-byte rather than rebuilt
-         from the mark plus a webfont — the wordmark is drawn artwork, and setting "OpenPosse"
+         from the mark plus a webfont – the wordmark is drawn artwork, and setting "OpenPosse"
          in Inter beside the hat would be a near-miss of the logo rather than the logo.
 
          The *dark* file is the one for a dark page: white wordmark on the orb's own #141417.
@@ -18,8 +18,8 @@
          That background is baked in and opaque, so this reads as a plate on the slightly
          lighter `--stage` rather than sitting flush.
 
-         **No `border-radius`.** The artwork rounds its own corners — 53px of transparency at
-         3040 wide, so 7.3px at the 420 it is shown at — which means a CSS radius here does not
+         **No `border-radius`.** The artwork rounds its own corners – 53px of transparency at
+         3040 wide, so 7.3px at the 420 it is shown at – which means a CSS radius here does not
          add the curve, it clips inside one that is already there. The 14px first written on
          this rule was nearly double the artwork's and took a bite out of the plate.
 
@@ -40,7 +40,7 @@
         align-items: start;
       }
       /* The measure the copy was written for. Paragraphs do not get wider just because the
-         page did — 620px is about 80 characters of this size, and past that prose is harder
+         page did – 620px is about 80 characters of this size, and past that prose is harder
          to read, not easier. */
       .setup { max-width: 620px; }
 
@@ -49,7 +49,7 @@
       .rail > section { margin-bottom: 0; }
 
       /* Below this the two columns do not both fit, so the rail goes back under the steps.
-         It keeps its own spacing there and stops being sticky — a sticky element in a single
+         It keeps its own spacing there and stops being sticky – a sticky element in a single
          column would sit over the content beneath it. */
       @media (max-width: 1000px) {
         .columns { grid-template-columns: minmax(0, 1fr); gap: 0; }
@@ -60,7 +60,7 @@
       /* ── The roster, in 340px instead of 620 ────────────────────────────────────────────
          The row is one flex line: avatar, name, a 132px rename field and a select that can
          reach 190px. That is already snug in the wide column and would squeeze the name out
-         of existence here, so in the rail it wraps into three lines — who it is, what it is
+         of existence here, so in the rail it wraps into three lines – who it is, what it is
          called, then what you can change. */
       .rail .agent {
         flex-wrap: wrap; row-gap: 7px;
@@ -127,7 +127,7 @@
     <main>
       <!-- A packaged file referenced from an extension page, so no `web_accessible_resources`
            entry: that list is what a *web page* may reach, and this is our own origin. It is
-           deliberately not added to one — every entry there is a surface any site can probe. -->
+           deliberately not added to one – every entry there is a surface any site can probe. -->
       <img class="lockup" src="icons/openposse-lockup-dark.png" alt="OpenPosse"
            width="3040" height="920" />
 
@@ -135,7 +135,7 @@
         <div class="setup">
       <h1>Set up OpenPosse</h1>
       <p>
-        Three things, once. Everything after this happens on your machine — speech recognition
+        Three things, once. Everything after this happens on your machine – speech recognition
         included.
       </p>
 
@@ -145,7 +145,7 @@
           <h2>Let it hear you</h2>
           <p>
             The microphone is granted to OpenPosse itself, not to any website, so this is asked
-            once and never again. It has to be asked on a page like this one — a background
+            once and never again. It has to be asked on a page like this one – a background
             worker has nowhere to show the prompt.
           </p>
           <div class="row">
@@ -160,7 +160,7 @@
         <div style="flex:1">
           <h2>Download the speech model</h2>
           <p>
-            A few tens of megabytes, once. After this, nothing you say is sent anywhere —
+            A few tens of megabytes, once. After this, nothing you say is sent anywhere –
             recognition runs entirely on this machine, and OpenPosse requires it to.
           </p>
           <div class="row">
@@ -177,7 +177,7 @@
           <p>
             Chrome only lets an extension <em>suggest</em> Ctrl+Shift and a digit for a shortcut
             that works outside the browser, so OpenPosse ships with one of those. Anything else
-            — <span class="tech">⌥V</span>, say — you pick here, and you can tick
+            – <span class="tech">⌥V</span>, say – you pick here, and you can tick
             <strong>Global</strong> so it reaches you in any app rather than only in Chrome.
           </p>
           <div class="row">
@@ -190,10 +190,10 @@
       <section class="step" id="step-panel">
         <div class="num">4</div>
         <div style="flex:1">
-          <h2>Show the panel on any page <span class="kind">— optional</span></h2>
+          <h2>Show the panel on any page <span class="kind">– optional</span></h2>
           <p>
             The panel appears over whatever page you're on. Chrome normally lends an extension
-            access to the current tab when you press its shortcut — but not when that shortcut
+            access to the current tab when you press its shortcut – but not when that shortcut
             is <strong>Global</strong>, which is exactly what makes
             <span class="tech">⌥V</span> work from other apps. So the two can't both be had
             without asking you directly.
@@ -201,8 +201,8 @@
           <p>
             Chrome will word this as <em>“Read and change all your data on all websites”</em>,
             because that is the only wording it has. What OpenPosse does with it is draw the
-            panel. It still sends nothing anywhere — speech, assistants and answers all stay on
-            this machine — and it does not read pages it hasn't been asked to drive.
+            panel. It still sends nothing anywhere – speech, assistants and answers all stay on
+            this machine – and it does not read pages it hasn't been asked to drive.
           </p>
           <p>
             Skip it and everything still works: the panel appears on your assistants' own pages,
@@ -220,7 +220,7 @@
         <h2>Voices</h2>
         <p>
           Answers are spoken back to you, and a long answer is shortened to one sentence first
-          — the full text stays on screen. Everything here runs on this machine.
+          – the full text stays on screen. Everything here runs on this machine.
         </p>
         <div id="engine" class="card">checking…</div>
 
@@ -232,10 +232,10 @@
                  coverage, then 340 MB at fp32 with all 28 voices – and this comment claimed
                  "twice, to 166" until the third move was noticed. A number typed into copy is a
                  number that goes stale silently, and so is one typed into the note about it. -->
-            <h2>Better voices <span class="kind">— optional, <span id="weights-size">…</span></span></h2>
+            <h2>Better voices <span class="kind">– optional, <span id="weights-size">…</span></span></h2>
             <p>
               The system voices are your operating system's, and they sound like it. Kokoro is a
-              neural voice model that runs <em>on this machine</em> — nothing you say or hear
+              neural voice model that runs <em>on this machine</em> – nothing you say or hear
               goes anywhere. It is a one-off download, kept locally afterwards.
             </p>
             <p>
@@ -254,7 +254,7 @@
       <section id="voices-section" hidden>
         <h2>Try the voices</h2>
         <p>
-          Whatever is in the box, in each voice — the same words every time, so they can be
+          Whatever is in the box, in each voice – the same words every time, so they can be
           compared rather than just sampled. The first one takes a moment while the model
           loads; the rest are immediate.
         </p>
@@ -265,7 +265,7 @@
 
         <!-- The roster sits here rather than at the foot of the page because it is the one
              thing on this page you come back for. Recording saves an agent under the vendor's
-             product name and naming it is an edit *here* — the orb cannot ask for typing, since
+             product name and naming it is an edit *here* – the orb cannot ask for typing, since
              a page is entitled to take its own focus back, and Notion does. A recording can also
              be stranded by closing the tab mid-wizard. Both end at this list, so it should not
              be below the setup steps, which are done once and never again. -->
