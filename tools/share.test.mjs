@@ -110,6 +110,27 @@ test('a half-recorded open or submit step is refused', () => {
   assert.equal(unpack(shared({ openMethod: 'click', openSelector: null })).ok, false);
   assert.equal(unpack(shared({ openMethod: 'shortcut', shortcut: null })).ok, false);
   assert.equal(unpack(shared({ submitMethod: 'click', submitSelector: null })).ok, false);
+  // No method and no shortcut either: the runtime has no route in, so neither has this.
+  assert.equal(unpack(shared({ openMethod: null, shortcut: null, openSelector: null })).ok, false);
+});
+
+test('the recipes/ directory imports, openMethod or not', async () => {
+  // **A real artefact, not a fixture.** `leanix-ea-assistant.json` was captured from a live page
+  // on 2026-09-06 and predates `openMethod`; requiring that field refused it, while
+  // `openAssistant` in content.js drives it perfectly from its shortcut alone. A validator
+  // stricter than the runtime rejects recipes that work, so every recipe this repo ships is
+  // checked against the importer here.
+  const { readdir, readFile } = await import('node:fs/promises');
+  const dir = new URL('../recipes/', import.meta.url);
+  const files = (await readdir(dir)).filter((f) => f.endsWith('.json'));
+  assert.ok(files.length > 0, 'recipes/ should still hold at least one recorded vendor');
+
+  for (const file of files) {
+    const recipe = JSON.parse(await readFile(new URL(file, dir), 'utf8'));
+    const result = unpack(toFile(pack({ name: recipe.agentName ?? 'Assistant', recipe })));
+    assert.equal(result.ok, true, `${file}: ${result.problems?.join(' ')}`);
+    assert.equal(result.recipe.domainPattern, recipe.domainPattern);
+  }
 });
 
 test('a file from something else is refused without reading further', () => {

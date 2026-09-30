@@ -89,14 +89,40 @@ async function openAssistant(recipe) {
  * a second is the cheaper of the two by a wide margin, and it crosses shadow roots, which the
  * observer would have to be told about one root at a time.
  *
- * `settled()` resolves **true only when the indicator was seen and then left.** Never having
- * seen it is not the same claim: a vendor may show nothing, the recipe may predate this, or the
- * selector may have drifted – and in all three the honest answer is "I don't know", which is
- * what the clock is for.
+ * Returns `{ selector, finished(), everSeen(), stop() }` – the same four from both branches,
+ * including the one for a recipe with no indicator at all. This comment described a `settled()`
+ * that had already been replaced, and the stale name is part of why the no-indicator branch was
+ * left returning it for so long.
+ *
+ * `finished()` is **true only when the indicator was seen and then left.** Never having seen it
+ * is not the same claim: a vendor may show nothing, the recipe may predate this, or the selector
+ * may have drifted – and in all three the honest answer is "I don't know", which is what the
+ * clock is for.
  */
 function watchBusy(selector, { timeoutMs, steadyMs = 900 }) {
+  // **The same shape as the watching version, and it has to be checked by eye.**
+  //
+  // This branch returned `{ selector, settled, stop }` long after `settled()` was replaced by
+  // `finished()` – the refactor documented below changed the object the other return builds and
+  // left this one behind. Nothing calls `settled` any more, and `finished` was simply absent
+  // here, so `busy.finished()` at the top of the answer loop threw `busy.finished is not a
+  // function` for **every recipe without a busy indicator**.
+  //
+  // It went unseen because the vendor recorded at E8 has one, so the path that breaks is the one
+  // a recipe recorded *before* indicators existed takes – and that is the shape every imported
+  // recipe from the `recipes/` directory has. The symptom was a vendor answering normally while
+  // the turn reported TIMEOUT.
+  //
+  // `finished()` is false rather than true on purpose, per the note above: never having seen an
+  // indicator is not a claim that the vendor has stopped. The honest answer is "I don't know",
+  // and the clock is what that answer costs.
   if (!selector) {
-    return { selector: null, settled: async () => ({ finished: false, waited: 0 }), stop() {} };
+    return {
+      selector: null,
+      finished: () => false,
+      everSeen: () => false,
+      stop() {},
+    };
   }
 
   let seen = false;

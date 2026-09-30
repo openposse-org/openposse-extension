@@ -41,8 +41,27 @@ export const VERSION = 1;
  * `finish()` happens to write. A recipe missing any of these is not a recipe, however complete
  * it looks – it is an agent that will route an utterance and then fail.
  */
-const REQUIRED = ['domainPattern', 'openMethod', 'inputSelector', 'submitMethod',
+const REQUIRED = ['domainPattern', 'inputSelector', 'submitMethod',
   'responseContainerSelector'];
+
+/**
+ * Whether the recipe says enough about opening the assistant.
+ *
+ * **`openMethod` is deliberately not in `REQUIRED`, and the first version had it there.** It
+ * refused `recipes/leanix-ea-assistant.json` – a recipe captured from a live page in September,
+ * which drives LeanIX correctly – because that predates the field. `openAssistant` in
+ * `content.js` branches on `openMethod === 'click'` and otherwise falls through to
+ * `recipe.shortcut`, so an absent `openMethod` with a shortcut present is a working recipe.
+ *
+ * A validator stricter than the runtime it validates for rejects recipes that would have worked,
+ * and says nothing true about them. So this checks the same pair the runtime checks.
+ */
+function opensSomehow(recipe) {
+  if (recipe.openMethod === 'click') return isText(recipe.openSelector);
+  if (recipe.openMethod === 'shortcut') return Boolean(recipe.shortcut);
+  // No method named. The runtime takes the shortcut path, so a shortcut is what it needs.
+  return Boolean(recipe.shortcut);
+}
 
 /** Fields that are this machine's business and must not travel. */
 const LOCAL_ONLY = ['id', 'recipeID', 'agentName', 'voice', 'connection'];
@@ -155,14 +174,13 @@ export function unpack(text) {
     if (!isText(recipe[field])) problems.push(`Part of this recipe is missing (${field}).`);
   }
 
-  // The two conditional pairs. A recipe claiming to open by clicking without saying what to
-  // click is the drifted-selector failure arriving before anyone has used it once.
-  if (recipe.openMethod === 'click' && !isText(recipe.openSelector)) {
-    problems.push("This says it opens by clicking, but not what to click.");
+  // Opening, checked as the pair the runtime checks rather than as a field that must be present.
+  if (!opensSomehow(recipe)) {
+    problems.push(recipe.openMethod === 'click'
+      ? 'This says it opens by clicking, but not what to click.'
+      : "This doesn't say how to open the assistant.");
   }
-  if (recipe.openMethod === 'shortcut' && !recipe.shortcut) {
-    problems.push('This says it opens with a keyboard shortcut, but not which one.');
-  }
+
   if (recipe.submitMethod === 'click' && !isText(recipe.submitSelector)) {
     problems.push("This says it sends with a button, but not which button.");
   }
