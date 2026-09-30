@@ -561,8 +561,10 @@ const INTENTS = {
 if (globalThis.__openposseContentScript) {
   console.debug('[openposse] content script already present');
 } else {
-  globalThis.__openposseContentScript = true;
+  // Installed first, flagged second. The same rule as the orb's guard: a sentinel set before the
+  // work claims a listener the page may not have, and every later injection then skips silently.
   install();
+  globalThis.__openposseContentScript = true;
 }
 
 function install() {

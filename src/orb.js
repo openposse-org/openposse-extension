@@ -20,8 +20,16 @@
 import { MARK_SVG, MARK_CSS } from './mark.js';
 import { tell } from './tell.js';
 
+// **The sentinel is set at the end of this block, not here.** Claiming success before doing the
+// work meant a throw anywhere below left the page asserting an orb it does not have: every later
+// injection saw the flag, did nothing, and said nothing, so fixing the extension changed nothing
+// for that tab until the page itself was reloaded. That is precisely what the stray backtick did
+// – the flag was set on the first line and the throw came four hundred lines later, which turned
+// one broken build into tabs that stayed broken after it was fixed.
+//
+// Safe to defer because this block is synchronous throughout: the bundle is `format: iife`, which
+// forbids top-level await, so a second injection cannot interleave with a first still running.
 if (!globalThis.__openposseOrb) {
-  globalThis.__openposseOrb = true;
 
   // ── The orb renderer ─────────────────────────────────────────────────────────────────────
   //
@@ -849,4 +857,8 @@ if (!globalThis.__openposseOrb) {
   });
 
   render();
+
+  // Last statement in the block, deliberately. See the note on the guard above: anything that
+  // throws before this line leaves the page injectable again rather than permanently poisoned.
+  globalThis.__openposseOrb = true;
 }
