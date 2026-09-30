@@ -46,7 +46,23 @@
 
       /* Sticky, so the roster is still there after scrolling through six steps. */
       .rail { position: sticky; top: 36px; }
-      .rail > section { margin-bottom: 0; }
+      /* The last one only. The rail holds the roster *and* the import block, and zeroing both
+         ran them together with nothing between them. */
+      .rail > section { margin-bottom: 30px; }
+      .rail > section:last-child { margin-bottom: 0; }
+
+      /* The import block lives in 340px too, so its controls stack rather than share a line. */
+      #import-section .card { display: flex; flex-direction: column; gap: 10px; }
+      #import-section textarea { width: 100%; box-sizing: border-box; margin: 0; }
+      #import-section input[type="file"] { font: inherit; font-size: 12px; color: var(--text-dim); }
+      /* `.row` already lays this out; only the stray top margin `.status` carries for the
+         non-flex steps needs undoing, since the card's own gap is doing that job here. */
+      #import-section .status { margin-top: 0; }
+      /* A refusal has to *look* refused. The rest of this page reports every state as plain
+         text, which is fine for "checking…" and wrong for "this asks for access to *.co.uk" –
+         that one is the security control reporting, and it should not read like a status. */
+      #import-section .status.bad { color: var(--error); }
+      #import-preview { margin: 0; max-height: 210px; overflow: auto; }
 
       /* Below this the two columns do not both fit, so the rail goes back under the steps.
          It keeps its own spacing there and stops being sticky – a sticky element in a single
@@ -273,6 +289,28 @@
           <section>
             <h2>Assistants</h2>
             <div id="roster" class="card">none yet</div>
+          </section>
+
+          <!-- Recording an assistant helps one person. This is how it reaches everyone else.
+               Two beats on purpose: the file is read and shown first, then a separate click
+               asks Chrome for access to that one site. A gesture does not survive an await,
+               so the parse cannot happen inside the click that requests permission. -->
+          <section id="import-section">
+            <h2>Add a shared assistant</h2>
+            <p class="kind">
+              Someone else can record an assistant and send you the file. You will be asked for
+              access to that one site before anything is added.
+            </p>
+            <div class="card">
+              <input type="file" id="import-file" accept="application/json,.json">
+              <textarea id="import-text" rows="3" spellcheck="false"
+                        placeholder="…or paste what they sent you"></textarea>
+              <pre class="recipe" id="import-preview" hidden></pre>
+              <div class="row">
+                <button id="import-add" disabled>Add assistant</button>
+                <span class="status tech" id="import-status">nothing to add yet</span>
+              </div>
+            </div>
           </section>
         </aside>
       </div>

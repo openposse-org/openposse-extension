@@ -7,6 +7,8 @@
 
 import { loadRoster, setMicGranted, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
+import { pack, unpack, toFile, filenameFor } from './share.js';
+import { matchPattern } from './domain.js';
 import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
 import {
   weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES, VOICES,
@@ -580,6 +582,53 @@ async function refreshRoster() {
       see.textContent = 'Hide';
     });
 
+    // **Share** – the same show/hide as See, because the JSON *is* the review surface.
+    //
+    // Downloading it silently would make the file the thing you trust without ever having seen
+    // it. Shown, it can be read before it is sent and read again by whoever receives it, which
+    // is half of what stands between an imported recipe and a bad host permission. The other
+    // half is Chrome's own prompt, on the far side.
+    const bundle = document.createElement('pre');
+    bundle.className = 'recipe';
+    bundle.hidden = true;
+
+    const share = document.createElement('button');
+    share.className = 'ghost';
+    share.textContent = 'Share';
+    share.addEventListener('click', async () => {
+      if (!bundle.hidden) { bundle.hidden = true; share.textContent = 'Share'; return; }
+
+      const result = await chrome.runtime
+        .sendMessage({ kind: 'openposse.agent.recipe', agentId: agent.id })
+        .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+
+      if (!result?.ok || !result.recipe) {
+        say(result?.reason ?? 'its recipe is missing', true);
+        return;
+      }
+
+      const text = toFile(pack({ name: agent.name, recipe: result.recipe }));
+      bundle.textContent = '';
+
+      const save = document.createElement('button');
+      save.className = 'ghost';
+      save.textContent = `Save ${filenameFor(agent.name)}`;
+      save.addEventListener('click', () => {
+        // A blob URL from an extension page needs no `downloads` permission, and revoking it
+        // after the click keeps the object out of memory for the life of the page.
+        const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filenameFor(agent.name);
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      });
+
+      bundle.append(text, save);
+      bundle.hidden = false;
+      share.textContent = 'Hide';
+    });
+
     // **Re-record** – same wizard, keeping this agent's name and voice.
     const again = document.createElement('button');
     again.className = 'ghost';
@@ -619,8 +668,8 @@ async function refreshRoster() {
       await refreshRoster();
     });
 
-    tools.append(see, again, remove);
-    text.append(problemLine, details);
+    tools.append(see, share, again, remove);
+    text.append(problemLine, details, bundle);
     row.append(rename, voice, tools);
     target.append(row);
   }
@@ -651,6 +700,115 @@ function describeRecipe(recipe) {
   const width = Math.max(...rows.map(([label]) => label.length));
   return rows.map(([label, value]) => `${label.padEnd(width)}  ${value ?? '–'}`).join('\n');
 }
+
+// ── Adding an assistant somebody else recorded ─────────────────────────────────────────────
+//
+// **Two beats, and the split is load-bearing rather than tidy.** `permissions.request` needs a
+// Chrome user gesture, and a gesture does not survive an `await` – the constraint `popup.js`
+// documents at length, which is why the recording grant lives on a button there. So the file is
+// read and shown on one interaction, and the origin is requested on a *separate* click whose
+// very first statement is the request.
+//
+// Reading first also means the site is named on screen before anyone is asked to allow it.
+// Chrome's prompt says "Read and change your data on notion.so"; this says which assistant that
+// is for, and what it will drive.
+
+/** The recipe waiting to be added, and nothing else. Null whenever the preview is not valid. */
+let pending = null;
+
+function showImport(message, bad = false) {
+  const status = el('import-status');
+  status.textContent = message;
+  status.className = bad ? 'status tech bad' : 'status tech';
+}
+
+/**
+ * Reads what was pasted or picked, and says what it is or what is wrong with it.
+ *
+ * Every refusal names its reason. A file that cannot be added and does not say why is the exact
+ * shape this project keeps banning, and here it would read as "the button is broken".
+ */
+function offer(text) {
+  const preview = el('import-preview');
+  pending = null;
+  el('import-add').disabled = true;
+
+  if (!String(text ?? '').trim()) {
+    preview.hidden = true;
+    showImport('nothing to add yet');
+    return;
+  }
+
+  const read = unpack(text);
+  if (!read.ok) {
+    preview.hidden = true;
+    showImport(read.problems.join(' '), true);
+    return;
+  }
+
+  // `describeRecipe` already renders a recipe as something a person can check, and it is the
+  // same view the See button shows for an agent that is already installed. One surface.
+  preview.textContent = `${read.name} – on ${read.recipe.domainPattern}\n\n`
+    + describeRecipe(read.recipe);
+  preview.hidden = false;
+
+  // **The raw text is kept, not just the parsed result.** The worker re-validates on the bytes
+  // rather than trusting this page, so it needs exactly what was read here – re-serialising the
+  // parsed object would hand it something this page had already touched.
+  pending = { ...read, raw: String(text) };
+  el('import-add').disabled = false;
+  showImport(read.notes.length
+    ? read.notes.join(' ')
+    : `ready – you will be asked for access to ${read.recipe.domainPattern}`);
+}
+
+el('import-file').addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) { offer(''); return; }
+  try {
+    offer(await file.text());
+  } catch (error) {
+    // A file that cannot be read is not the same event as a file that is not a recipe, and the
+    // person reacts to them differently – one is worth retrying, the other is not.
+    showImport(`That file could not be read – ${error?.message ?? error}`, true);
+  }
+});
+
+el('import-text').addEventListener('input', (event) => offer(event.target.value));
+
+el('import-add').addEventListener('click', async () => {
+  if (!pending) return;                       // the button is disabled; this is belt and braces
+
+  // **First statement, nothing awaited before it.** See the note above this section.
+  const granted = await chrome.permissions.request({
+    origins: [matchPattern(pending.recipe.domainPattern)],
+  });
+  if (!granted) {
+    // Declining is an answer. Nothing is added and the file stays loaded, so the same click
+    // works if they change their mind.
+    showImport(`Not added – OpenPosse has no access to ${pending.recipe.domainPattern}.`, true);
+    return;
+  }
+
+  // The *text* crosses, not the parsed recipe: the worker makes the trust decision itself, on
+  // the bytes, so this page is not the only thing standing between a forged file and a grant.
+  const result = await chrome.runtime
+    .sendMessage({ kind: 'openposse.agent.import', text: pending.raw })
+    .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+
+  if (!result?.ok) { showImport(result?.reason ?? 'could not add it', true); return; }
+
+  showImport(result.renamed
+    ? `Added as ${result.name} – you already had one by that name.`
+    : `Added ${result.name}.`);
+
+  el('import-text').value = '';
+  el('import-file').value = '';
+  el('import-preview').hidden = true;
+  el('import-add').disabled = true;
+  pending = null;
+  await refreshRoster();
+});
 
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
 

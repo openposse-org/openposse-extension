@@ -23,6 +23,7 @@ import { needsShortening, spokenForm } from './saying.js';
 import { summarise } from './summariser.js';
 import { route, navigationTarget, productName, FLOOR_MS } from './routing.js';
 import { matchPattern } from './domain.js';
+import { unpack } from './share.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
 import {
   derive, stepLabel, instruction, captures, PATIENCE_MS,
@@ -981,6 +982,14 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
     return true;
   }
 
+  if (request?.kind === 'openposse.agent.import') {
+    importShared(request.text).then(respond, (error) => {
+      console.error('[openposse] import failed –', error);
+      respond({ ok: false, reason: String(error?.message ?? error) });
+    });
+    return true;
+  }
+
   if (request?.kind === 'openposse.agent.rename') {
     renameAgent(request.agentId, request.name).then(respond, (error) => {
       console.error('[openposse] rename failed –', error);
@@ -990,6 +999,47 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   }
   return false;
 });
+
+/**
+ * Adds an assistant somebody else recorded.
+ *
+ * **Validated here as well as in the page, deliberately.** The Settings page unpacks the file to
+ * show a preview and to know which origin to ask for, and it would be easy to let this handler
+ * take the recipe the page already parsed. That would make the worker a hole around the check:
+ * every other sender of this message – a future surface, a mistake, anything – would skip the
+ * domain round-trip that is the whole control. So the *text* crosses, and the trust decision is
+ * made once, here, on the bytes.
+ *
+ * The permission is **not** requested here and cannot be. `permissions.request` needs a user
+ * gesture, and a gesture does not transfer through `sendMessage` – the same constraint that put
+ * the recording grant in the popup. The page holds the click and grants first; this runs after.
+ *
+ * `reconcileRegistrations` then registers the content script for the new origin, so there is
+ * nothing to register by hand: the granted origins are the source of truth.
+ */
+async function importShared(text) {
+  const read = unpack(text);
+  if (!read.ok) return { ok: false, reason: read.problems.join(' ') };
+
+  const pattern = matchPattern(read.recipe.domainPattern);
+  if (!(await chrome.permissions.contains({ origins: [pattern] }))) {
+    // Reached when the page's own request was declined, or when something other than the page
+    // sent this. Either way it is not a failure to report as broken – nothing was granted, so
+    // nothing is added.
+    return { ok: false, reason: `OpenPosse has no access to ${read.recipe.domainPattern} yet.` };
+  }
+
+  // A second Notion must not fail because the first is called Notion. `freeName` numbers it,
+  // visibly, and the name is editable in the row that appears.
+  const { agents } = await loadRoster();
+  const name = freeName(agents, read.name);
+
+  // No voice: a shared recipe carries none, so the agent falls under the accent heuristic and
+  // sounds different from whatever else is in this roster.
+  const agent = await addAgent({ name, voice: null, recipe: read.recipe });
+  await reconcileRegistrations();
+  return { ok: true, name: agent.name, renamed: agent.name !== read.name };
+}
 
 // ── The wizard (E8) ────────────────────────────────────────────────────────────────────────
 //
