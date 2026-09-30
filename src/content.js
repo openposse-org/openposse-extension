@@ -1,4 +1,4 @@
-// Content script — the only code that touches a vendor's page.
+// Content script – the only code that touches a vendor's page.
 //
 // It is driven entirely by the recipe the service worker hands it. There are no vendor
 // selectors in this file, and there must never be: selectors come from recordings, so a
@@ -35,7 +35,7 @@ const ERROR = {
 
 function failure(code, message, extra = {}) {
   // `extra` carries diagnostics that survive a failure. Without it, a later step failing
-  // hides what earlier steps established — the shortcut measurement vanished the moment the
+  // hides what earlier steps established – the shortcut measurement vanished the moment the
   // send button lookup failed, which is precisely when it was most worth knowing.
   return { ok: false, code, message, ...extra };
 }
@@ -66,7 +66,7 @@ async function openAssistant(recipe) {
   pressShortcut(recipe.shortcut, document.activeElement ?? document.body);
   // Names the route so `Recipe.triggerMethod` never has to guess. A null from the caller is
   // the `isTrusted` rejection: the browser marks JS-dispatched key events untrusted and some
-  // vendors ignore them silently, with no error to catch — the panel not appearing is the
+  // vendors ignore them silently, with no error to catch – the panel not appearing is the
   // only signal there is.
   return 'synthetic';
 }
@@ -76,11 +76,11 @@ async function openAssistant(recipe) {
  *
  * Each step reports its own specific failure. A single "couldn't ask the assistant" would be
  * useless here: a missing input means the recipe needs re-recording, while a missing response
- * container after a successful submit usually means the vendor renamed one class — different
+ * container after a successful submit usually means the vendor renamed one class – different
  * diagnosis, different fix.
  */
 /**
- * Follows the element a vendor shows while it is working — a spinner, a "stop generating".
+ * Follows the element a vendor shows while it is working – a spinner, a "stop generating".
  *
  * Polled rather than observed, at 150 ms. A `MutationObserver` would need the whole document
  * with `subtree`, because the indicator can be anywhere and is usually nowhere near the answer,
@@ -90,7 +90,7 @@ async function openAssistant(recipe) {
  *
  * `settled()` resolves **true only when the indicator was seen and then left.** Never having
  * seen it is not the same claim: a vendor may show nothing, the recipe may predate this, or the
- * selector may have drifted — and in all three the honest answer is "I don't know", which is
+ * selector may have drifted – and in all three the honest answer is "I don't know", which is
  * what the clock is for.
  */
 function watchBusy(selector, { timeoutMs, steadyMs = 900 }) {
@@ -126,12 +126,12 @@ function watchBusy(selector, { timeoutMs, steadyMs = 900 }) {
   return {
     selector,
     /**
-     * Whether the vendor has finished — **read, never waited on.**
+     * Whether the vendor has finished – **read, never waited on.**
      *
      * The first version blocked here until the indicator cleared, and that was the mistake
      * that made a recorded vendor worse than an unrecorded one. It sat between reading the
      * first row and the re-pick loop, so every row that arrived during it was already counted
-     * as "before" by the time the loop took its baseline — and the loop then waited for a
+     * as "before" by the time the loop took its baseline – and the loop then waited for a
      * further row that was never coming, breaking with a status row as the answer. Measured:
      * two passes where the same vendor without an indicator took three and answered correctly.
      *
@@ -150,12 +150,12 @@ async function askAssistant({ recipe, prompt }, emit) {
   // Open the assistant if it is closed, rather than failing.
   //
   // Checking first is what makes the shortcut safe to send at all: these shortcuts are
-  // usually *toggles*, so pressing one blind would close a panel that was already open —
+  // usually *toggles*, so pressing one blind would close a panel that was already open –
   // turning a working request into a failure, and doing it more reliably the better the
   // rest of the code works.
   let openedBy = 'already-open';
   // Visible, not merely present. LeanIX keeps the panel mounted when closed, so a presence
-  // check reports "already open" for a shut panel — which is exactly what happened the first
+  // check reports "already open" for a shut panel – which is exactly what happened the first
   // time this was measured, and it silently skipped the thing under test.
   let input = deepQuerySelectorVisible(recipe.inputSelector);
 
@@ -170,14 +170,14 @@ async function askAssistant({ recipe, prompt }, emit) {
       ERROR.timeout,
       recipe.openMethod === 'click'
         ? 'the assistant did not open when its button was clicked'
-        // **The old text here told the user to rely on the Mac app**, which is parked — it
+        // **The old text here told the user to rely on the Mac app**, which is parked – it
         // said "needs the app to post a real event", describing a retry path that no longer
         // exists and cannot be reached. A message naming a fix that is unavailable is worse
         // than a bare failure: it sends somebody looking for a setting they do not have.
         //
         // What is true: some vendors check `isTrusted` and ignore keystrokes that came from a
         // script, and there is nothing this extension can do about that. Notion is one of
-        // them, and it also offers a button — so the fix is a re-recording that opens it by
+        // them, and it also offers a button – so the fix is a re-recording that opens it by
         // clicking, which is exactly what the message now says.
         : 'this assistant ignores keyboard shortcuts it did not get from a person. '
           + 'Re-record it from Settings and open the assistant by clicking its button '
@@ -207,7 +207,7 @@ async function askAssistant({ recipe, prompt }, emit) {
   if (recipe.submitMethod === 'click') {
     // Wait rather than demand it instantly. A panel that just opened is often still
     // rendering, and some vendors only mount or enable the send control once the input has
-    // content — so an immediate lookup fails on a page that is working perfectly.
+    // content – so an immediate lookup fails on a page that is working perfectly.
     const button = recipe.submitSelector
       ? await waitForElement(recipe.submitSelector, { timeoutMs: 3000 })
       : null;
@@ -223,7 +223,7 @@ async function askAssistant({ recipe, prompt }, emit) {
       // control never accepted it.
       return failure(
         ERROR.elementNotFound,
-        'send button stayed disabled — the input never registered',
+        'send button stayed disabled – the input never registered',
         { openedBy }
       );
     }
@@ -243,13 +243,13 @@ async function askAssistant({ recipe, prompt }, emit) {
   // this is also the latency a vendor that only ever adds one row pays on every exchange, and
   // a minute of that would be unusable.
   //
-  // The honest fix is to record the vendor's own "still generating" indicator during setup —
-  // Notion shows one — and wait on that disappearing instead of on a clock. That is a recorder
+  // The honest fix is to record the vendor's own "still generating" indicator during setup –
+  // Notion shows one – and wait on that disappearing instead of on a clock. That is a recorder
   // change, so it belongs to E8. Until then this is a guess with a ceiling.
   // **2.5 s, down from 10.** The first version was a guess with a ceiling and the ceiling was
   // being paid on every successful exchange: `settling 11998ms over 3 passes` for an answer
   // already sitting in the tab. Pass 1 waits for a row *beyond* the one just read, and when
-  // pass 0 already had the answer — the common case — no such row is ever coming, so the whole
+  // pass 0 already had the answer – the common case – no such row is ever coming, so the whole
   // window is spent discovering that.
   //
   // The replacement is measured rather than guessed. The same trace reports the vendor's own
@@ -257,15 +257,15 @@ async function askAssistant({ recipe, prompt }, emit) {
   // it with margin. Worst case is now ~4 s of settling instead of ~12.
   //
   // Still a clock, and still the wrong instrument. The honest fix is the vendor's own "still
-  // generating" indicator, recorded during setup — E8.
+  // generating" indicator, recorded during setup – E8.
   const ANSWER_GRACE_MS = 2_500;
 
   /**
    * Which of the rows that appeared is the answer.
    *
    * **Some vendors do not let a selector name answers at all.** Measured on Notion: after one
-   * exchange the transcript holds three rows — the question, the answer, and a seven-character
-   * trailer — and all three carry an identical set of attributes. The recorder tried every
+   * exchange the transcript holds three rows – the question, the answer, and a seven-character
+   * trailer – and all three carry an identical set of attributes. The recorder tried every
    * strategy it has and `div[data-agent-service-find-row]` was genuinely the tightest thing
    * that described both recorded answers. There is nothing tighter to find.
    *
@@ -273,7 +273,7 @@ async function askAssistant({ recipe, prompt }, emit) {
    * confuse us about: **we know what we typed.** The row echoing our own prompt is the
    * question, by construction rather than by guess.
    *
-   * It does not read anything the user wrote — only our own prompt, and only to exclude it.
+   * It does not read anything the user wrote – only our own prompt, and only to exclude it.
    */
   const withoutOurQuestion = (all) => {
     const fresh = all.slice(repliesBefore);
@@ -294,7 +294,7 @@ async function askAssistant({ recipe, prompt }, emit) {
     // trailing seven-character row from the recorded shape was that, all along.
     //
     // This was considered and dropped once, on the grounds that it cannot exclude the
-    // 45-character status row — which is true, and was the wrong conclusion. The status row
+    // 45-character status row – which is true, and was the wrong conclusion. The status row
     // and the timestamp are different problems: one is transient and is caught by re-picking
     // after the page settles, the other is permanent and is caught by its size. Two rows, two
     // rules; keeping only one of them left the other in place.
@@ -322,7 +322,7 @@ async function askAssistant({ recipe, prompt }, emit) {
   });
 
   // Timed and returned, not logged. This runs in the vendor's page, so a console line lands in
-  // *their* DevTools — which is why "vendor answered +8068ms" could not be split into how much
+  // *their* DevTools – which is why "vendor answered +8068ms" could not be split into how much
   // was the model thinking and how much was us waiting out quiet periods.
   const waitedAt = Date.now();
   let passes = 0;
@@ -330,7 +330,7 @@ async function askAssistant({ recipe, prompt }, emit) {
   let container = await waitForNewMatch(
     recipe.responseContainerSelector, repliesBefore,
     // `quietPeriodMs` is the vendor's own measured "things have stopped changing", recorded
-    // per recipe rather than guessed — the right order of magnitude for how long to wait in
+    // per recipe rather than guessed – the right order of magnitude for how long to wait in
     // case a status row is about to be followed by the real answer.
     {
       timeoutMs: responseTimeoutMs,
@@ -343,7 +343,7 @@ async function askAssistant({ recipe, prompt }, emit) {
     // Distinguish "sent, and the vendor never answered" from "never actually sent".
     //
     // A synthetic Enter is `isTrusted: false` and some vendors ignore it exactly the way they
-    // ignore a synthetic shortcut — the text lands in the composer and simply sits there. Both
+    // ignore a synthetic shortcut – the text lands in the composer and simply sits there. Both
     // failures time out identically, and they need opposite fixes: one is a slow or broken
     // assistant, the other means this recipe should have recorded the send *button*.
     //
@@ -354,18 +354,18 @@ async function askAssistant({ recipe, prompt }, emit) {
     return failure(
       ERROR.timeout,
       submitRejected
-        ? 'the message was typed but sending it did nothing — the vendor ignored a synthetic Enter'
+        ? 'the message was typed but sending it did nothing – the vendor ignored a synthetic Enter'
         : `no new response within ${Math.round(responseTimeoutMs / 1000)}s`,
       { openedBy, submitRejected }
     );
   }
 
-  // Read, then look again — because a status row is only knowable as one in hindsight.
+  // Read, then look again – because a status row is only knowable as one in hindsight.
   //
   // Notion shows "Working on your request" before it shows the answer, and from the DOM that
   // row is indistinguishable from a reply: same attributes, same shape, and at 45 characters
   // it clears any sensible minimum length. Waiting longer does not separate them either, since
-  // the gap between the two is the model thinking — seconds, not the few hundred milliseconds
+  // the gap between the two is the model thinking – seconds, not the few hundred milliseconds
   // a render takes to settle.
   //
   // What *is* decidable is what happened afterwards. Once the page goes quiet, we pick again:
@@ -383,7 +383,7 @@ async function askAssistant({ recipe, prompt }, emit) {
   // had not arrived.
   //
   // **Nothing is awaited here.** The grace is decided inside the loop, from the indicator's
-  // state at the moment each pass begins — see `watchBusy.finished`.
+  // state at the moment each pass begins – see `watchBusy.finished`.
   let text = '';
   let readFrom = null;
   for (let pass = 0; pass < 3; pass += 1) {
@@ -392,20 +392,20 @@ async function askAssistant({ recipe, prompt }, emit) {
       // **Wait for a further row rather than looking again immediately.**
       //
       // Re-picking on the spot was the bug: the status row goes quiet after ~900 ms, but the
-      // gap before the answer is the model *thinking* — seconds. So the second pass ran while
+      // gap before the answer is the model *thinking* – seconds. So the second pass ran while
       // the transcript still held exactly what the first pass had read, found the same element,
       // and broke with the status text as the answer. Notion's own screen disagreed, because
       // by then it had replaced "Working on your request" with the joke.
       //
       // `waitForNewMatch` returns the moment a row arrives, so a vendor that adds one costs
       // nothing. A vendor that never adds another pays `ANSWER_GRACE_MS` once and then returns
-      // null, ending the loop with the text we already had — which is the right answer for it.
+      // null, ending the loop with the text we already had – which is the right answer for it.
       : await waitForNewMatch(
         recipe.responseContainerSelector,
         deepQuerySelectorAll(recipe.responseContainerSelector).length,
         {
           // **The grace shrinks after the first extra pass.** It exists for the gap between a
-          // status row and the answer, which is the model thinking — seconds, and only once.
+          // status row and the answer, which is the model thinking – seconds, and only once.
           // Applying it again on every later pass meant a successful exchange still paid the
           // full ceiling before reporting, so an answer visible in the vendor's tab took ten
           // more seconds to reach the panel. That was measured as lag by the person using it,
@@ -443,7 +443,7 @@ async function askAssistant({ recipe, prompt }, emit) {
 
   // Transport diagnostics, not content: how many reply elements existed before and after.
   // Without these, "Andy answered" and "Andy re-read the previous answer" are the same
-  // observation — the text alone cannot distinguish them, especially when the question is
+  // observation – the text alone cannot distinguish them, especially when the question is
   // the same each time.
   return {
     ok: true,
@@ -472,7 +472,7 @@ async function askAssistant({ recipe, prompt }, emit) {
   };
 }
 
-/** Reads the last answer without asking anything — "say that again". */
+/** Reads the last answer without asking anything – "say that again". */
 function getLastResponse({ recipe }) {
   const all = deepQuerySelectorAll(recipe.responseContainerSelector);
   // The *last* match. On a chat page the first is the opening reply of the conversation,
@@ -486,13 +486,13 @@ function getLastResponse({ recipe }) {
  * Opens the assistant via its keyboard shortcut.
  *
  * Reports `TIMEOUT` and stops when nothing changes. It does **not** retry, try a different
- * key, or decide the retry worked — the app owns the `CGEventPost` fallback, because the host
+ * key, or decide the retry worked – the app owns the `CGEventPost` fallback, because the host
  * inherits no TCC permissions from Chrome and the extension cannot post a trusted event at
  * all.
  */
 async function invokeViaShortcut({ recipe }) {
   // Never act blind. These controls are usually *toggles*, so opening one that is already open
-  // closes it — turning a working state into a broken one, and looking like the trigger failed.
+  // closes it – turning a working state into a broken one, and looking like the trigger failed.
   if (deepQuerySelectorVisible(recipe.inputSelector)) {
     return { ok: true, openedBy: 'already-open' };
   }
@@ -506,7 +506,7 @@ async function invokeViaShortcut({ recipe }) {
     // in a browser can post a trusted event. So the honest remedy is a different recording.
     return failure(ERROR.timeout, recipe.openMethod === 'click'
       ? 'the assistant did not open when its button was clicked'
-      : 'this assistant ignores keyboard shortcuts it did not get from a person — '
+      : 'this assistant ignores keyboard shortcuts it did not get from a person – '
         + 'record it again, opening the assistant by clicking its button');
   }
   return { ok: true, openedBy };
@@ -553,7 +553,7 @@ const INTENTS = {
 // Runs once per page, however many times the file is injected.
 //
 // A dynamically-registered content script only injects on *page load*, so a tab that was
-// already open when the user granted access has none — and asking someone to reload the page
+// already open when the user granted access has none – and asking someone to reload the page
 // they just chose is both bad and lossy. The worker therefore injects into the open tab with
 // `executeScript`, which means this file can arrive twice: once from the injection, once from
 // the registration on the next load. Without this guard the second copy adds a second
@@ -574,7 +574,7 @@ function install() {
   }
 
   // Streams progress back on its own channel so the app can start speaking before the
-  // answer is complete — the entire latency argument for driving a browser at all.
+  // answer is complete – the entire latency argument for driving a browser at all.
   const emit = (event) => {
     chrome.runtime.sendMessage({
       kind: 'openposse.stream',
@@ -593,12 +593,12 @@ function install() {
   });
 
   // Lets the worker ask *this frame* whether it can see the assistant, before sending it an
-  // intent it has no way to carry out. See `frameOwningAssistant` in the service worker —
+  // intent it has no way to carry out. See `frameOwningAssistant` in the service worker –
   // without it, every frame answers and the fastest failure wins.
   //
   // Installed on `globalThis` rather than exposed as an intent because the worker reads it
   // with `executeScript`, which returns one result per frame. An intent would go back through
-  // `sendMessage`, which returns only the first — the very thing being fixed.
+  // `sendMessage`, which returns only the first – the very thing being fixed.
   //
   // Visible, not merely present: LeanIX keeps its composer mounted while the panel is shut,
   // so presence would nominate a frame that cannot actually be typed into.

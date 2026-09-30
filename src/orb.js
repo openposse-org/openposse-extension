@@ -1,12 +1,12 @@
 // The summon panel, floating over whatever page you are on.
 //
-// A transposition of `design/README.md`, not a reinvention — the colours, spacing, motion
+// A transposition of `design/README.md`, not a reinvention – the colours, spacing, motion
 // timings and the orb algorithm are specified there as final, and the renderer below is ported
 // from `draw()`/`points()`/`lut()` in the design file rather than re-derived.
 //
 // **It lives in a shadow root, and that is structural.** This markup sits inside the vendor's
 // document, where their stylesheet has the same origin advantage over ours that popup.html's
-// `.mic-fix { display: block }` had over `[hidden]` — one `div { margin: 0 }` in Notion's CSS
+// `.mic-fix { display: block }` had over `[hidden]` – one `div { margin: 0 }` in Notion's CSS
 // and the panel is silently wrong. A closed shadow root is the only boundary CSS cannot cross,
 // and it costs nothing here because nothing outside needs to style this.
 //
@@ -29,7 +29,7 @@ if (!globalThis.__openposseOrb) {
   // face floods with colour, and the rim is stroked three times at falling blur and rising
   // opacity because that is what makes it bloom rather than read as a drawn circle.
 
-  /** The outer bloom. Off — see the note where it is drawn. */
+  /** The outer bloom. Off – see the note where it is drawn. */
   const SHOW_HALO = false;
 
   const PAL = [[255, 122, 24], [255, 63, 216], [138, 92, 255], [34, 216, 255], [196, 242, 255], [255, 122, 24]];
@@ -86,7 +86,7 @@ if (!globalThis.__openposseOrb) {
 
     // **While listening, the radius is the microphone**, which is what the design asks for and
     // why: "so a dead mic can never look healthy." The synthetic curve below drew the same
-    // confident sphere whether or not anything was being heard — breaking the promise in
+    // confident sphere whether or not anything was being heard – breaking the promise in
     // precisely the case it exists for, a granted, connected, silent microphone.
     //
     // The floor is kept, so silence still breathes rather than collapsing: a quiet room sits
@@ -101,7 +101,7 @@ if (!globalThis.__openposseOrb) {
         ? Math.min(1.05, 0.22 + 0.04 * Math.sin(t / 28) + 0.85 * shown)
         : 0.80 + 0.16 * Math.sin(t / 13) + 0.09 * Math.sin(t / 4.1))
       // An answering agent moves with its own speech for the same reason a listening orb moves
-      // with yours — otherwise it is an animation that happens to be playing while a voice
+      // with yours – otherwise it is an animation that happens to be playing while a voice
       // happens to be talking, and the two drift apart within a sentence. The floor is higher
       // than the microphone's because there is no silence to represent: an agent that is
       // speaking is always saying something.
@@ -117,7 +117,7 @@ if (!globalThis.__openposseOrb) {
     const R = Math.min(w, h) * 0.232 * (0.93 + 0.13 * amp);
     const L = lut(mode === 'dead' ? '#8E8E93' : tint);
 
-    // Diffuse halo — **off by request, 2026-09-26.**
+    // Diffuse halo – **off by request, 2026-09-26.**
     //
     // A deliberate departure from a design marked high-fidelity, so it is a switch rather than
     // a deletion: the bloom reaches 2.05R, roughly doubling the panel's visual footprint over
@@ -200,11 +200,11 @@ if (!globalThis.__openposseOrb) {
    *
    * **Which is why the family is "OpenPosse Inter" and not "Inter".** Plenty of vendors ship
    * their own Inter. Adding a second face under that name to their document would leave two
-   * competing definitions and could change *their* typography — this panel is a guest and must
+   * competing definitions and could change *their* typography – this panel is a guest and must
    * not redecorate. A name nobody else uses cannot collide, and nothing in the page references
    * it, so the page renders exactly as it did.
    *
-   * Failure is cosmetic — the CSS falls through to the system stack — but it is **reported**,
+   * Failure is cosmetic – the CSS falls through to the system stack – but it is **reported**,
    * because "the panel looks wrong on this one site" with nothing in the console is a bug
    * somebody would spend an afternoon on.
    */
@@ -220,10 +220,10 @@ if (!globalThis.__openposseOrb) {
       face.load()
         .then((loaded) => document.fonts.add(loaded))
         .catch((error) => {
-          console.warn('[openposse] Inter would not load —', error?.message ?? error);
+          console.warn('[openposse] Inter would not load –', error?.message ?? error);
         });
     } catch (error) {
-      console.warn('[openposse] Inter could not be registered —', error?.message ?? error);
+      console.warn('[openposse] Inter could not be registered –', error?.message ?? error);
     }
   }
 
@@ -236,7 +236,7 @@ if (!globalThis.__openposseOrb) {
       z-index: 2147483647;
       width: 452px;
       /* Defined here rather than on :host, which is \`all: initial\` on purpose so nothing the
-         page sets can reach in. Kept identical to \`ui.css\` — the panel and the settings page
+         page sets can reach in. Kept identical to \`ui.css\` – the panel and the settings page
          disagreeing about their own typeface would be visible and pointless. */
       --ui: "OpenPosse Inter", -apple-system, system-ui, "Segoe UI", sans-serif;
       --figures: "ss02", "tnum";
@@ -278,7 +278,7 @@ if (!globalThis.__openposseOrb) {
         inset 0 -1px 0 rgba(255,255,255,.08),
         inset 0 0 0 .5px rgba(255,255,255,.17);
     }
-    /* Sheen, explicitly not hit-testable — it covers the whole panel. */
+    /* Sheen, explicitly not hit-testable – it covers the whole panel. */
     .glass::after {
       content: ''; position: absolute; inset: 0; border-radius: 32px; pointer-events: none;
       background: linear-gradient(114deg, rgba(255,255,255,.12) 0%, transparent 30%,
@@ -286,7 +286,7 @@ if (!globalThis.__openposseOrb) {
     }
 
     /* The title bar is the handle. It opts into hit-testing, which the rest of the card does
-       not — so the page underneath stays usable everywhere except the strip you grab. */
+       not – so the page underneath stays usable everywhere except the strip you grab. */
     header {
       display: flex; align-items: center; gap: 9px;
       pointer-events: auto; cursor: grab; user-select: none; touch-action: none;
@@ -386,7 +386,7 @@ if (!globalThis.__openposseOrb) {
     .coach .row { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
     .coach .row .tick { color: #30D158; font-size: 11px; }
     .coach .row .tick.none { color: rgba(235,235,245,.35); }
-    /* "there is none" is prose, not a selector — same no-op fix as `.keys` below. */
+    /* "there is none" is prose, not a selector – same no-op fix as `.keys` below. */
     .coach .row .detail.none { color: rgba(235,235,245,.42); font-feature-settings: normal; }
     .coach .row .label { color: rgba(235,235,245,.55); flex: 0 0 92px; }
     .coach .row .kind {
@@ -396,7 +396,7 @@ if (!globalThis.__openposseOrb) {
     }
     /* **Wraps rather than truncates.** These are the recording's whole output, and the one
        thing somebody might want to check against their page. An ellipsis put the interesting
-       half of a selector out of reach — and "hover for the rest" is no answer to a screenshot.
+       half of a selector out of reach – and "hover for the rest" is no answer to a screenshot.
        A taller card is the cheaper cost. */
     .coach .row .detail {
       font: 11px/1.4 var(--ui);
@@ -408,21 +408,21 @@ if (!globalThis.__openposseOrb) {
     }
     /* A shortcut is something you pressed, not page structure, so it is not a code chip.
        **This opt-out used to be \`font-family: inherit\`**, which escaped a monospace face that
-       no longer exists — one family now, so that line had quietly become a no-op. What it has
+       no longer exists – one family now, so that line had quietly become a no-op. What it has
        to turn off is the feature set. */
     .coach .row .detail.keys {
       font-feature-settings: normal; font-size: 13px; letter-spacing: .12em;
     }
     /* **Opted back in.** The wrap is pointer-events: none so the page underneath stays usable,
        and every interactive part has to say otherwise for itself. Without this the field is
-       visible, looks focusable, and every click lands in the vendor's page behind it — which
+       visible, looks focusable, and every click lands in the vendor's page behind it – which
        reads as the panel being frozen rather than as it not being there. */
     .coach .name { margin-top: 14px; display: flex; gap: 8px; pointer-events: auto; }
     /* **[hidden] is only a UA rule, so any author display declaration outranks it on origin.**
        The line above would otherwise leave this row on screen through every step of the
        recording, offering a name field before there is anything to name. This is the same bug
-       that opened the project — a .mic-fix { display: block } that outranked [hidden] and put
-       an empty red card in the popup — and it is worth a rule per shadow root rather than
+       that opened the project – a .mic-fix { display: block } that outranked [hidden] and put
+       an empty red card in the popup – and it is worth a rule per shadow root rather than
        remembering it each time. */
     [hidden] { display: none !important; }
     .coach .name input {
@@ -442,7 +442,7 @@ if (!globalThis.__openposseOrb) {
 
   const host = document.createElement('div');
   // `closed`, not `open`: nothing outside needs to reach in, and a closed root cannot be
-  // queried by the page either — this panel shows what someone said, and the page it happens
+  // queried by the page either – this panel shows what someone said, and the page it happens
   // to be sitting over has no business reading it.
   const root = host.attachShadow({ mode: 'closed' });
   root.innerHTML = `
@@ -457,7 +457,7 @@ if (!globalThis.__openposseOrb) {
         </header>
         <div class="orbwrap">
           <canvas width="168" height="168"></canvas>
-          <div class="deadmic" hidden>NOT HEARING ANYTHING — CHECK INPUT</div>
+          <div class="deadmic" hidden>NOT HEARING ANYTHING – CHECK INPUT</div>
         </div>
         <div class="transcript"></div>
         <div class="divider"></div>
@@ -632,7 +632,7 @@ if (!globalThis.__openposseOrb) {
   /**
    * The wizard, drawn from what `coaching.js` decided.
    *
-   * Nothing here judges anything — the step, the sentence and the tick-list all arrive in the
+   * Nothing here judges anything – the step, the sentence and the tick-list all arrive in the
    * patch. That is the same split the Mac side had, and the reason it is worth keeping is that
    * the rules are testable without a window and this is not.
    */
@@ -690,7 +690,7 @@ if (!globalThis.__openposseOrb) {
   // Stopped at `.wrap`, which every interactive part of the panel is inside, so our own
   // handlers (the orb, the avatars, the header's drag, the name field) have all run by the time
   // this fires. What it prevents is the event continuing out of the shadow root and into the
-  // vendor's document-level listeners — where "a click landed outside my editor" is answered by
+  // vendor's document-level listeners – where "a click landed outside my editor" is answered by
   // taking focus back, which is exactly what stopped the name field being typed into.
   //
   // Bubble phase only, so a vendor listening in the capture phase still sees it. That is not
@@ -702,7 +702,7 @@ if (!globalThis.__openposseOrb) {
   // ── Moving it out of the way ────────────────────────────────────────────────────────────
   //
   // The panel sits over somebody else's application, and where it sits is sometimes exactly
-  // where they need to look — during a recording especially, since the whole task is reading
+  // where they need to look – during a recording especially, since the whole task is reading
   // and clicking the page underneath.
   //
   // The offset is kept in `chrome.storage.local`, which is **ours**: the panel is injected
@@ -722,7 +722,7 @@ if (!globalThis.__openposseOrb) {
     /**
      * Keeps the panel reachable.
      *
-     * Dragging something entirely off screen is easy and there is no way back — the panel has
+     * Dragging something entirely off screen is easy and there is no way back – the panel has
      * no chrome of its own to drag it home by, and a recording in progress would be stranded
      * with it. So at least a corner stays on screen, measured from where the panel actually is
      * rather than from where it was designed to be.
@@ -771,7 +771,7 @@ if (!globalThis.__openposseOrb) {
       wrap.classList.remove('dragging');
       try { header.releasePointerCapture(event.pointerId); } catch { /* already released */ }
       chrome.storage?.local?.set({ orbOffset: { dx, dy } })
-        .catch((error) => console.warn('[openposse] panel position not saved —', error));
+        .catch((error) => console.warn('[openposse] panel position not saved –', error));
     };
 
     header.addEventListener('pointerup', release);
@@ -788,7 +788,7 @@ if (!globalThis.__openposseOrb) {
   // **The right reading of that is not "win the fight harder".** A page is entitled to manage
   // its own focus, every vendor will do it differently, and a recording that cannot finish
   // without a text field is a recording held hostage by whichever application it was made in.
-  // The recording is complete and verified without a name — so it is saved under the vendor's
+  // The recording is complete and verified without a name – so it is saved under the vendor's
   // product name, and renaming happens in Settings, where nothing can interfere.
 
   // Clicking the orb re-arms listening, per the design. The one control the panel has.
@@ -799,7 +799,7 @@ if (!globalThis.__openposseOrb) {
   // Terminal phases fade themselves out after the design's idle beat.
   //
   // **Owned here rather than by the worker**, because MV3 kills an idle service worker after
-  // ~30 seconds and a `setTimeout` there would sometimes never fire — leaving a panel parked
+  // ~30 seconds and a `setTimeout` there would sometimes never fire – leaving a panel parked
   // over someone else's page with no way to dismiss it. A timer in the page cannot be killed
   // by the worker's lifecycle.
   const DISMISS_MS = 6500;
@@ -809,7 +809,7 @@ if (!globalThis.__openposseOrb) {
   function armDismiss(phase) {
     clearTimeout(dismiss);
     // **Never while the agent is still talking.** The answer is read aloud after the panel
-    // reaches `answering`, and a shortened sentence can easily outlast 6.5 seconds — so the
+    // reaches `answering`, and a shortened sentence can easily outlast 6.5 seconds – so the
     // panel would fade out mid-word, taking the text with it. The timer restarts from the end
     // of speech instead, which is when someone actually has the answer.
     if (speaking) return;
@@ -830,7 +830,7 @@ if (!globalThis.__openposseOrb) {
     if (message?.kind === 'openposse.orb.speaking') {
       speaking = message.speaking === true;
       // **Cancelled, not merely suppressed.** `armDismiss` refuses to *start* a timer while
-      // speaking, but the answer arrives before the voice does — so the timer was already
+      // speaking, but the answer arrives before the voice does – so the timer was already
       // running by the time this said "an agent is talking", and the guard had nothing to
       // stop. The panel faded out mid-sentence.
       if (speaking) clearTimeout(dismiss);

@@ -27,7 +27,7 @@
       #empty { color: var(--text-dim); font-size: 12.5px; }
 
       /* Voice sits above the text box because voice is the product and typing is the
-         fallback — the order on screen should say which is which. */
+         fallback – the order on screen should say which is which. */
       .listen { display: flex; gap: 9px; align-items: center; }
       .ask { display: flex; gap: 7px; margin-top: 10px; }
       .ask input { flex: 1; }
@@ -49,10 +49,10 @@
       <div class="hint tech" id="shortcut"></div>
     </header>
 
-    <!-- Deliberately not the design's `NOT HEARING ANYTHING — CHECK INPUT` badge. That one is
+    <!-- Deliberately not the design's `NOT HEARING ANYTHING – CHECK INPUT` badge. That one is
          for a microphone that is connected and silent, and belongs in the panel's
          not-capturing state. A permission that was never granted needs different words and a
-         different action — telling someone to check their input device would send them to
+         different action – telling someone to check their input device would send them to
          look for a fault that is not there. -->
     <button id="mic-warning" hidden class="card bad mic-fix"></button>
 
@@ -61,7 +61,7 @@
       No assistants yet. Open a page with an AI assistant on it, then record it.
     </div>
 
-    <!-- Starts a turn. **Nothing here narrates one** — the orb owns the whole of the current
+    <!-- Starts a turn. **Nothing here narrates one** – the orb owns the whole of the current
          turn, and a second surface describing it can only ever be a slower, smaller copy that
          disappears when you look away. The button still says whether it is a Stop, because
          that is the control's own state rather than a report about the turn. -->

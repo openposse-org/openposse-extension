@@ -4,7 +4,7 @@
 // script has a DOM but runs at the *page's* origin, which would mean one microphone grant per
 // site, lost on every navigation. An offscreen document is the extension's own origin with a
 // DOM and no window: one grant, invisible, and it survives tab switches. That is the whole
-// reason it exists — and E0 measured that audio genuinely reaches it rather than assuming so,
+// reason it exists – and E0 measured that audio genuinely reaches it rather than assuming so,
 // because the reports of speech recognition failing here are real and concern the *network*
 // recogniser.
 //
@@ -15,7 +15,7 @@
 // **Transcript text passes through and is never written down.** Not to the console, not to
 // storage, not to an error string. The E0 spike logged what it heard and said in a comment why
 // it was allowed to; this is shipping code and is not. Everything reported here is a state
-// name, an error code or a duration — except `text`, which goes to exactly one place: a live
+// name, an error code or a duration – except `text`, which goes to exactly one place: a live
 // message to whoever is displaying it.
 
 import { assignVoices } from './voices.js';
@@ -33,7 +33,7 @@ let recognition = null;
 //
 // The orb's radius follows the microphone, which is the design's own requirement and the
 // reason it gives: **"so a dead mic can never look healthy."** A synthetic amplitude breaks
-// that promise in the one case it exists for — a granted, connected, silent microphone draws
+// that promise in the one case it exists for – a granted, connected, silent microphone draws
 // the same confident sphere as a working one, and the person sees a healthy instrument while
 // nothing is being heard.
 //
@@ -75,7 +75,7 @@ async function startMeter() {
       const db = 20 * Math.log10(Math.max(rms, 1e-6));
       const target = Math.min(1, Math.max(0, (db + 55) / 45));
 
-      // Fast to rise, slow to fall — so a consonant registers and the orb does not flicker
+      // Fast to rise, slow to fall – so a consonant registers and the orb does not flicker
       // between syllables.
       level += (target - level) * (target > level ? ATTACK : RELEASE);
       send('openposse.level', { level: Math.round(level * 1000) / 1000 });
@@ -83,11 +83,11 @@ async function startMeter() {
 
     meter = { ctx, stream, timer };
   } catch (error) {
-    // No meter. `orb.js` falls back to the synthetic amplitude, which is where it started — but
+    // No meter. `orb.js` falls back to the synthetic amplitude, which is where it started – but
     // **the fallback is invisible**, so without this "the orb does not follow my voice" has
     // four possible causes and no way to tell them apart: a refused second capture, a blocked
     // AudioContext, an autoplay policy, or the orb simply being wrong.
-    console.warn('[openposse] no level meter —', error?.message ?? error);
+    console.warn('[openposse] no level meter –', error?.message ?? error);
     meter = null;
   }
 }
@@ -109,7 +109,7 @@ function stopMeter() {
 //
 // - *last result → `end`* came back 0 ms, twice. Not a finding, an identity: the final result
 //   *is* the decision that the turn is over, so the two fire in one task.
-// - *last interim → final* came back 0 ms on three turns of four. Also near-tautological —
+// - *last interim → final* came back 0 ms on three turns of four. Also near-tautological –
 //   SODA emits its final immediately after its last interim, so this measures dispatch order
 //   rather than silence.
 //
@@ -118,7 +118,7 @@ function stopMeter() {
 // and anything happening, and it is the only one of the three that is about them.
 //
 // **Whether it fires at all is itself the finding.** Apple's `SpeechDetector` emits nothing in
-// practice — measured, recorded in the root CLAUDE.md, and the reason M1 had to endpoint on the
+// practice – measured, recorded in the root CLAUDE.md, and the reason M1 had to endpoint on the
 // absence of transcription instead. A `null` here is the same answer from a different vendor,
 // and E4's orb needs it either way: "the speaker stopped" is what moves it from listening to
 // thinking, and without the event that transition has to be inferred all over again.
@@ -142,11 +142,11 @@ const send = (kind, body = {}) =>
  *
  * `service-not-allowed` is the interesting one and deliberately does not read as a fault. It
  * means we demanded on-device recognition and Chrome could not supply it, so it refused rather
- * than quietly using a server — the promise holding, not breaking. Saying "speech recognition
+ * than quietly using a server – the promise holding, not breaking. Saying "speech recognition
  * failed" there would be true and would teach exactly the wrong thing.
  */
 const ERROR_COPY = {
-  'not-allowed': "The microphone isn't granted — finish setup and try again.",
+  'not-allowed': "The microphone isn't granted – finish setup and try again.",
   'service-not-allowed':
     'On-device recognition was unavailable, so nothing was sent anywhere. '
     + 'Check the speech model in setup.',
@@ -161,7 +161,7 @@ const ERROR_COPY = {
  * Starts one turn.
  *
  * `continuous = false` is the push-to-talk shape and, if Chrome's recogniser behaves as
- * documented, it is also **our endpointer for free** — it decides the utterance is over and
+ * documented, it is also **our endpointer for free** – it decides the utterance is over and
  * fires `end` without being told. M1 had to build `SilenceTimeoutEndpointer` against the
  * absence of transcription activity, because Apple's `SpeechDetector` emitted nothing at all.
  * The plan says to verify this here before porting anything, so `end` reports the gap since the
@@ -187,7 +187,7 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
       send('openposse.listen.failed', {
         code: `model-${state}`,
         message: state === 'downloadable'
-          ? 'The speech model has not been downloaded yet — finish setup.'
+          ? 'The speech model has not been downloaded yet – finish setup.'
           : 'On-device speech recognition is switched off in this Chrome.',
       });
       return;
@@ -209,7 +209,7 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
   listener.processLocally = true;
 
   // Layer 1 of routing, and the cheapest: bias the recogniser toward the names it is about to
-  // have to distinguish. Strictly better than the `contextualStrings` this replaces — that took
+  // have to distinguish. Strictly better than the `contextualStrings` this replaces – that took
   // a bare list, this takes a weight per phrase. Guarded because a shape change here must not
   // cost us the turn; unbiased recognition still works, it is just more likely to hear "Ivor".
   if (Phrase && phrases.length > 0) {
@@ -254,7 +254,7 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
     send('openposse.listen.ended', {
       cancelled: cancelling,
       tailMs: lastResultAt ? Math.round(performance.now() - lastResultAt) : null,
-      // null means `speechend` never fired — the Apple outcome, and a finding in itself.
+      // null means `speechend` never fired – the Apple outcome, and a finding in itself.
       waitMs,
       speechEndFired: Boolean(speechEndAt),
     });
@@ -285,7 +285,7 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
  * Ends the turn, discarding what was said.
  *
  * `abort()` rather than `stop()`, because the only way to reach this is pressing the shortcut
- * again or clicking the button again — which M1 settled as *cancel*, not *send*. `stop()` would
+ * again or clicking the button again – which M1 settled as *cancel*, not *send*. `stop()` would
  * finalise the half-sentence and hand it on to be acted upon, so "never mind" would ask the
  * question anyway. That is the more expensive mistake of the two.
  */
@@ -298,7 +298,7 @@ function stop() {
 // ── Speaking ──────────────────────────────────────────────────────────────────────────────
 //
 // Here rather than in the worker for the same reason the microphone is: a service worker has no
-// DOM and therefore no `speechSynthesis`. Here rather than in the page for a better one — an
+// DOM and therefore no `speechSynthesis`. Here rather than in the page for a better one – an
 // utterance started in a tab is cancelled when that tab navigates or closes, and the whole
 // point of this product is that you can ask a question and then look at something else.
 
@@ -322,7 +322,7 @@ function voices() {
  * Whether Kokoro's weights are actually present.
  *
  * Reads the local store rather than the bundle: the weights are downloaded from setup, once,
- * verified, and kept — so "is this machine ready" is a question about what has been installed
+ * verified, and kept – so "is this machine ready" is a question about what has been installed
  * and not about what shipped. It answers correctly before the download and after it, with
  * nothing to remember to flip.
  */
@@ -344,7 +344,7 @@ async function speak({ text, agentID, roster = [] }) {
   cancelKokoro();
 
   // E6's fork. `chooseEngine` routes to Kokoro when WebGPU *and* the weights are both present,
-  // and to the system voices otherwise — which is every machine today, because the weights are
+  // and to the system voices otherwise – which is every machine today, because the weights are
   // not bundled yet. The branch is live rather than hypothetical, so adding the assets is the
   // whole of the remaining change.
   const { engine: chosen } = await engine();
@@ -353,14 +353,14 @@ async function speak({ text, agentID, roster = [] }) {
     // question is being asked rather than about the answer being different today. What is
     // downloadable and what is downloaded are separate facts, and `weights.js` is the one that
     // knows the second. When they were six and 28, taking the default handed a third British
-    // agent `bf_isabella` — a file the shim would refuse, correctly, three layers from anything
+    // agent `bf_isabella` – a file the shim would refuse, correctly, three layers from anything
     // that could explain it. Naming the source keeps that true for whatever the next subset is.
     const installed = KOKORO_VOICES;
     const voice = assignKokoroVoices(roster, installed).get(agentID) ?? installed[0]?.id
       ?? 'bm_george';
     send('openposse.speaking', { started: true });
     const result = await speakWithKokoro(text, voice, {
-      // A real amplitude, on the same channel the microphone uses — so the orb follows an
+      // A real amplitude, on the same channel the microphone uses – so the orb follows an
       // answering agent exactly as it follows you. The system-voice path can only send
       // `pulse`, because `speechSynthesis` exposes no audio to measure.
       onLevel: (level) => send('openposse.speaking', { level }),
@@ -388,7 +388,7 @@ async function speak({ text, agentID, roster = [] }) {
 
   const utterance = new SpeechSynthesisUtterance(text);
   // No voice means nothing local could be found. Speaking anyway would use the browser default,
-  // which may be a network voice — the exact thing `localVoices` exists to prevent — so this
+  // which may be a network voice – the exact thing `localVoices` exists to prevent – so this
   // stays silent and says why. A missing voice is a setup problem, not a reason to leak.
   if (!voice) {
     send('openposse.spoke', { ok: false, reason: 'no-local-voice' });
@@ -397,7 +397,7 @@ async function speak({ text, agentID, roster = [] }) {
   utterance.voice = voice;
   utterance.lang = voice.lang;
 
-  // The orb's `agent` mode, driven by a real signal rather than a synthetic one — though a
+  // The orb's `agent` mode, driven by a real signal rather than a synthetic one – though a
   // coarser signal than the microphone's. `speechSynthesis` renders straight to the output
   // device and exposes no audio node, so there is no amplitude to read; `boundary` fires per
   // word, which is speech *rate* rather than loudness. It is honestly synchronised with what is
@@ -427,7 +427,7 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
       respond({ ok: true });
       return true;
     case 'openposse.engine.query':
-      // Asked by setup. This document is the only place that can answer — WebGPU and the voice
+      // Asked by setup. This document is the only place that can answer – WebGPU and the voice
       // list both live here.
       engine().then(respond);
       return true;
@@ -448,5 +448,5 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
 
 // Announced rather than waited for. E0 measured that this document runs *before*
 // `createDocument()` resolves in the worker, so the worker cannot treat that promise as "the
-// document is now ready" — it has to hear it from here.
+// document is now ready" – it has to hear it from here.
 send('openposse.offscreen.ready');

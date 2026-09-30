@@ -18,7 +18,7 @@ import { beginTurn, trace } from './trace.js';
  * How much of an interim result to show as still-being-revised.
  *
  * The design dims "the last ~9 characters while the user is still speaking", which is a
- * presentational stand-in for confidence rather than a measurement — Web Speech gives one
+ * presentational stand-in for confidence rather than a measurement – Web Speech gives one
  * transcript per result and does not say which part it is least sure of.
  */
 const VOLATILE_TAIL = 9;
@@ -29,31 +29,31 @@ const OFFSCREEN_PATH = 'offscreen.html';
  * How hard to lean on roster names, on the spec's 0.0–10.0 scale.
  *
  * **That scale is logarithmic**, which is the whole story. `boost` is roughly the natural log
- * of how many times more likely the page thinks the phrase is than the model does — so the 8
+ * of how many times more likely the page thinks the phrase is than the model does – so the 8
  * this started with, taken from E0 and from the plan's "~8–10", asserted that "Ivan" is about
  * **3,000×** more likely than English says. The recogniser believed it: interim hypotheses came
  * back as "Ivan Ivan Ivan…" thirty-three times over, for an utterance that contained the word
  * once.
  *
- * E0 did not catch it because E0 only read finals, and the final rescoring pass repairs it —
+ * E0 did not catch it because E0 only read finals, and the final rescoring pass repairs it –
  * "Ivan tell me a joke" arrived perfectly while the interim text was nonsense. Interim results
  * are what the orb will show at E4, so the artefact was always going to surface; it surfaced
  * the first time anything displayed them.
  *
  * 3.0 is ~20×, and is what the spec's own explainer uses for a proper noun. MDN warns that 9
  * and 10 make the engine hear the phrase where it is not, which is exactly what was observed.
- * Biasing is meant to win close calls — "Ivan" over "even" — not to overrule the audio.
+ * Biasing is meant to win close calls – "Ivan" over "even" – not to overrule the audio.
  */
 const NAME_BOOST = 3;
 
-/** Session keys. Flags only — never text. */
+/** Session keys. Flags only – never text. */
 const LISTENING = 'listening';
 const BIAS = 'bias';
 
 /**
  * The utterance in progress: `{ text, isFinal, at }`, or null.
  *
- * Module state, so it dies with the worker. Deliberate — see the file header.
+ * Module state, so it dies with the worker. Deliberate – see the file header.
  */
 let turn = null;
 
@@ -88,7 +88,7 @@ export function currentTurn() {
  *
  * **Nothing may be sequenced on `createDocument()` resolving.** E0 measured the document
  * reporting for duty *before* that promise settled, so it is not a readiness signal in either
- * direction — hence `tell()` below retries rather than trusting it.
+ * direction – hence `tell()` below retries rather than trusting it.
  */
 async function ensureOffscreen() {
   if (await chrome.offscreen.hasDocument()) return;
@@ -96,13 +96,13 @@ async function ensureOffscreen() {
     await chrome.offscreen.createDocument({
       url: chrome.runtime.getURL(OFFSCREEN_PATH),
       // Both, because this document now does both. `AUDIO_PLAYBACK` is what keeps it alive
-      // while an answer is being read out — an offscreen document whose stated reason has
+      // while an answer is being read out – an offscreen document whose stated reason has
       // finished is a candidate for closing, and losing it mid-sentence would cut the agent off.
       reasons: [chrome.offscreen.Reason.USER_MEDIA, chrome.offscreen.Reason.AUDIO_PLAYBACK],
       justification: 'on-device speech recognition and speaking answers aloud',
     });
   } catch (error) {
-    // Two documents cannot coexist, and two calls can race here — a shortcut press while a
+    // Two documents cannot coexist, and two calls can race here – a shortcut press while a
     // previous one is still creating. Losing that race means the document exists, which is
     // what we wanted, so it is not a failure.
     if (!String(error?.message ?? error).includes('Only a single offscreen')) throw error;
@@ -113,7 +113,7 @@ async function ensureOffscreen() {
  * Sends one instruction to the offscreen document, retrying once.
  *
  * The retry is for the gap between `createDocument()` resolving and the document's listener
- * being registered — a gap E0's observation says may exist in either direction, and which
+ * being registered – a gap E0's observation says may exist in either direction, and which
  * presents as "Receiving end does not exist" on a document that is about to be perfectly fine.
  */
 async function tell(kind, body = {}) {
@@ -121,12 +121,12 @@ async function tell(kind, body = {}) {
   try {
     return await chrome.runtime.sendMessage({ kind, ...body });
   } catch {
-    // The first failure is expected — that is what the retry is for — so it says nothing.
+    // The first failure is expected – that is what the retry is for – so it says nothing.
     // The second is not: the offscreen document never received the instruction, which means no
     // listening, or no speech, with nothing anywhere to say so.
     await new Promise((resolve) => setTimeout(resolve, 60));
     return chrome.runtime.sendMessage({ kind, ...body }).catch((error) => {
-      console.warn(`[openposse] offscreen did not receive ${kind} —`, error?.message ?? error);
+      console.warn(`[openposse] offscreen did not receive ${kind} –`, error?.message ?? error);
       return null;
     });
   }
@@ -143,7 +143,7 @@ async function tell(kind, body = {}) {
  */
 async function phrasesForRoster() {
   const stored = (await chrome.storage.session.get(BIAS))[BIAS];
-  // Anything that is not a number is the default — including the boolean this key used to
+  // Anything that is not a number is the default – including the boolean this key used to
   // hold, which can still be sitting in session storage from before the sweep existed.
   const boost = typeof stored === 'number' ? stored : NAME_BOOST;
   if (boost <= 0) return [];
@@ -153,12 +153,12 @@ async function phrasesForRoster() {
 
 export async function startListening() {
   // Asked before the recogniser is, because the recogniser's answer to an ungranted microphone
-  // is `not-allowed` — a code that also covers a device in use and a policy block. Checking
+  // is `not-allowed` – a code that also covers a device in use and a policy block. Checking
   // what setup recorded lets the failure name setup, which is the actual fix.
   if (!(await micGranted())) {
     failure = {
       code: 'mic-not-granted',
-      message: "The microphone isn't set up yet — finish setup first.",
+      message: "The microphone isn't set up yet – finish setup first.",
     };
     // The design's dead-mic state, driven by a real signal rather than a synthetic one: an
     // ungranted microphone shows as dead, never as a healthy idle orb.
@@ -173,13 +173,13 @@ export async function startListening() {
   turn = null;
   failure = null;
   // Starting a turn stops whatever is being read out. Barge-in's cheap half: the microphone is
-  // about to open, and an agent still talking would be heard by it — and speaking over someone
+  // about to open, and an agent still talking would be heard by it – and speaking over someone
   // who has just pressed the key to interrupt is the rudest thing this could do.
   await tell('openposse.hush');
   await chrome.storage.session.set({ [LISTENING]: true });
   await setBadge('listening');
   // Before the panel, not after. The panel's injection can take a moment, and until this runs
-  // an open popup still shows the *previous* turn's outcome — so the two surfaces disagree,
+  // an open popup still shows the *previous* turn's outcome – so the two surfaces disagree,
   // one saying "Didn't hear anything" while the other says "Listening".
   await broadcastState();
   // `create` injects the panel into whatever tab is in front. Everything after this is a merge
@@ -191,7 +191,7 @@ export async function startListening() {
   }, { create: true });
 
   const phrases = await phrasesForRoster();
-  // How many names and at what weight — a count and a number, not the names. Paired with the
+  // How many names and at what weight – a count and a number, not the names. Paired with the
   // tail measurement below it, this is what makes a boost sweep readable: each turn says what
   // it was listening with before it says how it ended.
   beginTurn('turn');
@@ -205,7 +205,7 @@ export async function startListening() {
  * Says an answer out loud, in that agent's voice.
  *
  * The whole roster's voice hints travel with it, because distinctness is a property of the
- * *set* — `assignVoices` has to see everyone to guarantee two agents never sound alike, and
+ * *set* – `assignVoices` has to see everyone to guarantee two agents never sound alike, and
  * the offscreen document is where the voice list lives.
  */
 export async function say(text, agentID) {
@@ -221,21 +221,21 @@ export async function say(text, agentID) {
  * Says why an answer was not read out.
  *
  * **An answer that silently fails to be spoken is indistinguishable from one that was never
- * meant to be**, and from a muted laptop. The turn still worked — the text is on screen — so
+ * meant to be**, and from a muted laptop. The turn still worked – the text is on screen – so
  * there is nothing loud to notice and nothing to search for, which is the worst shape a bug
  * can have.
  *
  * Split in two on purpose. A person only needs telling when there is something they could do
  * about it, and only on the panel they are already looking at; everything else is a code in a
- * console for whoever is debugging. `cancelled` is neither — it is what happens every time
+ * console for whoever is debugging. `cancelled` is neither – it is what happens every time
  * somebody interrupts, which is a feature.
  */
 const UNSPOKEN_COPY = {
-  'no-local-voice': 'No on-device voice is available — the answer is above.',
+  'no-local-voice': 'No on-device voice is available – the answer is above.',
   'kokoro-not-implemented': 'The neural voice is selected but not installed.',
   'audio-busy': 'Something else is using the audio output.',
   'synthesis-unavailable': 'This browser could not speak the answer.',
-  'kokoro-silent-audio': 'The neural voice produced no sound — the answer is above.',
+  'kokoro-silent-audio': 'The neural voice produced no sound – the answer is above.',
 };
 
 function reportUnspoken(reason) {
@@ -269,7 +269,7 @@ export async function isListening() {
  *
  * A development handle, not a setting. The plan asks E2 to show `phrases` *demonstrably*
  * helping on "Ivan", and the only way to demonstrate that is to say the same word under
- * different weights and compare what comes back — which is also how 8 was caught being far too
+ * different weights and compare what comes back – which is also how 8 was caught being far too
  * high. Session-scoped, so it cannot be left somewhere strange by accident; a browser restart
  * puts it back to `NAME_BOOST`.
  *
@@ -293,7 +293,7 @@ async function settle() {
 // ── The badge ─────────────────────────────────────────────────────────────────────────────
 //
 // The only thing visible while the popup is closed, which is the normal case for a global
-// shortcut. It carries *state*, never content — a dot means the microphone is open, an initial
+// shortcut. It carries *state*, never content – a dot means the microphone is open, an initial
 // means that agent is working on something. Those are the two facts someone needs without
 // opening anything, and a microphone you cannot tell is open is the kind of thing that ends up
 // in a review.
@@ -357,13 +357,13 @@ export function handleOffscreenMessage(message) {
   switch (message?.kind) {
     case 'openposse.heard':
       // Recorded, not relayed. `runtime.sendMessage` from the offscreen document already
-      // reaches every extension context, so an open popup has this message before we do —
+      // reaches every extension context, so an open popup has this message before we do –
       // forwarding it would be a second copy of the same words arriving a round trip later, and
       // the surface would render each interim result twice. What is kept here is for a popup
       // opened *after* the turn, which saw none of them.
       turn = { text: message.text, isFinal: message.isFinal, at: Date.now() };
       // Committed white, the tail dimmed, and the phase moves to routing the moment it commits
-      // — the panel should never show a caret next to text the recogniser has finished with.
+      // – the panel should never show a caret next to text the recogniser has finished with.
       panel(message.isFinal
         ? { phase: 'routing', transcript: message.text, volatile: '' }
         : {
@@ -371,7 +371,7 @@ export function handleOffscreenMessage(message) {
           volatile: message.text.slice(-VOLATILE_TAIL),
         });
       // Handed on as soon as it is final. The handler reads the roster before it claims the
-      // badge, so `end` — a millisecond behind — can still win the race and clear it; the
+      // badge, so `end` – a millisecond behind – can still win the race and clear it; the
       // agent's initial then appears a moment later. A flicker, not a wrong state, and worth
       // saying out loud rather than leaving `settle`'s check looking like it guarantees more
       // than it does.
@@ -386,19 +386,19 @@ export function handleOffscreenMessage(message) {
     case 'openposse.listen.ended':
       // The numbers E2 exists to produce, so they have to be readable somewhere.
       //
-      // Durations are not transcripts, page content or vendor responses — they are diagnostics
+      // Durations are not transcripts, page content or vendor responses – they are diagnostics
       // of exactly the kind the rule carves out. `info` rather than `debug` because `debug` is
       // Verbose level and Chrome DevTools hides that by default: a measurement nobody can find
       // is not a measurement. Both lines come out of this file once the question is settled.
       // **"speechend never fired" is only a finding if something was said.** With no results
       // at all there was nothing to end, and blaming the API for a silent room sends the next
-      // reader looking for a browser bug — the same shape as the measurements that came back
+      // reader looking for a browser bug – the same shape as the measurements that came back
       // 0 ms and meant nothing.
       trace('recogniser closed',
         message.tailMs == null ? 'nothing was said'
           : message.waitMs != null
             ? `${message.waitMs}ms you-stopped→final, ${message.tailMs}ms final→end`
-            // `speechend` fired, but *after* the final result rather than before it — so there
+            // `speechend` fired, but *after* the final result rather than before it – so there
             // is no interval to report and "null ms" is not a measurement. Worth naming rather
             // than papering over: the ordering is not guaranteed, and it means the recogniser
             // sometimes commits before it decides you stopped.
@@ -414,7 +414,7 @@ export function handleOffscreenMessage(message) {
       return true;
 
     case 'openposse.listen.note':
-      // `no-speech` is the common one and is not a failure — but it does mean the turn produced
+      // `no-speech` is the common one and is not a failure – but it does mean the turn produced
       // nothing, and a surface showing the last thing heard would otherwise keep showing a
       // previous utterance as though it had just been said.
       if (message.note === 'no-speech') { turn = null; failure = { code: 'no-speech', message: "Didn't hear anything." }; }
@@ -431,7 +431,7 @@ export function handleOffscreenMessage(message) {
       // Kokoro sends a real `level` measured off the audio on its way to the speakers, so the
       // orb follows an answering agent exactly as it follows you. `speechSynthesis` cannot:
       // it renders straight to the device and exposes no audio node, so all it can offer is a
-      // word boundary — speech *rate* — which the orb eases between into something that at
+      // word boundary – speech *rate* – which the orb eases between into something that at
       // least moves with the words.
       if (message.started) panelSpeaking(true);
       if (typeof message.level === 'number') panelLevel(message.level);
@@ -445,8 +445,8 @@ export function handleOffscreenMessage(message) {
       // document and its console is a different window. Load, synthesis and playback answer
       // three different questions: a cold model, a slow engine, or simply a long answer.
       // Once per engine, and the line that settles the question. `requested` is what we asked
-      // for; `providers` is what ONNX Runtime actually bound. The two disagreeing — or a
-      // `wasm` in that list — is the whole answer to why synthesis is slow.
+      // for; `providers` is what ONNX Runtime actually bound. The two disagreeing – or a
+      // `wasm` in that list – is the whole answer to why synthesis is slow.
       if (message.ms?.backend) {
         const b = message.ms.backend;
         trace('BACKEND',
@@ -478,7 +478,7 @@ export function handleOffscreenMessage(message) {
       return true;
 
     case 'openposse.level':
-      // Straight through. Not stored, not logged — it is a fact about the room, and only the
+      // Straight through. Not stored, not logged – it is a fact about the room, and only the
       // orb wants it.
       panelLevel(message.level);
       return true;

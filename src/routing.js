@@ -1,8 +1,8 @@
 // Turning "Ivan tell me a joke" into an agent and a question.
 //
-// Layers 1 and 2 of the plan's three. Layer 1 — biasing the recogniser with `phrases` — happens
-// before this file sees anything, in `listening.js`. Layer 3 — the Prompt API deciding with a
-// constrained schema — is E7, and is an *enhancement*: Gemini Nano needs 22 GB of disk and a
+// Layers 1 and 2 of the plan's three. Layer 1 – biasing the recogniser with `phrases` – happens
+// before this file sees anything, in `listening.js`. Layer 3 – the Prompt API deciding with a
+// constrained schema – is E7, and is an *enhancement*: Gemini Nano needs 22 GB of disk and a
 // 4 GB GPU, so most machines will never run it and this file is what they get. It has to be
 // good enough on its own.
 //
@@ -29,7 +29,7 @@ const MAX_NAME_WORDS = 3;
  * short enough that coming back from lunch and saying "what about Tuesday" does not reach a
  * vendor.
  *
- * Lives here, with the routing policy it belongs to, because **two surfaces enforce it** — the
+ * Lives here, with the routing policy it belongs to, because **two surfaces enforce it** – the
  * worker deciding where an utterance goes, and the popup deciding which agent to light. A ring
  * that outlives the floor is a lie about where the next question would land, and two copies of
  * a timeout drift.
@@ -41,7 +41,7 @@ export const FLOOR_MS = 90_000;
  *
  * This exists because of a real failure, caught by the test below rather than by a person being
  * answered by the wrong assistant: `editDistance('and', 'Andy')` is 1, comfortably inside
- * tolerance, so **"and what about last quarter" routed to Andy** — the plan's own example of a
+ * tolerance, so **"and what about last quarter" routed to Andy** – the plan's own example of a
  * name-less follow-up, sent to an agent nobody addressed.
  *
  * The principle is general. A fuzzy match is a guess that the recogniser misheard something,
@@ -50,7 +50,7 @@ export const FLOOR_MS = 90_000;
  * almost certainly heard correctly. Weighted toward words that begin a sentence, because only
  * the prefix is ever tested.
  *
- * Exact matches are unaffected, so naming an agent "Andy" still works — it is only the
+ * Exact matches are unaffected, so naming an agent "Andy" still works – it is only the
  * approximate leap that this refuses.
  */
 const COMMON_WORDS = new Set([
@@ -71,7 +71,7 @@ const COMMON_WORDS = new Set([
 /**
  * Lowercases, drops punctuation, collapses whitespace.
  *
- * Punctuation goes because a recogniser's commas are its own invention — "Ivan, tell me" and
+ * Punctuation goes because a recogniser's commas are its own invention – "Ivan, tell me" and
  * "Ivan tell me" are the same utterance and must not route differently. Apostrophes stay, so
  * "O'Brien" survives as one word.
  */
@@ -120,8 +120,8 @@ function tolerance(name) {
 /**
  * The best roster match for a spoken fragment, or null.
  *
- * **Ambiguity is a refusal, not a coin toss.** If two agents are equally close — "Andy" and
- * "Sandy" both one letter from "andi" — there is no evidence to choose between them, and
+ * **Ambiguity is a refusal, not a coin toss.** If two agents are equally close – "Andy" and
+ * "Sandy" both one letter from "andi" – there is no evidence to choose between them, and
  * picking one would be inventing the thing the user is relying on us to get right.
  */
 export function bestMatch(fragment, agents) {
@@ -144,7 +144,7 @@ export function bestMatch(fragment, agents) {
 
 // ── Navigation (E3b) ──────────────────────────────────────────────────────────────────────
 //
-// Asking an agent something does **not** switch to its tab — the content script drives a
+// Asking an agent something does **not** switch to its tab – the content script drives a
 // background tab perfectly well, so switching would only pull someone away from what they were
 // doing. Navigation is therefore something you ask for, and this is where asking is recognised.
 
@@ -164,7 +164,7 @@ const NAVIGATION_PREFIXES = [
 /**
  * The vendor's name as a person would say it, derived from the recipe's domain.
  *
- * Nobody says "take me to Ivan" — they say "Notion". The agent's name and its vendor are
+ * Nobody says "take me to Ivan" – they say "Notion". The agent's name and its vendor are
  * different strings and only the agent's is in the roster, so the other one has to come from
  * the domain the recorder already captured. Same job `BrowserTab.productInitial` did on the
  * Mac side.
@@ -201,7 +201,7 @@ function matchTarget(fragment, agents) {
  *
  * **The rule is exhaustion**: an opening like "show me" counts only when it, plus something
  * that names an agent, consumes the *whole* utterance. "Show me" is navigation; "show me the
- * Q3 numbers" is a question. Getting this wrong does not merely misfire — it **eats the
+ * Q3 numbers" is a question. Getting this wrong does not merely misfire – it **eats the
  * question** and switches tabs instead, so the speaker watches their request vanish with no
  * error anywhere. Anything left over therefore means question, every time.
  *
@@ -211,7 +211,7 @@ export function navigationTarget(utterance, agents, { floorHolder = null } = {})
   const text = normalise(utterance);
   if (!text || !agents || agents.length === 0) return null;
 
-  // "show me" on its own — whatever we were just talking about.
+  // "show me" on its own – whatever we were just talking about.
   if (BARE_NAVIGATION.has(text)) {
     return floorHolder ? { agent: floorHolder } : { problem: 'nothing-to-show' };
   }
@@ -243,7 +243,7 @@ export function navigationTarget(utterance, agents, { floorHolder = null } = {})
  *
  * **The name must come first.** Checking the end of the sentence as well would catch "tell me a
  * joke, Ivan", and would also route "tell me about Andy" to Andy with the prompt "tell me
- * about" — a sentence that mentions an agent is not a sentence addressed to one, and no amount
+ * about" – a sentence that mentions an agent is not a sentence addressed to one, and no amount
  * of string handling can tell those apart. Prefix only, and the floor holder covers the rest.
  *
  * @param utterance  what was heard
@@ -275,7 +275,7 @@ export function route(utterance, agents, { floorHolder = null } = {}) {
     }
   }
 
-  // No name, so this is a follow-up — "and what about last quarter?" — and belongs to whoever
+  // No name, so this is a follow-up – "and what about last quarter?" – and belongs to whoever
   // last answered. The 90-second expiry is applied by the caller; a stale floor is no floor.
   if (floorHolder) return { agent: floorHolder, prompt: text, matched: 'floor' };
 
