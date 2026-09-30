@@ -13,6 +13,24 @@ import { MARK_SVG, MARK_CSS } from './mark.js';
 
 const el = (id) => document.getElementById(id);
 
+// **A popup that throws while loading is indistinguishable from one that does nothing.**
+// The markup renders either way – the buttons are in the HTML – but if this module dies before
+// it reaches `addEventListener`, every one of them is inert and the only record of why is a
+// console nobody has open. That is the shape this project bans outright, and it is what "the
+// button does nothing at all" looked like from the outside.
+//
+// So the failure is painted into the popup itself. Registered first, before anything that can
+// throw: an uncaught exception during module evaluation fires `error` on the window, and a
+// rejected top-level promise fires `unhandledrejection`.
+const fatal = (what) => {
+  const strip = document.createElement('div');
+  strip.className = 'card bad';
+  strip.textContent = `OpenPosse failed to start – ${what}`;
+  document.body.prepend(strip);
+};
+window.addEventListener('error', (event) => fatal(event.message ?? String(event.error)));
+window.addEventListener('unhandledrejection', (e) => fatal(e.reason?.message ?? String(e.reason)));
+
 // The mark, from the one place it is defined. It is injected rather than written into
 // `popup.html` so the popup and the orb cannot end up showing different logos – which is
 // exactly what happened when each carried its own copy of the gradient tile.
@@ -201,6 +219,17 @@ el('prompt').addEventListener('keydown', (event) => {
  */
 let recordable = null;
 
+/**
+ * Why `recordable` is null, so the button can say so instead of simply not working.
+ *
+ * **This exists because "nothing happens" was a real, un-diagnosable symptom.** The click handler
+ * used to open with a bare `if (!recordable) return;` and the query below had no `.catch`, so any
+ * rejection left the button *enabled* and inert: pressing it did nothing, logged nothing, and was
+ * indistinguishable from a broken extension. That is the shape this project keeps banning – a
+ * reason that exists and is not shown.
+ */
+let whyNot = 'still working out which tab this is';
+
 chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
   const host = (() => {
     try { return new URL(tab?.url ?? '').hostname; } catch { return ''; }
@@ -208,15 +237,27 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
   // Only https. A `chrome://` page, a local file or the Web Store can never be driven, and a
   // button that starts a flow which cannot finish is worse than one that is plainly disabled.
   if (!host || !tab?.url?.startsWith('https://')) {
+    whyNot = 'this page can’t be recorded';
     el('record').disabled = true;
     el('record').title = 'This page can’t be recorded';
     return;
   }
   recordable = { tabId: tab.id, pattern: patternForHost(host) };
+}).catch((error) => {
+  // The tab query itself can reject, and `patternForHost` runs inside the callback. Either way
+  // the button must stop looking pressable and must name the reason.
+  whyNot = error?.message ?? String(error);
+  console.warn('[openposse] this tab cannot be recorded –', whyNot);
+  el('record').disabled = true;
+  el('record').title = `Can’t record this tab – ${whyNot}`;
 });
 
 el('record').addEventListener('click', async () => {
-  if (!recordable) return;
+  if (!recordable) {
+    el('record').textContent = whyNot;
+    console.warn('[openposse] record pressed with no recordable tab –', whyNot);
+    return;
+  }
   const { tabId, pattern } = recordable;
 
   // **First statement, nothing awaited before it.** See `recordable` above.
@@ -244,9 +285,19 @@ el('mic-warning').addEventListener('click', () => {
 
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
 
+// **An unbound command is a state, not an absence.** Chrome drops a user-assigned shortcut when
+// an unpacked extension is removed and re-added, and `getAll` then returns the command with an
+// empty `shortcut`. Rendering that as blank space meant the one surface that knows the binding
+// showed nothing, and "⌥V stopped working" had no visible cause anywhere in the product.
 chrome.commands.getAll().then((commands) => {
   const summon = commands.find((c) => c.name === 'summon');
-  if (summon?.shortcut) el('shortcut').textContent = summon.shortcut;
+  el('shortcut').textContent = summon?.shortcut || 'no shortcut set';
+  if (!summon?.shortcut) {
+    el('shortcut').title = 'Set one in Settings, or at chrome://extensions/shortcuts';
+    console.warn('[openposse] no shortcut is bound to the summon command');
+  }
+}).catch((error) => {
+  console.warn('[openposse] could not read the shortcut –', error?.message ?? error);
 });
 
 // The turn may already be running – the shortcut works with nothing on screen, so a popup opened

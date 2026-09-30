@@ -18,6 +18,7 @@
 // Top level, not inside the guard below: an `import` declaration cannot sit in a block. esbuild
 // folds it into the IIFE, so the shipped content script is still one file.
 import { MARK_SVG, MARK_CSS } from './mark.js';
+import { tell } from './tell.js';
 
 if (!globalThis.__openposseOrb) {
   globalThis.__openposseOrb = true;
@@ -386,7 +387,7 @@ if (!globalThis.__openposseOrb) {
     .coach .row { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
     .coach .row .tick { color: #30D158; font-size: 11px; }
     .coach .row .tick.none { color: rgba(235,235,245,.35); }
-    /* "there is none" is prose, not a selector – same no-op fix as `.keys` below. */
+    /* "there is none" is prose, not a selector – same no-op fix as \`.keys\` below. */
     .coach .row .detail.none { color: rgba(235,235,245,.42); font-feature-settings: normal; }
     .coach .row .label { color: rgba(235,235,245,.55); flex: 0 0 92px; }
     .coach .row .kind {
@@ -590,8 +591,7 @@ if (!globalThis.__openposseOrb) {
       a.title = holdsFloor ? `${agent.name} has the floor` : `Ask ${agent.name} instead`;
       if (!holdsFloor) {
         a.addEventListener('click', () => {
-          chrome.runtime.sendMessage({ kind: 'openposse.orb.reroute', agentName: agent.name })
-            .catch(() => {});
+          tell({ kind: 'openposse.orb.reroute', agentName: agent.name });
         });
       } else {
         a.style.cursor = 'default';
@@ -793,7 +793,7 @@ if (!globalThis.__openposseOrb) {
 
   // Clicking the orb re-arms listening, per the design. The one control the panel has.
   $('.orbwrap').addEventListener('click', () => {
-    chrome.runtime.sendMessage({ kind: 'openposse.listen.toggle' }).catch(() => {});
+    tell({ kind: 'openposse.listen.toggle' });
   });
 
   // Terminal phases fade themselves out after the design's idle beat.

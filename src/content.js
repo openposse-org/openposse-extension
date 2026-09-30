@@ -24,6 +24,7 @@ import {
 import {
   arm as armRecorder, disarm as disarmRecorder, isArmed, MIN_ANSWER_TEXT,
 } from './recorder.js';
+import { tell } from './tell.js';
 
 /** Wire error codes this script can originate. Mirrors `docs/protocol.md`. */
 const ERROR = {
@@ -522,11 +523,10 @@ async function invokeViaShortcut({ recipe }) {
 function armRecording() {
   armRecorder({
     emit: (event) => {
-      chrome.runtime.sendMessage({ kind: 'openposse.recording', event }).catch(() => {
-        // The worker may have been terminated. Losing one capture is survivable and the
-        // wizard's checklist already shows what is still outstanding; throwing here would
-        // tear down the recording over it.
-      });
+      // The worker may have been terminated, or this page may be running a previous build.
+      // Losing one capture is survivable and the wizard's checklist already shows what is
+      // still outstanding; throwing here would tear down the recording over it.
+      tell({ kind: 'openposse.recording', event });
     },
   });
   return { ok: true };
@@ -576,14 +576,9 @@ function install() {
   // Streams progress back on its own channel so the app can start speaking before the
   // answer is complete – the entire latency argument for driving a browser at all.
   const emit = (event) => {
-    chrome.runtime.sendMessage({
-      kind: 'openposse.stream',
-      id: request.id,
-      event,
-    }).catch(() => {
-      // The worker may have been terminated mid-answer. Losing a partial is survivable;
-      // throwing here would abandon the rest of the answer, which is not.
-    });
+    // The worker may have been terminated mid-answer. Losing a partial is survivable;
+    // abandoning the rest of the answer over it is not.
+    tell({ kind: 'openposse.stream', id: request.id, event });
   };
 
   Promise.resolve(handler(request, emit))
