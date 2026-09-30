@@ -215,69 +215,7 @@ export async function removeAgent(agentID) {
   return true;
 }
 
-// ── Importing from the Mac app ─────────────────────────────────────────────────────────────
-
-/**
- * Takes the contents of `~/Library/Application Support/OpenPosse/` and makes a roster of it.
- *
- * The Swift `Agent` nests its connection as `{"browser": {"recipeID": "…"}}` and its voice as
- * `{"system": {"identifier": "…"}}`; both flatten here. The voice identifier is kept but must
- * be treated as a *hint* — `com.apple.eloquence.en-GB.Eddy` does not exist on Windows, so
- * resolution happens against the runtime voice list, not against this string.
- *
- * @param files {File[]} everything from a directory picker; anything unrecognised is ignored.
- */
-export async function importFromMacApp(files) {
-  const read = async (file) => JSON.parse(await file.text());
-  const result = { imported: [], skipped: [], problem: null };
-
-  const agentsFile = files.find((f) => f.name === 'agents.json');
-  if (!agentsFile) {
-    result.problem = "No agents.json in that folder — pick the OpenPosse folder itself.";
-    return result;
-  }
-
-  let macAgents;
-  try {
-    macAgents = await read(agentsFile);
-  } catch {
-    result.problem = "agents.json couldn't be read.";
-    return result;
-  }
-
-  // Recipes arrive as `recipes/<uuid>.json`, so index by the id in the filename.
-  const recipeFiles = new Map();
-  for (const file of files) {
-    const match = file.name.match(/^([0-9A-Fa-f-]{36})\.json$/);
-    if (match) recipeFiles.set(match[1].toUpperCase(), file);
-  }
-
-  const { agents: existing } = await loadRoster();
-
-  for (const macAgent of macAgents) {
-    const recipeID = macAgent?.connection?.browser?.recipeID?.toUpperCase();
-    const file = recipeID && recipeFiles.get(recipeID);
-    if (!file) {
-      result.skipped.push({ name: macAgent?.name ?? 'unnamed', why: 'its recipe was missing' });
-      continue;
-    }
-    if (isNameTaken(existing, macAgent.name)) {
-      result.skipped.push({ name: macAgent.name, why: 'a name already in use' });
-      continue;
-    }
-
-    try {
-      await addAgent({
-        name: macAgent.name,
-        voice: macAgent?.voice?.system?.identifier ?? null,
-        recipe: await read(file),
-      });
-      existing.push({ id: 'pending', name: macAgent.name });
-      result.imported.push(macAgent.name);
-    } catch {
-      result.skipped.push({ name: macAgent.name, why: 'its recipe could not be read' });
-    }
-  }
-
-  return result;
-}
+// Importing a roster from the parked Mac app lived here until 2026-09-30. It came out with the
+// setup step that was its only caller: V1 is the whole product, the Swift side never shipped, so
+// there is nobody holding an `~/Library/Application Support/OpenPosse` to bring across. Recover
+// it from git if V2 ever needs it — the shape it decoded is recorded in `docs/protocol.md`.

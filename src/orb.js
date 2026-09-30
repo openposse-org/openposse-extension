@@ -239,7 +239,7 @@ if (!globalThis.__openposseOrb) {
          page sets can reach in. Kept identical to \`ui.css\` — the panel and the settings page
          disagreeing about their own typeface would be visible and pointless. */
       --ui: "OpenPosse Inter", -apple-system, system-ui, "Segoe UI", sans-serif;
-      --code: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+      --figures: "ss02", "tnum";
       font: 400 13px/1.45 var(--ui);
       font-optical-sizing: auto;
       -webkit-font-smoothing: antialiased;
@@ -295,10 +295,7 @@ if (!globalThis.__openposseOrb) {
     ${MARK_CSS}
     .title { font-size: 13.5px; font-weight: 600; letter-spacing: -.008em; }
     .spacer { flex: 1; }
-    .key {
-      font-family: var(--code);
-      font-size: 10.5px; color: rgba(235,235,245,.58);
-    }
+    .key { font-size: 10.5px; color: rgba(235,235,245,.58); }
 
     .orbwrap {
       position: relative; display: flex; flex-direction: column; align-items: center;
@@ -308,7 +305,6 @@ if (!globalThis.__openposseOrb) {
     canvas { width: 168px; height: 168px; display: block; }
     .deadmic {
       position: absolute; bottom: 14px;
-      font-family: var(--code);
       font-size: 9.5px; letter-spacing: .06em; color: #FF453A;
       background: rgba(255,69,58,.12);
       box-shadow: inset 0 0 0 .5px rgba(255,69,58,.4);
@@ -381,7 +377,7 @@ if (!globalThis.__openposseOrb) {
        different product would read as having left OpenPosse behind. */
     .coach { padding: 2px 0 4px; }
     .coach .step {
-      font: 600 9.5px/1 var(--code);
+      font: 600 9.5px/1 var(--ui);
       letter-spacing: .08em; color: rgba(235,235,245,.42); margin-bottom: 10px;
     }
     .coach .say { font-size: 14px; line-height: 1.45; color: rgba(255,255,255,.92); }
@@ -390,10 +386,11 @@ if (!globalThis.__openposseOrb) {
     .coach .row { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
     .coach .row .tick { color: #30D158; font-size: 11px; }
     .coach .row .tick.none { color: rgba(235,235,245,.35); }
-    .coach .row .detail.none { color: rgba(235,235,245,.42); font-family: inherit; }
+    /* "there is none" is prose, not a selector — same no-op fix as `.keys` below. */
+    .coach .row .detail.none { color: rgba(235,235,245,.42); font-feature-settings: normal; }
     .coach .row .label { color: rgba(235,235,245,.55); flex: 0 0 92px; }
     .coach .row .kind {
-      font: 600 8.5px/1 var(--code);
+      font: 600 8.5px/1 var(--ui);
       letter-spacing: .06em; color: rgba(235,235,245,.34); flex: 0 0 auto;
       align-self: center;
     }
@@ -402,12 +399,20 @@ if (!globalThis.__openposseOrb) {
        half of a selector out of reach — and "hover for the rest" is no answer to a screenshot.
        A taller card is the cheaper cost. */
     .coach .row .detail {
-      font: 11px/1.4 var(--code);
+      font: 11px/1.4 var(--ui);
+      /* Selectors, so the disambiguated glyphs earn their place here exactly as they do in the
+         roster's recipe dump: I, l and 1 are one bar in Inter's default set. */
+      font-feature-settings: var(--figures);
       color: rgba(255,255,255,.75); flex: 1 1 auto;
       white-space: normal; overflow-wrap: anywhere;
     }
-    /* A shortcut is something you pressed, not page structure, so it is not a code chip. */
-    .coach .row .detail.keys { font-family: inherit; font-size: 13px; letter-spacing: .12em; }
+    /* A shortcut is something you pressed, not page structure, so it is not a code chip.
+       **This opt-out used to be \`font-family: inherit\`**, which escaped a monospace face that
+       no longer exists — one family now, so that line had quietly become a no-op. What it has
+       to turn off is the feature set. */
+    .coach .row .detail.keys {
+      font-feature-settings: normal; font-size: 13px; letter-spacing: .12em;
+    }
     /* **Opted back in.** The wrap is pointer-events: none so the page underneath stays usable,
        and every interactive part has to say otherwise for itself. Without this the field is
        visible, looks focusable, and every click lands in the vendor's page behind it — which

@@ -88,7 +88,7 @@
         width: 21px; height: 21px; flex: 0 0 21px;
         border-radius: 50%;
         display: grid; place-items: center;
-        font-family: var(--code);
+        font-family: var(--ui);
         font-size: 10px;
         border: 1px solid var(--line);
         color: var(--text-faint);
@@ -150,7 +150,7 @@
           </p>
           <div class="row">
             <button id="grant-mic">Grant microphone access</button>
-            <span class="status mono" id="mic-status">not granted</span>
+            <span class="status tech" id="mic-status">not granted</span>
           </div>
         </div>
       </section>
@@ -165,7 +165,7 @@
           </p>
           <div class="row">
             <button id="install-model">Download</button>
-            <span class="status mono" id="model-status">checking…</span>
+            <span class="status tech" id="model-status">checking…</span>
           </div>
         </div>
       </section>
@@ -177,12 +177,12 @@
           <p>
             Chrome only lets an extension <em>suggest</em> Ctrl+Shift and a digit for a shortcut
             that works outside the browser, so OpenPosse ships with one of those. Anything else
-            — <span class="mono">⌥V</span>, say — you pick here, and you can tick
+            — <span class="tech">⌥V</span>, say — you pick here, and you can tick
             <strong>Global</strong> so it reaches you in any app rather than only in Chrome.
           </p>
           <div class="row">
             <button class="secondary" id="open-shortcuts">Change shortcut…</button>
-            <span class="status mono" id="shortcut-status">checking…</span>
+            <span class="status tech" id="shortcut-status">checking…</span>
           </div>
         </div>
       </section>
@@ -195,7 +195,7 @@
             The panel appears over whatever page you're on. Chrome normally lends an extension
             access to the current tab when you press its shortcut — but not when that shortcut
             is <strong>Global</strong>, which is exactly what makes
-            <span class="mono">⌥V</span> work from other apps. So the two can't both be had
+            <span class="tech">⌥V</span> work from other apps. So the two can't both be had
             without asking you directly.
           </p>
           <p>
@@ -211,27 +211,8 @@
           </p>
           <div class="row">
             <button class="secondary" id="grant-panel">Turn on</button>
-            <span class="status mono" id="panel-status">checking…</span>
+            <span class="status tech" id="panel-status">checking…</span>
           </div>
-        </div>
-      </section>
-
-      <section class="step" id="step-import">
-        <div class="num">5</div>
-        <div style="flex:1">
-          <h2>Bring across assistants you already recorded <span class="kind">— optional</span></h2>
-          <p>
-            If you used the OpenPosse Mac app, pick its folder and the assistants come with
-            their recipes intact:
-            <span class="mono">~/Library/Application&nbsp;Support/OpenPosse</span>
-          </p>
-          <div class="row">
-            <button class="secondary" id="pick-folder">Choose folder…</button>
-            <span class="status mono" id="import-status"></span>
-          </div>
-          <!-- Directory picker: agents.json and recipes/*.json arrive together, so one
-               choice imports everything rather than asking for files one at a time. -->
-          <input type="file" id="folder" webkitdirectory directory hidden />
         </div>
       </section>
 
@@ -244,11 +225,13 @@
         <div id="engine" class="card">checking…</div>
 
         <div class="step" id="step-weights" style="margin-top:18px">
-          <div class="num">6</div>
+          <div class="num">5</div>
           <div style="flex:1">
-            <!-- The size is filled in from `TOTAL_BYTES` rather than written here. It has
-                 already moved twice — 89 MB to 166 MB when the model changed for GPU kernel
-                 coverage — and a number typed into copy is a number that goes stale silently. -->
+            <!-- The size is filled in from `TOTAL_BYTES` rather than written here. It has now
+                 moved three times – 89 MB, then 166 MB when the model changed for GPU kernel
+                 coverage, then 340 MB at fp32 with all 28 voices – and this comment claimed
+                 "twice, to 166" until the third move was noticed. A number typed into copy is a
+                 number that goes stale silently, and so is one typed into the note about it. -->
             <h2>Better voices <span class="kind">— optional, <span id="weights-size">…</span></span></h2>
             <p>
               The system voices are your operating system's, and they sound like it. Kokoro is a
@@ -262,7 +245,7 @@
             <div class="row">
               <button class="secondary" id="get-weights">Download</button>
               <button class="secondary" id="drop-weights" hidden>Remove</button>
-              <span class="status mono" id="weights-status">checking…</span>
+              <span class="status tech" id="weights-status">checking…</span>
             </div>
           </div>
         </div>
@@ -285,7 +268,7 @@
              product name and naming it is an edit *here* — the orb cannot ask for typing, since
              a page is entitled to take its own focus back, and Notion does. A recording can also
              be stranded by closing the tab mid-wizard. Both end at this list, so it should not
-             be below six steps that are done once and never again. -->
+             be below the setup steps, which are done once and never again. -->
         <aside class="rail">
           <section>
             <h2>Assistants</h2>
