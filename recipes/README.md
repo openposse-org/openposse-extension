@@ -5,9 +5,17 @@ Each file is one vendor's recorded selectors, matching `Recipe` in
 `extension/tools/capture.js` — nothing is guessed**, which is the rule that keeps selector
 literals out of extension source. M3 replaces this directory with the recorder's output.
 
-## `leanix-ea-assistant.json` — Andy
+## Andy — LeanIX EA Assistant *(recipe removed 2026-10-01)*
 
-Captured 2026-09-06 against `demo-au.leanix.net`.
+Captured 2026-09-06 against `demo-au.leanix.net`, and the test vendor through E8–E11.
+
+**The recipe file is gone; everything below stays.** Almost none of it is about the file — the
+latency measurements, the cold-tab explanation for the original timeout, the state-persistence
+trap and the synthetic-trigger result are findings about driving *a* vendor, and the next one
+will meet them. LeanIX is also enterprise-only with no self-serve signup, so nobody outside a
+customer could have used the recipe anyway.
+
+The recorded values, for reference:
 
 | Field | Value | Why this one |
 |---|---|---|

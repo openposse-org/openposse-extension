@@ -114,12 +114,24 @@ test('a half-recorded open or submit step is refused', () => {
   assert.equal(unpack(shared({ openMethod: null, shortcut: null, openSelector: null })).ok, false);
 });
 
+test('a recipe with no openMethod, opening by shortcut, is accepted', () => {
+  // **This was a real artefact until 2026-10-01.** `leanix-ea-assistant.json` was captured from a
+  // live page on 2026-09-06, predates `openMethod`, and the first `unpack` refused it — while
+  // `openAssistant` in content.js drove it perfectly from its shortcut alone. The recipe has been
+  // dropped, so the case it proved is pinned here rather than lost with it: a validator stricter
+  // than the runtime it validates for rejects recipes that work.
+  const result = unpack(shared({
+    openMethod: null,
+    openSelector: null,
+    shortcut: { key: 'k', code: 'KeyK', metaKey: true, shiftKey: true },
+  }));
+  assert.equal(result.ok, true, result.problems?.join(' '));
+  assert.equal(result.recipe.openMethod, null, 'the absent field survives rather than being filled in');
+});
+
 test('the recipes/ directory imports, openMethod or not', async () => {
-  // **A real artefact, not a fixture.** `leanix-ea-assistant.json` was captured from a live page
-  // on 2026-09-06 and predates `openMethod`; requiring that field refused it, while
-  // `openAssistant` in content.js drives it perfectly from its shortcut alone. A validator
-  // stricter than the runtime rejects recipes that work, so every recipe this repo ships is
-  // checked against the importer here.
+  // Every recipe this repo ships is checked against its own importer, so a recording the
+  // validator would refuse cannot reach a user.
   const { readdir, readFile } = await import('node:fs/promises');
   const dir = new URL('../recipes/', import.meta.url);
   const files = (await readdir(dir)).filter((f) => f.endsWith('.json'));

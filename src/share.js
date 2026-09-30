@@ -48,8 +48,9 @@ const REQUIRED = ['domainPattern', 'inputSelector', 'submitMethod',
  * Whether the recipe says enough about opening the assistant.
  *
  * **`openMethod` is deliberately not in `REQUIRED`, and the first version had it there.** It
- * refused `recipes/leanix-ea-assistant.json` – a recipe captured from a live page in September,
- * which drives LeanIX correctly – because that predates the field. `openAssistant` in
+ * refused the LeanIX recipe this repo shipped until 2026-10-01 – captured from a live page in
+ * September and driving the vendor correctly – because that recording predates the field. The
+ * case it proved is now pinned by a fixture in `share.test.mjs`. `openAssistant` in
  * `content.js` branches on `openMethod === 'click'` and otherwise falls through to
  * `recipe.shortcut`, so an absent `openMethod` with a shortcut present is a working recipe.
  *
