@@ -15,6 +15,10 @@
 // permission for. Pressing the shortcut grants `activeTab` for exactly that tab, for exactly
 // as long as this needs.
 
+// Top level, not inside the guard below: an `import` declaration cannot sit in a block. esbuild
+// folds it into the IIFE, so the shipped content script is still one file.
+import { MARK_SVG, MARK_CSS } from './mark.js';
+
 if (!globalThis.__openposseOrb) {
   globalThis.__openposseOrb = true;
 
@@ -288,13 +292,7 @@ if (!globalThis.__openposseOrb) {
       pointer-events: auto; cursor: grab; user-select: none; touch-action: none;
     }
     .wrap.dragging header { cursor: grabbing; }
-    .mark {
-      width: 19px; height: 19px; border-radius: 6.5px;
-      background: linear-gradient(150deg, #0A84FF, #30D158);
-      display: grid; place-items: center;
-      font-size: 8px; font-weight: 700; color: #fff;
-      box-shadow: inset 0 .5px 0 rgba(255,255,255,.5), 0 1px 3px rgba(0,0,0,.4);
-    }
+    ${MARK_CSS}
     .title { font-size: 13.5px; font-weight: 600; letter-spacing: -.008em; }
     .spacer { flex: 1; }
     .key {
@@ -447,7 +445,7 @@ if (!globalThis.__openposseOrb) {
     <div class="wrap" part="wrap">
       <div class="glass">
         <header>
-          <div class="mark">op</div>
+          ${MARK_SVG}
           <div class="title">OpenPosse</div>
           <div class="spacer"></div>
           <div class="key"></div>

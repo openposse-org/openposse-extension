@@ -9,8 +9,22 @@ import { loadRoster, findAgent, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
 import { FLOOR_MS } from './routing.js';
 import { patternForHost, matchPattern } from './domain.js';
+import { MARK_SVG, MARK_CSS } from './mark.js';
 
 const el = (id) => document.getElementById(id);
+
+// The mark, from the one place it is defined. It is injected rather than written into
+// `popup.html` so the popup and the orb cannot end up showing different logos — which is
+// exactly what happened when each carried its own copy of the gradient tile.
+//
+// The style element carries the sizing that ships with the artwork; the placeholder in the HTML
+// only reserves the space, so the header does not shift when this lands.
+{
+  const style = document.createElement('style');
+  style.textContent = MARK_CSS;
+  document.head.append(style);
+  el('mark').innerHTML = MARK_SVG;
+}
 
 /**
  * Who currently holds the floor, so the popup lights the agent a follow-up would reach.
