@@ -15,8 +15,8 @@
  *
  * A `main` URL is a moving target: the file behind it can change without the URL changing, so
  * the hash below would start failing one day for reasons nobody could see from here. Pinning
- * the commit makes the bytes immutable and makes a hash mismatch mean what it should — that
- * something is wrong — rather than that upstream published a new build.
+ * the commit makes the bytes immutable and makes a hash mismatch mean what it should – that
+ * something is wrong – rather than that upstream published a new build.
  */
 const REVISION = 'a70f0e45c1cc0df9abdfbfa0f6dee9073579ee99';
 const REPO = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve';
@@ -27,7 +27,7 @@ const at = (path) => `${REPO}/${REVISION}/${path}`;
  * The model comes from the **timestamped** repository, and the voices do not.
  *
  * Two repositories publish `model_q8f16.onnx` at the same 86.1 MB with different bytes, and the
- * first version of this file pinned the wrong one — it downloaded and verified perfectly, and
+ * first version of this file pinned the wrong one – it downloaded and verified perfectly, and
  * would have been loaded by an engine asking for the other. The hash check cannot save you from
  * correctly verifying the wrong file.
  *
@@ -36,7 +36,7 @@ const at = (path) => `${REPO}/${REVISION}/${path}`;
  * synthesised envelope.
  *
  * The **voices are style vectors rather than model weights** and are shared between the two, so
- * they stay where they are — which also means the six already downloaded do not have to be
+ * they stay where they are – which also means the six already downloaded do not have to be
  * fetched again. Keying the cache by URL makes that automatic: only the model reads as missing.
  */
 const TS_REVISION = 'dd4401a9add81ac692d20e240d22ec9dda82cc29';
@@ -45,8 +45,8 @@ const TS_REPO = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX-time
 /**
  * What the engine must be told to ask for, exported so it cannot drift from what was fetched.
  *
- * `kokoro.js` configures HeadTTS with these. Two copies of a model id or a voice base — one
- * here and one there — is how the engine ends up requesting a file nobody downloaded, which is
+ * `kokoro.js` configures HeadTTS with these. Two copies of a model id or a voice base – one
+ * here and one there – is how the engine ends up requesting a file nobody downloaded, which is
  * a failure at first use rather than at build time.
  */
 export const MODEL_REPO = 'onnx-community/Kokoro-82M-v1.0-ONNX-timestamped';
@@ -59,7 +59,7 @@ export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
  * ## Do not switch this to fp16. It was tried, and it is silent.
  *
  * The reasoning that leads there is sound, which is what makes it worth writing down. int8
- * graphs frequently have no WebGPU kernels, so part of the graph falls back to the CPU — true,
+ * graphs frequently have no WebGPU kernels, so part of the graph falls back to the CPU – true,
  * and why q8 measured ~1.6× real time. fp16 fixes exactly that: 5.3 seconds of speech in
  * 660 ms, **0.12× real time**, thirteen times faster.
  *
@@ -68,7 +68,7 @@ export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
  *
  * That is not this codebase's bug. **ONNX Runtime's WebGPU backend produces NaN for Kokoro at
  * fp16**, an open upstream issue across several transformers.js versions and several GPU
- * vendors — see microsoft/onnxruntime#29807 ("fp32 corrupts a subset of inputs, fp16 corrupts
+ * vendors – see microsoft/onnxruntime#29807 ("fp32 corrupts a subset of inputs, fp16 corrupts
  * all; same model clean on WASM") and #26732 for the same fp16-overflow shape in another model.
  * NaN reaches the WAV encoder and lands as silence, which is why the failure presents as a
  * voice that plays for exactly the right number of milliseconds and cannot be heard.
@@ -78,8 +78,8 @@ export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
  * | | size | speed | correct on WebGPU |
  * |---|---|---|---|
  * | `q8` | 92 MB | ~1.6× real time | yes |
- * | `fp16` | 156 MB | ~0.12× real time | **no — all NaN** |
- * | `q4f16` | 147 MB | fast | no — same fp16 path |
+ * | `fp16` | 156 MB | ~0.12× real time | **no – all NaN** |
+ * | `q4f16` | 147 MB | fast | no – same fp16 path |
  * | **`fp32`** | **326 MB** | **fast, full GPU kernels** | **yes** |
  *
  * **fp32 is not unconditionally safe either**, and the same issue says so: it corrupts a subset
@@ -91,7 +91,7 @@ export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
  * (`model_quantized.onnx`, sha256 `c0c02b3299fd97c34ea92a98e6d41eaa1a739c8f77bf685aac34bd7b34c1132c`).
  *
  * `model_q8f16.onnx` is 86 MB and would have been ideal, but transformers.js 4.0.0 has no such
- * dtype — it was silently ignored and the 326 MB fp32 default requested instead.
+ * dtype – it was silently ignored and the 326 MB fp32 default requested instead.
  *
  * **The guard against all of this is `peak` in `kokoro.js`**, which refuses a buffer of zeros
  * and falls back to a system voice. That matters beyond this machine: the upstream issue says
@@ -103,7 +103,7 @@ export const VOICES_BASE = `${REPO}/${REVISION}/voices`;
  * below ties the two together: an unrecognised dtype fails at first use, not at build time.
  *
  * **The hashes are read, not guessed.** They come from HuggingFace's own API, which reports the
- * Git-LFS object id — and an LFS oid *is* the SHA-256 of the file's contents. Cross-checked:
+ * Git-LFS object id – and an LFS oid *is* the SHA-256 of the file's contents. Cross-checked:
  * the oid the API gives for `model_quantized.onnx` matches the SHA-256 published on its file
  * page, which is what establishes the two are the same thing rather than assuming it.
  *
@@ -121,7 +121,7 @@ export const MODEL = {
 /**
  * What transformers.js 4.0.0 will accept, read from the bundled build rather than the docs.
  *
- * Kept so the test can assert `DTYPE` is one of them. An unrecognised name does not throw — it
+ * Kept so the test can assert `DTYPE` is one of them. An unrecognised name does not throw – it
  * is ignored, and the default fp32 model is requested instead, which surfaces as a refused
  * network request for a file nobody downloaded.
  */
@@ -131,21 +131,21 @@ export const KNOWN_DTYPES = ['fp32', 'fp16', 'q8', 'int8', 'uint8', 'q4', 'bnb4'
  * **All 28 English voices.** 14.6 MB, every file exactly 522,240 bytes.
  *
  * This shipped as six, and the comment justifying that said all 28 would be 28.7 MB. It is
- * 14.6 — the figure was roughly doubled and nobody checked it, because it was only ever load
+ * 14.6 – the figure was roughly doubled and nobody checked it, because it was only ever load
  *-bearing for a decision that looked obvious. The six were 3.1 MB, so the other 22 cost
  * **11.5 MB against a 326 MB model**: 3.5% more download, for four times the choice.
  *
  * **The bytes were never the real cost of shipping a subset.** With part of the set on disk,
  * "which voices exist" and "which voices are installed" were different questions, and every
  * caller had to know which one it was asking. One did not: `assignKokoroVoices` defaulted to
- * the published 28, so a third British agent was handed `bf_isabella` — a file the local-only
+ * the published 28, so a third British agent was handed `bf_isabella` – a file the local-only
  * shim would refuse, correctly, presenting as a voice that simply did not speak. Shipping the
  * whole set collapses the two lists into one, and `tts.js` now derives its own from this one
  * rather than keeping a second copy of the same ids in another file.
  *
  * **The order is load-bearing, which is why the original six are still first and still in
- * their original order.** An agent with no chosen voice is assigned by position — the first
- * free voice of the right accent — so re-sorting this array would silently give every
+ * their original order.** An agent with no chosen voice is assigned by position – the first
+ * free voice of the right accent – so re-sorting this array would silently give every
  * auto-assigned agent a different voice on the next roster change. Anyone who already has
  * agents keeps the voices they have; the additions only reach the seventh agent onwards, who
  * until now was getting a collision.
@@ -204,15 +204,15 @@ export const VOICES = Object.entries({
  * `en-GB` or `en-US`, from the id's first letter.
  *
  * Kokoro names every voice `<accent><gender>_<name>`, so the accent is in the id and does not
- * need a table beside it. It had one anyway — a hand-written `lang` per voice in `tts.js` and
- * a `/^b/` test in `offscreen.js` — which is two copies of a rule the naming already states.
+ * need a table beside it. It had one anyway – a hand-written `lang` per voice in `tts.js` and
+ * a `/^b/` test in `offscreen.js` – which is two copies of a rule the naming already states.
  */
 export const langOf = (id) => (String(id).startsWith('b') ? 'en-GB' : 'en-US');
 
 /**
  * The model's own paperwork, which transformers.js loads before the weights.
  *
- * Tiny — 3.6 kB between them — and completely load-bearing: `from_pretrained` reads
+ * Tiny – 3.6 kB between them – and completely load-bearing: `from_pretrained` reads
  * `config.json` to know what architecture it is building, and `AutoTokenizer` needs the other
  * two to turn phonemes into the ids the model expects. Without them the engine cannot start,
  * and the first version of this manifest had 89 MB of weights and none of these.
@@ -239,12 +239,12 @@ export const TOTAL_BYTES = ALL.reduce((sum, f) => sum + f.bytes, 0);
 const CACHE = 'openposse-kokoro-v1';
 
 /**
- * The hosts a download actually touches — **both of them**.
+ * The hosts a download actually touches – **both of them**.
  *
  * `huggingface.co/…/resolve/…` answers with a **302 to `us.aws.cdn.hf.co`**, and that response
  * carries `access-control-allow-origin: https://huggingface.co` rather than `*`. So a fetch
  * from an extension page is refused unless we hold host permission, and holding it for
- * `huggingface.co` alone is not enough — the bytes come from the CDN.
+ * `huggingface.co` alone is not enough – the bytes come from the CDN.
  *
  * Measured rather than assumed, after every file failed with a message the UI was throwing
  * away. A redirect to a second origin is invisible from the URL you wrote down.
@@ -255,7 +255,7 @@ export const HOSTS = { origins: ['https://huggingface.co/*', 'https://*.hf.co/*'
  * Asks for those hosts, if we do not already have them.
  *
  * **Must be called straight from the click.** `permissions.request` needs a live user gesture,
- * and an await before it spends one — the same trap that made the orb appear on Notion and
+ * and an await before it spends one – the same trap that made the orb appear on Notion and
  * nowhere else. `contains` first, so a second download does not re-prompt.
  */
 export async function ensureAccess() {
@@ -280,7 +280,7 @@ export async function digest(buffer) {
  *
  * **An unmeasured hash returns `unverified`, never `true`.** The difference matters: `true`
  * would let a null constant read as a passed check, which is precisely the failure this
- * function exists to prevent. The caller decides what to do with `unverified` — setup refuses,
+ * function exists to prevent. The caller decides what to do with `unverified` – setup refuses,
  * and says so, rather than installing something it cannot vouch for.
  */
 export async function verify(file, buffer) {
@@ -299,7 +299,7 @@ export async function verify(file, buffer) {
  * Cached entries are keyed by their **source URL**, not by our short id.
  *
  * Cache Storage rejects any request scheme that is not http(s), and a bare `'model'` resolves
- * against the page — `chrome-extension://…/model` — so `put` fails with *"Request scheme
+ * against the page – `chrome-extension://…/model` – so `put` fails with *"Request scheme
  * 'chrome-extension' is unsupported"*. The real URL is both a legal key and a better one: it
  * carries the pinned revision, so bumping `REVISION` invalidates the old entry by itself rather
  * than needing a migration.
@@ -325,11 +325,11 @@ export async function readWeight(id) {
 /**
  * `missing` · `partial` · `ready`, plus **why** it is partial.
  *
- * `partial` used to have exactly one cause — a download that stopped — so setup called it
+ * `partial` used to have exactly one cause – a download that stopped – so setup called it
  * "interrupted" and was right. Growing the voice set gave it a second cause with the same
  * shape and a completely different meaning: an install that was complete when it was made and
  * is now missing files that did not exist then. Both resume the same way, which is precisely
- * the trap — *same handling is not the same cause*, and the person reacts differently. Told
+ * the trap – *same handling is not the same cause*, and the person reacts differently. Told
  * "interrupted" about a healthy install, they go looking for a fault that is not there.
  *
  * `core` is what tells them apart, and it is a fact rather than a guess: the model is 96% of
@@ -343,7 +343,7 @@ export async function weightsStatus() {
   const isVoice = new Set(VOICES.map((v) => v.id));
   const core = ALL.every((f, i) => isVoice.has(f.id) || present[i]);
   // What is still to fetch, summed from the manifest rather than from a file size repeated in
-  // the UI — the figure somebody decides on before committing a connection has to be the real
+  // the UI – the figure somebody decides on before committing a connection has to be the real
   // one, and a constant copied into setup would be right until the day it was not.
   const missingBytes = ALL.reduce((n, f, i) => (present[i] ? n : n + f.bytes), 0);
 
@@ -386,7 +386,7 @@ export async function downloadWeights({ onProgress = () => {}, fetchImpl = fetch
    *
    * **`onProgress` is somebody else's code and must not be inside our try.** In the loop below
    * a throw from it would be filed as a failure of the *file*, so a broken status line would
-   * report a network problem — and on the already-stored path it was not caught at all, which
+   * report a network problem – and on the already-stored path it was not caught at all, which
    * is an uncaught TypeError from a function that had just succeeded.
    *
    * Neither is a download failure, and neither should be silent, so it gets its own guard.
@@ -395,7 +395,7 @@ export async function downloadWeights({ onProgress = () => {}, fetchImpl = fetch
     try {
       onProgress({ id, done, total: ALL.length, bytes, totalBytes: TOTAL_BYTES });
     } catch (error) {
-      console.warn('[openposse] weights progress handler threw —', error?.message ?? error);
+      console.warn('[openposse] weights progress handler threw –', error?.message ?? error);
     }
   };
 

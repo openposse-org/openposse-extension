@@ -2,16 +2,16 @@
 //
 // Two engines, chosen at runtime rather than at build time:
 //
-// - **System** (`speechSynthesis`) — always present, free, and on macOS it is Apple's own 41
+// - **System** (`speechSynthesis`) – always present, free, and on macOS it is Apple's own 41
 //   local voices, which is the same set the Mac app used. Elsewhere it is whatever the OS
 //   ships, which on Windows is SAPI and on Linux is a lottery.
-// - **Kokoro** (E6) — 82M parameters of neural TTS, Apache-2.0, run locally through ONNX. It
+// - **Kokoro** (E6) – 82M parameters of neural TTS, Apache-2.0, run locally through ONNX. It
 //   is the answer to "the voices are ugly, too robotic", and it needs WebGPU to be fast enough
 //   to hold a conversation with.
 //
 // **The selection is the interesting part and it is pure, so it is tested.** Getting it wrong
 // is not a crash: it is a product that sounds worse than it should on a capable machine, or
-// one that stutters unusably on a machine that cannot keep up — and both of those are
+// one that stutters unusably on a machine that cannot keep up – and both of those are
 // invisible on whatever laptop the developer happened to use.
 
 import { VOICES, langOf } from './weights.js';
@@ -21,29 +21,29 @@ import { VOICES, langOf } from './weights.js';
  *
  * **Derived from `weights.js` rather than listed again here.** This was a hand-written array of
  * the same 28 ids with a `lang` on each, which was defensible only while the two lists genuinely
- * differed — the published set was 28 and six were downloaded, and the gap was the whole reason
+ * differed – the published set was 28 and six were downloaded, and the gap was the whole reason
  * `assignKokoroVoices` takes an `installed` argument. All 28 now ship, so a second copy is just
  * somewhere for the two to disagree, and the way they would disagree is the worst kind: a voice
  * assigned from this list that nobody downloaded fails at the first answer, three layers from
  * anything that could explain it.
  *
- * Order is carried over unchanged, and it matters — see the note on `VOICES`.
+ * Order is carried over unchanged, and it matters – see the note on `VOICES`.
  */
 export const KOKORO_VOICES = VOICES.map(({ id }) => ({ id, lang: langOf(id) }));
 
 /**
  * Why an engine was chosen, in words a person can act on.
  *
- * Each of these sends someone somewhere different — one is "your machine cannot do this", one
+ * Each of these sends someone somewhere different – one is "your machine cannot do this", one
  * is "it can but the files are not here", one is "you asked for it this way". A single "using
  * system voices" would be true and useless.
  */
 export const REASONS = {
-  'kokoro': 'Kokoro — neural voices, running on this machine',
-  'no-webgpu': 'System voices — this browser has no WebGPU, and Kokoro without it is too slow to hold a conversation',
-  'no-assets': 'System voices — the Kokoro voice model is not installed',
-  'not-built': 'System voices — the Kokoro model is downloaded, but the engine that reads it is not built yet',
-  'preference': 'System voices — chosen in settings',
+  'kokoro': 'Kokoro – neural voices, running on this machine',
+  'no-webgpu': 'System voices – this browser has no WebGPU, and Kokoro without it is too slow to hold a conversation',
+  'no-assets': 'System voices – the Kokoro voice model is not installed',
+  'not-built': 'System voices – the Kokoro model is downloaded, but the engine that reads it is not built yet',
+  'preference': 'System voices – chosen in settings',
   'system': 'System voices',
 };
 
@@ -52,8 +52,8 @@ export const REASONS = {
  *
  * **False until HeadTTS is vendored and wired**, and it has to be checked or the product lies:
  * the weights are downloadable *now*, so a machine with WebGPU would otherwise pass both gates,
- * be told "Kokoro — neural voices, running on this machine", and then fail to speak with
- * "the model is not installed" — which would be untrue twice over.
+ * be told "Kokoro – neural voices, running on this machine", and then fail to speak with
+ * "the model is not installed" – which would be untrue twice over.
  *
  * A constant rather than a probe, unlike the asset check, because there is no file to look for
  * until the code exists. It flips in one place on the day it does, and the test below makes
@@ -65,7 +65,7 @@ export const KOKORO_IMPLEMENTED = true;
  * Picks an engine from what is actually available.
  *
  * **WebGPU is a hard gate, not a preference.** Kokoro runs about three times faster than real
- * time on WebGPU and roughly ten times slower than *that* on the WASM fallback — which is not
+ * time on WebGPU and roughly ten times slower than *that* on the WASM fallback – which is not
  * a degraded experience, it is an unusable one, and shipping it would make the product feel
  * broken on exactly the machines least able to afford it. Falling back to system voices is the
  * status quo rather than a failure, which is what makes the gate safe to enforce.
@@ -96,8 +96,8 @@ export function describeEngine(choice) {
  * Whether this context can run Kokoro fast enough to be worth it.
  *
  * `navigator.gpu.requestAdapter()` rather than the mere presence of `navigator.gpu`: the object
- * exists in browsers that then refuse to give you an adapter — a blocklisted driver, a headless
- * session, a machine with no usable GPU — and treating the property as the answer would route
+ * exists in browsers that then refuse to give you an adapter – a blocklisted driver, a headless
+ * session, a machine with no usable GPU – and treating the property as the answer would route
  * those to an engine that cannot run.
  */
 export async function hasWebGPU() {
@@ -126,7 +126,7 @@ export function assignKokoroVoices(agents, voices = KOKORO_VOICES) {
 
   // **A voice somebody chose is not a hint to be improved on.** The loop below hands out
   // distinct voices so no two agents sound alike, and left to itself it would reassign a
-  // deliberate choice on the next roster change — the agent you gave a particular voice to
+  // deliberate choice on the next roster change – the agent you gave a particular voice to
   // would quietly acquire a different one because somebody else was recorded.
   //
   // So explicit choices are settled first and their voices marked taken. The heuristic then

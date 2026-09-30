@@ -1,7 +1,7 @@
 // Which voice an agent actually gets on *this* machine.
 //
 // A stored voice is a **hint, never an address.** Ivan's voice arrived from the Mac app as
-// `com.apple.eloquence.en-GB.Eddy`, which exists on macOS and on nothing else — so the same
+// `com.apple.eloquence.en-GB.Eddy`, which exists on macOS and on nothing else – so the same
 // roster opened on Windows or Linux would otherwise give every agent the browser default, and
 // they would all sound identical. Agents are told apart by name and by voice; losing the voice
 // halves that.
@@ -9,7 +9,7 @@
 // **Everything here filters on `localService`.** Chrome on macOS lists Apple's 41 local English
 // voices *and* three remote Google ones in the same array, and the remote ones send text to a
 // server to be spoken. Taking `voices[0]`, or matching a name without checking, is one of the
-// three documented ways to break this product's founding promise — see `extension/CLAUDE.md`.
+// three documented ways to break this product's founding promise – see `extension/CLAUDE.md`.
 //
 // Pure functions over plain objects, so the whole of this runs under `node --test` with no
 // browser and no speech engine. `SpeechSynthesisVoice` is read-only and shaped like its own
@@ -44,7 +44,7 @@ function language(tag) {
  * already somebody else's". Each is a weaker claim than the last, and the order is what keeps
  * a roster sounding the way it was set up wherever that is possible.
  *
- * @param stored     what the roster recorded — a URI, an Apple identifier, or nothing
+ * @param stored     what the roster recorded – a URI, an Apple identifier, or nothing
  * @param available  this machine's voices, already filtered to local
  * @param taken      voice URIs other agents have been given, so two agents never collide
  * @param prefer     a language tag to fall back toward, default `en`
@@ -71,7 +71,7 @@ export function resolveVoice(stored, available, { taken = new Set(), prefer = 'e
   const byLabel = from.find((v) => leaf && String(v.name ?? '').toLowerCase().includes(leaf));
   if (byLabel) return byLabel;
 
-  // 3. Same language *and region* — keeps a British agent British where the machine can.
+  // 3. Same language *and region* – keeps a British agent British where the machine can.
   const sameTag = from.find((v) => String(v.lang ?? '').toLowerCase() === prefer.toLowerCase());
   if (sameTag) return sameTag;
 
@@ -87,8 +87,8 @@ export function resolveVoice(stored, available, { taken = new Set(), prefer = 'e
  * A voice for every agent, all different where the machine allows it.
  *
  * Resolved in roster order and greedily, which matters: the first agent gets the closest match
- * to what was chosen, and later ones take what is left. The alternative — everyone getting
- * their own best match independently — hands the same voice to two agents whenever both were
+ * to what was chosen, and later ones take what is left. The alternative – everyone getting
+ * their own best match independently – hands the same voice to two agents whenever both were
  * set up with it, and two agents that sound alike cannot be told apart by ear, which is the
  * only way anyone hears them.
  *
