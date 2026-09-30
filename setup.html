@@ -6,8 +6,79 @@
     <link rel="stylesheet" href="ui.css" />
     <style>
       body { padding: 36px 40px 60px; }
-      main { max-width: 620px; }
+      main { max-width: 1030px; margin: 0 auto; }
       section { margin-bottom: 34px; }
+
+      /* `design/assets/openposse-lockup-dark.png`, copied byte-for-byte rather than rebuilt
+         from the mark plus a webfont — the wordmark is drawn artwork, and setting "OpenPosse"
+         in Inter beside the hat would be a near-miss of the logo rather than the logo.
+
+         The *dark* file is the one for a dark page: white wordmark on the orb's own #141417.
+         (`-light.png` is the same lockup with a near-black wordmark, for a white background.)
+         That background is baked in and opaque, so this reads as a plate on the slightly
+         lighter `--stage` rather than sitting flush.
+
+         **No `border-radius`.** The artwork rounds its own corners — 53px of transparency at
+         3040 wide, so 7.3px at the 420 it is shown at — which means a CSS radius here does not
+         add the curve, it clips inside one that is already there. The 14px first written on
+         this rule was nearly double the artwork's and took a bite out of the plate.
+
+         `width`/`height` attributes carry the intrinsic ratio so the page does not reflow as
+         it decodes; the CSS below is what actually sizes it. */
+      .lockup {
+        display: block;
+        width: 100%; max-width: 420px; height: auto;
+        margin-bottom: 32px;
+      }
+
+      /* Setup on the left, what you come back for on the right. The steps are done once; the
+         roster is the reason to open this page again, and it used to be below all of them. */
+      .columns {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 46px;
+        align-items: start;
+      }
+      /* The measure the copy was written for. Paragraphs do not get wider just because the
+         page did — 620px is about 80 characters of this size, and past that prose is harder
+         to read, not easier. */
+      .setup { max-width: 620px; }
+
+      /* Sticky, so the roster is still there after scrolling through six steps. */
+      .rail { position: sticky; top: 36px; }
+      .rail > section { margin-bottom: 0; }
+
+      /* Below this the two columns do not both fit, so the rail goes back under the steps.
+         It keeps its own spacing there and stops being sticky — a sticky element in a single
+         column would sit over the content beneath it. */
+      @media (max-width: 1000px) {
+        .columns { grid-template-columns: minmax(0, 1fr); gap: 0; }
+        .rail { position: static; }
+        .rail > section { margin-bottom: 34px; }
+      }
+
+      /* ── The roster, in 340px instead of 620 ────────────────────────────────────────────
+         The row is one flex line: avatar, name, a 132px rename field and a select that can
+         reach 190px. That is already snug in the wide column and would squeeze the name out
+         of existence here, so in the rail it wraps into three lines — who it is, what it is
+         called, then what you can change. */
+      .rail .agent {
+        flex-wrap: wrap; row-gap: 7px;
+        /* Each agent is a three-line block here. In the wide column it was one line, so one row
+           ending and the next beginning was obvious; stacked, two agents run into each other
+           with nothing between them. Same rule the voice list already uses. */
+        padding-bottom: 13px;
+        border-bottom: 1px solid var(--line);
+      }
+      .rail .agent:last-child { padding-bottom: 8px; border-bottom: 0; }
+      /* 45px is the avatar plus the row's gap, so this fills the rest of the first line. */
+      .rail .agent .who { flex: 1 1 calc(100% - 45px); min-width: 0; }
+      .rail .agent .rename {
+        flex: 1 1 100%; width: auto; margin-left: 0; text-align: left;
+        border-color: rgba(255, 255, 255, 0.14);
+      }
+      .rail .agent .voice-pick { margin-left: 0; max-width: none; }
+      .rail .agent .tools { margin-left: auto; }
       .step {
         display: flex;
         gap: 13px;
@@ -17,7 +88,7 @@
         width: 21px; height: 21px; flex: 0 0 21px;
         border-radius: 50%;
         display: grid; place-items: center;
-        font-family: "SF Mono", ui-monospace, monospace;
+        font-family: var(--ui);
         font-size: 10px;
         border: 1px solid var(--line);
         color: var(--text-faint);
@@ -54,6 +125,14 @@
   </head>
   <body>
     <main>
+      <!-- A packaged file referenced from an extension page, so no `web_accessible_resources`
+           entry: that list is what a *web page* may reach, and this is our own origin. It is
+           deliberately not added to one — every entry there is a surface any site can probe. -->
+      <img class="lockup" src="icons/openposse-lockup-dark.png" alt="OpenPosse"
+           width="3040" height="920" />
+
+      <div class="columns">
+        <div class="setup">
       <h1>Set up OpenPosse</h1>
       <p>
         Three things, once. Everything after this happens on your machine — speech recognition
@@ -71,7 +150,7 @@
           </p>
           <div class="row">
             <button id="grant-mic">Grant microphone access</button>
-            <span class="status mono" id="mic-status">not granted</span>
+            <span class="status tech" id="mic-status">not granted</span>
           </div>
         </div>
       </section>
@@ -86,7 +165,7 @@
           </p>
           <div class="row">
             <button id="install-model">Download</button>
-            <span class="status mono" id="model-status">checking…</span>
+            <span class="status tech" id="model-status">checking…</span>
           </div>
         </div>
       </section>
@@ -98,12 +177,12 @@
           <p>
             Chrome only lets an extension <em>suggest</em> Ctrl+Shift and a digit for a shortcut
             that works outside the browser, so OpenPosse ships with one of those. Anything else
-            — <span class="mono">⌥V</span>, say — you pick here, and you can tick
+            — <span class="tech">⌥V</span>, say — you pick here, and you can tick
             <strong>Global</strong> so it reaches you in any app rather than only in Chrome.
           </p>
           <div class="row">
             <button class="secondary" id="open-shortcuts">Change shortcut…</button>
-            <span class="status mono" id="shortcut-status">checking…</span>
+            <span class="status tech" id="shortcut-status">checking…</span>
           </div>
         </div>
       </section>
@@ -116,7 +195,7 @@
             The panel appears over whatever page you're on. Chrome normally lends an extension
             access to the current tab when you press its shortcut — but not when that shortcut
             is <strong>Global</strong>, which is exactly what makes
-            <span class="mono">⌥V</span> work from other apps. So the two can't both be had
+            <span class="tech">⌥V</span> work from other apps. So the two can't both be had
             without asking you directly.
           </p>
           <p>
@@ -132,27 +211,8 @@
           </p>
           <div class="row">
             <button class="secondary" id="grant-panel">Turn on</button>
-            <span class="status mono" id="panel-status">checking…</span>
+            <span class="status tech" id="panel-status">checking…</span>
           </div>
-        </div>
-      </section>
-
-      <section class="step" id="step-import">
-        <div class="num">5</div>
-        <div style="flex:1">
-          <h2>Bring across assistants you already recorded <span class="kind">— optional</span></h2>
-          <p>
-            If you used the OpenPosse Mac app, pick its folder and the assistants come with
-            their recipes intact:
-            <span class="mono">~/Library/Application&nbsp;Support/OpenPosse</span>
-          </p>
-          <div class="row">
-            <button class="secondary" id="pick-folder">Choose folder…</button>
-            <span class="status mono" id="import-status"></span>
-          </div>
-          <!-- Directory picker: agents.json and recipes/*.json arrive together, so one
-               choice imports everything rather than asking for files one at a time. -->
-          <input type="file" id="folder" webkitdirectory directory hidden />
         </div>
       </section>
 
@@ -165,11 +225,13 @@
         <div id="engine" class="card">checking…</div>
 
         <div class="step" id="step-weights" style="margin-top:18px">
-          <div class="num">6</div>
+          <div class="num">5</div>
           <div style="flex:1">
-            <!-- The size is filled in from `TOTAL_BYTES` rather than written here. It has
-                 already moved twice — 89 MB to 166 MB when the model changed for GPU kernel
-                 coverage — and a number typed into copy is a number that goes stale silently. -->
+            <!-- The size is filled in from `TOTAL_BYTES` rather than written here. It has now
+                 moved three times – 89 MB, then 166 MB when the model changed for GPU kernel
+                 coverage, then 340 MB at fp32 with all 28 voices – and this comment claimed
+                 "twice, to 166" until the third move was noticed. A number typed into copy is a
+                 number that goes stale silently, and so is one typed into the note about it. -->
             <h2>Better voices <span class="kind">— optional, <span id="weights-size">…</span></span></h2>
             <p>
               The system voices are your operating system's, and they sound like it. Kokoro is a
@@ -183,7 +245,7 @@
             <div class="row">
               <button class="secondary" id="get-weights">Download</button>
               <button class="secondary" id="drop-weights" hidden>Remove</button>
-              <span class="status mono" id="weights-status">checking…</span>
+              <span class="status tech" id="weights-status">checking…</span>
             </div>
           </div>
         </div>
@@ -199,11 +261,21 @@
         <textarea id="sample" rows="4" spellcheck="false"></textarea>
         <div id="voice-list" style="margin-top:14px"></div>
       </section>
+        </div>
 
-      <section>
-        <h2>Assistants</h2>
-        <div id="roster" class="card">none yet</div>
-      </section>
+        <!-- The roster sits here rather than at the foot of the page because it is the one
+             thing on this page you come back for. Recording saves an agent under the vendor's
+             product name and naming it is an edit *here* — the orb cannot ask for typing, since
+             a page is entitled to take its own focus back, and Notion does. A recording can also
+             be stranded by closing the tab mid-wizard. Both end at this list, so it should not
+             be below the setup steps, which are done once and never again. -->
+        <aside class="rail">
+          <section>
+            <h2>Assistants</h2>
+            <div id="roster" class="card">none yet</div>
+          </section>
+        </aside>
+      </div>
     </main>
     <script type="module" src="dist/setup.js"></script>
   </body>

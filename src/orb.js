@@ -15,6 +15,10 @@
 // permission for. Pressing the shortcut grants `activeTab` for exactly that tab, for exactly
 // as long as this needs.
 
+// Top level, not inside the guard below: an `import` declaration cannot sit in a block. esbuild
+// folds it into the IIFE, so the shipped content script is still one file.
+import { MARK_SVG, MARK_CSS } from './mark.js';
+
 if (!globalThis.__openposseOrb) {
   globalThis.__openposseOrb = true;
 
@@ -181,6 +185,48 @@ if (!globalThis.__openposseOrb) {
     ring(R * 0.035, 0.92, 0);
   }
 
+  // ── The typeface ─────────────────────────────────────────────────────────────────────────
+
+  /** Registered once per page, not once per panel. */
+  let fontRegistered = false;
+
+  /**
+   * Puts Inter on **the vendor's document**, which is the one thing here that is not obvious.
+   *
+   * Everything else about this panel is sealed inside a closed shadow root. A font cannot be:
+   * `@font-face` declared inside a shadow root is not reliably honoured, and font loading is a
+   * document-level register either way. So the face is added to the page's own `document.fonts`
+   * and the shadow CSS then just names it.
+   *
+   * **Which is why the family is "OpenPosse Inter" and not "Inter".** Plenty of vendors ship
+   * their own Inter. Adding a second face under that name to their document would leave two
+   * competing definitions and could change *their* typography — this panel is a guest and must
+   * not redecorate. A name nobody else uses cannot collide, and nothing in the page references
+   * it, so the page renders exactly as it did.
+   *
+   * Failure is cosmetic — the CSS falls through to the system stack — but it is **reported**,
+   * because "the panel looks wrong on this one site" with nothing in the console is a bug
+   * somebody would spend an afternoon on.
+   */
+  function ensureFont() {
+    if (fontRegistered) return;
+    fontRegistered = true;
+    try {
+      const url = chrome.runtime.getURL('vendor/inter/InterVariable.woff2');
+      const face = new FontFace('OpenPosse Inter', `url(${url})`, {
+        weight: '100 900',
+        display: 'swap',
+      });
+      face.load()
+        .then((loaded) => document.fonts.add(loaded))
+        .catch((error) => {
+          console.warn('[openposse] Inter would not load —', error?.message ?? error);
+        });
+    } catch (error) {
+      console.warn('[openposse] Inter could not be registered —', error?.message ?? error);
+    }
+  }
+
   // ── The panel ────────────────────────────────────────────────────────────────────────────
 
   const CSS = `
@@ -189,7 +235,13 @@ if (!globalThis.__openposseOrb) {
       position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%);
       z-index: 2147483647;
       width: 452px;
-      font: 400 13px/1.45 -apple-system, "SF Pro Text", system-ui, sans-serif;
+      /* Defined here rather than on :host, which is \`all: initial\` on purpose so nothing the
+         page sets can reach in. Kept identical to \`ui.css\` — the panel and the settings page
+         disagreeing about their own typeface would be visible and pointless. */
+      --ui: "OpenPosse Inter", -apple-system, system-ui, "Segoe UI", sans-serif;
+      --figures: "ss02", "tnum";
+      font: 400 13px/1.45 var(--ui);
+      font-optical-sizing: auto;
       -webkit-font-smoothing: antialiased;
       color: #fff;
       /* Not hit-testable except where it has to be. The page underneath stays usable, which
@@ -240,19 +292,10 @@ if (!globalThis.__openposseOrb) {
       pointer-events: auto; cursor: grab; user-select: none; touch-action: none;
     }
     .wrap.dragging header { cursor: grabbing; }
-    .mark {
-      width: 19px; height: 19px; border-radius: 6.5px;
-      background: linear-gradient(150deg, #0A84FF, #30D158);
-      display: grid; place-items: center;
-      font-size: 8px; font-weight: 700; color: #fff;
-      box-shadow: inset 0 .5px 0 rgba(255,255,255,.5), 0 1px 3px rgba(0,0,0,.4);
-    }
+    ${MARK_CSS}
     .title { font-size: 13.5px; font-weight: 600; letter-spacing: -.008em; }
     .spacer { flex: 1; }
-    .key {
-      font-family: "SF Mono", ui-monospace, SFMono-Regular, monospace;
-      font-size: 10.5px; color: rgba(235,235,245,.58);
-    }
+    .key { font-size: 10.5px; color: rgba(235,235,245,.58); }
 
     .orbwrap {
       position: relative; display: flex; flex-direction: column; align-items: center;
@@ -262,7 +305,6 @@ if (!globalThis.__openposseOrb) {
     canvas { width: 168px; height: 168px; display: block; }
     .deadmic {
       position: absolute; bottom: 14px;
-      font-family: "SF Mono", ui-monospace, monospace;
       font-size: 9.5px; letter-spacing: .06em; color: #FF453A;
       background: rgba(255,69,58,.12);
       box-shadow: inset 0 0 0 .5px rgba(255,69,58,.4);
@@ -335,7 +377,7 @@ if (!globalThis.__openposseOrb) {
        different product would read as having left OpenPosse behind. */
     .coach { padding: 2px 0 4px; }
     .coach .step {
-      font: 600 9.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      font: 600 9.5px/1 var(--ui);
       letter-spacing: .08em; color: rgba(235,235,245,.42); margin-bottom: 10px;
     }
     .coach .say { font-size: 14px; line-height: 1.45; color: rgba(255,255,255,.92); }
@@ -344,10 +386,11 @@ if (!globalThis.__openposseOrb) {
     .coach .row { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
     .coach .row .tick { color: #30D158; font-size: 11px; }
     .coach .row .tick.none { color: rgba(235,235,245,.35); }
-    .coach .row .detail.none { color: rgba(235,235,245,.42); font-family: inherit; }
+    /* "there is none" is prose, not a selector — same no-op fix as `.keys` below. */
+    .coach .row .detail.none { color: rgba(235,235,245,.42); font-feature-settings: normal; }
     .coach .row .label { color: rgba(235,235,245,.55); flex: 0 0 92px; }
     .coach .row .kind {
-      font: 600 8.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      font: 600 8.5px/1 var(--ui);
       letter-spacing: .06em; color: rgba(235,235,245,.34); flex: 0 0 auto;
       align-self: center;
     }
@@ -356,12 +399,20 @@ if (!globalThis.__openposseOrb) {
        half of a selector out of reach — and "hover for the rest" is no answer to a screenshot.
        A taller card is the cheaper cost. */
     .coach .row .detail {
-      font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      font: 11px/1.4 var(--ui);
+      /* Selectors, so the disambiguated glyphs earn their place here exactly as they do in the
+         roster's recipe dump: I, l and 1 are one bar in Inter's default set. */
+      font-feature-settings: var(--figures);
       color: rgba(255,255,255,.75); flex: 1 1 auto;
       white-space: normal; overflow-wrap: anywhere;
     }
-    /* A shortcut is something you pressed, not page structure, so it is not a code chip. */
-    .coach .row .detail.keys { font-family: inherit; font-size: 13px; letter-spacing: .12em; }
+    /* A shortcut is something you pressed, not page structure, so it is not a code chip.
+       **This opt-out used to be \`font-family: inherit\`**, which escaped a monospace face that
+       no longer exists — one family now, so that line had quietly become a no-op. What it has
+       to turn off is the feature set. */
+    .coach .row .detail.keys {
+      font-feature-settings: normal; font-size: 13px; letter-spacing: .12em;
+    }
     /* **Opted back in.** The wrap is pointer-events: none so the page underneath stays usable,
        and every interactive part has to say otherwise for itself. Without this the field is
        visible, looks focusable, and every click lands in the vendor's page behind it — which
@@ -387,6 +438,8 @@ if (!globalThis.__openposseOrb) {
     .coach .name button:disabled { opacity: .35; cursor: default; }
   `;
 
+  ensureFont();
+
   const host = document.createElement('div');
   // `closed`, not `open`: nothing outside needs to reach in, and a closed root cannot be
   // queried by the page either — this panel shows what someone said, and the page it happens
@@ -397,7 +450,7 @@ if (!globalThis.__openposseOrb) {
     <div class="wrap" part="wrap">
       <div class="glass">
         <header>
-          <div class="mark">op</div>
+          ${MARK_SVG}
           <div class="title">OpenPosse</div>
           <div class="spacer"></div>
           <div class="key"></div>

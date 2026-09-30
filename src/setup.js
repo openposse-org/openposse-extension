@@ -5,7 +5,7 @@
 // with `NotAllowedError: Permission dismissed` on macOS. This page exists for that reason, not
 // for tidiness.
 
-import { loadRoster, importFromMacApp, setMicGranted, micGranted } from './storage.js';
+import { loadRoster, setMicGranted, micGranted } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
 import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
 import {
@@ -157,32 +157,6 @@ el('grant-panel').addEventListener('click', async () => {
     await chrome.permissions.request(ALL_SITES);
   }
   await refreshPanelAccess();
-});
-
-// ── 5. Import ──────────────────────────────────────────────────────────────────────────────
-
-el('pick-folder').addEventListener('click', () => el('folder').click());
-
-el('folder').addEventListener('change', async (event) => {
-  const files = [...event.target.files];
-  if (files.length === 0) return;
-
-  setStatus('import-status', 'reading…');
-  const result = await importFromMacApp(files);
-
-  if (result.problem) {
-    setStatus('import-status', result.problem);
-  } else {
-    const parts = [];
-    if (result.imported.length) parts.push(`imported ${result.imported.join(', ')}`);
-    // Skips are named with their reason. "2 skipped" tells someone nothing they can act on.
-    for (const { name, why } of result.skipped) parts.push(`skipped ${name} — ${why}`);
-    setStatus('import-status', parts.join(' · ') || 'nothing to import');
-  }
-
-  markDone('step-import', result.imported.length > 0);
-  await refreshRoster();
-  event.target.value = '';     // So choosing the same folder twice fires `change` again.
 });
 
 // ── Which engine speaks ────────────────────────────────────────────────────────────────────
@@ -457,7 +431,11 @@ async function refreshRoster() {
     avatar.className = 'avatar';
     avatar.textContent = initialFor(agent.name);
 
+    // Named so the rail can give it a line of its own. The roster now sits in a 340px column
+    // rather than the 620px one this row was laid out for, and the alternative — selecting it
+    // as "the child with no class" — breaks silently the first time anyone adds one.
     const text = document.createElement('div');
+    text.className = 'who';
     const name = document.createElement('div');
     name.className = 'name';
     name.textContent = agent.name;

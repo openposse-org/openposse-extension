@@ -5,6 +5,53 @@
  * time either changed. Names match the Swift `Design.Palette` so the two can be diffed by eye.
  */
 
+/* Inter, from `vendor/inter/`, never from rsms.me.
+ *
+ * **A webfont is a network request, and this product promises there are none.** Linking the
+ * CDN would put a third-party fetch on every surface — including the orb, which is injected
+ * into somebody's Notion tab, so it would fire from inside a page the user is working in. That
+ * is the founding promise broken for a typeface. It is also remotely hosted content in a
+ * Manifest V3 extension, which the Web Store reviews for.
+ *
+ * **The family is called "OpenPosse Inter" rather than "Inter", and that matters in exactly one
+ * place.** The orb registers this face on the *vendor's* document, because `@font-face` inside
+ * a shadow root is not reliably honoured. A vendor that ships its own Inter — and plenty do —
+ * would then have two faces under one name and its own typography could change. A name nobody
+ * else uses cannot collide.
+ *
+ * One file: the variable font, 100–900, 352 kB. Static weights would be six requests and more
+ * bytes. `font-optical-sizing` is what Inter v4 asks for; it drives the `opsz` axis.
+ */
+@font-face {
+  font-family: "OpenPosse Inter";
+  src: url("vendor/inter/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Named once so the fallback cannot drift between surfaces. The system stack behind it is not
+ * decoration: a font that fails to load must leave readable text, not a serif default.
+ *
+ * **There is one family now.** A `--code` token held `ui-monospace, SFMono-Regular, …` for the
+ * status readouts, step numbers, badges, keycaps and the recipe dump, so those slots were the
+ * only things on any surface not set in Inter. They are Inter too as of 2026-09-30, which left
+ * the token holding the same value as `--ui` — so it is gone rather than duplicated, because
+ * two names for one value is the shape everything else here has had to be collapsed out of.
+ *
+ * What the monospace was actually buying is kept as OpenType features, at the two slots that
+ * needed it rather than at all of them: `--figures` below. */
+:root {
+  --ui: "OpenPosse Inter", -apple-system, system-ui, "Segoe UI", sans-serif;
+
+  /* Inter's disambiguation set — serifed capital I, tailed lowercase l, slashed zero — plus
+   * fixed-width digits. Verified against the vendored build rather than assumed: rendering
+   * `Il1 0O` under ss01–ss04, zero, tnum, cv05 and cv08 showed ss02 is the set that changes all
+   * three glyphs. Without it `Il1` is three near-identical bars, which is fine in prose and not
+   * fine in a CSS selector; tnum stops a download percentage jittering as it counts up. */
+  --figures: "ss02", "tnum";
+}
+
 :root {
   color-scheme: dark;
 
@@ -46,7 +93,8 @@ body {
   margin: 0;
   background: var(--stage);
   color: var(--text);
-  font: 13px/1.45 -apple-system, "SF Pro Text", system-ui, sans-serif;
+  font: 13px/1.45 var(--ui);
+  font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -54,9 +102,15 @@ h1 { font-size: 19px; font-weight: 600; letter-spacing: -0.012em; margin: 0 0 5p
 h2 { font-size: 13px; font-weight: 600; margin: 0 0 7px; }
 p  { color: var(--text-dim); margin: 0 0 14px; }
 
-.mono {
-  font-family: "SF Mono", ui-monospace, SFMono-Regular, monospace;
+/* The small technical voice: status readouts, key combinations, file paths.
+ *
+ * Called `.mono` until 2026-09-30, when the face became Inter like everything else. Renamed
+ * rather than left alone, because a class named for a typeface it no longer uses is a wrong
+ * answer waiting for whoever greps for it next. No `font-family` here either: there is one
+ * family, `body` already sets it, and restating it is how the two copies start drifting. */
+.tech {
   font-size: 10.5px;
+  font-feature-settings: var(--figures);
 }
 
 /* ── Controls ─────────────────────────────────────────────────────────────────────────── */
@@ -171,13 +225,19 @@ input[type="text"]::placeholder { color: var(--text-faint); }
 .agent .voice-pick ~ .tools { margin-left: 0; }
 .agent .voice-pick { margin-left: 8px; }
 
-/* The row's own controls. Quiet until the row is hovered, because a roster is read far more
-   often than it is edited and three buttons per agent would otherwise be the loudest thing on
-   the page. */
+/* The row's own controls, always shown.
+ *
+ * They used to fade in on hover, on the reasoning that a roster is read more often than it is
+ * edited. That reasoning was about noise and ignored discoverability: a control that only
+ * exists once the pointer is over it cannot be found by anyone who does not already know it is
+ * there, and "See" is the only way to look at a recipe while "Re-record" is the fix for the
+ * commonest failure there is. Hover is also not a thing that reliably happens — a trackpad
+ * user tabbing through, or any touch input, never triggers it.
+ *
+ * They are quiet rather than hidden instead: `.ghost` is a faint outline that only gains
+ * contrast on hover, so the row still reads as a list rather than a toolbar. */
 .agent { position: relative; }
-.agent .tools { display: flex; gap: 4px; opacity: 0; transition: opacity 0.12s ease; }
-.agent:hover .tools,
-.agent:focus-within .tools { opacity: 1; }
+.agent .tools { display: flex; gap: 4px; }
 
 .agent .ghost {
   background: transparent;
@@ -198,7 +258,11 @@ input[type="text"]::placeholder { color: var(--text-faint); }
   padding: 9px 11px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.05);
-  font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 11px/1.6 var(--ui);
+  /* This one dumps CSS selectors, so it is the slot where losing the monospace face would
+     actually cost something: `[data-testid="Il1"]` is unreadable in a face where I, l and 1 are
+     the same bar. `--figures` is what buys that back. */
+  font-feature-settings: var(--figures);
   color: var(--text-faint);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -226,7 +290,7 @@ input[type="text"]::placeholder { color: var(--text-faint); }
 /* The dead-mic badge, worded exactly as the design specifies. Colour is never the only
  * signal — the words carry it too, for anyone who cannot tell red from green. */
 .dead-mic {
-  font-family: "SF Mono", ui-monospace, monospace;
+  font-family: var(--ui);
   font-size: 9.5px;
   letter-spacing: 0.06em;
   color: var(--error);

@@ -10,13 +10,10 @@
         display: flex; align-items: center; gap: 8px;
         margin-bottom: 12px;
       }
-      .mark {
-        width: 19px; height: 19px; border-radius: 6.5px;
-        background: linear-gradient(150deg, #0a84ff, #30d158);
-        display: grid; place-items: center;
-        font-size: 8px; font-weight: 700; color: #fff;
-        box-shadow: inset 0 0.5px 0 rgba(255,255,255,.5), 0 1px 3px rgba(0,0,0,.4);
-      }
+      /* The mark's own sizing lives in `src/mark.js` alongside the artwork, so the popup and
+         the orb cannot disagree about it. Only the placeholder needs a rule here: it reserves
+         the space before the script fills it, so the header does not jump on open. */
+      #mark { width: 22px; height: 22px; flex: 0 0 22px; }
       header .title { font-size: 13.5px; font-weight: 600; letter-spacing: -0.008em; }
       header .spacer { flex: 1; }
       .hint { color: var(--text-faint); font-size: 11px; }
@@ -46,10 +43,10 @@
   </head>
   <body>
     <header>
-      <div class="mark">op</div>
+      <div id="mark"></div>
       <div class="title">OpenPosse</div>
       <div class="spacer"></div>
-      <div class="hint mono" id="shortcut"></div>
+      <div class="hint tech" id="shortcut"></div>
     </header>
 
     <!-- Deliberately not the design's `NOT HEARING ANYTHING — CHECK INPUT` badge. That one is

@@ -16,7 +16,34 @@ distinction is this project's standing rule and it has already caught one real p
 | `headtts/openposse-local-only.mjs` | — | **OpenPosse's own** | not third-party; see below |
 | `transformers/transformers.min.js` | 4.0.0 | Apache-2.0 | [@huggingface/transformers](https://www.npmjs.com/package/@huggingface/transformers) |
 | `transformers/ort-wasm-simd-threaded.asyncify.*` | 1.25.0-dev | MIT | [onnxruntime-web](https://www.npmjs.com/package/onnxruntime-web) |
+| `inter/InterVariable.woff2` | 4.1 | OFL-1.1 | [rsms/inter](https://github.com/rsms/inter) |
 | `../dictionaries/en-us.txt` | with HeadTTS | see below | CMU Pronouncing Dictionary, via HeadTTS |
+
+Each licence text travels with the code it covers: `headtts/LICENSE`,
+`transformers/LICENSE-transformers`, `transformers/LICENSE-onnxruntime` and
+`inter/LICENSE.txt`. OpenPosse's own licence is Apache-2.0, at the repository root.
+
+## Inter
+
+The UI typeface, **committed rather than linked, and that is the whole point**. `rsms.me` serves
+it happily over a CDN, and using it that way would put a third-party request on every surface —
+including the orb, which is injected into the user's Notion tab, so the fetch would fire from
+inside a page they are working in. That is this project's founding promise broken for a
+typeface, and it is remotely hosted content in a Manifest V3 extension besides.
+
+One file: the variable font, weights 100–900, 352 kB, taken from `rsms.me/inter/font-files/` on
+2026-09-30. Static weights would be more requests and more bytes. Italic is not shipped because
+nothing uses it.
+
+**The SIL Open Font License permits this and asks two things in return**, both satisfied here:
+the licence text travels with the font (`inter/LICENSE.txt`), and a font under it may not be
+sold on its own or released under a different licence. It carries no copyleft into the software
+that uses it, so it does not touch OpenPosse's own Apache-2.0.
+
+**The family is declared as "OpenPosse Inter", not "Inter", on purpose.** The orb registers the
+face on the vendor's own `document.fonts`, because `@font-face` inside a shadow root is not
+reliably honoured. A vendor shipping its own Inter — and plenty do — would then have two faces
+competing under one name, and its typography could change. This panel is a guest.
 
 ## What was checked, and what was found
 
@@ -29,10 +56,13 @@ distinction is this project's standing rule and it has already caught one real p
   speaker-recognition model family. A word-boundary scan finds **zero**. Noted because the
   false positive is convincing and the next person will hit it too.
 - **ONNX Runtime Web** ships **no LICENSE file in its npm package** — only `"license": "MIT"`
-  in `package.json` and a README. Nothing is invented here to fill the gap: the canonical text
-  is the MIT licence in
-  [microsoft/onnxruntime](https://github.com/microsoft/onnxruntime/blob/main/LICENSE), and it
-  should be included by hand before this is published.
+  in `package.json` and a README. Nothing was invented to fill the gap: the canonical text was
+  taken from
+  [microsoft/onnxruntime](https://github.com/microsoft/onnxruntime/blob/main/LICENSE) on
+  2026-09-30 and is committed as `transformers/LICENSE-onnxruntime`. **Copy it again by hand
+  whenever the WASM files are updated** — `npm i` will not bring it, which is what made it
+  missing in the first place. MIT requires the notice to travel with the code, so vendoring the
+  binary without it is a licence breach rather than an untidy directory.
 
 ## Updating these files
 
