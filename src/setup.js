@@ -457,7 +457,11 @@ async function refreshRoster() {
     avatar.className = 'avatar';
     avatar.textContent = initialFor(agent.name);
 
+    // Named so the rail can give it a line of its own. The roster now sits in a 340px column
+    // rather than the 620px one this row was laid out for, and the alternative — selecting it
+    // as "the child with no class" — breaks silently the first time anyone adds one.
     const text = document.createElement('div');
+    text.className = 'who';
     const name = document.createElement('div');
     name.className = 'name';
     name.textContent = agent.name;
