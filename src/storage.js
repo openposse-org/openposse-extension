@@ -1,7 +1,7 @@
 // The roster, in `chrome.storage.local`.
 //
 // A transposition of `Sources/OpenPosseKit/Store/AgentStore.swift`, deliberately keeping its
-// decisions rather than re-deriving them — each one was made for a reason that has not changed
+// decisions rather than re-deriving them – each one was made for a reason that has not changed
 // just because the host has.
 //
 // **Agents and recipes are stored separately**, under `agents` and `recipe:<id>` keys. Same
@@ -10,7 +10,7 @@
 // blob would rewrite the whole roster on every re-record.
 //
 // The shapes are unchanged from `OpenPosseShared`, so a recipe recorded by the Mac app imports
-// as-is. That is not sentiment — it is the only reason V1 starts with a working Notion agent
+// as-is. That is not sentiment – it is the only reason V1 starts with a working Notion agent
 // instead of an empty list.
 
 const AGENTS_KEY = 'agents';
@@ -21,7 +21,7 @@ const recipeKey = (id) => `recipe:${id}`;
 //
 // **`navigator.permissions.query({name:'microphone'})` is not a source of truth here.**
 // `prompt` is its default *and* its fallback, so an unsupported query, a wrapper that
-// swallowed an error, and a genuine "never asked" all look identical — and from a popup it
+// swallowed an error, and a genuine "never asked" all look identical – and from a popup it
 // reports `prompt` even when the grant is live. The spec itself is ambiguous enough that it
 // can say `prompt` while `getUserMedia` is actively running.
 //
@@ -51,8 +51,8 @@ export function newID() {
 /**
  * Every agent, plus which of them cannot work.
  *
- * **An agent whose recipe is missing is listed, not dropped.** It still routes — a name match
- * will happily decide an utterance was meant for it — and then fails when asked. Naming it is
+ * **An agent whose recipe is missing is listed, not dropped.** It still routes – a name match
+ * will happily decide an utterance was meant for it – and then fails when asked. Naming it is
  * what lets the popup offer a re-record instead of the user discovering it by being answered
  * with an error.
  */
@@ -112,13 +112,13 @@ export function isNameTaken(agents, name, exceptID = null) {
  *
  * **The recipe is written first.** If this is interrupted between the two writes, an orphan
  * recipe costs a few kilobytes; an agent whose recipe never landed is a roster entry that
- * routes and then fails — the state `broken` exists to describe, and worth not creating.
+ * routes and then fails – the state `broken` exists to describe, and worth not creating.
  */
 /**
  * A name nothing else is using, by adding a number rather than refusing.
  *
  * Recording ends with an agent that exists, so there is nobody to ask at the moment a
- * collision happens — a second recording of Notion must not fail because the first is called
+ * collision happens – a second recording of Notion must not fail because the first is called
  * Notion. The number is visible and the name is editable, which between them say what happened
  * without a dialog.
  */
@@ -164,7 +164,7 @@ export async function renameAgent(agentID, name) {
     [AGENTS_KEY]: agents.map((a) => (a.id === agentID ? { ...a, name: wanted } : a)),
   });
 
-  // `agentName` is denormalised into the recipe, so leaving it would make the two disagree —
+  // `agentName` is denormalised into the recipe, so leaving it would make the two disagree –
   // and the recipe's copy is what the recorder's own diagnostics read back.
   if (agent.recipeID) {
     const key = recipeKey(agent.recipeID);
@@ -218,4 +218,4 @@ export async function removeAgent(agentID) {
 // Importing a roster from the parked Mac app lived here until 2026-09-30. It came out with the
 // setup step that was its only caller: V1 is the whole product, the Swift side never shipped, so
 // there is nobody holding an `~/Library/Application Support/OpenPosse` to bring across. Recover
-// it from git if V2 ever needs it — the shape it decoded is recorded in `docs/protocol.md`.
+// it from git if V2 ever needs it – the shape it decoded is recorded in `docs/protocol.md`.

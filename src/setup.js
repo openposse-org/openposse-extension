@@ -37,7 +37,7 @@ async function refreshMic() {
     setStatus('mic-status', 'granted');
   } else {
     setStatus('mic-status', await isBlocked()
-      ? 'blocked by Chrome — allow it in this extension’s site settings'
+      ? 'blocked by Chrome – allow it in this extension’s site settings'
       : 'not granted');
   }
   markDone('step-mic', granted);
@@ -54,12 +54,12 @@ el('grant-mic').addEventListener('click', async () => {
     for (const track of stream.getTracks()) track.stop();
 
     // Recorded here because this is the only place that knows. Everywhere else has to infer
-    // it from an API that answers `prompt` in three different situations — see `storage.js`.
+    // it from an API that answers `prompt` in three different situations – see `storage.js`.
     await setMicGranted(true);
     await refreshMic();
   } catch (error) {
     await setMicGranted(false);
-    setStatus('mic-status', `${error.name} — ${error.message}`);
+    setStatus('mic-status', `${error.name} – ${error.message}`);
   }
 });
 
@@ -80,7 +80,7 @@ async function refreshModel() {
   if (state === 'unavailable') {
     // Worth separating from "not downloaded yet". This is usually a field trial being off
     // rather than anything the user did, and no amount of clicking Download will fix it.
-    setStatus('model-status', 'unavailable — on-device recognition is switched off in this Chrome');
+    setStatus('model-status', 'unavailable – on-device recognition is switched off in this Chrome');
   }
   return ready;
 }
@@ -99,7 +99,7 @@ el('install-model').addEventListener('click', async () => {
 // ── 3. The shortcut ────────────────────────────────────────────────────────────────────────
 //
 // Here because it cannot be done for them and would otherwise be folklore. A manifest may only
-// *suggest* `Ctrl+Shift+[0-9]` for a shortcut that works outside Chrome — but the user's own
+// *suggest* `Ctrl+Shift+[0-9]` for a shortcut that works outside Chrome – but the user's own
 // assignment at `chrome://extensions/shortcuts` carries no such restriction, so ⌥V is available
 // to anyone who knows the page exists. Telling them beats them not knowing.
 //
@@ -122,7 +122,7 @@ el('open-shortcuts').addEventListener('click', async () => {
 //
 // **A global shortcut and `activeTab` are mutually exclusive**, which is why this exists.
 // Chrome grants an extension temporary access to the current tab when the user presses its
-// shortcut — but not when that shortcut is marked `global`, because such a command can fire
+// shortcut – but not when that shortcut is marked `global`, because such a command can fire
 // while Chrome is in the background and there is no tab the gesture belongs to. Measured, after
 // two wrong explanations: the same keypress that works on a vendor's page fails on every other
 // with "Cannot access contents of url".
@@ -131,7 +131,7 @@ el('open-shortcuts').addEventListener('click', async () => {
 // its own. Everything else needs the broad grant or nothing.
 //
 // Offered rather than asked for at install. The prompt Chrome shows is alarming and it should
-// be — this is the biggest thing the extension can ask for — so it belongs behind a sentence
+// be – this is the biggest thing the extension can ask for – so it belongs behind a sentence
 // explaining what it buys and a choice the user makes knowingly.
 
 const ALL_SITES = { origins: ['https://*/*'] };
@@ -139,8 +139,8 @@ const ALL_SITES = { origins: ['https://*/*'] };
 async function refreshPanelAccess() {
   const granted = await chrome.permissions.contains(ALL_SITES);
   setStatus('panel-status', granted
-    ? 'on — the panel appears on any page'
-    : "off — the panel appears on assistants' pages only");
+    ? 'on – the panel appears on any page'
+    : "off – the panel appears on assistants' pages only");
   markDone('step-panel', granted);
   el('grant-panel').textContent = granted ? 'Turn off' : 'Turn on';
   return granted;
@@ -162,7 +162,7 @@ el('grant-panel').addEventListener('click', async () => {
 // ── Which engine speaks ────────────────────────────────────────────────────────────────────
 //
 // Reported rather than chosen. The decision is made from what the machine can actually do, and
-// the value of showing it is that "why does it sound like that" has an answer — a person on a
+// the value of showing it is that "why does it sound like that" has an answer – a person on a
 // browser without WebGPU should be told so, not left to wonder.
 //
 // The offscreen document is the only context that can answer: WebGPU and the voice list both
@@ -171,7 +171,7 @@ el('grant-panel').addEventListener('click', async () => {
 async function refreshEngine() {
   // **Worked out here rather than asked of the offscreen document.**
   //
-  // The first version messaged that document for the answer, and it usually does not exist —
+  // The first version messaged that document for the answer, and it usually does not exist –
   // it is created when a turn starts, and opening settings is not a turn. So the send threw,
   // the catch fell back to the bland "System voices", and the page never showed the *reason*,
   // which is the only part worth reading. It looked like the line was not updating.
@@ -190,7 +190,7 @@ async function refreshEngine() {
 //
 // **This button is the amended rule's entire justification, so it has to behave like it.** The
 // rule now permits a model download that the user starts, from a pinned URL, verified against a
-// hash in the build — and each of those is only true because this page does it that way. A
+// hash in the build – and each of those is only true because this page does it that way. A
 // download that started itself, or that installed whatever arrived, would make the amendment a
 // piece of paperwork.
 //
@@ -208,19 +208,19 @@ async function refreshWeights() {
   el('get-weights').hidden = done;
   // **"Resume" is wrong for an install that grew.** Nothing stopped: the voice set went from
   // six to 28, so a complete install is now short some files it never had. `core` distinguishes
-  // the two, and the word has to follow — "Resume" and "interrupted" send somebody looking for
+  // the two, and the word has to follow – "Resume" and "interrupted" send somebody looking for
   // a failure that did not happen.
   const extending = state === 'partial' && core;
   el('get-weights').textContent = extending ? 'Add them' : state === 'partial' ? 'Resume' : 'Download';
-  // Says what is on disk, and nothing about whether it is being used — the engine line above
+  // Says what is on disk, and nothing about whether it is being used – the engine line above
   // owns that, and this claiming "used whenever WebGPU is available" directly contradicted it
   // while the engine was still unbuilt. One fact, one place.
   setStatus('weights-status', done
-    ? `installed — ${want} files, verified`
+    ? `installed – ${want} files, verified`
     : extending
       ? `${want - have} more voices available · ${mb(missingBytes)}`
       : state === 'partial'
-        ? `${have} of ${want} files — interrupted`
+        ? `${have} of ${want} files – interrupted`
         : `not downloaded · ${mb(TOTAL_BYTES)}`);
   markDone('step-weights', done);
   return state;
@@ -232,7 +232,7 @@ el('get-weights').addEventListener('click', async () => {
   // without both origins every file fails with a message that says nothing useful.
   const allowed = await ensureAccess();
   if (!allowed) {
-    setStatus('weights-status', 'needs access to huggingface.co to download — not granted');
+    setStatus('weights-status', 'needs access to huggingface.co to download – not granted');
     return;
   }
 
@@ -248,8 +248,8 @@ el('get-weights').addEventListener('click', async () => {
     });
   } catch (error) {
     // A button that does nothing is the worst outcome available, so nothing gets to throw
-    // past here silently — the page says what happened and the console says it precisely.
-    console.error('[openposse] weights download threw —', error?.message ?? error);
+    // past here silently – the page says what happened and the console says it precisely.
+    console.error('[openposse] weights download threw –', error?.message ?? error);
     setStatus('weights-status', `could not start: ${error?.message ?? error}`);
     el('get-weights').disabled = false;
     return;
@@ -258,16 +258,16 @@ el('get-weights').addEventListener('click', async () => {
 
   if (!result.ok) {
     // **The reason, not a count of failures.** The first version said "could not download
-    // model, bm_george, … — try again" for every cause there is, and the actual message —
-    // which named a CORS refusal — was thrown away by this very line. Listing the files told
+    // model, bm_george, … – try again" for every cause there is, and the actual message –
+    // which named a CORS refusal – was thrown away by this very line. Listing the files told
     // nobody anything; they had all failed for one reason.
-    for (const f of result.failed) console.warn('[openposse] weights:', f.id, '—', f.reason);
+    for (const f of result.failed) console.warn('[openposse] weights:', f.id, '–', f.reason);
 
     const mismatched = result.failed.filter((f) => f.reason === 'mismatch');
     const reasons = [...new Set(result.failed.map((f) => f.reason))];
     setStatus('weights-status', mismatched.length
       ? `refused: ${mismatched.map((f) => f.id).join(', ')} did not match the expected contents`
-      : `${result.failed.length} of ${result.failed.length} failed — ${reasons.join(' · ')}`);
+      : `${result.failed.length} of ${result.failed.length} failed – ${reasons.join(' · ')}`);
     el('drop-weights').hidden = false;
     return;
   }
@@ -285,7 +285,7 @@ el('drop-weights').addEventListener('click', async () => {
 // ── Trying the voices ──────────────────────────────────────────────────────────────────────
 //
 // **The same words in every voice**, whatever they are. Different lines per voice would sample
-// them; one line lets them be compared, which is the actual question — "which of these should
+// them; one line lets them be compared, which is the actual question – "which of these should
 // Ivan be" is a judgement nobody can make from six different sentences.
 //
 // Editable, because the right sample depends on what you are listening for. A default that
@@ -293,7 +293,7 @@ el('drop-weights').addEventListener('click', async () => {
 // vocabulary, and vice versa.
 //
 // This one runs long on purpose: several clauses, a colon, and shifts of pace that a short
-// line cannot show. It also crosses HeadTTS's sentence split, so it exercises chunk chaining —
+// line cannot show. It also crosses HeadTTS's sentence split, so it exercises chunk chaining –
 // the thing that made the spike say "Hello" and stop.
 const DEFAULT_SAMPLE = 'All men dream, but not equally. Those who dream by night in the dusty '
   + 'recesses of their minds wake in the day to find that it was vanity: but the dreamers of '
@@ -322,7 +322,7 @@ function describeVoice(id) {
  * The four accent groups, in the order they are offered.
  *
  * Fixed here rather than derived from `VOICES`, whose order is the *assignment* order and puts
- * the six original voices first so nobody's agent changes voice — see the note on `VOICES`.
+ * the six original voices first so nobody's agent changes voice – see the note on `VOICES`.
  * Reading that order into the UI would produce four groups interleaved by history.
  */
 const VOICE_GROUPS = ['British female', 'British male', 'American female', 'American male'];
@@ -346,7 +346,7 @@ async function refreshVoices() {
   list.textContent = '';
 
   // Grouped, because 28 rows of "Play" with the accent repeated on every one is a wall. The
-  // heading carries the accent, so the row's second line is free to carry a failure instead —
+  // heading carries the accent, so the row's second line is free to carry a failure instead –
   // which is what it is really for.
   for (const accent of VOICE_GROUPS) {
     const voices = voicesIn(accent);
@@ -417,7 +417,7 @@ async function refreshRoster() {
   target.className = 'card';
 
   if (agents.length === 0) {
-    target.textContent = 'none yet — record one from the toolbar button';
+    target.textContent = 'none yet – record one from the toolbar button';
     return;
   }
 
@@ -432,8 +432,8 @@ async function refreshRoster() {
     avatar.textContent = initialFor(agent.name);
 
     // Named so the rail can give it a line of its own. The roster now sits in a 340px column
-    // rather than the 620px one this row was laid out for, and the alternative — selecting it
-    // as "the child with no class" — breaks silently the first time anyone adds one.
+    // rather than the 620px one this row was laid out for, and the alternative – selecting it
+    // as "the child with no class" – breaks silently the first time anyone adds one.
     const text = document.createElement('div');
     text.className = 'who';
     const name = document.createElement('div');
@@ -444,7 +444,7 @@ async function refreshRoster() {
     // A broken agent is listed, not hidden. It still routes, so being told beats finding out
     // when it is asked a question.
     kind.textContent = broken.includes(agent.id)
-      ? 'needs re-recording — its recipe is missing'
+      ? 'needs re-recording – its recipe is missing'
       : 'Via browser';
 
     text.append(name, kind);
@@ -455,7 +455,7 @@ async function refreshRoster() {
     // Recording used to end with a name field in the orb, over the vendor's page. It could not
     // be typed into: a page manages its own focus, and Notion takes it straight back. Rather
     // than fight that per vendor forever, a recording now saves itself under the vendor's
-    // product name and the name becomes an edit — here, in our own page, where nothing
+    // product name and the name becomes an edit – here, in our own page, where nothing
     // competes for the keyboard.
     //
     // A plain input rather than a dialog: there is one field and it already shows the current
@@ -480,7 +480,7 @@ async function refreshRoster() {
         .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
 
       if (!result?.ok) {
-        // A rename that did not happen must not look like one that did — the roster is what
+        // A rename that did not happen must not look like one that did – the roster is what
         // the user says out loud, so believing a stale name means addressing an agent that
         // does not answer.
         problemLine.textContent = result?.reason ?? 'could not rename';
@@ -556,7 +556,7 @@ async function refreshRoster() {
       problemLine.hidden = false;
     };
 
-    // **See** — the recipe as the runtime will read it, not a reconstruction of it.
+    // **See** – the recipe as the runtime will read it, not a reconstruction of it.
     const details = document.createElement('pre');
     details.className = 'recipe';
     details.hidden = true;
@@ -580,7 +580,7 @@ async function refreshRoster() {
       see.textContent = 'Hide';
     });
 
-    // **Re-record** — same wizard, keeping this agent's name and voice.
+    // **Re-record** – same wizard, keeping this agent's name and voice.
     const again = document.createElement('button');
     again.className = 'ghost';
     again.textContent = 'Re-record';
@@ -593,10 +593,10 @@ async function refreshRoster() {
 
       again.disabled = false;
       if (!result?.ok) { say(result?.reason ?? 'could not start', true); return; }
-      say('recording — the panel is on that tab now');
+      say('recording – the panel is on that tab now');
     });
 
-    // **Delete** — confirmed in place. A dialog would be a second surface to build and would
+    // **Delete** – confirmed in place. A dialog would be a second surface to build and would
     // still be a yes/no; turning the button itself into the confirmation keeps the question
     // attached to the row it is about, so there is no chance of confirming the wrong one.
     const remove = document.createElement('button');
@@ -644,12 +644,12 @@ function describeRecipe(recipe) {
     ['message box', recipe.inputSelector],
     ['sends with', recipe.submitMethod === 'enterKey' ? '↩ Enter' : recipe.submitSelector],
     ['answer appears', recipe.responseContainerSelector],
-    ['knows when done', recipe.busySelector ?? '— none, so a timer is used'],
+    ['knows when done', recipe.busySelector ?? '– none, so a timer is used'],
     ['quiet period', `${recipe.quietPeriodMs ?? 900} ms`],
     ['gives up after', `${Math.round((recipe.responseTimeoutMs ?? 60000) / 1000)} s`],
   ];
   const width = Math.max(...rows.map(([label]) => label.length));
-  return rows.map(([label, value]) => `${label.padEnd(width)}  ${value ?? '—'}`).join('\n');
+  return rows.map(([label, value]) => `${label.padEnd(width)}  ${value ?? '–'}`).join('\n');
 }
 
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
@@ -658,7 +658,7 @@ function describeRecipe(recipe) {
 //
 // **This was a bare sequence of awaits, and that is how the weights section shipped broken.**
 // `markDone` was given an id that did not exist, threw on null, and took every later step with
-// it — so the page sat on "checking…" with a button that appeared to do nothing and nothing in
+// it – so the page sat on "checking…" with a button that appeared to do nothing and nothing in
 // the console to say why. A setup page is a list of independent facts about a machine; one of
 // them being unreadable is no reason to stop reporting the rest.
 for (const [name, refresh] of Object.entries({
@@ -674,11 +674,11 @@ for (const [name, refresh] of Object.entries({
   try {
     await refresh();
   } catch (error) {
-    console.error(`[openposse] setup: ${name} could not be read —`, error?.message ?? error);
+    console.error(`[openposse] setup: ${name} could not be read –`, error?.message ?? error);
   }
 }
 
 // Shortcuts are changed on another tab, so this page is stale the moment they leave it. Chrome
-// has no event for a rebinding — re-reading on focus is the only way the status can be true
+// has no event for a rebinding – re-reading on focus is the only way the status can be true
 // when they come back, and coming back is exactly what they do.
 window.addEventListener('focus', () => { refreshShortcut(); });
