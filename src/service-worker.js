@@ -29,6 +29,10 @@ import {
   derive, stepLabel, instruction, captures, PATIENCE_MS,
 } from './coaching.js';
 import { panel, hidePanel, primePanel } from './panel.js';
+import {
+  surfaceNow, surfaceWarm, hydrate as hydrateSurface, watchSurface,
+} from './surface.js';
+import { frontWindowNow, hydrate as hydrateFront, watchFront } from './front.js';
 import { trace } from './trace.js';
 import { channelFor } from './channels.js';
 
@@ -1409,13 +1413,89 @@ async function registerFor(pattern) {
  */
 chrome.commands.onCommand.addListener((command, tab) => {
   if (command !== 'summon') return;
-  // **First, before any await.** `activeTab` is granted by this keypress and is spent by the
-  // time an async chain gets around to using it – which is why the orb only ever appeared on
-  // Notion, the one site with a standing host permission. The event carries the tab, so no
-  // query is needed either.
-  primePanel(tab?.id);
+  // **First, before any await**, and now for two reasons rather than one. `activeTab` is granted
+  // by this keypress and is spent by the time an async chain gets around to using it – which is
+  // why the orb only ever appeared on Notion, the one site with a standing host permission.
+  // `chrome.sidePanel.open()` has the identical rule and the identical failure. So the surface is
+  // read from a synchronous cache (`surface.js`) rather than from storage: a read here would
+  // spend the very gesture it is deciding how to use.
+  showSurface(tab);
   toggleListening();
 });
+
+/**
+ * Opens whichever surface the user has chosen, synchronously.
+ *
+ * Neither branch may await. A global shortcut pressed while Chrome is in the background carries
+ * no tab, and then neither surface has anywhere to go – the orb falls back to a query that
+ * usually fails (correctly: nobody is looking at a window), and the panel simply cannot open,
+ * because a side panel belongs to a window and there is no focused one.
+ */
+function showSurface(tab) {
+  if (surfaceNow() !== 'panel') {
+    // `warm` says whether this is the user's choice or merely the default: MV3 kills an idle
+    // worker in ~30 s and a global shortcut is the most likely thing to wake it, so the cache can
+    // be cold on exactly the event it exists for. Measured 2026-10-01: it is not, in practice.
+    if (!surfaceWarm()) console.info('[openposse] surface is the default, not a choice – hydrate lost the race');
+    // **The orb has the same missing-tab problem as the panel below, and it is worse there.**
+    // With no tab id, `place()` falls back to `chrome.tabs.query()` – an await, which spends the
+    // `activeTab` grant this keypress just made. So the orb reaches only sites we hold a standing
+    // permission for, which is precisely the symptom `panel.js` documents as fixed. It was fixed
+    // for the popup's button and never for the shortcut; a broad host grant hid the difference.
+    if (tab?.id == null) console.warn('[openposse] the shortcut carried no tab, so the orb falls back to a query – which spends the activeTab grant. Expect the orb on already-granted sites only.');
+    primePanel(tab?.id);
+    return;
+  }
+  if (tab?.windowId != null) { openPanelIn(tab.windowId, 'the event'); return; }
+
+  // **A command marked `global` does not carry a tab**, so this is the *normal* path for ⌥V and
+  // not the background case the first version assumed – which is why every press returned
+  // silently. Looking the window up instead was measured on 2026-10-01 and fails for the reason
+  // this whole function is shaped around:
+  //
+  //     sidePanel.open() may only be called in response to a user gesture.
+  //
+  // One await, gesture gone. So the window has to be known before the keypress rather than found
+  // after it, which is what `front.js` is for.
+  const known = frontWindowNow();
+  if (known != null) { openPanelIn(known, 'the remembered window'); return; }
+  console.warn('[openposse] no window remembered yet, so there is nowhere to open the panel – click the toolbar icon once, or press the shortcut again now the worker is awake. Listening started either way.');
+}
+
+/**
+ * The open itself, which reports both ways.
+ *
+ * The spike used to follow a success with an "opened by" ping. That is gone: the panel catches up
+ * by asking `openposse.listen.query` when its document loads, which answers the same question
+ * and, unlike a broadcast racing that document's own listener, actually arrives.
+ */
+function openPanelIn(windowId, via) {
+  return chrome.sidePanel.open({ windowId }).then(
+    () => console.info(`[openposse] side panel opened via ${via}`),
+    (error) => console.warn(`[openposse] side panel would not open via ${via} –`, error?.message ?? error),
+  );
+}
+
+/**
+ * Points the toolbar icon at the chosen surface.
+ *
+ * `openPanelOnActionClick: true` makes Chrome open the panel itself on a click, which bypasses
+ * both `default_popup` **and** `chrome.action.onClicked` – no code of ours runs in between, so
+ * there is no gesture to lose. Setting it false restores the popup. There is no manifest field
+ * for this; it only exists as a call.
+ */
+function pointActionAt(surface) {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: surface === 'panel' })
+    .catch((error) => console.warn('[openposse] setPanelBehavior –', error?.message));
+}
+
+// Top level, not awaited by anything: both caches have to be warm before a shortcut arrives, and
+// `surface.js` defaults to `orb` precisely because it sometimes will not be. Measured warm in
+// practice – Chrome lets a storage read settle before dispatching the event that woke the worker.
+hydrateSurface().then(pointActionAt);
+watchSurface(pointActionAt);
+hydrateFront();
+watchFront();
 
 chrome.runtime.onInstalled.addListener(() => {
   console.info('[openposse] extension installed');

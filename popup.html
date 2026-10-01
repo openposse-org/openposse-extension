@@ -76,6 +76,14 @@
       <button id="send">Ask</button>
     </div>
 
+    <!-- E14's surface switch, and it lives here rather than only in the panel because of a
+         chicken-and-egg the spike shipped with: the switch was reachable only from the surface
+         it switches to, so anyone who could not open the panel could not choose it either.
+         Temporary — it goes when the testing resolves and one surface is deleted. -->
+    <div class="listen">
+      <button id="surface" class="secondary"></button>
+    </div>
+
     <footer>
       <button class="secondary" id="record">Record this tab</button>
       <div class="spacer"></div>

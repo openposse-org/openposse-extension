@@ -14,7 +14,8 @@
     "storage",
     "tabs",
     "alarms",
-    "scripting"
+    "scripting",
+    "sidePanel"
   ],
   "optional_host_permissions": [
     "https://*/*"
@@ -56,6 +57,9 @@
       "32": "icons/icon-32.png",
       "48": "icons/icon-48.png"
     }
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
   },
   "options_page": "setup.html",
   "commands": {

@@ -307,4 +307,24 @@ const catchUp = chrome.runtime
   .then((state) => showState(state ?? { listening: false }))
   .catch(() => showState({ listening: false }));
 
-await Promise.all([render(), checkMic(), catchUp]);
+/**
+ * E14's surface switch. Temporary, and it is here because the spike shipped a chicken-and-egg:
+ * the only control for choosing the panel lived *inside* the panel, so anyone who could not open
+ * it could not select it either. It goes when the testing resolves and one surface is deleted.
+ */
+async function paintSurface() {
+  const { surface } = await chrome.storage.local.get('surface');
+  const onPanel = surface === 'panel';
+  el('surface').textContent = onPanel ? 'Showing turns in the side panel' : 'Showing turns on the orb';
+  el('surface').title = onPanel
+    ? 'Switch back to the floating orb over the page'
+    : 'Switch to Chrome’s side panel, which also works on pages the orb cannot reach';
+}
+
+el('surface').addEventListener('click', async () => {
+  const { surface } = await chrome.storage.local.get('surface');
+  await chrome.storage.local.set({ surface: surface === 'panel' ? 'orb' : 'panel' });
+  await paintSurface();
+});
+
+await Promise.all([render(), checkMic(), catchUp, paintSurface()]);

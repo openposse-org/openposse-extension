@@ -25,6 +25,18 @@ import { build } from 'esbuild';
  */
 const stub = (thenable = true) => new Proxy(function stubbed() {}, {
   get: (target, key) => {
+    // **One symbol is answered, and it is not decoration.** `const [tab] = await
+    // chrome.tabs.query(…)` is how every extension page reads the tab in front, and array
+    // destructuring asks for `Symbol.iterator`. Without this the read throws *after* the test
+    // has returned, which Node reports as an unhandled rejection against the whole file – six
+    // green ticks and a red file, with the reason nowhere near the test that caused it.
+    if (key === Symbol.iterator) return function* iterate() { yield stub(thenable); };
+    // **And one more, for the same reason.** `` `Ask ${agent.name}` `` is ordinary UI code, and
+    // a template literal coerces. Without this the fallback chain is `valueOf` then `toString`,
+    // both of which the trap answers with another *stub* rather than a primitive – so every
+    // interpolation throws "Cannot convert object to primitive value", asynchronously, long
+    // after the test that caused it has passed.
+    if (key === Symbol.toPrimitive) return (hint) => (hint === 'number' ? 0 : '«stub»');
     if (typeof key === 'symbol') return undefined;      // let coercion fall through to the target
     if (key !== 'then') return stub(thenable);
     if (!thenable) return undefined;
@@ -72,6 +84,33 @@ test('orb.js survives being loaded, and its body actually runs', async () => {
 test('content.js survives being loaded, and its body actually runs', async () => {
   const sandbox = evaluate(await bundled('src/content.js'), ['chrome']);
   assert.equal(sandbox.__openposseContentScript, true, 'the guarded block was skipped');
+});
+
+test('sidepanel.js survives being loaded, and runs to its last statement', async () => {
+  // **E14 makes this the only surface** when the switch is flipped, so a module-load throw here
+  // is the whole product doing nothing – the exact symptom this file exists for, and now with no
+  // orb behind it to notice.
+  //
+  // The assertion is `requestAnimationFrame` having been reached, because it is the file's last
+  // statement: a throw anywhere above it leaves `frame` null, which is precisely the failure the
+  // stray backtick produced four hundred lines into orb.js.
+  //
+  // **It schedules a frame and does not draw one**, deliberately. Invoking the callback would run
+  // `drawSphere`, which wants a canvas with real dimensions and a 2D context – and `stub` cannot
+  // give it either, because a chaining Proxy has no primitive conversion, so `window
+  // .devicePixelRatio` fails at `Math.min`. Mocking fifteen canvas methods to execute drawing
+  // code that has been on screen for weeks is not what this harness is for. `orb.js` above draws
+  // no frame either, for the same reason.
+  let frame = null;
+  const sandbox = {
+    window: stub(), document: stub(), chrome: stub(), navigator: stub(), console: stub(),
+    requestAnimationFrame: (fn) => { frame ??= fn; return 1; },
+  };
+  vm.createContext(sandbox);
+  const code = await bundled('src/sidepanel.js');
+  new vm.Script(code, { filename: 'sidepanel.js' }).runInContext(sandbox);
+
+  assert.equal(typeof frame, 'function', 'the module did not reach its last statement');
 });
 
 test('capture.js survives being loaded', async () => {

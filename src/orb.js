@@ -19,6 +19,7 @@
 // folds it into the IIFE, so the shipped content script is still one file.
 import { MARK_SVG, MARK_CSS } from './mark.js';
 import { tell } from './tell.js';
+import { drawSphere, modeFor } from './sphere.js';
 
 // **The sentinel is set at the end of this block, not here.** Claiming success before doing the
 // work meant a throw anywhere below left the page asserting an orb it does not have: every later
@@ -31,168 +32,12 @@ import { tell } from './tell.js';
 // forbids top-level await, so a second injection cannot interleave with a first still running.
 if (!globalThis.__openposseOrb) {
 
-  // ── The orb renderer ─────────────────────────────────────────────────────────────────────
+  // ── The orb renderer lives in `sphere.js` ────────────────────────────────────────────────
   //
-  // Ported verbatim from the design file's logic class. The comments there explain the two
-  // non-obvious parts and are worth keeping: the halo's inner stop must be transparent or the
-  // face floods with colour, and the rim is stroked three times at falling blur and rising
-  // opacity because that is what makes it bloom rather than read as a drawn circle.
-
-  /** The outer bloom. Off – see the note where it is drawn. */
-  const SHOW_HALO = false;
-
-  const PAL = [[255, 122, 24], [255, 63, 216], [138, 92, 255], [34, 216, 255], [196, 242, 255], [255, 122, 24]];
-  const LUTS = {};
-  let POINTS = null;
-
-  function points() {
-    if (POINTS) return POINTS;
-    const N = 520, out = [], ga = Math.PI * (3 - Math.sqrt(5));
-    for (let i = 0; i < N; i += 1) {
-      const y = 1 - (i / (N - 1)) * 2;
-      const r = Math.sqrt(Math.max(0, 1 - y * y));
-      const th = ga * i;
-      out.push([Math.cos(th) * r, y, Math.sin(th) * r]);
-    }
-    POINTS = out;
-    return out;
-  }
-
-  function hexArr(h) {
-    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h || '');
-    return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null;
-  }
-
-  /** 72 steps around the rim, and the one place the agent's channel colour is mixed in. */
-  function lut(tint) {
-    if (LUTS[tint]) return LUTS[tint];
-    const mix = hexArr(tint), N = 72, arr = [], raw = [];
-    for (let i = 0; i < N; i += 1) {
-      const p = (i / N) * (PAL.length - 1);
-      const a = Math.floor(p), b = Math.min(PAL.length - 1, a + 1), f = p - a;
-      let c = [0, 1, 2].map((k) => PAL[a][k] + (PAL[b][k] - PAL[a][k]) * f);
-      if (mix) c = c.map((v, k) => v * 0.42 + mix[k] * 0.58);
-      raw.push(c);
-      arr.push(c.map(Math.round).join(','));
-    }
-    LUTS[tint] = { s: arr, raw };
-    return LUTS[tint];
-  }
-
-  function draw(cv, t, mode, tint) {
-    const r = cv.getBoundingClientRect();
-    if (!r.width || !r.height) return;
-    const cx = cv.__cx || (cv.__cx = cv.getContext('2d'));
-    const d = Math.min(2, window.devicePixelRatio || 1);
-    if (cv.width !== Math.round(r.width * d) || cv.height !== Math.round(r.height * d)) {
-      cv.width = Math.round(r.width * d);
-      cv.height = Math.round(r.height * d);
-    }
-    cx.setTransform(d, 0, 0, d, 0, 0);
-    const w = r.width, h = r.height, ox = w / 2, oy = h / 2;
-    cx.clearRect(0, 0, w, h);
-    cx.globalCompositeOperation = 'lighter';
-
-    // **While listening, the radius is the microphone**, which is what the design asks for and
-    // why: "so a dead mic can never look healthy." The synthetic curve below drew the same
-    // confident sphere whether or not anything was being heard – breaking the promise in
-    // precisely the case it exists for, a granted, connected, silent microphone.
-    //
-    // The floor is kept, so silence still breathes rather than collapsing: a quiet room sits
-    // near 0.24 against a synthetic 0.80, which is the visible difference between "listening"
-    // and "hearing you". `shown` eases toward the reported level, because the meter arrives at
-    // 20 Hz and this runs at 60.
-    //
-    // Every other mode stays synthetic. `agent` becomes the TTS output level at E5, by the same
-    // argument and through the same channel.
-    const amp = mode === 'speak'
-      ? (hasLevel
-        ? Math.min(1.05, 0.22 + 0.04 * Math.sin(t / 28) + 0.85 * shown)
-        : 0.80 + 0.16 * Math.sin(t / 13) + 0.09 * Math.sin(t / 4.1))
-      // An answering agent moves with its own speech for the same reason a listening orb moves
-      // with yours – otherwise it is an animation that happens to be playing while a voice
-      // happens to be talking, and the two drift apart within a sentence. The floor is higher
-      // than the microphone's because there is no silence to represent: an agent that is
-      // speaking is always saying something.
-      : mode === 'agent'
-        ? (hasLevel
-          ? Math.min(1.05, 0.42 + 0.06 * Math.sin(t / 9.5) + 0.60 * shown)
-          : 0.58 + 0.16 * Math.sin(t / 9.5) + 0.10 * Math.sin(t / 3.3))
-        : mode === 'think' ? 0.26 + 0.07 * Math.sin(t / 20)
-          : mode === 'dead' ? 0
-            : 0.13 + 0.04 * Math.sin(t / 28);
-    const lum = mode === 'dead' ? 0.18 : mode === 'rest' ? 0.5 : mode === 'think' ? 0.72 : 1;
-
-    const R = Math.min(w, h) * 0.232 * (0.93 + 0.13 * amp);
-    const L = lut(mode === 'dead' ? '#8E8E93' : tint);
-
-    // Diffuse halo – **off by request, 2026-09-26.**
-    //
-    // A deliberate departure from a design marked high-fidelity, so it is a switch rather than
-    // a deletion: the bloom reaches 2.05R, roughly doubling the panel's visual footprint over
-    // somebody else's page, and on screen it read as a second ring around the sphere rather
-    // than as light coming off it. The rim's own three passes already bloom.
-    //
-    // Kept because judging it needs to be done against a real page in both states, and
-    // re-deciding costs one word here.
-    if (SHOW_HALO) {
-      // The inner stop **must** be transparent: a radial gradient's inner radius is a plateau,
-      // so anything inside it floods the core, and the reference's face is near-black.
-      const hg = cx.createRadialGradient(ox, oy, R * 0.55, ox, oy, R * 2.05);
-      hg.addColorStop(0, 'rgba(0,0,0,0)');
-      hg.addColorStop(0.62, `rgba(${L.s[18]},${0.30 * lum})`);
-      hg.addColorStop(0.78, `rgba(${L.s[50]},${0.13 * lum})`);
-      hg.addColorStop(1, 'rgba(0,0,0,0)');
-      cx.fillStyle = hg;
-      cx.beginPath(); cx.arc(ox, oy, R * 2.05, 0, 6.2832); cx.fill();
-    }
-
-    if (mode !== 'dead') {
-      const pts = points(), step = w < 160 ? 2 : 1;
-      const a = t * 0.0075, ca = Math.cos(a), sa = Math.sin(a);
-      const ct = Math.cos(0.34), st = Math.sin(0.34);
-      for (let i = 0; i < pts.length; i += step) {
-        const p = pts[i];
-        const x = p[0] * ca + p[2] * sa, zr = -p[0] * sa + p[2] * ca;
-        const y = p[1] * ct - zr * st, z = p[1] * st + zr * ct;
-        const wob = 1 + 0.14 * amp * Math.sin(p[1] * 6 + t * 0.06)
-          + 0.07 * amp * Math.sin(p[0] * 7 - t * 0.045);
-        const px = ox + x * R * wob, py = oy + y * R * wob;
-        const rad = x * x + y * y;
-        const rim = rad * rad * Math.sqrt(rad);
-        const depth = (z + 1) / 2;
-        const al = (0.07 + 0.8 * rim) * (0.3 + 0.7 * depth) * lum;
-        if (al < 0.015) continue;
-        const idx = (((Math.atan2(y, x) + Math.PI) / 6.2832) * 72 + t * 0.12) | 0;
-        const s = 0.9 + 1.7 * rim * depth;
-        cx.fillStyle = `rgba(${L.s[idx % 72]},${al})`;
-        cx.fillRect(px - s / 2, py - s / 2, s, s);
-      }
-    }
-
-    const grad = () => {
-      const g = cx.createConicGradient
-        ? cx.createConicGradient(t * 0.004, ox, oy)
-        : cx.createLinearGradient(ox - R, oy - R, ox + R, oy + R);
-      for (let i = 0; i <= 6; i += 1) {
-        const c = L.raw[Math.min(71, Math.round((i / 6) * 71))];
-        g.addColorStop(i / 6, `rgb(${c.map(Math.round).join(',')})`);
-      }
-      return g;
-    };
-    const ring = (lw, alpha, blur) => {
-      cx.save();
-      if (blur && cx.filter !== undefined) cx.filter = `blur(${blur}px)`;
-      cx.globalAlpha = alpha * lum;
-      cx.lineWidth = lw;
-      cx.strokeStyle = grad();
-      cx.beginPath(); cx.arc(ox, oy, R * 1.055, 0, 6.2832); cx.stroke();
-      cx.restore();
-    };
-    ring(R * 0.22, 0.34, R * 0.30);
-    ring(R * 0.11, 0.5, R * 0.10);
-    ring(R * 0.035, 0.92, 0);
-  }
+  // Lifted there at E14 so the side panel draws the same sphere rather than a second copy of
+  // its mathematics. It is a pure function and this file is still the only thing that owns the
+  // orb's *state* – see the note at the top of that module for why this is not the shared
+  // renderer E14's corollary forbids.
 
   // ── The typeface ─────────────────────────────────────────────────────────────────────────
 
@@ -507,17 +352,6 @@ if (!globalThis.__openposseOrb) {
   let target = 0;
   let hasLevel = false;
 
-  /** The design's six states, mapped from the loop's own vocabulary. */
-  function modeFor(phase) {
-    switch (phase) {
-      case 'listening': return 'speak';
-      case 'thinking': return 'think';
-      case 'answering': return 'agent';
-      case 'not-capturing': return 'dead';
-      default: return 'rest';          // routing, needs-attention, idle
-    }
-  }
-
   function tick() {
     t += 1;
     // **Nothing is drawn while recording**, because the canvas is hidden behind the coaching
@@ -529,7 +363,14 @@ if (!globalThis.__openposseOrb) {
       // design's 80 ms attack and 250 ms release, and this only bridges 20 Hz of messages to
       // 60 Hz of frames. Doing it twice would add lag somebody would read as the orb being slow.
       shown += (target - shown) * 0.25;
-      draw(canvas, t, modeFor(state.phase), state.channel ?? 'none');
+      // `level: null` is *no meter at all*, which the renderer draws as the synthetic curve –
+      // a browser or a device that cannot measure must not look like a silent room.
+      drawSphere(canvas, {
+        t,
+        mode: modeFor(state.phase),
+        tint: state.channel ?? 'none',
+        level: hasLevel ? shown : null,
+      });
     }
     raf = requestAnimationFrame(tick);
   }
