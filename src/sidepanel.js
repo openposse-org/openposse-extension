@@ -7,28 +7,28 @@
 // page, so on a new tab, an ungranted site, `chrome://` anything, the Web Store or a PDF there
 // **is** no orb and no way to grant from nothing. Neither was complete and the seam was visible.
 //
-// Three things here are genuinely different from the two surfaces they came from, rather than
-// transcribed:
+// Three things here are genuinely different from the two surfaces they came from:
 //
 // - **`permissions.request()` works from here**, proven on 2026-10-01 by Chrome's own dialog
-//   rather than by reading. That is the whole load-bearing question of E14 – a content script
-//   cannot do it (the API is absent there, and routing a click through `sendMessage` yields a
-//   *restricted* gesture Chrome refuses), so the orb could never have owned the grant flow.
+//   rather than by reading. A content script cannot do it (the API is absent there, and routing
+//   a click through `sendMessage` yields a *restricted* gesture Chrome refuses), so the orb could
+//   never have owned the grant flow.
 // - **The site line exists at all.** A popup that closes cannot tell you an hour later that the
 //   site it is looking at is no longer granted; a panel that stays open can, and that is exactly
 //   the diagnostic that was missing when a Chrome Site-access change silently killed an agent.
 // - **Nothing fades out.** The orb's dismiss timer exists because it sits over somebody else's
 //   application and has to get out of the way. A panel is the user's own column – it stays, and
-//   the stage clears back to idle instead.
+//   the last answer stays with it until the next turn.
 //
-// The layout assumes no width and no side: Chrome does not persist the panel's width, offers no
+// The layout is the orb's own, rebuilt to the mockup of 2026-10-01: avatars rather than rows, a
+// status line naming who the turn is with in their own colour, an answer in a bubble carrying its
+// source. It assumes no width and no side – Chrome does not persist the panel's width, offers no
 // API to set it, reopens at roughly 360px, and lets the user put it left or right.
 
-import { loadRoster, findAgent, micGranted } from './storage.js';
+import { loadRoster, findAgent, micGranted, recipeFor } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
-import { FLOOR_MS } from './routing.js';
+import { FLOOR_MS, productName } from './routing.js';
 import { patternForHost, matchPattern } from './domain.js';
-import { MARK_SVG, MARK_CSS } from './mark.js';
 import { SURFACES, setSurface } from './surface.js';
 import { drawSphere, modeFor } from './sphere.js';
 
@@ -48,13 +48,9 @@ const fatal = (what) => {
 window.addEventListener('error', (event) => fatal(event.message ?? String(event.error)));
 window.addEventListener('unhandledrejection', (e) => fatal(e.reason?.message ?? String(e.reason)));
 
-// The mark, from the one place it is defined, so no two surfaces can show different logos.
-{
-  const style = document.createElement('style');
-  style.textContent = MARK_CSS;
-  document.head.append(style);
-  el('mark').innerHTML = MARK_SVG;
-}
+// **No mark and no title here.** Chrome draws `OpenPosse` with the extension's own icon directly
+// above this document, and the first version repeated both twenty pixels below it. The shortcut
+// is the one thing in that header Chrome does not show, so it is the only thing kept.
 
 // ── The turn ───────────────────────────────────────────────────────────────────────────────
 
@@ -68,7 +64,7 @@ window.addEventListener('unhandledrejection', (e) => fatal(e.reason?.message ?? 
  */
 let state = {
   phase: 'idle', agentName: null, channel: null,
-  transcript: '', volatile: '', answer: '', sub: '', message: '', shortcut: '',
+  transcript: '', volatile: '', answer: '', sub: '', message: '',
 };
 
 /** The microphone level, and whether there is a meter at all. `null` is *no meter*, not silence. */
@@ -96,14 +92,24 @@ function tick() {
   requestAnimationFrame(tick);
 }
 
+/**
+ * What the status line says, and it is two different kinds of thing.
+ *
+ * **When a turn is with somebody, it names them: `Ivan · Notion`, in their channel colour.** That
+ * is the mockup's own treatment and it carries more than a sentence did – the product name is the
+ * thing a person checks when an answer looks wrong, and `${name} is thinking…` never said which
+ * of three Notion agents was being asked.
+ *
+ * Words are used only where there is no agent to name, or where something needs saying.
+ */
 const STATUS = {
   listening: () => ({ text: 'Listening' }),
   routing: () => ({ text: "Working out who that's for…", pulse: true }),
-  thinking: (s) => ({ text: `${s.agentName} is thinking…`, pulse: true, tinted: true }),
-  answering: (s) => ({ text: `${s.agentName} answered`, tinted: true }),
+  thinking: (s) => ({ who: s.agentName, pulse: true, tinted: true }),
+  answering: (s) => ({ who: s.agentName, tinted: true }),
   'needs-attention': () => ({ text: 'Needs attention', bad: true }),
   'not-capturing': () => ({ text: 'No input', bad: true }),
-  idle: () => ({ text: '' }),
+  idle: (s) => (s.agentName ? { who: s.agentName, tinted: true } : { text: '' }),
 };
 
 function renderTurn() {
@@ -135,17 +141,21 @@ function renderTurn() {
   }
 
   const look = (STATUS[state.phase] ?? STATUS.idle)(state);
-  const status = el('status');
-  status.className = `status${look.tinted ? ' tinted' : ''}${look.bad ? ' bad' : ''}`;
-  if (state.channel) status.style.setProperty('--channel', state.channel);
-  status.textContent = '';
+  const who = el('who');
+  who.className = `who${look.tinted ? ' tinted' : ''}${look.bad ? ' bad' : ''}`;
+  if (state.channel) who.style.setProperty('--channel', state.channel);
+  who.textContent = '';
   if (look.pulse) {
     const dot = document.createElement('div');
     dot.className = 'pulse';
-    status.append(dot);
+    who.append(dot);
   }
-  const words = state.message || look.text;
-  if (words) status.append(document.createTextNode(words));
+  // A message always wins: it is the only thing here written for this exact moment, and the
+  // phases that carry one are the ones where something went wrong.
+  const vendor = look.who ? roster.products[idFor(look.who)] : null;
+  const words = state.message
+    || (look.who ? [look.who, vendor].filter(Boolean).join(' · ') : look.text);
+  if (words) who.append(document.createTextNode(words));
 
   el('deadmic').hidden = state.phase !== 'not-capturing';
 
@@ -154,14 +164,14 @@ function renderTurn() {
   if (state.answer) {
     const bubble = document.createElement('div');
     bubble.className = 'bubble';
-    bubble.textContent = state.answer;
-    answer.append(bubble);
+    bubble.append(document.createTextNode(state.answer));
     if (state.sub) {
       const sub = document.createElement('div');
       sub.className = 'sub';
       sub.textContent = state.sub;
-      answer.append(sub);
+      bubble.append(sub);
     }
+    answer.append(bubble);
   }
 }
 
@@ -218,8 +228,20 @@ function renderCoach() {
 
 // ── The roster ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The roster, read once and drawn many times.
+ *
+ * **Split in two because the vendor names cost a storage read each.** The status line says
+ * `Ivan · Notion`, and that product name comes from the agent's recipe – so a render that fetched
+ * it would hit storage per agent on every phase change, six times a turn, to draw the same four
+ * strings. `load()` fetches; `draw()` is synchronous and cheap and runs whenever the turn moves.
+ */
+let roster = { agents: [], broken: [], problem: null, products: {} };
+
 /** Whom the text box is currently aimed at. Survives re-renders; the roster does not own it. */
 let aimedAt = null;
+
+const idFor = (name) => roster.agents.find((a) => a.name === name)?.id ?? null;
 
 /**
  * Who currently holds the floor, so the panel lights the agent a follow-up would reach.
@@ -234,13 +256,23 @@ async function floorHolderName() {
   return floorHolder;
 }
 
-async function renderRoster() {
+async function loadRosterData() {
   const { agents, broken, problem } = await loadRoster();
+  const products = {};
+  await Promise.all(agents.map(async (agent) => {
+    // `productName` turns `*.notion.so` into "Notion" – the same derivation E3b's navigation uses,
+    // so "take me to Notion" and the label here cannot drift apart.
+    products[agent.id] = productName((await recipeFor(agent))?.domainPattern) ?? null;
+  }));
+  roster = { agents, broken, problem, products };
+  drawRoster();
+}
+
+async function drawRoster() {
+  const { agents, broken, problem } = roster;
   // Mid-turn the patch is authoritative and arrives ahead of session storage; between turns
   // storage is the only source. Reading both in that order keeps the lit ring honest either way.
   const active = state.agentName ?? await floorHolderName();
-  const target = el('agents');
-  target.textContent = '';
 
   // **`problem` is shown, and it never has been on any surface.** `loadRoster` returns a whole
   // sentence when storage is unreadable – "Your saved assistants couldn't be read." – and both
@@ -255,44 +287,44 @@ async function renderRoster() {
       ?? 'No assistants yet. Open a page with an AI assistant on it, then record it.';
   }
 
+  const target = el('avatars');
+  target.textContent = '';
+
   // **Re-asking is offered only when there is something to re-ask.** The orb turns every avatar
-  // into a re-route button because an answer is the only thing it ever shows. Here a row is
-  // usually just a target for the text box – so the row says, in words on the row itself, which
-  // of the two a click is about to do. An invisible mode switch on a click is the thing this
-  // codebase keeps banning.
+  // into a re-route button because an answer is the only thing it ever shows. Here an avatar is
+  // usually just a target for the text box, so the title says which of the two a click will do –
+  // an invisible mode switch on a click is the thing this codebase keeps banning.
   const canReroute = Boolean(state.answer) && state.phase !== 'listening';
 
   for (const agent of agents) {
     const holdsFloor = agent.name === active;
-    const row = document.createElement('div');
-    // Dimming everyone but the floor holder is the design's own rule. With nobody holding it all
-    // are lit – "no active agent" must not read as "every agent is broken".
-    const lit = !active || holdsFloor;
-    row.className = `agent${lit ? ' active' : ''}${agent.name === aimedAt ? ' aimed' : ''}`;
-    row.style.setProperty('--channel', channelFor(agent.name));
-
-    const avatar = document.createElement('div');
-    avatar.className = 'avatar';
-    avatar.textContent = initialFor(agent.name);
-
-    const text = document.createElement('div');
-    text.className = 'text';
-    const name = document.createElement('div');
-    name.className = 'name';
-    name.textContent = agent.name;
-    const kind = document.createElement('div');
     const reroutes = canReroute && !holdsFloor;
-    kind.className = broken.includes(agent.id) ? 'kind bad' : 'kind';
-    kind.textContent = broken.includes(agent.id) ? 'needs re-recording'
-      : reroutes ? 'ask this one instead'
-        : holdsFloor ? 'has the floor'
-          : 'Via browser';
+    const vendor = roster.products[agent.id];
 
-    text.append(name, kind);
-    row.append(avatar, text);
+    const av = document.createElement('div');
+    // `avatar` is ui.css's, so this and Settings cannot disagree about the shape; `av` carries
+    // only the panel's states.
+    //
+    // **`lit` is the ring, and only the floor holder gets it.** With nobody holding the floor
+    // everyone goes to full opacity instead – the design's rule is that "no active agent" must
+    // not read as "every agent is broken", and `on` satisfies that. Giving all four the ring and
+    // the glow satisfied it too and produced four things competing to look selected.
+    av.className = `avatar av${holdsFloor ? ' lit' : ''}${active ? '' : ' on'}`
+      + `${agent.name === aimedAt ? ' aimed' : ''}`
+      + `${broken.includes(agent.id) ? ' broken' : ''}`;
+    // The name, for `aim()` to match on. **Not the title**: "Ivan" is a substring of "Ivan 2", so
+    // matching on text aimed at one and highlighted both – which is exactly the roster this
+    // project has, since `freeName` produces "Ivan 2" on a second import.
+    av.dataset.name = agent.name;
+    av.style.setProperty('--channel', channelFor(agent.name));
+    av.textContent = initialFor(agent.name);
+    // The name is no longer on screen beside the letter, so it has to be reachable: the title is
+    // the only thing carrying it for an agent who is not currently the subject of the status line.
+    av.title = broken.includes(agent.id) ? `${agent.name} needs re-recording`
+      : reroutes ? `Put the same question to ${agent.name}`
+        : [`Ask ${agent.name}`, vendor].filter(Boolean).join(' · ');
 
-    row.title = reroutes ? `Put the same question to ${agent.name}` : `Ask ${agent.name}`;
-    row.addEventListener('click', () => {
+    av.addEventListener('click', () => {
       if (reroutes) {
         // Straight to the worker, which re-asks the remembered prompt. The agent was *clicked*,
         // so re-deriving them from a sentence would throw away the one unambiguous signal there
@@ -305,7 +337,7 @@ async function renderRoster() {
       el('prompt').focus();
     });
 
-    target.append(row);
+    target.append(av);
   }
 
   if (agents.length > 0 && !findAgent(agents, aimedAt ?? '')) aim(active ?? agents[0].name);
@@ -315,8 +347,8 @@ function aim(name) {
   aimedAt = name;
   el('prompt').placeholder = `Ask ${name} to…`;
   el('prompt').dataset.agent = name;
-  for (const row of el('agents').children) {
-    row.classList.toggle('aimed', row.querySelector('.name')?.textContent === name);
+  for (const av of el('avatars').children) {
+    av.classList.toggle('aimed', av.dataset.name === name);
   }
 }
 
@@ -355,9 +387,11 @@ el('mic-warning').addEventListener('click', () => chrome.runtime.openOptionsPage
 function showListening({ listening }) {
   const button = el('listen');
   button.textContent = listening ? 'Stop' : 'Listen';
-  // Losing `.secondary` fills the button with the channel blue – the same "this is live now"
-  // signal the badge shows on the toolbar, so the two surfaces agree.
-  button.classList.toggle('secondary', !listening);
+  // **Listen is the filled control and Ask is the outline**, which is the way round the first
+  // version had backwards: voice is the product and typing is the fallback, and the weight on
+  // screen has to say the same thing the order does. Gaining `.secondary` while listening turns
+  // it into a Stop, which is a different act.
+  button.classList.toggle('secondary', listening);
 }
 
 el('listen').addEventListener('click', () => {
@@ -373,8 +407,7 @@ async function send() {
   const prompt = input.value.trim();
   if (!prompt) return;
 
-  const { agents } = await loadRoster();
-  const agent = findAgent(agents, input.dataset.agent ?? '') ?? agents[0];
+  const agent = findAgent(roster.agents, input.dataset.agent ?? '') ?? roster.agents[0];
   if (!agent) return;
 
   input.value = '';
@@ -519,9 +552,10 @@ el('settings').addEventListener('click', (event) => {
 async function paintSurface() {
   const { surface } = await chrome.storage.local.get('surface');
   const onPanel = SURFACES.includes(surface) ? surface === 'panel' : false;
-  el('surface').textContent = onPanel
-    ? 'Showing turns here · switch to the floating orb'
-    : 'Showing turns on the floating orb · switch to here';
+  el('surface').textContent = onPanel ? 'Use the orb' : 'Use this panel';
+  el('surface').title = onPanel
+    ? 'Show turns on the floating orb over the page instead'
+    : 'Show turns here, which also works on pages the orb cannot reach';
 }
 
 el('surface').addEventListener('click', async () => {
@@ -564,24 +598,24 @@ chrome.runtime.onMessage.addListener((message) => {
   // which reads as it hearing something before anyone has spoken.
   if (patch.phase === 'listening') { level = null; eased = 0; }
 
-  if (patch.shortcut !== undefined) el('shortcut').textContent = patch.shortcut || 'no shortcut set';
+  if (patch.shortcut !== undefined) el('shortcut').textContent = patch.shortcut || '';
 
   renderTurn();
-  // The roster's lit ring and its re-ask offer both depend on the turn, so it re-renders with it.
+  // The lit avatar and the re-ask offer both depend on the turn, so they redraw with it.
   // **Compared rather than triggered off the patch's own keys**, because the clearing case has
-  // no key to watch: a turn that ends leaves rows still offering to re-ask a question whose
+  // no key to watch: a turn that ends leaves avatars still offering to re-ask a question whose
   // answer is gone. Skipping the unchanged case keeps this off the twice-a-second interim path.
   if (before.phase !== state.phase || before.answer !== state.answer
     || before.agentName !== state.agentName || patch.agents !== undefined) {
-    renderRoster();
+    drawRoster();
   }
   return false;
 });
 
 // ── Staying current, which a popup never had to do ─────────────────────────────────────────
 //
-// All three of these exist because this surface outlives the things it is describing. The popup
-// read everything once, at open, and was gone before any of it could change.
+// All of these exist because this surface outlives the things it is describing. The popup read
+// everything once, at open, and was gone before any of it could change.
 
 chrome.tabs.onActivated.addListener(paintSite);
 chrome.tabs.onUpdated.addListener((_id, change) => { if (change.url) paintSite(); });
@@ -593,9 +627,12 @@ chrome.permissions.onAdded.addListener(paintSite);
 chrome.permissions.onRemoved.addListener(paintSite);
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.agents) renderRoster();
-  if (area === 'local' && changes.surface) paintSurface();
-  if (area === 'local' && changes.micGranted) checkMic();
+  if (area !== 'local') return;
+  // The whole roster, not just the names: a re-record replaces a recipe, and the vendor label in
+  // the status line comes from it.
+  if (changes.agents || Object.keys(changes).some((k) => k.startsWith('recipe:'))) loadRosterData();
+  if (changes.surface) paintSurface();
+  if (changes.micGranted) checkMic();
 });
 
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
@@ -606,11 +643,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // showed nothing, and "⌥V stopped working" had no visible cause anywhere in the product.
 chrome.commands.getAll().then((commands) => {
   const summon = commands.find((c) => c.name === 'summon');
-  el('shortcut').textContent = summon?.shortcut || 'no shortcut set';
-  if (!summon?.shortcut) {
-    el('shortcut').title = 'Set one in Settings, or at chrome://extensions/shortcuts';
-    console.warn('[openposse] no shortcut is bound to the summon command');
-  }
+  el('shortcut').textContent = summon?.shortcut || 'no shortcut';
+  el('shortcut').title = summon?.shortcut
+    ? 'Press this anywhere to start a turn'
+    : 'Set one in Settings, or at chrome://extensions/shortcuts';
+  if (!summon?.shortcut) console.warn('[openposse] no shortcut is bound to the summon command');
 }).catch((error) => {
   console.warn('[openposse] could not read the shortcut –', error?.message ?? error);
 });
@@ -638,7 +675,7 @@ chrome.runtime
   .catch(() => showListening({ listening: false }));
 
 renderTurn();
-renderRoster();
+loadRosterData();
 checkMic();
 paintSite();
 paintSurface();
