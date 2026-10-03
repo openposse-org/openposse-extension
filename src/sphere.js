@@ -13,28 +13,39 @@
 // fallback with a scheduled death. That rule is intact – `orb.js` and `sidepanel.js` each keep
 // their own state, their own DOM and their own render pass, and they duplicate each other freely.
 //
-// This is not that. It is a pure function of `(canvas, time, mode, tint, level)` with no state,
-// no DOM beyond the canvas it is handed, and no knowledge of which surface called it. It is
-// artwork, not architecture, and it was lifted rather than copied for one reason: 150 lines of
-// canvas mathematics duplicated into a second file is 150 lines where a fix can land in one copy.
-// When a surface is deleted, one import line goes with it.
+// This is not that. It is a function of `(canvas, time, mode, tint, level)` with no DOM beyond
+// the canvas it is handed and no knowledge of which surface called it. It is artwork, not
+// architecture, and it was lifted rather than copied for one reason: 150 lines of canvas
+// mathematics duplicated into a second file is 150 lines where a fix can land in one copy. When
+// a surface is deleted, one import line goes with it.
 //
-// The one real change from the in-orb version: `level` is a parameter rather than a pair of
-// closure variables. `null` means *there is no meter*, which is a different thing from a silent
-// room and must not look the same – see the amplitude note below.
+// **It is not quite stateless, and the exception is worth stating rather than discovering.** The
+// eased amplitude, luminance and tint strength live on the canvas object (`cv.__amp` and friends,
+// alongside the 2D context that was always cached there), because easing is a property of a thing
+// being animated rather than of the caller animating it. Two canvases drawing the same turn ease
+// independently, which is right: one of them may have been hidden for the first half of it.
+//
+// Two changes from the in-orb version. `level` is a parameter rather than a pair of closure
+// variables, and `null` means *there is no meter*, which is a different thing from a silent room
+// and must not look the same – see the amplitude note below. And the drawing constants were
+// reconciled against the landing page's own orb (`op-landing`, hero A) on 2026-10-01: the dot
+// scale, the amplitude clamp, the point distribution and the rim's stop count had all drifted in
+// the port, each of them in the direction of a flatter sphere.
 
 /** The outer bloom. Off – see the note where it is drawn. */
 const SHOW_HALO = false;
 
 const PAL = [[255, 122, 24], [255, 63, 216], [138, 92, 255], [34, 216, 255], [196, 242, 255], [255, 122, 24]];
-const LUTS = {};
 let POINTS = null;
 
 function points() {
   if (POINTS) return POINTS;
+  // **`(i + .5) / N`, not `i / (N - 1)`.** The offset form is the standard Fibonacci sphere and
+  // keeps both poles off the exact ±1 axis; the other puts one point dead on each, where the
+  // ring maths degenerates and the wobble has no lateral component to act on.
   const N = 520, out = [], ga = Math.PI * (3 - Math.sqrt(5));
   for (let i = 0; i < N; i += 1) {
-    const y = 1 - (i / (N - 1)) * 2;
+    const y = 1 - (2 * (i + 0.5)) / N;
     const r = Math.sqrt(Math.max(0, 1 - y * y));
     const th = ga * i;
     out.push([Math.cos(th) * r, y, Math.sin(th) * r]);
@@ -48,20 +59,48 @@ function hexArr(h) {
   return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null;
 }
 
-/** 72 steps around the rim, and the one place the agent's channel colour is mixed in. */
-function lut(tint) {
-  if (LUTS[tint]) return LUTS[tint];
-  const mix = hexArr(tint), N = 72, arr = [], raw = [];
+/** The untinted rim: 72 steps around the palette, computed once because it never changes. */
+const BASE = (() => {
+  const N = 72, out = [];
   for (let i = 0; i < N; i += 1) {
     const p = (i / N) * (PAL.length - 1);
     const a = Math.floor(p), b = Math.min(PAL.length - 1, a + 1), f = p - a;
-    let c = [0, 1, 2].map((k) => PAL[a][k] + (PAL[b][k] - PAL[a][k]) * f);
-    if (mix) c = c.map((v, k) => v * 0.42 + mix[k] * 0.58);
-    raw.push(c);
-    arr.push(c.map(Math.round).join(','));
+    out.push([0, 1, 2].map((k) => PAL[a][k] + (PAL[b][k] - PAL[a][k]) * f));
   }
-  LUTS[tint] = { s: arr, raw };
-  return LUTS[tint];
+  return out;
+})();
+
+/**
+ * The rim with the agent's channel mixed in, at strength `mix`.
+ *
+ * **Built per frame rather than cached per tint, and the reason is the easing below.** `mix`
+ * now moves continuously from 0 to 1 as a turn acquires an agent, so a cache keyed on the hex
+ * alone would hand back whatever strength happened to be current when that agent first drew.
+ * It is 72 interpolations a frame against 520 `fillRect`s, which is not where the time goes.
+ */
+function lut(tint, mix) {
+  const m = mix > 0.002 ? hexArr(tint) : null;
+  const s = [], raw = [];
+  for (const base of BASE) {
+    const c = m ? base.map((v, k) => v + (m[k] - v) * 0.58 * mix) : base;
+    raw.push(c);
+    s.push(c.map(Math.round).join(','));
+  }
+  return { s, raw };
+}
+
+/**
+ * Moves a canvas's own copy of a value toward a target, and returns where it got to.
+ *
+ * The state lives on the canvas for the same reason the 2D context does: this stays a function
+ * of what it is handed, and the thing being animated is the one holding the animation. Two
+ * canvases drawing the same turn ease independently, which is correct – one may have been
+ * hidden for the first half of it.
+ */
+function toward(cv, key, target, rate) {
+  const now = cv[key];
+  cv[key] = now === undefined ? target : now + (target - now) * rate;
+  return cv[key];
 }
 
 /**
@@ -101,7 +140,7 @@ export function drawSphere(cv, { t, mode, tint, level = null }) {
   //
   // A **null** level is not a quiet room – it is a browser or a device that cannot give us a
   // meter – so it falls back to the synthetic curve rather than drawing a permanently dead orb.
-  const amp = mode === 'speak'
+  const target = mode === 'speak'
     ? (hasLevel
       ? Math.min(1.05, 0.22 + 0.04 * Math.sin(t / 28) + 0.85 * shown)
       : 0.80 + 0.16 * Math.sin(t / 13) + 0.09 * Math.sin(t / 4.1))
@@ -117,10 +156,26 @@ export function drawSphere(cv, { t, mode, tint, level = null }) {
       : mode === 'think' ? 0.26 + 0.07 * Math.sin(t / 20)
         : mode === 'dead' ? 0
           : 0.13 + 0.04 * Math.sin(t / 28);
-  const lum = mode === 'dead' ? 0.18 : mode === 'rest' ? 0.5 : mode === 'think' ? 0.72 : 1;
+
+  // **Eased toward, not jumped to.** This is the hero's own treatment and the one difference a
+  // still image cannot show: a turn moving listening → thinking → answering glides rather than
+  // snapping between three sizes and two brightnesses. The rates are the hero's.
+  //
+  // The amplitude eases faster when a meter is live, because the caller has already smoothed
+  // that signal and a second lag stacked on it is lag a person can feel. The radius is supposed
+  // to *be* the microphone: a sluggish one says "listening" where a prompt one says "hearing
+  // you", and telling those two apart is the whole reason the meter drives the radius at all.
+  const amp = toward(cv, '__amp', target, hasLevel ? 0.4 : 0.12);
+  const lum = toward(cv, '__lum', mode === 'dead' ? 0.18 : mode === 'rest' ? 0.5 : mode === 'think' ? 0.72 : 1, 0.06);
+
+  // The channel fades in as a turn acquires an agent, rather than the sphere changing colour
+  // between one frame and the next. `dead` is its own grey and is always at full strength – it
+  // is a state rather than an identity, so there is nothing for it to fade in from.
+  const grey = mode === 'dead';
+  const mix = toward(cv, '__mix', grey || hexArr(tint) ? 1 : 0, grey ? 0.12 : 0.05);
 
   const R = Math.min(w, h) * 0.232 * (0.93 + 0.13 * amp);
-  const L = lut(mode === 'dead' ? '#8E8E93' : tint);
+  const L = lut(grey ? '#8E8E93' : tint, mix);
 
   // Diffuse halo – **off by request, 2026-09-26.**
   //
@@ -144,24 +199,35 @@ export function drawSphere(cv, { t, mode, tint, level = null }) {
   }
 
   if (mode !== 'dead') {
-    const pts = points(), step = w < 160 ? 2 : 1;
+    const pts = points();
+    // **A dot's size scales with the sphere, and the port had it fixed.** The reference draws at
+    // 168px, so `k` is how much bigger than that this canvas is – without it a 320px orb is the
+    // same 520 one-pixel dots spread over three times the area, which is why a larger orb read
+    // as *dimmer* rather than larger and sent the last round looking at the glow instead.
+    //
+    // It also replaces the decimation it sits where: halving the point count below 160px made a
+    // narrow panel's orb sparse, where shrinking the dots keeps it the same sphere, smaller.
+    // 1× displays get a touch less, because a 1px dot is already heavier than it means to be.
+    const k = (Math.min(w, h) / 168) * (d > 1 ? 1 : 0.8);
     const a = t * 0.0075, ca = Math.cos(a), sa = Math.sin(a);
     const ct = Math.cos(0.34), st = Math.sin(0.34);
-    for (let i = 0; i < pts.length; i += step) {
+    for (let i = 0; i < pts.length; i += 1) {
       const p = pts[i];
       const x = p[0] * ca + p[2] * sa, zr = -p[0] * sa + p[2] * ca;
       const y = p[1] * ct - zr * st, z = p[1] * st + zr * ct;
       const wob = 1 + 0.14 * amp * Math.sin(p[1] * 6 + t * 0.06)
         + 0.07 * amp * Math.sin(p[0] * 7 - t * 0.045);
       const px = ox + x * R * wob, py = oy + y * R * wob;
-      const rad = x * x + y * y;
+      // Clamped, because the wobble can push a point past the unit sphere and `rim` is a 2.5
+      // power – unclamped, a loud syllable makes the silhouette flare rather than swell.
+      const rad = Math.min(1.3, x * x + y * y);
       const rim = rad * rad * Math.sqrt(rad);
       const depth = (z + 1) / 2;
       const al = (0.07 + 0.8 * rim) * (0.3 + 0.7 * depth) * lum;
       if (al < 0.015) continue;
       const idx = (((Math.atan2(y, x) + Math.PI) / 6.2832) * 72 + t * 0.12) | 0;
-      const s = 0.9 + 1.7 * rim * depth;
-      cx.fillStyle = `rgba(${L.s[idx % 72]},${al})`;
+      const s = (0.9 + 1.7 * rim * depth) * k;
+      cx.fillStyle = `rgba(${L.s[idx % 72]},${Math.min(1, al)})`;
       cx.fillRect(px - s / 2, py - s / 2, s, s);
     }
   }
@@ -170,9 +236,11 @@ export function drawSphere(cv, { t, mode, tint, level = null }) {
     const g = cx.createConicGradient
       ? cx.createConicGradient(t * 0.004, ox, oy)
       : cx.createLinearGradient(ox - R, oy - R, ox + R, oy + R);
-    for (let i = 0; i <= 6; i += 1) {
-      const c = L.raw[Math.min(71, Math.round((i / 6) * 71))];
-      g.addColorStop(i / 6, `rgb(${c.map(Math.round).join(',')})`);
+    // Thirteen stops, not seven. Seven quantises the rim into visible bands at the blurred
+    // passes, where the point cloud behind it is continuous – so the two read as two objects.
+    for (let i = 0; i <= 12; i += 1) {
+      const c = L.raw[Math.min(71, Math.round((i / 12) * 71))];
+      g.addColorStop(i / 12, `rgb(${c.map(Math.round).join(',')})`);
     }
     return g;
   };

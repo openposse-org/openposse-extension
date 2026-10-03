@@ -10,7 +10,7 @@
        * The first version ported the popup's markup more or less verbatim and it showed: a
        * second header under Chrome's own, a list of full-width rows where the design uses
        * avatars, and the product's primary action styled as a secondary control. This is the
-       * orb's own visual language — `design/README.md` — carried onto a surface that has no
+       * orb's own visual language – `design/README.md` – carried onto a surface that has no
        * page behind it.
        *
        * **The mockup is a style reference, not a measurement one.** It is drawn far wider than
@@ -21,58 +21,87 @@
        *
        * **No Liquid Glass**, and now also **no header**. There is nothing behind a side panel
        * to blur, and Chrome already draws `OpenPosse` with the extension's own icon directly
-       * above this document — so the port's header repeated both, twenty pixels apart. The only
+       * above this document – so the port's header repeated both, twenty pixels apart. The only
        * thing in it Chrome does not show is the shortcut, which moves into the panel's body.
        */
 
       /* The ambient wash, which is doing most of the work the glass used to.
        *
-       * Two layers: a warm pool behind the orb, and a very broad lift so the panel does not end
-       * in hard black at the edges. Fixed rather than scrolling, so a long answer slides over
-       * the light rather than dragging it. It is **not** tinted by the agent's channel — the orb
-       * is, and a green sphere on a green field loses the sphere. Warm orange is the brand's own
-       * first palette stop, which is what makes the two read as one object lit from behind. */
+       * **The colour ramp is the landing hero's, not a second guess at it.** Orange at the core,
+       * falling through `rgba(228,73,122,.05)` to nothing on `#0B0A0C` – the same ramp the hero
+       * puts behind its logo, so the site and the extension are lit by one light. The first
+       * version used orange twice and read flatter for it: magenta is what makes the falloff
+       * look like distance rather than like the gradient running out.
+       *
+       * The *geometry* is re-derived rather than ported. The hero's ellipse sits at `74% 50%`
+       * because its orb is in the right column of a two-column header; here the orb is centred
+       * near the top of a column that reopens at ~360px. Two layers, because the hero's single
+       * ellipse leaves the bottom of a tall narrow panel dead.
+       *
+       * Fixed rather than scrolling, so a long answer slides over the light rather than dragging
+       * it. It is **not** tinted by the agent's channel – the orb is, and a green sphere on a
+       * green field loses the sphere. */
       body {
         padding: 10px 14px 20px;
         background:
-          radial-gradient(74% 38% at 50% 19%, rgba(255, 122, 24, 0.17), transparent 70%),
-          radial-gradient(120% 70% at 50% 30%, rgba(255, 122, 24, 0.07), transparent 78%),
-          #0c0c0e;
+          radial-gradient(86% 42% at 50% 20%,
+            rgba(255, 122, 24, 0.17), rgba(228, 73, 122, 0.05) 55%, transparent 75%),
+          radial-gradient(130% 72% at 50% 30%, rgba(255, 122, 24, 0.06), transparent 78%),
+          #0b0a0c;
         background-attachment: fixed;
       }
 
       /* ── The stage ─────────────────────────────────────────────────────────────────────── */
 
       .orbwrap { position: relative; display: flex; justify-content: center; }
-      /* A fraction of the panel, never a fixed 168px: the design's size assumes a 452px card
-         floating over a page, and here the container is wherever the user dragged the divider.
-         Note the sphere fills about half of its canvas — the rest was reserved for a halo that
+      /* **The hero's proportion, not its pixel count.** It draws the orb at 320px inside a 520px
+         column, so the rule is 62% of whatever column it is in, capped where the hero caps it.
+         Writing `320px` literally would fill a 360px panel edge to edge, which is a different
+         picture from the one being matched.
+         Note the sphere fills about half of its canvas – the rest was reserved for a halo that
          is switched off. On flat black that read as a hole; with the wash behind it, it reads as
          the light the sphere is sitting in, which is why the canvas is not simply cropped. */
-      canvas { width: min(196px, 58vw); aspect-ratio: 1; display: block; }
+      canvas { width: min(320px, 62%); aspect-ratio: 1; display: block; }
       .orbwrap .dead-mic { position: absolute; bottom: 6px; }
 
+      /* 21px/500, which is four points larger than the port guessed at. What the transcript is,
+         on either surface, is the thing you just said being read back – so it is the one piece of
+         text that has to carry from across a desk.
+
+         **`min-height` is why there is no `:empty` rule any more.** It reserves two lines, so a
+         one-line utterance growing to two does not shove the roster and the answer down the panel
+         while somebody is still mid-sentence. The cost is a reserved strip on a panel that has
+         not heard anything yet. */
       .transcript {
-        margin: -14px 0 0; padding: 0 2px; text-align: center;
-        font-size: 17px; line-height: 1.34; letter-spacing: -0.011em;
+        min-height: 66px; margin: -20px 0 0; padding: 0 6px; text-align: center;
+        font-weight: 500; font-size: 21px; line-height: 1.34; letter-spacing: -0.015em;
         text-wrap: pretty; overflow-wrap: anywhere;
       }
-      .transcript:empty { display: none; }
-      .volatile { color: var(--text-dim); }
+      /* Dimmer than `--text-dim`, deliberately: this is the tail the recogniser is still
+         revising, and it has to read as less settled than ordinary secondary text rather than
+         the same as it. */
+      .volatile { color: rgba(235, 235, 245, 0.52); }
       .caret {
-        display: inline-block; width: 2px; height: 15px; vertical-align: -2px;
-        background: var(--text); opacity: 0.9; margin-left: 1px;
+        display: inline-block; width: 2px; height: 22px; vertical-align: -3px;
+        background: var(--text); opacity: 0.9; margin-left: 2px;
         animation: blink 1.1s steps(2) infinite;
       }
       @keyframes blink { 50% { opacity: 0; } }
 
-      .rule { height: 1px; background: rgba(255, 255, 255, 0.09); margin: 20px 0 13px; }
-
-      /* Avatars on the left, who the turn is with on the right. Straight from the design. */
-      .band { display: flex; align-items: center; gap: 10px; min-height: 34px; }
-      #avatars { display: flex; gap: 7px; }
+      /* Avatars on the left, who the turn is with on the right.
+         **The divider is an inset hairline on this row rather than an element of its own.** A
+         half-pixel `inset` shadow is what the hero uses and it is the better primitive: a 1px div
+         rounds up to a whole device pixel and reads as a drawn line, where this catches the light
+         the way the edge of a raised surface does. It also cannot drift out of alignment with the
+         row it divides, having no margins of its own to keep in step. */
+      .band {
+        display: flex; align-items: center; gap: 10px;
+        margin-top: 18px; padding-top: 14px;
+        box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.14);
+      }
+      #avatars { display: flex; gap: 9px; }
       .who {
-        margin-left: auto; text-align: right; font-size: 12.5px; color: var(--text-dim);
+        margin-left: auto; text-align: right; font-size: 13px; color: var(--text-dim);
         display: flex; align-items: center; gap: 7px; overflow-wrap: anywhere;
       }
       .who.tinted { color: var(--channel); }
@@ -87,32 +116,60 @@
       }
 
       /* `.avatar` itself comes from ui.css so the panel and Settings cannot disagree about it.
-         Only the states are here — and only the floor holder is lit, which is the design's rule
-         and not decoration: a dimmed row is "not who you are talking to", never "broken". */
-      .av {
-        opacity: 0.38; cursor: pointer;
-        transition: opacity 0.18s ease, box-shadow 0.18s ease;
-      }
-      .av:hover { opacity: 0.72; }
-      /* Nobody holds the floor: everyone is present, nobody is selected. */
-      .av.on { opacity: 1; }
-      .av.lit {
-        opacity: 1;
-        box-shadow:
-          inset 0 0.5px 0 rgba(255, 255, 255, 0.45),
-          0 0 0 1.5px var(--channel),
-          0 0 15px color-mix(in srgb, var(--channel) 55%, transparent);
-      }
-      .av.aimed:not(.lit) { opacity: 0.9; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.35); }
-      .av.broken { box-shadow: 0 0 0 1.5px var(--error); }
+         Only the states are here – and only the floor holder is lit, which is the design's rule
+         and not decoration: a dimmed avatar is "not who you are talking to", never "broken".
 
-      .answer { margin-top: 12px; }
-      .answer:empty { display: none; }
+         **Every ring is drawn on `::after` at `inset: -4px`, which is the hero's geometry.** It
+         puts the ring 4px clear of the circle instead of hugging it, and the gap is what makes it
+         read as a halo rather than as a border the avatar grew. It also keeps the ring off the
+         avatar's own `box-shadow`, so ui.css owns the circle's inner highlight and nothing here
+         has to restate it to avoid wiping it out – which is exactly what `.lit` used to do.
+
+         Dimming is the hero's rule too, and it is the inverse of the port's: full opacity is the
+         resting state and `dim` is applied to the others only while somebody holds the floor. The
+         old version dimmed by default and had to add an `on` class to undo it, so the roster's
+         ordinary appearance was the special case. */
+      .av {
+        position: relative; cursor: pointer;
+        transition: opacity 0.3s ease;
+      }
+      .av::after {
+        content: ''; position: absolute; inset: -4px; border-radius: 50%;
+        box-shadow: 0 0 0 0 transparent; transition: box-shadow 0.3s ease;
+        pointer-events: none;
+      }
+      /* Somebody else holds the floor. */
+      .av.dim { opacity: 0.42; }
+      .av.dim:hover { opacity: 0.72; }
+      .av.lit::after {
+        box-shadow:
+          0 0 0 1.5px var(--channel),
+          0 0 14px color-mix(in srgb, var(--channel) 55%, transparent);
+      }
+      .av.aimed:not(.lit)::after { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.35); }
+      .av.broken::after { box-shadow: 0 0 0 1.5px var(--error); }
+
+      /* Reserved like the transcript, and for the sharper version of the same reason: an answer
+         lands mid-turn, and without the reserve it shoves Listen/Stop down the panel at the exact
+         moment somebody may be reaching for it.
+
+         **Reserved only while a turn is actually in flight**, which is where this departs from
+         the hero. The hero's section ends under its answer, so an unconditional 84px reserve
+         costs it nothing; here the desk sits below, so the same reserve on a panel that has never
+         answered is a hole *between* two things rather than space at the end of one. Holding it
+         from `routing` onward buys the no-jump where it is wanted – the move it does make is at
+         listening → routing, which is the moment somebody has just stopped talking. */
+      .answer { padding-top: 14px; }
+      #stage.awaiting .answer { min-height: 84px; }
       .bubble {
-        border-radius: 14px; padding: 11px 13px;
-        font-size: 14.5px; line-height: 1.47;
-        background: rgba(255, 255, 255, 0.055);
-        box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.09);
+        border-radius: 16px; padding: 12px 15px;
+        font-size: 15.5px; line-height: 1.47;
+        background: rgba(255, 255, 255, 0.075);
+        /* Two insets, not one. The hairline alone drew an outlined box; the top highlight is
+           what tips it into reading as a raised surface catching the wash behind it. */
+        box-shadow:
+          inset 0 0.5px 0 rgba(255, 255, 255, 0.22),
+          inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
         animation: rise 0.34s cubic-bezier(0.22, 1, 0.36, 1);
         /* Bounded so a long answer cannot push the controls off screen – they stay reachable
            while an agent is still reading it out. */
@@ -120,7 +177,7 @@
       }
       @keyframes rise { from { opacity: 0; transform: translateY(5px); } }
       /* Inside the bubble, as drawn: it is a property of the answer, not a note beside it. */
-      .sub { font-size: 12px; color: var(--text-faint); margin-top: 5px; }
+      .sub { font-size: 12.5px; color: rgba(235, 235, 245, 0.55); margin-top: 4px; }
 
       /* ── The coaching card, during a recording ─────────────────────────────────────────── */
 
@@ -206,7 +263,6 @@
         <div class="dead-mic" id="deadmic" hidden>NOT HEARING ANYTHING – CHECK INPUT</div>
       </div>
       <div class="transcript" id="transcript"></div>
-      <div class="rule"></div>
       <div class="band">
         <div id="avatars"></div>
         <div class="who" id="who"></div>

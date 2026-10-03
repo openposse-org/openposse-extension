@@ -93,20 +93,33 @@ function tick() {
 }
 
 /**
- * What the status line says, and it is two different kinds of thing.
+ * What the status line says, and it is three different kinds of thing.
  *
- * **When a turn is with somebody, it names them: `Ivan · Notion`, in their channel colour.** That
- * is the mockup's own treatment and it carries more than a sentence did – the product name is the
- * thing a person checks when an answer looks wrong, and `${name} is thinking…` never said which
- * of three Notion agents was being asked.
+ * **While something is happening it is a verb; once it has settled it is an address.** `Ivan is
+ * thinking…` then `Ivan is speaking` then `Ivan · Notion`, in their channel colour throughout –
+ * the landing hero's own sequence, and it is better than either half alone. The port used the
+ * address for all three, so thinking, answering and the minute afterwards rendered identically
+ * and the only thing that moved was the orb. The verb says a turn is still in flight; the vendor
+ * is what a person checks when an answer looks wrong, and it is wanted once it is over.
  *
- * Words are used only where there is no agent to name, or where something needs saying.
+ * Plain words are for where there is no agent to name, or where something needs saying.
  */
+/**
+ * The phases where an answer is on its way, so the panel holds a space open for it.
+ *
+ * **Not simply "a turn is running".** `listening` is deliberately out: nothing is about to land
+ * while somebody is still talking, and on a panel that has never answered the reserve would be a
+ * gap between the roster and the controls rather than space at the end of anything. Holding it
+ * from `routing` means the one move the layout makes is at the moment the person stopped speaking
+ * – not at the moment the bubble appears, which is when a hand is most likely on its way to Stop.
+ */
+const AWAITING = new Set(['routing', 'thinking', 'answering']);
+
 const STATUS = {
   listening: () => ({ text: 'Listening' }),
   routing: () => ({ text: "Working out who that's for…", pulse: true }),
-  thinking: (s) => ({ who: s.agentName, pulse: true, tinted: true }),
-  answering: (s) => ({ who: s.agentName, tinted: true }),
+  thinking: (s) => ({ who: s.agentName, verb: 'is thinking…', pulse: true, tinted: true }),
+  answering: (s) => ({ who: s.agentName, verb: 'is speaking', tinted: true }),
   'needs-attention': () => ({ text: 'Needs attention', bad: true }),
   'not-capturing': () => ({ text: 'No input', bad: true }),
   idle: (s) => (s.agentName ? { who: s.agentName, tinted: true } : { text: '' }),
@@ -152,12 +165,19 @@ function renderTurn() {
   }
   // A message always wins: it is the only thing here written for this exact moment, and the
   // phases that carry one are the ones where something went wrong.
+  //
+  // The verb needs a name to attach to, so a phase that has one falls back to the address rather
+  // than printing `null is thinking…` – which is the same thing the port did with no agent, so
+  // nothing regresses in the case where routing has not decided yet.
   const vendor = look.who ? roster.products[idFor(look.who)] : null;
-  const words = state.message
-    || (look.who ? [look.who, vendor].filter(Boolean).join(' · ') : look.text);
+  const named = look.verb ? `${look.who} ${look.verb}` : [look.who, vendor].filter(Boolean).join(' · ');
+  const words = state.message || (look.who ? named : look.text);
   if (words) who.append(document.createTextNode(words));
 
   el('deadmic').hidden = state.phase !== 'not-capturing';
+
+  // See `AWAITING` above, and the `.awaiting` rule in the stylesheet.
+  el('stage').classList.toggle('awaiting', AWAITING.has(state.phase));
 
   const answer = el('answer');
   answer.textContent = '';
@@ -305,11 +325,15 @@ async function drawRoster() {
     // `avatar` is ui.css's, so this and Settings cannot disagree about the shape; `av` carries
     // only the panel's states.
     //
-    // **`lit` is the ring, and only the floor holder gets it.** With nobody holding the floor
-    // everyone goes to full opacity instead – the design's rule is that "no active agent" must
-    // not read as "every agent is broken", and `on` satisfies that. Giving all four the ring and
-    // the glow satisfied it too and produced four things competing to look selected.
-    av.className = `avatar av${holdsFloor ? ' lit' : ''}${active ? '' : ' on'}`
+    // **`lit` is the ring, and only the floor holder gets it.** Giving all four the ring and the
+    // glow produced four things competing to look selected; the ring means one thing, which is
+    // that this is who the turn is with.
+    //
+    // **`dim` is applied, never undone.** Full opacity is the resting state and the others fade
+    // only while somebody holds the floor – the landing hero's rule, and the inverse of the
+    // port's, which dimmed by default and needed an `on` class to put the roster back to normal.
+    // That made the ordinary appearance of the roster the special case.
+    av.className = `avatar av${holdsFloor ? ' lit' : ''}${active && !holdsFloor ? ' dim' : ''}`
       + `${agent.name === aimedAt ? ' aimed' : ''}`
       + `${broken.includes(agent.id) ? ' broken' : ''}`;
     // The name, for `aim()` to match on. **Not the title**: "Ivan" is a substring of "Ivan 2", so
@@ -483,10 +507,10 @@ async function paintSite() {
     line.textContent = site.why;
     grant.hidden = true;
   } else if (site.covered) {
-    line.textContent = `${site.pattern} — access granted`;
+    line.textContent = `${site.pattern} – access granted`;
     grant.hidden = true;
   } else {
-    line.textContent = `${site.pattern} — no access yet`;
+    line.textContent = `${site.pattern} – no access yet`;
     grant.textContent = `Grant access to ${site.pattern}`;
     grant.hidden = false;
   }
