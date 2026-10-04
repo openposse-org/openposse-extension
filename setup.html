@@ -338,13 +338,12 @@
             <textarea id="sample" rows="2" spellcheck="false"
                       aria-label="What the voices say"></textarea>
             <div class="sample-go">
-              <!-- Disabled **and** explained from the first paint, rather than waiting for a
-                   script to say why. `refreshVoices` clears this once it finds the weights, and
-                   if reading them throws it does not run at all – so a blank default would leave
-                   exactly the dead unexplained button this pair exists to avoid. -->
-              <button class="secondary" id="play-sample" disabled>Play sample</button>
-              <span class="status tech" id="sample-status">needs the voice model below – otherwise
-                you will hear the pace on the next answer</span>
+              <!-- Live from the first paint, on every machine. It speaks through the worker
+                   rather than from this page, so whichever engine would answer you is the one
+                   that answers here – and the status beside it names which, since that is the
+                   one thing about this section nobody can tell by reading. -->
+              <button class="secondary" id="play-sample">Play sample</button>
+              <span class="status tech" id="sample-status"></span>
             </div>
           </div>
         </div>

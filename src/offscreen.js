@@ -18,7 +18,7 @@
 // name, an error code or a duration – except `text`, which goes to exactly one place: a live
 // message to whoever is displaying it.
 
-import { assignVoices } from './voices.js';
+import { assignVoices, localVoices } from './voices.js';
 import { chooseEngine, hasWebGPU, assignKokoroVoices, KOKORO_VOICES } from './tts.js';
 import { weightsStatus } from './weights.js';
 import { speak as speakWithKokoro, cancel as cancelKokoro, warm as warmKokoro } from './kokoro.js';
@@ -341,7 +341,20 @@ async function engine() {
 // `speed` arrives with the message rather than being read from storage here, for the same
 // reason `roster` does: this document is handed everything it needs and keeps no copy of
 // anything that can change behind its back.
-async function speak({ text, agentID, roster = [], speed = 1 }) {
+//
+// **`wanted` and `preview` are what Settings adds, and neither forks the engine choice.** That
+// is the point of routing a preview through here rather than letting Settings speak for itself:
+// a preview that picked its own engine would demonstrate an engine nobody's answers use, and the
+// one person it would mislead is exactly the person previewing – somebody deciding whether to
+// spend 340 MB.
+//
+// - `wanted` names a voice outright, for the Settings list, where the question is "what does
+//   *this* one sound like" rather than "what will Ivan sound like". It is checked against what
+//   is actually available rather than trusted, so a stale id falls back instead of failing.
+// - `preview` is a label, not behaviour. It travels back out on `openposse.speaking` and
+//   `openposse.spoke` so the worker can tell a preview from a turn – no floor is held, no panel
+//   is waiting, and `trace`'s clock belongs to whatever turn last ran.
+async function speak({ text, agentID, roster = [], speed = 1, wanted = null, preview = false }) {
   if (!text) return;
   speechSynthesis.cancel();                 // never two agents at once
   cancelKokoro();
@@ -359,9 +372,13 @@ async function speak({ text, agentID, roster = [], speed = 1 }) {
     // agent `bf_isabella` – a file the shim would refuse, correctly, three layers from anything
     // that could explain it. Naming the source keeps that true for whatever the next subset is.
     const installed = KOKORO_VOICES;
-    const voice = assignKokoroVoices(roster, installed).get(agentID) ?? installed[0]?.id
+    // A named voice wins, but only if it is one of the installed ones. An id from a stale
+    // Settings page would otherwise reach the shim, which refuses a file it has no hash for –
+    // correctly, and three layers from anything that could explain it.
+    const named = installed.some((v) => v.id === wanted) ? wanted : null;
+    const voice = named ?? assignKokoroVoices(roster, installed).get(agentID) ?? installed[0]?.id
       ?? 'bm_george';
-    send('openposse.speaking', { started: true });
+    send('openposse.speaking', { started: true, preview });
     const result = await speakWithKokoro(text, voice, {
       // A real amplitude, on the same channel the microphone uses – so the orb follows an
       // answering agent exactly as it follows you. The system-voice path can only send
@@ -381,7 +398,7 @@ async function speak({ text, agentID, roster = [], speed = 1 }) {
     // computed. `assignKokoroVoices` hands out voices by position, so an agent's voice changes
     // when the roster does; without this, "is this the voice it used last week" is unanswerable
     // from the log, and the answer to "why does it sound different" is a shrug.
-    send('openposse.spoke', { ...result, engine: 'kokoro', voice });
+    send('openposse.spoke', { ...result, engine: 'kokoro', voice, preview });
     return;
   }
 
@@ -390,19 +407,25 @@ async function speak({ text, agentID, roster = [], speed = 1 }) {
     // Nothing at all, rather than nothing *local*. A different problem with a different fix,
     // and reporting both as "no local voice" would send someone to check a setting that is
     // not the one at fault.
-    send('openposse.spoke', { ok: false, reason: 'synthesis-unavailable' });
+    send('openposse.spoke', { ok: false, reason: 'synthesis-unavailable', preview });
     return;
   }
 
   const assigned = assignVoices(roster, available);
-  const voice = assigned.get(agentID) ?? null;
+  // **An empty roster is not a missing voice, and only a preview can tell the difference.**
+  // During a turn there is always an agent, so `assigned.get(agentID)` coming back empty means
+  // nothing local matched and refusing is right. A preview can be asked for before anybody has
+  // recorded an assistant, where there is nothing to assign *from* – and answering "no local
+  // voice" would send somebody to check a speech setting that is working perfectly.
+  const local = localVoices(available);
+  const voice = assigned.get(agentID) ?? (preview ? local[0] ?? null : null);
 
   const utterance = new SpeechSynthesisUtterance(text);
   // No voice means nothing local could be found. Speaking anyway would use the browser default,
   // which may be a network voice – the exact thing `localVoices` exists to prevent – so this
   // stays silent and says why. A missing voice is a setup problem, not a reason to leak.
   if (!voice) {
-    send('openposse.spoke', { ok: false, reason: 'no-local-voice' });
+    send('openposse.spoke', { ok: false, reason: 'no-local-voice', preview });
     return;
   }
   utterance.voice = voice;
@@ -417,16 +440,16 @@ async function speak({ text, agentID, roster = [], speed = 1 }) {
   // device and exposes no audio node, so there is no amplitude to read; `boundary` fires per
   // word, which is speech *rate* rather than loudness. It is honestly synchronised with what is
   // being said, which is what the orb is for, and E6's own audio can be metered properly.
-  utterance.addEventListener('boundary', () => send('openposse.speaking', { pulse: true }));
-  utterance.addEventListener('start', () => send('openposse.speaking', { started: true }));
+  utterance.addEventListener('boundary', () => send('openposse.speaking', { pulse: true, preview }));
+  utterance.addEventListener('start', () => send('openposse.speaking', { started: true, preview }));
   // Named here too, for the same reason as the Kokoro path above – and because "which engine"
   // and "which voice" are one question. A log line that answers it for one path and not the
   // other is worse than one that answers neither: it reads as the system path having no voice.
-  utterance.addEventListener('end', () => send('openposse.spoke', { ok: true, engine: 'system', voice: voice.name }));
+  utterance.addEventListener('end', () => send('openposse.spoke', { ok: true, engine: 'system', voice: voice.name, preview }));
   utterance.addEventListener('error', (event) => {
     // `interrupted` and `canceled` are us stopping it on purpose, not faults.
     const ours = event.error === 'interrupted' || event.error === 'canceled';
-    send('openposse.spoke', { ok: ours, reason: ours ? 'cancelled' : event.error });
+    send('openposse.spoke', { ok: ours, reason: ours ? 'cancelled' : event.error, engine: 'system', preview });
   });
 
   speechSynthesis.speak(utterance);

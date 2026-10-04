@@ -15,7 +15,6 @@ import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
 import {
   weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES, VOICES,
 } from './weights.js';
-import { speak as speakWithKokoro } from './kokoro.js';
 import { icon } from './icons.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
@@ -332,42 +331,135 @@ el('speed').addEventListener('change', async () => {
   showPace();
 });
 
-/** Whether a preview can be played from this page at all. Set by `refreshVoices`. */
-let kokoroReady = false;
-/** The voice the pace preview uses: whichever was played last, else the first installed one. */
-let lastHeardVoice = VOICES[0]?.id ?? 'bm_george';
-
 /**
- * Whether the sample can be played, and if not, why not.
+ * The voice the pace sample uses, or null for "nobody has said".
  *
- * **The reason is on screen rather than only in the disabled state.** This page previews through
- * Kokoro directly, because that is the only engine it can address a *specific voice* on – the
- * system path lives in the offscreen document and picks a voice per agent. So somebody on the
- * system voices finds a dead button, and a dead button with no sentence beside it reads as a
- * bug rather than as a thing that needs the download below.
+ * Null is a real answer rather than a missing one: with no voice named, the preview goes down
+ * the roster's own assignment and you hear what your *assistant* will sound like, which is the
+ * question somebody adjusting the pace is actually asking. It becomes a specific voice only once
+ * you have picked one, which is when naming it starts being what you meant.
  */
-function refreshSampleButton() {
-  el('play-sample').disabled = !kokoroReady;
-  setStatus('sample-status', kokoroReady
-    ? ''
-    : 'needs the voice model below – otherwise you will hear the pace on the next answer');
+let lastHeardVoice = null;
+
+// ── Previews ───────────────────────────────────────────────────────────────────────────────
+//
+// **This page does not speak. It asks the worker to.**
+//
+// It used to call Kokoro directly, which is the only engine a *page* can point at a named voice:
+// the system path lives in the offscreen document and picks per agent. So the pace preview
+// worked on machines that had downloaded 340 MB and was a dead button on every other one, which
+// is to say on exactly the machines whose owner was deciding whether to.
+//
+// Going through `openposse.voice.preview` fixes more than the dead button, and that is the
+// reason it is worth the round trip. A preview is a claim about what answers will sound like,
+// and the only way to make the claim true is to let the same code choose: `chooseEngine` picks
+// the engine, the roster picks the voice, the pace is read from storage rather than handed over
+// from a slider that may not have been saved yet. A preview choosing any of those for itself
+// would be demonstrating something else and sounding confident about it.
+//
+// Two consequences worth stating, because both look like side effects and are the point:
+//
+// - **Stopping is free.** `speak()` cancels whatever is speaking before it starts, so a second
+//   preview silences the first rather than playing over it, and pressing ⌥V silences it too.
+// - **It outlives this tab**, since the audio is the offscreen document's rather than this
+//   page's. Previously, navigating away mid-sample cut it off.
+
+/** Long enough for a cold Kokoro load, short enough that a lost reply is not a hung button. */
+const PREVIEW_PATIENCE_MS = 45_000;
+
+/** Who is waiting on the current preview, so the answer reaches the button that asked. */
+let awaiting = null;
+let patience = null;
+
+const SPOKEN_PROBLEM = {
+  'no-local-voice': 'no local voice is installed for this – check your system speech settings',
+  'synthesis-unavailable': 'this browser reported no speech voices at all',
+  'no-answer': 'the voice engine did not answer',
+  cancelled: 'stopped',
+};
+
+/** Hands the outcome to whoever asked, once, and lets the next preview start. */
+function settle(outcome) {
+  if (!awaiting) return;
+  const report = awaiting;
+  awaiting = null;
+  clearTimeout(patience);
+  report(outcome);
 }
 
-el('play-sample').addEventListener('click', async () => {
+/**
+ * Speaks the sample down the real path and routes the result back to one caller.
+ *
+ * `report` is called exactly once, with the `openposse.spoke` message or a stand-in carrying the
+ * same shape – so a caller never has to tell "it is still synthesising" from "it refused", which
+ * is the distinction this page kept losing.
+ */
+async function playSample({ voice = null, report }) {
+  // One at a time. The engines speak one utterance at a time anyway, and two voices over each
+  // other tells you nothing about either – but the first caller has to be *told*, or its button
+  // sits on "Playing…" while the second one plays.
+  settle({ ok: false, reason: 'cancelled' });
+  awaiting = report;
+  patience = setTimeout(() => settle({ ok: false, reason: 'no-answer' }), PREVIEW_PATIENCE_MS);
+
+  const sent = await chrome.runtime
+    .sendMessage({ kind: 'openposse.voice.preview', text: sample(), voice })
+    .catch((error) => ({ ok: false, reason: error?.message ?? String(error) }));
+
+  // This only says the instruction was dispatched. The outcome arrives below, which is where the
+  // speaking actually finishes – so a failure here is a failure to *start*, and says so.
+  if (!sent?.ok) settle({ ok: false, reason: sent?.reason ?? 'could not reach the voice engine' });
+}
+
+/**
+ * The outcome of a preview, which arrives as a broadcast rather than as a reply.
+ *
+ * `preview` is what tells this apart from an answer being read out in another tab – a real turn
+ * sends the same message and this page would otherwise report somebody else's agent as its own
+ * sample.
+ */
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.kind !== 'openposse.spoke' || !message.preview) return;
+  // The same breakdown the turn logs, because this page is where a voice gets judged and
+  // "it played and I heard nothing" needs the same numbers to be answerable here.
+  const m = message.ms ?? {};
+  if (message.ms) {
+    console.info(`[openposse] preview ${message.voice ?? '?'} (${message.engine ?? '?'}) · `
+      + `first word ${m.firstWord ?? '?'}ms · synth ${m.synth ?? '?'}ms → ${m.audio ?? '?'}ms `
+      + `audio in ${m.chunks ?? '?'} chunks at ${m.rate ?? '?'}Hz · peak ${m.peak ?? '?'} · `
+      + `spoke ${m.play ?? '?'}ms${message.ok ? '' : ` · ${message.reason}`}`);
+  }
+  settle(message);
+});
+
+/** What actually spoke, which is the one thing a preview can report that reading cannot tell you. */
+function describeSpoken(message) {
+  const engine = message.engine === 'kokoro' ? 'Kokoro' : 'System voice';
+  const voice = message.engine === 'kokoro' && message.voice
+    ? describeVoice(message.voice).name
+    : message.voice;
+  return voice ? `${engine} · ${voice}` : engine;
+}
+
+el('play-sample').addEventListener('click', () => {
   const button = el('play-sample');
   button.disabled = true;
   button.textContent = 'Playing…';
   setStatus('sample-status', '');
 
-  const result = await speakWithKokoro(sample(), lastHeardVoice, { speed: pace })
-    .catch((error) => ({ ok: false, reason: error?.message ?? String(error) }));
-
-  button.textContent = 'Play sample';
-  button.disabled = false;
-  // A preview that did not play says so. Same rule as the per-voice rows below: the engine
-  // hands back a reason and dropping it would make "it is synthesising" and "it refused"
-  // the same silence.
-  if (!result?.ok) setStatus('sample-status', result?.reason ?? 'could not play that');
+  playSample({
+    voice: lastHeardVoice,
+    report: (outcome) => {
+      button.disabled = false;
+      button.textContent = 'Play sample';
+      // Naming the engine is most of the value. "Which of the two is actually speaking" is the
+      // question this whole section is about, and a preview that answered it only by sounding a
+      // particular way would be making the reader guess at the thing it just demonstrated.
+      setStatus('sample-status', outcome.ok
+        ? describeSpoken(outcome)
+        : SPOKEN_PROBLEM[outcome.reason] ?? outcome.reason ?? 'it did not play');
+    },
+  });
 });
 
 // ── Trying the voices ──────────────────────────────────────────────────────────────────────
@@ -434,9 +526,11 @@ async function refreshVoices() {
   const ready = (await weightsStatus()).state === 'ready';
   // Read by the pace slider, which lives outside this section and must know whether it can
   // play anything back.
-  kokoroReady = ready;
+  // **Nothing outside this section reads it any more.** It used to gate the Play sample button,
+  // because the page could only speak through Kokoro – now the worker speaks and that button is
+  // live on every machine, so "are the weights here" is only a question about whether there is a
+  // list of voices to show.
   el('voices-section').hidden = !ready;
-  refreshSampleButton();
   if (!ready) return;
 
   const list = el('voice-list');
@@ -500,36 +594,31 @@ function renderVoice(grid, id, name) {
     play.classList.toggle('busy', which === 'loader-circle');
   };
 
-  play.addEventListener('click', async () => {
-    // Every button disabled, not just this one: two voices over each other tells you nothing
-    // about either, and the engine speaks one utterance at a time anyway. `#play-sample` is in
-    // that set too – it speaks through the same engine.
+  play.addEventListener('click', () => {
+    // Every button disabled, not just this one: the engines speak one utterance at a time, and
+    // leaving the rest live would mean a second click cancels a sample that is still loading –
+    // which looks like the first voice simply failing. `#play-sample` is in the set too; it goes
+    // down the same path.
     const buttons = [...grid.closest('#voice-list').querySelectorAll('button'), el('play-sample')];
     for (const b of buttons) b.disabled = true;
     show('loader-circle');
     sub.textContent = '';
 
-    // At the pace the slider currently says, not at 1. A preview that ignored it would make the
-    // one control you cannot judge by reading the one control you cannot judge at all.
+    // Remembered, so the pace sample above speaks in whatever was last judged here rather than
+    // reverting to the roster's choice. The pace itself is not passed: the worker reads what is
+    // *stored*, which is the number an answer will actually use.
     lastHeardVoice = id;
-    const result = await speakWithKokoro(sample(), id, { speed: pace })
-      .catch((error) => ({ ok: false, reason: error?.message ?? String(error) }));
-    // The same breakdown the turn logs, because this page is where a voice gets judged and
-    // "it played and I heard nothing" needs the same two numbers to be answerable here.
-    const m = result.ms ?? {};
-    console.info(`[openposse] voice ${id} · first word ${m.firstWord ?? '?'}ms · `
-      + `synth ${m.synth ?? '?'}ms → ${m.audio ?? '?'}ms `
-      + `audio in ${m.chunks ?? '?'} chunks at ${m.rate ?? '?'}Hz · peak ${m.peak ?? '?'} · `
-      + `spoke ${m.play ?? '?'}ms${result.ok ? '' : ` · ${result.reason}`}`);
-    if (!result.ok) {
-      sub.textContent = result.reason;
-      sub.style.color = 'var(--error)';
-    }
-    show('play');
-    for (const b of buttons) b.disabled = false;
-    // Re-read rather than left enabled: the loop above turns every button back on, and this one
-    // is only ever enabled when Kokoro can answer.
-    refreshSampleButton();
+    playSample({
+      voice: id,
+      report: (outcome) => {
+        if (!outcome.ok && outcome.reason !== 'cancelled') {
+          sub.textContent = SPOKEN_PROBLEM[outcome.reason] ?? outcome.reason;
+          sub.style.color = 'var(--error)';
+        }
+        show('play');
+        for (const b of buttons) b.disabled = false;
+      },
+    });
   });
 
   row.append(label, sub, play);
@@ -677,9 +766,18 @@ async function refreshRoster() {
       }
       // Spoken back rather than only saved. A voice is the one setting here you cannot judge
       // by reading, and hearing it immediately is the difference between choosing and guessing.
+      //
+      // "Chosen for me" deliberately says nothing: the heuristic picks from the whole roster, so
+      // the voice this agent lands on is not knowable until every agent has been placed, and
+      // playing *a* voice would be asserting one that may not be the one it gets.
       if (voice.value) {
         lastHeardVoice = voice.value;
-        speakWithKokoro(sample(), voice.value, { speed: pace }).catch(() => {});
+        playSample({ voice: voice.value, report: (outcome) => {
+          if (outcome.ok || outcome.reason === 'cancelled') return;
+          problemLine.textContent = SPOKEN_PROBLEM[outcome.reason] ?? outcome.reason;
+          problemLine.className = 'kind bad';
+          problemLine.hidden = false;
+        } });
       }
     });
 
@@ -963,8 +1061,6 @@ for (const [name, refresh] of Object.entries({
   weights: refreshWeights,
   pace: loadPace,
   sample: loadSample,
-  // Last of the voice group, because it is what settles `kokoroReady` – and therefore whether
-  // the Play sample button above it is live.
   voices: refreshVoices,
   roster: refreshRoster,
 })) {

@@ -17,7 +17,7 @@ import {
 } from './storage.js';
 import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
-  isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone, say,
+  isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone, say, previewVoice,
 } from './listening.js';
 import { runDemo, stopDemo } from './demo.js';
 import { needsShortening, spokenForm } from './saying.js';
@@ -931,6 +931,18 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
     // Scaffolding, reachable only from the panel's own quiet button. See `demo.js`.
     runDemo().then(respond, (error) => {
       console.warn('[openposse] the demo turn failed –', error?.message ?? error);
+      respond({ ok: false, reason: error?.message ?? String(error) });
+    });
+    return true;
+  }
+  if (request?.kind === 'openposse.voice.preview') {
+    // Settings asking to hear a sample. Here rather than in the page because the offscreen
+    // document is the worker's to create, and because the whole value of this is that the
+    // engine, the voice and the pace are chosen by the same code that chooses them for an
+    // answer. The reply only says the instruction was dispatched – the outcome arrives on the
+    // page as `openposse.spoke`, which is where the speaking actually finishes.
+    previewVoice(request.text, request.voice ?? null).then(respond, (error) => {
+      console.warn('[openposse] the voice preview failed –', error?.message ?? error);
       respond({ ok: false, reason: error?.message ?? String(error) });
     });
     return true;

@@ -225,6 +225,41 @@ export async function say(text, agentID) {
 }
 
 /**
+ * Speaks a sample for Settings, down the same path an answer takes.
+ *
+ * **Settings used to speak for itself, and that is what this replaces.** It called Kokoro
+ * directly, which is the only engine a page can address a specific voice on – so the pace
+ * preview worked on the machines that had downloaded 340 MB and was a dead button on every
+ * other, which is to say on exactly the machines whose owner was deciding whether to.
+ *
+ * Going through here fixes more than the dead button. A preview is a claim about what answers
+ * will sound like, and the only way to make that claim true is to let the same code choose:
+ * `chooseEngine` picks the engine, the roster picks the voice, `voiceSpeed` is read from storage
+ * rather than passed in from a slider that may not have been saved yet. A preview that picked
+ * any of those for itself would be demonstrating something else.
+ *
+ * `voice` overrides the roster's choice, for the per-voice list where the question really is
+ * about one voice. `agents[0]` is the selector otherwise: "what Ivan will sound like" is the
+ * question somebody adjusting the pace is asking, and with no agents at all the offscreen
+ * document falls back to the first voice it has.
+ */
+export async function previewVoice(text, voice = null) {
+  if (!String(text ?? '').trim()) return { ok: false, reason: 'nothing to say' };
+  const { agents } = await loadRoster();
+  await tell('openposse.speak', {
+    text,
+    agentID: agents[0]?.id ?? null,
+    roster: agents.map((a) => ({ id: a.id, voice: a.voice })),
+    speed: await voiceSpeed(),
+    wanted: voice,
+    // Says this is not a turn. The outcome goes back to the page that asked, which is listening
+    // for it; nothing here holds a floor or a panel open on its behalf.
+    preview: true,
+  });
+  return { ok: true };
+}
+
+/**
  * Says why an answer was not read out.
  *
  * **An answer that silently fails to be spoken is indistinguishable from one that was never
@@ -428,6 +463,12 @@ export function handleOffscreenMessage(message) {
       return true;
 
     case 'openposse.speaking':
+      // **A Settings preview is not a turn, and must not move anything that belongs to one.**
+      // No agent holds the floor, no panel is waiting on it, and `trace`'s clock is measuring
+      // from whatever turn last ran – so an orb springing to life while somebody drags a slider
+      // would be reporting an answer that nobody asked for. The page that asked is listening
+      // for its own result.
+      if (message.preview) return true;
       // Renamed, because it was a lie that cost a round trip: this fires *before* the model
       // loads and before a sample is synthesised, so "speaking started … speaking ended
       // +21057ms" looked like twenty-one seconds of audio for twenty words. It is the moment
@@ -446,6 +487,7 @@ export function handleOffscreenMessage(message) {
       return true;
 
     case 'openposse.spoke':
+      if (message.preview) return true;           // see `openposse.speaking` above
       // Releases the panel's dismiss timer, which was held open so it could not fade out
       // mid-sentence, and drops the orb back to rest.
       // The breakdown the previous version could not show, because it happens in the offscreen
