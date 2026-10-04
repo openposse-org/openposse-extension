@@ -9,7 +9,7 @@
 // for something that was never meant to be kept. Only the listening *flag* is persisted, because
 // a badge that says we are listening after the worker has died is a lie a user would act on.
 
-import { loadRoster, micGranted } from './storage.js';
+import { loadRoster, micGranted, voiceSpeed } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
 import { panel, panelLevel, panelSpeaking } from './panel.js';
 import { beginTurn, trace } from './trace.js';
@@ -217,6 +217,10 @@ export async function say(text, agentID) {
     text,
     agentID,
     roster: agents.map((a) => ({ id: a.id, voice: a.voice })),
+    // Read per answer rather than cached, so a change in Settings takes on the next thing
+    // spoken. An MV3 worker is torn down every 30 s anyway, which makes a cache here a thing
+    // that is sometimes stale and sometimes not – the worst of both.
+    speed: await voiceSpeed(),
   });
 }
 

@@ -116,6 +116,21 @@
       }
       .status { margin-top: 9px; }
       .row { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+      /* `accent-color` is what makes the native slider use the brand orange rather than the
+         OS blue. `:root` already sets `color-scheme: dark`, so the track needs nothing else. */
+      .pace {
+        display: flex; align-items: center; gap: 12px;
+        margin-top: 14px; font-size: 13.5px;
+      }
+      .pace label { color: var(--text-dim); flex: 0 0 auto; }
+      .pace input[type="range"] { flex: 1; min-width: 0; accent-color: #ff8a1f; }
+      /* Fixed width and tabular figures, so the number does not shuffle the slider sideways as
+         it counts through 1.00 → 1.05 → 1.10. */
+      .pace output {
+        flex: 0 0 52px; text-align: right;
+        font-feature-settings: var(--figures); color: var(--text-dim);
+      }
+
       .voice {
         display: flex; align-items: center; gap: 11px;
         padding: 9px 0; border-bottom: 1px solid var(--line);
@@ -239,6 +254,17 @@
           – the full text stays on screen. Everything here runs on this machine.
         </p>
         <div id="engine" class="card">checking…</div>
+
+        <!-- **Here rather than in "Try the voices", which is hidden until Kokoro is installed.**
+             The pace applies to whichever engine is speaking, and the people on the system
+             voices are both the ones who cannot see that section and the ones most likely to
+             want this – so putting it there would hide the control from its own best case. -->
+        <div class="pace">
+          <label for="speed">Pace</label>
+          <input type="range" id="speed" min="0.7" max="1.6" step="0.05" value="1"
+                 aria-describedby="speed-value" />
+          <output class="tech" id="speed-value" for="speed">1.00×</output>
+        </div>
 
         <div class="step" id="step-weights" style="margin-top:18px">
           <div class="num">5</div>

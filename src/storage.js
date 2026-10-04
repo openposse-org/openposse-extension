@@ -15,6 +15,7 @@
 
 const AGENTS_KEY = 'agents';
 const MIC_KEY = 'micGranted';
+const SPEED_KEY = 'voiceSpeed';
 const recipeKey = (id) => `recipe:${id}`;
 
 // ── The microphone, remembered rather than predicted ───────────────────────────────────────
@@ -39,6 +40,50 @@ export async function setMicGranted(granted) {
 export async function micGranted() {
   const stored = await chrome.storage.local.get(MIC_KEY);
   return stored[MIC_KEY] === true;
+}
+
+/**
+ * How fast answers are read out, as a multiplier. 1 is each engine's own pace.
+ *
+ * **One number for both engines, because they are the same scale and the user is not choosing
+ * an engine.** Kokoro takes `speed` and drives it through its duration predictor; a system voice
+ * takes `utterance.rate`; both are 1-is-normal and both stretch time without moving pitch. Which
+ * of the two is speaking depends on whether the weights downloaded, which is not a thing anybody
+ * should have to think about while deciding how fast they want to be spoken to.
+ *
+ * **The default is 1, deliberately, even though 1 measured slow.** Kokoro's own pace came out at
+ * 102–126 wpm against a natural ~150 on one roster on one machine, which is an observation about
+ * those voices rather than a finding about the product. Shipping a different default on that
+ * evidence would change what every user hears to match one person's ear. Move it when there are
+ * numbers from more than one of them.
+ */
+const SPEED_DEFAULT = 1;
+// HeadTTS refuses anything outside this and says so; `utterance.rate` would silently clamp.
+// Enforced here so one stored value cannot be valid for one engine and rejected by the other.
+const SPEED_MIN = 0.25;
+const SPEED_MAX = 4;
+
+export function clampSpeed(value) {
+  // **Empty is not zero, and `Number` disagrees.** `Number(null)`, `Number('')` and `Number([])`
+  // are all 0, which is finite – so without this guard an unset value clamps to the *slowest*
+  // pace the engines allow rather than reading as "nobody has chosen one". Caught by a test
+  // rather than by a user wondering why their assistant started drawling.
+  if (value === null || value === undefined || value === '') return SPEED_DEFAULT;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return SPEED_DEFAULT;
+  return Math.min(SPEED_MAX, Math.max(SPEED_MIN, n));
+}
+
+export async function voiceSpeed() {
+  const stored = await chrome.storage.local.get(SPEED_KEY).catch(() => ({}));
+  // A missing key is the default rather than a fault: nobody has opened Settings yet.
+  return stored[SPEED_KEY] === undefined ? SPEED_DEFAULT : clampSpeed(stored[SPEED_KEY]);
+}
+
+export async function setVoiceSpeed(value) {
+  const speed = clampSpeed(value);
+  await chrome.storage.local.set({ [SPEED_KEY]: speed });
+  return speed;
 }
 
 /** A v4-ish id. Only has to be unique within one browser profile. */

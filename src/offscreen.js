@@ -338,7 +338,10 @@ async function engine() {
   });
 }
 
-async function speak({ text, agentID, roster = [] }) {
+// `speed` arrives with the message rather than being read from storage here, for the same
+// reason `roster` does: this document is handed everything it needs and keeps no copy of
+// anything that can change behind its back.
+async function speak({ text, agentID, roster = [], speed = 1 }) {
   if (!text) return;
   speechSynthesis.cancel();                 // never two agents at once
   cancelKokoro();
@@ -364,6 +367,7 @@ async function speak({ text, agentID, roster = [] }) {
       // answering agent exactly as it follows you. The system-voice path can only send
       // `pulse`, because `speechSynthesis` exposes no audio to measure.
       onLevel: (level) => send('openposse.speaking', { level }),
+      speed,
     });
 
     // **No silent fall-through to the system voices.** Getting the other voices when Kokoro
@@ -403,6 +407,10 @@ async function speak({ text, agentID, roster = [] }) {
   }
   utterance.voice = voice;
   utterance.lang = voice.lang;
+  // The same number Kokoro gets, because both are 1-is-normal and both stretch time without
+  // moving pitch. Which engine is speaking depends on whether the weights downloaded, and that
+  // is not something anyone should have to think about while setting how fast they are read to.
+  utterance.rate = speed;
 
   // The orb's `agent` mode, driven by a real signal rather than a synthetic one – though a
   // coarser signal than the microphone's. `speechSynthesis` renders straight to the output

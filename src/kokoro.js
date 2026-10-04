@@ -117,10 +117,14 @@ export async function warm() {
  *
  * @param text     what to say
  * @param voice    a Kokoro voice id, e.g. `bm_george`
- * @param onPulse  called as each chunk starts playing, for the orb
+ * @param onLevel  called with an amplitude as each chunk plays, for the orb
+ * @param speed    pace multiplier, 1 being this voice's own. Kokoro drives it through the
+ *                 duration predictor, so the speech is stretched rather than resampled and the
+ *                 pitch does not move. HeadTTS refuses anything outside 0.25–4 – `clampSpeed`
+ *                 in `storage.js` is what guarantees this never arrives out of range.
  * @returns `{ ok }` or `{ ok: false, reason }`
  */
-export async function speak(text, voice, { onLevel = () => {} } = {}) {
+export async function speak(text, voice, { onLevel = () => {}, speed = 1 } = {}) {
   if (!text) return { ok: true };
 
   // Measured and handed back rather than logged here: this runs in the offscreen document, so
@@ -146,7 +150,13 @@ export async function speak(text, voice, { onLevel = () => {} } = {}) {
       };
     }
 
-    await engine.setup({ voice, language: 'en-us', audioEncoding: 'wav' });
+    // `setup` runs per utterance rather than once per session, which is what makes the speed a
+    // per-answer value rather than something fixed when the engine warmed up. Changing it in
+    // Settings therefore takes effect on the next thing spoken, with nothing to restart.
+    await engine.setup({
+      voice, language: 'en-us', audioEncoding: 'wav', speed,
+    });
+    ms.speed = speed;
 
     // Playback is ours rather than HeadTTS's, because `cancel` must be able to stop
     // mid-sentence when somebody interrupts, and an engine that owns its own output gives us

@@ -5,7 +5,9 @@
 // with `NotAllowedError: Permission dismissed` on macOS. This page exists for that reason, not
 // for tidiness.
 
-import { loadRoster, setMicGranted, micGranted } from './storage.js';
+import {
+  loadRoster, setMicGranted, micGranted, voiceSpeed, setVoiceSpeed, clampSpeed,
+} from './storage.js';
 import { channelFor, initialFor } from './channels.js';
 import { pack, unpack, toFile, filenameFor } from './share.js';
 import { matchPattern } from './domain.js';
@@ -284,6 +286,54 @@ el('drop-weights').addEventListener('click', async () => {
   await refreshEngine();
 });
 
+// ── Pace ───────────────────────────────────────────────────────────────────────────────────
+//
+// **One number for both engines**, because which of the two is speaking depends on whether a
+// 340 MB download finished, and that is not a thing anybody should have to reason about while
+// deciding how fast they want to be read to. Kokoro takes it as `speed` through its duration
+// predictor; a system voice takes it as `utterance.rate`. Both are 1-is-normal and both stretch
+// time without moving pitch.
+//
+// The slider stops well inside what the engines accept – 0.7 to 1.6 against HeadTTS's 0.25 to 4
+// – because the useful range is narrow and a slider spanning the full one makes it a sliver.
+// `clampSpeed` still guards the stored value, so a number set by hand outside this remains
+// valid rather than being silently rejected by one engine and accepted by the other.
+
+/** The live value, so a preview started from this page speaks at what the slider now says. */
+let pace = 1;
+
+const showPace = () => { el('speed-value').textContent = `${pace.toFixed(2)}×`; };
+
+async function loadPace() {
+  pace = await voiceSpeed();
+  el('speed').value = String(pace);
+  showPace();
+}
+
+// `input` rather than `change`: the number has to track the thumb while it is being dragged, or
+// the only feedback is the thumb's own position, which says nothing about what it means.
+el('speed').addEventListener('input', () => {
+  pace = clampSpeed(el('speed').value);
+  showPace();
+});
+
+// **Saved on `change`, which fires when the thumb is released.** Writing on every `input` would
+// put sixty storage writes into one drag, and each one wakes the service worker through
+// `storage.onChanged`.
+el('speed').addEventListener('change', async () => {
+  pace = await setVoiceSpeed(el('speed').value);
+  showPace();
+  // Spoken back, for the same reason choosing a voice is: pace is the other setting on this
+  // page that cannot be judged by reading. Only where Kokoro can answer – a system-voice user
+  // hears it on the next answer, or from the panel's Demo button.
+  if (kokoroReady) speakWithKokoro(sample(), lastHeardVoice, { speed: pace }).catch(() => {});
+});
+
+/** Whether a preview can be played from this page at all. Set by `refreshVoices`. */
+let kokoroReady = false;
+/** The voice the pace preview uses: whichever was played last, else the first installed one. */
+let lastHeardVoice = VOICES[0]?.id ?? 'bm_george';
+
 // ── Trying the voices ──────────────────────────────────────────────────────────────────────
 //
 // **The same words in every voice**, whatever they are. Different lines per voice would sample
@@ -337,6 +387,9 @@ const voicesIn = (accent) => VOICES
 
 async function refreshVoices() {
   const ready = (await weightsStatus()).state === 'ready';
+  // Read by the pace slider, which lives outside this section and must know whether it can
+  // play anything back.
+  kokoroReady = ready;
   el('voices-section').hidden = !ready;
   if (!ready) return;
 
@@ -384,7 +437,10 @@ function renderVoice(list, id, name) {
     for (const b of buttons) b.disabled = true;
     play.textContent = 'Loading…';
 
-    const result = await speakWithKokoro(sample(), id);
+    // At the pace the slider currently says, not at 1. A preview that ignored it would make the
+    // one control you cannot judge by reading the one control you cannot judge at all.
+    lastHeardVoice = id;
+    const result = await speakWithKokoro(sample(), id, { speed: pace });
     // The same breakdown the turn logs, because this page is where a voice gets judged and
     // "it played and I heard nothing" needs the same two numbers to be answerable here.
     const m = result.ms ?? {};
@@ -545,7 +601,10 @@ async function refreshRoster() {
       }
       // Spoken back rather than only saved. A voice is the one setting here you cannot judge
       // by reading, and hearing it immediately is the difference between choosing and guessing.
-      if (voice.value) speakWithKokoro(sample(), voice.value).catch(() => {});
+      if (voice.value) {
+        lastHeardVoice = voice.value;
+        speakWithKokoro(sample(), voice.value, { speed: pace }).catch(() => {});
+      }
     });
 
     // ── What it captured, re-recording, and removing ───────────────────────────────────
@@ -826,6 +885,9 @@ for (const [name, refresh] of Object.entries({
   'panel access': refreshPanelAccess,
   'voice engine': refreshEngine,
   weights: refreshWeights,
+  // Before `voices`, so `kokoroReady` is false while this runs and the slider cannot try to
+  // play something back before anything has said whether it can.
+  pace: loadPace,
   voices: refreshVoices,
   roster: refreshRoster,
 })) {
