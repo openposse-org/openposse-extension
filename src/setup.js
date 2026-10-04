@@ -546,7 +546,9 @@ async function refreshVoices() {
 
     const group = document.createElement('details');
     group.className = 'voice-group';
-    group.open = true;
+    // Closed, which is `<details>`'s own default – stated by not setting `open` rather than by
+    // setting it false, since the attribute is presence-based and `open = false` reads as a
+    // decision that has to be kept in step with one.
 
     const summary = document.createElement('summary');
     const label = document.createElement('span');
@@ -565,32 +567,46 @@ async function refreshVoices() {
   }
 }
 
-/** One row of the try-it list: a name, a line for whatever goes wrong, and a play control. */
+/** One row of the try-it list: a play control, the name it plays, and a line for what went wrong. */
 function renderVoice(grid, id, name) {
   const row = document.createElement('div');
   row.className = 'voice';
 
-  const label = document.createElement('div');
-  label.className = 'name';
-  label.textContent = name;
   const sub = document.createElement('div');
   sub.className = 'accent';
 
-  // **Icon, not the word "Play", and the label moves to `aria-label` rather than being
-  // dropped.** Twenty-eight rows each carrying the same five letters is the noisiest thing on
-  // the page, and the one word that varies – the voice's name – was competing with it. A
-  // triangle is read instantly and takes a quarter of the width, which is what lets two columns
-  // fit. Nothing is lost to a screen reader: the button still announces which voice it plays.
+  // **The whole row is the button, with the icon leading it.**
+  //
+  // The icon was a separate control on the right, which is where a trailing action goes and is
+  // wrong here: the name took the remaining width, so each button sat far from its own name and
+  // close to the next column's. Adam's button read as Echo's, and no column gap fixes that –
+  // nothing makes 150px of intra-row space read as closer than 26px of gutter.
+  //
+  // Leading the name removes the question rather than arguing with it: there is nothing between
+  // the triangle and the word it plays. Making the row the target rather than the circle is the
+  // other half, because the hover tint then shows how far one voice's row extends.
+  //
+  // **Icon rather than the word "Play", still.** Twenty-eight rows carrying the same five
+  // letters was the noisiest thing on the page, competing with the one word that varies. The
+  // name is the button's own text now, so a screen reader reads it either way; `aria-label`
+  // keeps the verb, and contains the visible name so the two do not disagree.
   const play = document.createElement('button');
   play.className = 'play';
   play.setAttribute('aria-label', `Play ${name}`);
-  play.title = `Play ${name}`;
-  play.append(icon('play', { size: 12 }));
 
-  /** Swaps the glyph in place, so the row does not change width while it loads. */
+  const glyph = document.createElement('span');
+  glyph.className = 'glyph';
+  glyph.append(icon('play', { size: 11 }));
+
+  const label = document.createElement('span');
+  label.className = 'name';
+  label.textContent = name;
+  play.append(glyph, label);
+
+  /** Swaps the glyph in place, so the name does not move while it loads. */
   const show = (which) => {
-    play.textContent = '';
-    play.append(icon(which, { size: 12 }));
+    glyph.textContent = '';
+    glyph.append(icon(which, { size: 11 }));
     play.classList.toggle('busy', which === 'loader-circle');
   };
 
@@ -621,7 +637,7 @@ function renderVoice(grid, id, name) {
     });
   });
 
-  row.append(label, sub, play);
+  row.append(play, sub);
   grid.append(row);
 }
 

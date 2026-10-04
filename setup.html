@@ -141,38 +141,56 @@
       /* ── The voice list ─────────────────────────────────────────────────────────────────
          Two columns and four collapsible groups, because 28 voices in one column is a scroll
          rather than a list. The grid is the full width of the step's text column; each row is
-         a name and a play control, which is narrow enough that two fit without crowding. */
+         a play control and a name, which is narrow enough that two fit without crowding. */
       .voice-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        column-gap: 20px;
+        column-gap: 26px;
       }
       /* One column once a half is narrower than a name plus its button. Not tied to the 1000px
          breakpoint above: that one moves the rail, and this column keeps its width through it. */
       @media (max-width: 560px) { .voice-grid { grid-template-columns: minmax(0, 1fr); } }
 
-      .voice {
-        display: flex; align-items: center; gap: 11px;
-        padding: 7px 0; border-bottom: 1px solid var(--line);
-      }
       /* Every row keeps its rule, including the last. In one column the final border was a
          stray line under the list; across two it is the bottom edge of a table, and dropping it
          from one column only would leave the two halves ending differently. */
-      .voice .name { font-size: 13.5px; font-weight: 500; flex: 1; min-width: 0; }
-      .voice .accent { color: var(--text-faint); font-size: 11.5px; }
+      .voice { border-bottom: 1px solid var(--line); }
+      .voice .accent { color: var(--text-faint); font-size: 11.5px; padding: 0 8px 7px; }
 
-      /* Round, quiet, and the size of a target rather than the size of the glyph. The label is
-         on `aria-label`, since the triangle is the whole point of using an icon here. */
+      /* ── Why the control leads the name rather than trailing it ──────────────────────────
+         It was on the right, pushed there by the name taking the remaining space. That put a
+         wide gap between each name and its own button and a narrow one between that button and
+         the *next* column's name - so the eye grouped "▶ Echo" and Adam's button read as
+         Echo's. Proximity beat the grid, which is what proximity does.
+
+         Widening the column gap only softens that; nothing makes a 150px intra-row gap read as
+         closer than a 26px one. So the icon moved to the front, where there is nothing between
+         it and the name it plays, and the whole row became the target - the name included. The
+         hover tint runs the width of the cell, which is the other half of the answer: it shows
+         where one row ends and the next begins, at the moment you are about to click. */
       .voice .play {
-        flex: 0 0 auto; width: 26px; height: 26px; padding: 0;
+        display: flex; align-items: center; gap: 10px;
+        width: 100%; padding: 7px 8px;
+        font: inherit; text-align: left; cursor: pointer;
+        background: transparent; border: 0; border-radius: 8px;
+        color: var(--text);
+      }
+      .voice .play:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); }
+      .voice .play:disabled { opacity: 1; cursor: default; }
+      .voice .play .name { font-size: 13.5px; font-weight: 500; min-width: 0; }
+
+      /* The glyph keeps its own ring, so the control still reads as a button now that the row
+         around it is transparent at rest. */
+      .voice .glyph {
+        flex: 0 0 auto; width: 22px; height: 22px;
         display: grid; place-items: center;
         border-radius: 50%;
-        background: transparent; color: var(--text-faint);
-        border: 1px solid rgba(255, 255, 255, 0.14);
+        color: var(--text-faint);
+        border: 1px solid rgba(255, 255, 255, 0.16);
       }
-      .voice .play:hover:not(:disabled) { color: var(--text); border-color: rgba(255, 255, 255, 0.3); }
-      .voice .play.busy { color: var(--text); }
-      .voice .play.busy svg { animation: spin 0.8s linear infinite; }
+      .voice .play:hover:not(:disabled) .glyph { color: var(--text); border-color: rgba(255, 255, 255, 0.34); }
+      .voice .play.busy .glyph { color: var(--text); border-color: rgba(255, 255, 255, 0.34); }
+      .voice .play.busy .glyph svg { animation: spin 0.8s linear infinite; }
       @keyframes spin { to { transform: rotate(360deg); } }
 
       /* ── The groups ─────────────────────────────────────────────────────────────────────
@@ -180,9 +198,11 @@
          keyboard-operable for free, and the open state is the element's own rather than
          something this page has to hold and restore.
 
-         Open on arrival, all four. The section only exists once somebody has deliberately
-         downloaded 340 MB to compare voices, so meeting them with four closed drawers would
-         hide the thing they came for. Collapsing is for narrowing afterwards. */
+         **Closed on arrival, all four.** 28 rows is not a list you read, it is a set you narrow,
+         and the narrowing anybody does first is accent. Four closed drawers put that choice on
+         screen in four lines instead of making it the thing you scroll past. The count on each
+         summary is what makes closed honest rather than empty - it says what is behind the
+         drawer without opening it. */
       .voice-group { border-bottom: 1px solid var(--line); }
       .voice-group:last-child { border-bottom: 0; }
       .voice-group > summary {
