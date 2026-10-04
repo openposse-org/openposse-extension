@@ -131,20 +131,79 @@
         font-feature-settings: var(--figures); color: var(--text-dim);
       }
 
+      /* The sample, and the one button that speaks it. Full width because it is edited rather
+         than read, and the button under it rather than beside it so the box keeps that width. */
+      .sample { margin-top: 13px; }
+      .sample textarea { margin: 0; }
+      .sample-go { display: flex; gap: 9px; align-items: center; margin-top: 8px; }
+      .sample-go .status { margin-top: 0; }
+
+      /* ── The voice list ─────────────────────────────────────────────────────────────────
+         Two columns and four collapsible groups, because 28 voices in one column is a scroll
+         rather than a list. The grid is the full width of the step's text column; each row is
+         a name and a play control, which is narrow enough that two fit without crowding. */
+      .voice-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 20px;
+      }
+      /* One column once a half is narrower than a name plus its button. Not tied to the 1000px
+         breakpoint above: that one moves the rail, and this column keeps its width through it. */
+      @media (max-width: 560px) { .voice-grid { grid-template-columns: minmax(0, 1fr); } }
+
       .voice {
         display: flex; align-items: center; gap: 11px;
-        padding: 9px 0; border-bottom: 1px solid var(--line);
+        padding: 7px 0; border-bottom: 1px solid var(--line);
       }
-      .voice:last-child { border-bottom: 0; }
-      /* Carries the accent for the rows beneath it, so each row does not repeat it 28 times. */
-      .voice-group {
-        margin: 16px 0 2px; font-size: 9.5px; font-weight: 600;
-        letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-faint);
-      }
-      .voice-group:first-child { margin-top: 4px; }
-      .voice .name { font-size: 13.5px; font-weight: 500; flex: 1; }
+      /* Every row keeps its rule, including the last. In one column the final border was a
+         stray line under the list; across two it is the bottom edge of a table, and dropping it
+         from one column only would leave the two halves ending differently. */
+      .voice .name { font-size: 13.5px; font-weight: 500; flex: 1; min-width: 0; }
       .voice .accent { color: var(--text-faint); font-size: 11.5px; }
-      .voice button { padding: 5px 13px; font-size: 12px; }
+
+      /* Round, quiet, and the size of a target rather than the size of the glyph. The label is
+         on `aria-label`, since the triangle is the whole point of using an icon here. */
+      .voice .play {
+        flex: 0 0 auto; width: 26px; height: 26px; padding: 0;
+        display: grid; place-items: center;
+        border-radius: 50%;
+        background: transparent; color: var(--text-faint);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+      }
+      .voice .play:hover:not(:disabled) { color: var(--text); border-color: rgba(255, 255, 255, 0.3); }
+      .voice .play.busy { color: var(--text); }
+      .voice .play.busy svg { animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* ── The groups ─────────────────────────────────────────────────────────────────────
+         `<details>` rather than a button and a class: it collapses with no JavaScript, it is
+         keyboard-operable for free, and the open state is the element's own rather than
+         something this page has to hold and restore.
+
+         Open on arrival, all four. The section only exists once somebody has deliberately
+         downloaded 340 MB to compare voices, so meeting them with four closed drawers would
+         hide the thing they came for. Collapsing is for narrowing afterwards. */
+      .voice-group { border-bottom: 1px solid var(--line); }
+      .voice-group:last-child { border-bottom: 0; }
+      .voice-group > summary {
+        display: flex; align-items: center; gap: 7px;
+        padding: 11px 0; cursor: pointer;
+        font-size: 9.5px; font-weight: 600;
+        letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-faint);
+        list-style: none;            /* Firefox's marker */
+      }
+      /* Chrome draws its own triangle and `list-style` does not reach it. */
+      .voice-group > summary::-webkit-details-marker { display: none; }
+      .voice-group > summary:hover { color: var(--text-dim); }
+      .voice-group > summary .chev { transition: transform 0.18s ease; }
+      .voice-group[open] > summary .chev { transform: rotate(90deg); }
+      .voice-group > summary .count {
+        margin-left: auto; letter-spacing: 0;
+        font-feature-settings: var(--figures);
+      }
+      .voice-group[open] > summary { padding-bottom: 4px; }
+      .voice-group .voice-grid { padding-bottom: 9px; }
+
       textarea {
         font: inherit; width: 100%; resize: vertical;
         color: var(--text); background: rgba(0, 0, 0, 0.3);
@@ -247,61 +306,87 @@
         </div>
       </section>
 
-      <section>
-        <h2>Voices</h2>
-        <p>
-          Answers are spoken back to you, and a long answer is shortened to one sentence first
-          – the full text stays on screen. Everything here runs on this machine.
-        </p>
-        <div id="engine" class="card">checking…</div>
+      <!-- **A numbered step like the four above it, as of 2026-10-04.** Voices used to be a
+           bare `<section>` with a numbered step nested inside it, so the page ran 1, 2, 3, 4,
+           prose, 5 – and the two things on it that are genuinely settings were the two that did
+           not look like part of the sequence. Everything on this page is now one list. -->
+      <section class="step" id="step-voices">
+        <div class="num">5</div>
+        <div style="flex:1">
+          <h2>Voices</h2>
+          <p>
+            Answers are spoken back to you, and a long answer is shortened to one sentence first
+            – the full text stays on screen. Everything here runs on this machine.
+          </p>
+          <div id="engine" class="card">checking…</div>
 
-        <!-- **Here rather than in "Try the voices", which is hidden until Kokoro is installed.**
-             The pace applies to whichever engine is speaking, and the people on the system
-             voices are both the ones who cannot see that section and the ones most likely to
-             want this – so putting it there would hide the control from its own best case. -->
-        <div class="pace">
-          <label for="speed">Pace</label>
-          <input type="range" id="speed" min="0.7" max="1.6" step="0.05" value="1"
-                 aria-describedby="speed-value" />
-          <output class="tech" id="speed-value" for="speed">1.00×</output>
-        </div>
+          <div class="pace">
+            <label for="speed">Pace</label>
+            <input type="range" id="speed" min="0.7" max="1.6" step="0.05" value="1"
+                   aria-describedby="speed-value" />
+            <output class="tech" id="speed-value" for="speed">1.00×</output>
+          </div>
 
-        <div class="step" id="step-weights" style="margin-top:18px">
-          <div class="num">5</div>
-          <div style="flex:1">
-            <!-- The size is filled in from `TOTAL_BYTES` rather than written here. It has now
-                 moved three times – 89 MB, then 166 MB when the model changed for GPU kernel
-                 coverage, then 340 MB at fp32 with all 28 voices – and this comment claimed
-                 "twice, to 166" until the third move was noticed. A number typed into copy is a
-                 number that goes stale silently, and so is one typed into the note about it. -->
-            <h2>Better voices <span class="kind">– optional, <span id="weights-size">…</span></span></h2>
-            <p>
-              The system voices are your operating system's, and they sound like it. Kokoro is a
-              neural voice model that runs <em>on this machine</em> – nothing you say or hear
-              goes anywhere. It is a one-off download, kept locally afterwards.
-            </p>
-            <p>
-              It needs WebGPU to be fast enough for conversation. Without it OpenPosse keeps
-              using the system voices, which is the status quo rather than a failure.
-            </p>
-            <div class="row">
-              <button class="secondary" id="get-weights">Download</button>
-              <button class="secondary" id="drop-weights" hidden>Remove</button>
-              <span class="status tech" id="weights-status">checking…</span>
+          <!-- **The sample lives here rather than beside the voice list, because three separate
+               things now speak it** – this button, each voice's own, and whatever is being
+               judged about the pace. One box means they are all saying the same words, which is
+               the only way any of them can be compared with another.
+
+               It is also the always-visible half of the page: the voice list below is hidden
+               until Kokoro is installed, and the pace is not. -->
+          <div class="sample">
+            <textarea id="sample" rows="2" spellcheck="false"
+                      aria-label="What the voices say"></textarea>
+            <div class="sample-go">
+              <!-- Disabled **and** explained from the first paint, rather than waiting for a
+                   script to say why. `refreshVoices` clears this once it finds the weights, and
+                   if reading them throws it does not run at all – so a blank default would leave
+                   exactly the dead unexplained button this pair exists to avoid. -->
+              <button class="secondary" id="play-sample" disabled>Play sample</button>
+              <span class="status tech" id="sample-status">needs the voice model below – otherwise
+                you will hear the pace on the next answer</span>
             </div>
           </div>
         </div>
       </section>
 
-      <section id="voices-section" hidden>
-        <h2>Try the voices</h2>
-        <p>
-          Whatever is in the box, in each voice – the same words every time, so they can be
-          compared rather than just sampled. The first one takes a moment while the model
-          loads; the rest are immediate.
-        </p>
-        <textarea id="sample" rows="4" spellcheck="false"></textarea>
-        <div id="voice-list" style="margin-top:14px"></div>
+      <section class="step" id="step-weights">
+        <div class="num">6</div>
+        <div style="flex:1">
+          <!-- The size is filled in from `TOTAL_BYTES` rather than written here. It has now
+               moved three times – 89 MB, then 166 MB when the model changed for GPU kernel
+               coverage, then 340 MB at fp32 with all 28 voices – and this comment claimed
+               "twice, to 166" until the third move was noticed. A number typed into copy is a
+               number that goes stale silently, and so is one typed into the note about it. -->
+          <h2>Better voices <span class="kind">– optional, <span id="weights-size">…</span></span></h2>
+          <p>
+            The system voices are your operating system's, and they sound like it. Kokoro is a
+            neural voice model that runs <em>on this machine</em> – nothing you say or hear
+            goes anywhere. It is a one-off download, kept locally afterwards.
+          </p>
+          <p>
+            It needs WebGPU to be fast enough for conversation. Without it OpenPosse keeps
+            using the system voices, which is the status quo rather than a failure.
+          </p>
+          <div class="row">
+            <button class="secondary" id="get-weights">Download</button>
+            <button class="secondary" id="drop-weights" hidden>Remove</button>
+            <span class="status tech" id="weights-status">checking…</span>
+          </div>
+
+          <!-- **Inside this step rather than a seventh of its own**, because the list exists
+               only once the download above has finished – it is what that step produced, not a
+               separate thing to do. A numbered step that appears and disappears would also
+               renumber the page depending on what is installed. -->
+          <div id="voices-section" hidden style="margin-top:18px">
+            <p>
+              Each voice, saying whatever is in the box up in <strong>Voices</strong> – the same
+              words every time, so they can be compared rather than just sampled. The first one
+              takes a moment while the model loads; the rest are immediate.
+            </p>
+            <div id="voice-list"></div>
+          </div>
+        </div>
       </section>
         </div>
 
