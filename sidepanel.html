@@ -40,9 +40,12 @@
        *
        * Fixed rather than scrolling, so a long answer slides over the light rather than dragging
        * it. It is **not** tinted by the agent's channel – the orb is, and a green sphere on a
-       * green field loses the sphere. */
+       * green field loses the sphere.
+       *
+       * A column at least the window's height, so the site bar below sits at the foot of a short
+       * panel rather than under the last control. `main` and the bar carry their own padding. */
       body {
-        padding: 10px 14px 20px;
+        display: flex; flex-direction: column; min-height: 100vh;
         background:
           radial-gradient(86% 42% at 50% 20%,
             rgba(255, 122, 24, 0.17), rgba(228, 73, 122, 0.05) 55%, transparent 75%),
@@ -50,6 +53,8 @@
           #0b0a0c;
         background-attachment: fixed;
       }
+
+      main { flex: 1 0 auto; padding: 10px 14px 20px; }
 
       /* ── The stage ─────────────────────────────────────────────────────────────────────── */
 
@@ -221,98 +226,245 @@
         font: inherit; font-size: 12px; text-align: left; cursor: pointer;
       }
 
-      /* **Listen is the primary control and Ask is not.** The first version had these the other
-         way round – a faint outline for the thing the product is *for*, and a filled button for
-         the fallback – which said the opposite of what the layout said. */
-      #listen { width: 100%; }
-      .ask { display: flex; gap: 7px; margin-top: 9px; }
+      /* ── Icon buttons ──────────────────────────────────────────────────────────────────── */
+
+      /* **Every control is an icon, and its name is its `aria-label`.** The hover label below
+         draws that same attribute, so what a screen reader says and what appears on hover are
+         one string and cannot disagree. A control with no label shows no empty pill. */
+      button.icon {
+        position: relative;
+        width: 34px; height: 34px; flex: 0 0 34px; padding: 0;
+        display: grid; place-items: center;
+        border-radius: 50%;
+        background: transparent; color: var(--text-dim);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+        transition: color 0.15s ease, background-color 0.15s ease;
+      }
+      button.icon:hover:not(:disabled), button.icon[aria-expanded="true"] {
+        color: var(--text); background: rgba(255, 255, 255, 0.08);
+      }
+      button.icon[aria-expanded="true"] { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28); }
+      button.icon:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+      /* Dimmed by colour, not by ui.css's `opacity`, which would fade the label with the icon –
+         and on Record the label is where the reason it is disabled is written. */
+      button.icon:disabled {
+        opacity: 1; color: rgba(235, 235, 245, 0.2);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+      }
+      button.icon.busy svg { animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* The label, on hover and on keyboard focus. Not `title`: Chrome waits about a second to
+         show one and draws it in the OS's own small type, which is the opposite of "clear".
+         The short delay keeps a pointer crossing the row from flashing every label in turn.
+         `data-tip-at` pins it to one edge for the controls near the panel's sides, where a
+         centred label would run off a 320px column. */
+      button.icon[aria-label]::after {
+        content: attr(aria-label);
+        position: absolute; bottom: calc(100% + 8px); left: 50%; z-index: 5;
+        transform: translateX(-50%);
+        width: max-content; max-width: 220px;
+        padding: 5px 9px; border-radius: 7px;
+        background: var(--raised); color: var(--text);
+        box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14), 0 6px 18px rgba(0, 0, 0, 0.5);
+        font-size: 11.5px; font-weight: 500; line-height: 1.35; text-align: left;
+        pointer-events: none; opacity: 0;
+        transition: opacity 0.12s ease;
+      }
+      button.icon[aria-label]:is(:hover, :focus-visible)::after {
+        opacity: 1; transition-delay: 0.15s;
+      }
+      button.icon[data-tip-at="start"]::after { left: 0; transform: none; }
+      button.icon[data-tip-at="end"]::after { left: auto; right: 0; transform: none; }
+
+      /* ── The controls ──────────────────────────────────────────────────────────────────── */
+
+      /* The microphone centred, two controls either side. A three-column grid rather than flex
+         with a spacer, so the microphone stays on the panel's centre line – under the orb – however
+         wide either side is. */
+      .controls { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; }
+      .controls .side { display: flex; gap: 8px; align-items: center; height: 50px; }
+      .controls .side.end { justify-content: flex-end; }
+      .controls .center { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+
+      /* **Listen is the one filled control**, and with every button an icon that is the only
+         thing left to say it is primary. The first version had Listen as a faint outline and the
+         fallback filled, which said the opposite of what the layout said. */
+      button.icon.mic {
+        width: 50px; height: 50px; flex-basis: 50px;
+        background: var(--blue); color: #fff;
+        box-shadow:
+          inset 0 0.5px 0 rgba(255, 255, 255, 0.35),
+          0 6px 22px color-mix(in srgb, var(--blue) 36%, transparent);
+      }
+      button.icon.mic:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 86%, #fff); }
+      /* While listening it is Stop, which is a different act, so it stops looking like Listen. */
+      button.icon.mic.listening {
+        background: rgba(255, 255, 255, 0.08); color: var(--text);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+      }
+      button.icon.mic.listening:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); }
+
+      /* The shortcut, which is the one thing Chrome's own panel header does not show. Under the
+         microphone, because it is the other way to press it. */
+      #shortcut { color: var(--text-faint); }
+
+      /* Quieter than the rest: a developer's control, sitting where everybody can see it. */
+      #debug:not([aria-expanded="true"], :hover) { box-shadow: none; color: var(--text-faint); }
+      /* A debug value is in force. On the toggle, because the drawer being shut is exactly when
+         a changed timing would otherwise be invisible. */
+      #debug.overridden::before {
+        content: ''; position: absolute; top: 4px; right: 4px;
+        width: 7px; height: 7px; border-radius: 50%;
+        background: #ff7a18; box-shadow: 0 0 0 2px #0b0a0c;
+      }
+
+      /* The manual path, behind the keyboard toggle. */
+      .ask { display: flex; gap: 7px; align-items: center; margin-top: 14px; }
       .ask input { flex: 1; min-width: 0; }
 
-      /* Which site this is and whether we may drive it. The panel's own diagnostic: a popup that
-         closes cannot tell you an hour later that access was revoked. */
-      .site { margin-top: 14px; font-size: 11.5px; color: var(--text-dim); }
-      .site .host { font-feature-settings: var(--figures); overflow-wrap: anywhere; }
-      .site button { margin-top: 8px; width: 100%; }
+      /* ── Debug tools ───────────────────────────────────────────────────────────────────── */
 
-      footer {
-        margin-top: 14px; padding-top: 12px;
-        border-top: 1px solid rgba(255, 255, 255, 0.07);
-        display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      .debug {
+        margin-top: 16px; padding-top: 12px;
+        box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.14);
       }
-      footer .spacer { flex: 1; }
-      /* `font-weight: 400` is not tidying: ui.css's `button` sets 600, so without it these two
-         read as bold next to the actual buttons they are meant to be quieter than. */
-      .quiet {
-        color: var(--text-faint); font-size: 11.5px; font-weight: 400; text-decoration: none;
-        cursor: pointer; background: none; border: 0; padding: 0; font-family: inherit;
+      .debug .eyebrow {
+        font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--text-faint); margin-bottom: 10px;
       }
-      .quiet:hover { color: var(--text); }
-      /* The shortcut, which is the one thing Chrome's own panel header does not show. */
-      #shortcut { color: var(--text-faint); }
+      .debug .tools { display: flex; gap: 8px; }
+      /* Name and value on one line, the slider full width under them: side by side, a 320px
+         panel leaves the slider about 80px to travel 15 positions in. */
+      .debug .knob {
+        display: grid; grid-template-columns: 1fr auto; gap: 6px 10px;
+        grid-template-areas: "name value" "slider slider";
+        margin-top: 14px; font-size: 12px; color: var(--text-dim);
+      }
+      .debug .knob span { grid-area: name; }
+      .debug .knob output { grid-area: value; font-feature-settings: var(--figures); color: var(--text); }
+      .debug .knob input { grid-area: slider; width: 100%; margin: 0; accent-color: var(--blue); }
+      .debug .why { margin-top: 5px; font-size: 11px; line-height: 1.4; color: var(--text-faint); }
+
+      /* ── The site bar ──────────────────────────────────────────────────────────────────── */
+
+      /* Which site this is and whether we may drive it – the panel's own diagnostic, since a
+         popup that closes cannot tell you an hour later that access was revoked.
+
+         **Pinned to the foot of the panel, and still in the flow.** `main` grows to push it to
+         the bottom of a short panel; `sticky` keeps it there over a long one. `fixed` would need
+         a guessed padding to keep content out from under it, and that guess breaks the moment
+         the line wraps to three. Opaque, because a long answer scrolls beneath it. */
+      .site {
+        position: sticky; bottom: 0; z-index: 2;
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px 12px;
+        font-size: 11.5px; color: var(--text-dim);
+        background: #0b0a0c;
+        box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.14);
+      }
+      .site .where { flex: 1; min-width: 0; }
+      .site .host { font-feature-settings: var(--figures); overflow-wrap: anywhere; }
+      .site .note { margin-top: 3px; color: var(--text-faint); overflow-wrap: anywhere; }
+      .site .note.bad { color: var(--error); }
     </style>
   </head>
   <body>
-    <!-- Deliberately not the design's `NOT HEARING ANYTHING – CHECK INPUT` badge. That one is
-         for a microphone that is connected and silent and lives on the orb. A permission that
-         was never granted needs different words and a different action. -->
-    <button id="mic-warning" hidden class="card bad mic-fix"></button>
+    <main>
+      <!-- Deliberately not the design's `NOT HEARING ANYTHING – CHECK INPUT` badge. That one is
+           for a microphone that is connected and silent and lives on the orb. A permission that
+           was never granted needs different words and a different action.
 
-    <section id="stage">
-      <div class="orbwrap">
-        <canvas id="orb"></canvas>
-        <div class="dead-mic" id="deadmic" hidden>NOT HEARING ANYTHING – CHECK INPUT</div>
-      </div>
-      <div class="transcript" id="transcript"></div>
-      <div class="band">
-        <div id="avatars"></div>
-        <div class="who" id="who"></div>
-      </div>
-      <div class="answer" id="answer"></div>
-    </section>
+           **The one button that is not an icon**, because it is a sentence you need to read
+           rather than a control you need to find. -->
+      <button id="mic-warning" hidden class="card bad mic-fix"></button>
 
-    <section class="coach" id="coach" hidden>
-      <div class="step" id="coach-step"></div>
-      <div class="say" id="coach-say"></div>
-      <div class="list" id="coach-list"></div>
-    </section>
+      <section id="stage">
+        <div class="orbwrap">
+          <canvas id="orb"></canvas>
+          <div class="dead-mic" id="deadmic" hidden>NOT HEARING ANYTHING – CHECK INPUT</div>
+        </div>
+        <div class="transcript" id="transcript"></div>
+        <div class="band">
+          <div id="avatars"></div>
+          <div class="who" id="who"></div>
+        </div>
+        <div class="answer" id="answer"></div>
+      </section>
 
-    <section id="desk">
-      <div id="empty" hidden>
-        No assistants yet. Open a page with an AI assistant on it, then record it.
-      </div>
+      <section class="coach" id="coach" hidden>
+        <div class="step" id="coach-step"></div>
+        <div class="say" id="coach-say"></div>
+        <div class="list" id="coach-list"></div>
+      </section>
 
-      <button id="listen">Listen</button>
+      <section id="desk">
+        <div id="empty" hidden>
+          No assistants yet. Open a page with an AI assistant on it, then record it.
+        </div>
 
-      <!-- The manual path. Not only a fallback for a dead microphone: it is the whole product
-           minus voice, and it is the right answer in a meeting or an open-plan office. -->
-      <div class="ask">
-        <input type="text" id="prompt" placeholder="Ask an assistant…" />
-        <button id="send" class="secondary">Ask</button>
-      </div>
+        <!-- Icons and labels for the controls that change (Listen, the toggles) are set by the
+             script; the ones that never change carry their label here. -->
+        <div class="controls">
+          <div class="side">
+            <button class="icon" id="type" aria-controls="ask" data-tip-at="start"></button>
+            <!-- Disabled until the script has read the tab in front, so there is no window on
+                 load where it looks pressable and its click handler has no site to act on. -->
+            <button class="icon" id="record" disabled data-tip-at="start"
+                    aria-label="Reading the tab in front…"></button>
+          </div>
+          <div class="center">
+            <button class="icon mic" id="listen"></button>
+            <span class="tech" id="shortcut"></span>
+          </div>
+          <div class="side end">
+            <button class="icon" id="settings" aria-label="Settings" data-tip-at="end"></button>
+            <button class="icon" id="debug" aria-controls="debug-tools" data-tip-at="end"></button>
+          </div>
+        </div>
 
-      <div class="site">
+        <!-- The manual path. Not only a fallback for a dead microphone: it is the whole product
+             minus voice, and it is the right answer in a meeting or an open-plan office. Behind
+             a toggle because most turns are spoken, and an empty field under the microphone
+             reads as the place to start. -->
+        <div class="ask" id="ask" hidden>
+          <input type="text" id="prompt" placeholder="Ask an assistant…" />
+          <button class="icon" id="send" data-tip-at="end"></button>
+        </div>
+
+        <!-- Development tools, all behind one switch, as the Mac app had them. -->
+        <section class="debug" id="debug-tools" hidden>
+          <div class="eyebrow">Debug tools</div>
+          <div class="tools">
+            <!-- A scripted turn, for judging the UI and the voice without spending a vendor
+                 query. Here with E14's surface switch beside it: both are scaffolding with an
+                 expiry, deleted when user testing picks a surface. -->
+            <button class="icon" id="demo" data-tip-at="start"></button>
+            <button class="icon" id="surface" data-tip-at="start"></button>
+            <button class="icon" id="diagnostics" data-tip-at="start"
+                    aria-label="Voice diagnostics – check each layer of the Kokoro voice"></button>
+          </div>
+          <label class="knob" for="floor">
+            <span>Follow-up window</span>
+            <input type="range" id="floor" />
+            <output id="floor-value" for="floor"></output>
+          </label>
+          <div class="why">
+            How long a question with no name in it still goes to whoever answered last. Back to
+            the default when Chrome restarts.
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <!-- Which site this is and whether we may drive it, pinned to the panel's foot. -->
+    <footer class="site" id="site">
+      <div class="where">
         <div class="host" id="site-state">reading…</div>
-        <button id="grant" class="secondary" hidden></button>
+        <div class="note" id="site-note" hidden></div>
       </div>
-
-      <footer>
-        <!-- Disabled until the script has read the tab in front, so there is no window on load
-             where it looks pressable and its click handler has no site to act on. -->
-        <button class="secondary" id="record" disabled>Record this tab</button>
-        <div class="spacer"></div>
-        <span class="tech" id="shortcut"></span>
-        <!-- A button, not a bare `<a>` with no href: that is unreachable by keyboard, and these
-             two sit beside each other so they should behave the same way. -->
-        <button class="quiet" id="settings">Settings</button>
-        <!-- E14's surface switch. A quiet link rather than a button, because it is scaffolding
-             that gets deleted when user testing picks a surface, and it was competing with
-             Record for weight. -->
-        <button class="quiet" id="surface"></button>
-        <!-- A scripted turn, for judging the UI and the voice without spending a vendor query.
-             Same weight and the same expiry as the switch beside it. -->
-        <button class="quiet" id="demo" title="Replay a scripted turn on this surface, with no vendor involved">Demo</button>
-      </footer>
-    </section>
+      <button class="icon" id="grant" hidden data-tip-at="end"></button>
+    </footer>
 
     <script type="module" src="dist/sidepanel.js"></script>
   </body>

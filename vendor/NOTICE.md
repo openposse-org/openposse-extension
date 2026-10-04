@@ -52,7 +52,7 @@ The icon set, and **the only entry here whose code is not in this directory**. `
 holds the path data for the handful of icons actually rendered; this directory holds the licence
 that data arrived under. The split is the same reasoning as the paragraph below about
 `node_modules`: Chrome loads the whole unpacked directory and reports its size, so vendoring
-1,600 icons to draw three is charged to the extension in full. A copied `d` attribute costs one
+1,600 icons to draw fourteen is charged to the extension in full. A copied element costs one
 line and nothing when unused.
 
 ISC asks only that the notice is kept, which `lucide/LICENSE` does. That file also carries
@@ -68,9 +68,9 @@ To add an icon, copy its geometry rather than redrawing it:
 curl https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/<name>.svg
 ```
 
-and put the `d` attributes in `PATHS` under **Lucide's own name** for it. Renaming an icon to
-something that reads better locally is how the next person fails to find one that is already
-there.
+and copy each element inside it into `NODES` as `[tag, attributes]` – Lucide's own icon-node
+format – under **Lucide's own name** for it. Renaming an icon to something that reads better
+locally is how the next person fails to find one that is already there.
 
 ## What was checked, and what was found
 

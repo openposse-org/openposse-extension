@@ -22,7 +22,7 @@ import {
 import { runDemo, stopDemo } from './demo.js';
 import { needsShortening, spokenForm } from './saying.js';
 import { summarise } from './summariser.js';
-import { route, navigationTarget, productName, FLOOR_MS } from './routing.js';
+import { route, navigationTarget, productName, floorWindow, FLOOR_OVERRIDE_KEY } from './routing.js';
 import { matchPattern } from './domain.js';
 import { unpack } from './share.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
@@ -51,8 +51,9 @@ async function rememberPrompt(prompt) {
 }
 
 async function recallPrompt() {
-  const { lastPrompt, lastPromptAt = 0 } = await chrome.storage.session.get(['lastPrompt', 'lastPromptAt']);
-  return lastPrompt && Date.now() - lastPromptAt <= FLOOR_MS ? lastPrompt : '';
+  const { lastPrompt, lastPromptAt = 0, [FLOOR_OVERRIDE_KEY]: override } = await chrome.storage
+    .session.get(['lastPrompt', 'lastPromptAt', FLOOR_OVERRIDE_KEY]);
+  return lastPrompt && Date.now() - lastPromptAt <= floorWindow(override) ? lastPrompt : '';
 }
 
 /**
@@ -122,8 +123,9 @@ export async function ask(agentName, prompt, { onPartial } = {}) {
 
 /** Session state, so it dies with the browser – a floor held across a restart is meaningless. */
 async function floorHolder(agents) {
-  const { floorHolder: name, floorAt = 0 } = await chrome.storage.session.get(['floorHolder', 'floorAt']);
-  if (!name || Date.now() - floorAt > FLOOR_MS) return null;
+  const { floorHolder: name, floorAt = 0, [FLOOR_OVERRIDE_KEY]: override } = await chrome.storage
+    .session.get(['floorHolder', 'floorAt', FLOOR_OVERRIDE_KEY]);
+  if (!name || Date.now() - floorAt > floorWindow(override)) return null;
   return findAgent(agents, name);
 }
 

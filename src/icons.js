@@ -17,9 +17,10 @@
 //
 // ## Adding one
 //
-// `curl https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/<name>.svg`, then put
-// its `d` attributes in `PATHS` under the same name Lucide uses. Keep Lucide's name: renaming it
-// to something that reads better here is how the next person fails to find the icon they want.
+// `curl https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/<name>.svg`, then copy
+// each element inside it into `NODES` as `[tag, attributes]`, under the same name Lucide uses.
+// Keep Lucide's name: renaming it to something that reads better here is how the next person
+// fails to find the icon they want.
 
 /**
  * Lucide's own frame. These are what make a Lucide icon look like one, so they are set here
@@ -28,27 +29,114 @@
 const BOX = 24;
 
 /**
- * `d` attributes per icon, plus whether the shape is meant to be filled.
+ * The elements of each icon, plus whether the shape is meant to be filled.
+ *
+ * **`[tag, attributes]`, which is Lucide's own icon-node format** – the shape its JavaScript
+ * packages ship. It was a list of `d` strings while every icon here happened to be paths, and
+ * Lucide also draws with `rect` and `circle`: `mic` is a rect, `settings` ends in a circle.
+ * Converting those to paths by hand is the redrawing this file exists to avoid, so the table
+ * holds the elements as the SVG has them, attribute for attribute.
  *
  * **`filled` exists for `play` and shapes like it.** Lucide draws everything as an outline, which
  * is right at 24px and wrong at 13: an outlined triangle in a 26px button reads as a hollow
  * arrow rather than a play control. Filling it with the same colour as the stroke gives the solid
  * rounded triangle the slot actually wants, which is how Lucide's own docs suggest handling it.
+ * `square` and `circle` are filled for the same reason, as Stop and Record: outlined, they read
+ * as a frame and a ring.
  */
-const PATHS = {
+const NODES = {
   play: {
     filled: true,
-    d: ['M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z'],
+    nodes: [['path', { d: 'M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z' }]],
   },
-  'chevron-right': { d: ['m9 18 6-6-6-6'] },
-  'loader-circle': { d: ['M21 12a9 9 0 1 1-6.219-8.56'] },
+  'chevron-right': { nodes: [['path', { d: 'm9 18 6-6-6-6' }]] },
+  'loader-circle': { nodes: [['path', { d: 'M21 12a9 9 0 1 1-6.219-8.56' }]] },
+  mic: {
+    nodes: [
+      ['path', { d: 'M12 19v3' }],
+      ['path', { d: 'M19 10v2a7 7 0 0 1-14 0v-2' }],
+      ['rect', { x: '9', y: '2', width: '6', height: '13', rx: '3' }],
+    ],
+  },
+  square: { filled: true, nodes: [['rect', { width: '18', height: '18', x: '3', y: '3', rx: '2' }]] },
+  circle: { filled: true, nodes: [['circle', { cx: '12', cy: '12', r: '10' }]] },
+  keyboard: {
+    nodes: [
+      ['path', { d: 'M10 8h.01' }],
+      ['path', { d: 'M12 12h.01' }],
+      ['path', { d: 'M14 8h.01' }],
+      ['path', { d: 'M16 12h.01' }],
+      ['path', { d: 'M18 8h.01' }],
+      ['path', { d: 'M6 8h.01' }],
+      ['path', { d: 'M7 16h10' }],
+      ['path', { d: 'M8 12h.01' }],
+      ['rect', { width: '20', height: '16', x: '2', y: '4', rx: '2' }],
+    ],
+  },
+  'send-horizontal': {
+    nodes: [
+      ['path', { d: 'M3.714 3.048a.498.498 0 0 0-.683.627l2.843 7.627a2 2 0 0 1 0 1.396l-2.842 7.627a.498.498 0 0 0 .682.627l18-8.5a.5.5 0 0 0 0-.904z' }],
+      ['path', { d: 'M6 12h16' }],
+    ],
+  },
+  settings: {
+    nodes: [
+      ['path', { d: 'M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915' }],
+      ['circle', { cx: '12', cy: '12', r: '3' }],
+    ],
+  },
+  bug: {
+    nodes: [
+      ['path', { d: 'M12 20v-9' }],
+      ['path', { d: 'M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z' }],
+      ['path', { d: 'M14.12 3.88 16 2' }],
+      ['path', { d: 'M21 21a4 4 0 0 0-3.81-4' }],
+      ['path', { d: 'M21 5a4 4 0 0 1-3.55 3.97' }],
+      ['path', { d: 'M22 13h-4' }],
+      ['path', { d: 'M3 21a4 4 0 0 1 3.81-4' }],
+      ['path', { d: 'M3 5a4 4 0 0 0 3.55 3.97' }],
+      ['path', { d: 'M6 13H2' }],
+      ['path', { d: 'm8 2 1.88 1.88' }],
+      ['path', { d: 'M9 7.13V6a3 3 0 1 1 6 0v1.13' }],
+    ],
+  },
+  'panel-right': {
+    nodes: [
+      ['rect', { width: '18', height: '18', x: '3', y: '3', rx: '2' }],
+      ['path', { d: 'M15 3v18' }],
+    ],
+  },
+  orbit: {
+    nodes: [
+      ['path', { d: 'M20.341 6.484A10 10 0 0 1 10.266 21.85' }],
+      ['path', { d: 'M3.659 17.516A10 10 0 0 1 13.74 2.152' }],
+      ['circle', { cx: '12', cy: '12', r: '3' }],
+      ['circle', { cx: '19', cy: '5', r: '2' }],
+      ['circle', { cx: '5', cy: '19', r: '2' }],
+    ],
+  },
+  stethoscope: {
+    nodes: [
+      ['path', { d: 'M11 2v2' }],
+      ['path', { d: 'M5 2v2' }],
+      ['path', { d: 'M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1' }],
+      ['path', { d: 'M8 15a6 6 0 0 0 12 0v-3' }],
+      ['circle', { cx: '20', cy: '10', r: '2' }],
+    ],
+  },
+  'key-round': {
+    nodes: [
+      ['path', { d: 'M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z' }],
+      ['circle', { cx: '16.5', cy: '7.5', r: '.5', fill: 'currentColor' }],
+    ],
+  },
 };
 
 /** Every name this module knows, so a caller can check rather than discover at render time. */
-export const ICONS = Object.keys(PATHS);
+export const ICONS = Object.keys(NODES);
 
 function spec(name) {
-  const found = PATHS[name];
+  const found = NODES[name];
   // **Named, not swallowed.** An icon that silently renders nothing is a button with no label,
   // and the only clue would be a gap – so a typo says what it was and what exists instead.
   if (!found) throw new Error(`no icon named "${name}" – have: ${ICONS.join(', ')}`);
@@ -67,7 +155,7 @@ function spec(name) {
  * `aria-label`, and an icon that announced itself would make that a duplicate.
  */
 export function icon(name, { size = 16, className = '', strokeWidth = 2 } = {}) {
-  const { d, filled } = spec(name);
+  const { nodes, filled } = spec(name);
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
 
@@ -82,9 +170,9 @@ export function icon(name, { size = 16, className = '', strokeWidth = 2 } = {}) 
   svg.setAttribute('aria-hidden', 'true');
   if (className) svg.setAttribute('class', className);
 
-  for (const path of d) {
-    const node = document.createElementNS(ns, 'path');
-    node.setAttribute('d', path);
+  for (const [tag, attributes] of nodes) {
+    const node = document.createElementNS(ns, tag);
+    for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
     svg.append(node);
   }
   return svg;
@@ -102,10 +190,15 @@ export function icon(name, { size = 16, className = '', strokeWidth = 2 } = {}) 
  * never for anything read from a page, a recipe or a file.
  */
 export function iconMarkup(name, { size = 16, className = '', strokeWidth = 2 } = {}) {
-  const { d, filled } = spec(name);
-  const paths = d.map((path) => `<path d="${path}"/>`).join('');
+  const { nodes, filled } = spec(name);
+  const parts = nodes
+    .map(([tag, attributes]) => {
+      const pairs = Object.entries(attributes).map(([key, value]) => `${key}="${value}"`);
+      return `<${tag} ${pairs.join(' ')}/>`;
+    })
+    .join('');
   return `<svg viewBox="0 0 ${BOX} ${BOX}" width="${size}" height="${size}" `
     + `fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" `
     + `stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" `
-    + `aria-hidden="true"${className ? ` class="${className}"` : ''}>${paths}</svg>`;
+    + `aria-hidden="true"${className ? ` class="${className}"` : ''}>${parts}</svg>`;
 }

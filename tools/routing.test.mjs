@@ -8,7 +8,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { route, bestMatch, normalise, editDistance, navigationTarget, productName } from '../src/routing.js';
+import {
+  route, bestMatch, normalise, editDistance, navigationTarget, productName,
+  floorWindow, FLOOR_MS, FLOOR_RANGE,
+} from '../src/routing.js';
 
 const ROSTER = [
   { id: '1', name: 'Ivan' },
@@ -203,4 +206,18 @@ test('asking a question is never navigation', () => {
   // The ordinary case, stated so a future prefix cannot quietly capture it.
   assert.equal(navigationTarget('Ivan tell me a joke', NAV_ROSTER), null);
   assert.equal(navigationTarget('and what about last quarter', NAV_ROSTER), null);
+});
+
+test('the floor window takes a debug override only when it is a usable number', () => {
+  assert.equal(floorWindow(undefined), FLOOR_MS, 'nothing stored is the shipped value');
+  assert.equal(floorWindow(45_000), 45_000);
+  assert.equal(floorWindow(FLOOR_RANGE.min), FLOOR_RANGE.min);
+  assert.equal(floorWindow(FLOOR_RANGE.max), FLOOR_RANGE.max);
+  // **Empty is not zero.** `Number(null)` and `Number('')` are 0, which is finite – without the
+  // range check a cleared value would close the floor the instant it opened.
+  assert.equal(floorWindow(null), FLOOR_MS);
+  assert.equal(floorWindow(''), FLOOR_MS);
+  assert.equal(floorWindow(0), FLOOR_MS);
+  assert.equal(floorWindow('soon'), FLOOR_MS);
+  assert.equal(floorWindow(FLOOR_RANGE.max + 1), FLOOR_MS);
 });

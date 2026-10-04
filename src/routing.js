@@ -37,6 +37,34 @@ const MAX_NAME_WORDS = 3;
 export const FLOOR_MS = 90_000;
 
 /**
+ * Where the panel's debug tools keep an override of `FLOOR_MS`, and the range they offer.
+ *
+ * It is still a guess, and this is what lets it be tuned the way the Mac app's slider did. The
+ * range is that slider's, unchanged: 15 s is too short to read an answer, 300 s is long enough
+ * that a follow-up after a coffee would reach a vendor.
+ *
+ * **In `chrome.storage.session`, so it dies with the browser.** A debug value nobody remembers
+ * setting would otherwise change where name-less questions go for weeks, with nothing on screen
+ * once the debug drawer is shut. Session storage puts a ceiling on how long that can last.
+ */
+export const FLOOR_OVERRIDE_KEY = 'floorOverrideMs';
+export const FLOOR_RANGE = { min: 15_000, max: 300_000, step: 15_000 };
+
+/**
+ * The floor window in force: a stored override when it is a usable number, else `FLOOR_MS`.
+ *
+ * Every reader goes through this rather than comparing against `FLOOR_MS`, because three places
+ * enforce the window – the worker routing, the panel and the popup lighting a ring – and one of
+ * them honouring the override while another ignored it would light a ring on an agent the next
+ * question would not reach.
+ */
+export function floorWindow(override) {
+  // The range check also catches empty: `Number(null)` and `Number('')` are 0, which is finite.
+  const ms = Number(override);
+  return Number.isFinite(ms) && ms >= FLOOR_RANGE.min && ms <= FLOOR_RANGE.max ? ms : FLOOR_MS;
+}
+
+/**
  * Ordinary English words, which may match a name **exactly** but never approximately.
  *
  * This exists because of a real failure, caught by the test below rather than by a person being

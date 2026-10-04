@@ -27,12 +27,22 @@
 
 import { loadRoster, findAgent, micGranted, recipeFor } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
-import { FLOOR_MS, productName } from './routing.js';
+import { FLOOR_MS, FLOOR_OVERRIDE_KEY, FLOOR_RANGE, floorWindow, productName } from './routing.js';
 import { patternForHost, matchPattern } from './domain.js';
 import { SURFACES, setSurface } from './surface.js';
 import { drawSphere, modeFor } from './sphere.js';
+import { icon } from './icons.js';
 
 const el = (id) => document.getElementById(id);
+
+/** Puts one icon in a button, replacing whatever it held. */
+const setIcon = (button, name, size = 16) => button.replaceChildren(icon(name, { size }));
+
+/**
+ * A control's name. **Also its hover label**: the stylesheet draws `attr(aria-label)`, so the
+ * words a screen reader says and the words that appear on hover are one string, set in one place.
+ */
+const label = (button, text) => button.setAttribute('aria-label', text);
 
 // **A panel that throws while loading is indistinguishable from one that does nothing.** The
 // markup renders either way – the buttons are in the HTML – but if this module dies before it
@@ -266,13 +276,14 @@ const idFor = (name) => roster.agents.find((a) => a.name === name)?.id ?? null;
 /**
  * Who currently holds the floor, so the panel lights the agent a follow-up would reach.
  *
- * **Expiry is checked here too, against the same constant the worker routes by.** A ring that
- * outlives the floor is not cosmetic: it says a name-less question would go to Ivan when it would
- * actually be refused.
+ * **Expiry is checked here too, against the same window the worker routes by** – including a
+ * debug override of it. A ring that outlives the floor is not cosmetic: it says a name-less
+ * question would go to Ivan when it would actually be refused.
  */
 async function floorHolderName() {
-  const { floorHolder, floorAt = 0 } = await chrome.storage.session.get(['floorHolder', 'floorAt']);
-  if (!floorHolder || Date.now() - floorAt > FLOOR_MS) return null;
+  const { floorHolder, floorAt = 0, [FLOOR_OVERRIDE_KEY]: override } = await chrome.storage
+    .session.get(['floorHolder', 'floorAt', FLOOR_OVERRIDE_KEY]);
+  if (!floorHolder || Date.now() - floorAt > floorWindow(override)) return null;
   return floorHolder;
 }
 
@@ -357,8 +368,10 @@ async function drawRoster() {
           .catch(() => {});
         return;
       }
+      // Aiming is for the text box, so it opens it: aiming at a field that is hidden would be a
+      // click that changed nothing anybody can see.
       aim(agent.name);
-      el('prompt').focus();
+      setAsk(true);
     });
 
     target.append(av);
@@ -371,6 +384,7 @@ function aim(name) {
   aimedAt = name;
   el('prompt').placeholder = `Ask ${name} to…`;
   el('prompt').dataset.agent = name;
+  label(el('send'), `Ask ${name}`);
   for (const av of el('avatars').children) {
     av.classList.toggle('aimed', av.dataset.name === name);
   }
@@ -410,12 +424,15 @@ el('mic-warning').addEventListener('click', () => chrome.runtime.openOptionsPage
 
 function showListening({ listening }) {
   const button = el('listen');
-  button.textContent = listening ? 'Stop' : 'Listen';
-  // **Listen is the filled control and Ask is the outline**, which is the way round the first
+  // A filled square is Stop, the same reading it has on every media control. The two sizes are
+  // what makes them weigh the same: a square fills far more of its box than a microphone does.
+  setIcon(button, listening ? 'square' : 'mic', listening ? 15 : 21);
+  label(button, listening ? 'Stop listening' : 'Listen');
+  // **Listen is the filled control and everything else is an outline**, the way round the first
   // version had backwards: voice is the product and typing is the fallback, and the weight on
-  // screen has to say the same thing the order does. Gaining `.secondary` while listening turns
-  // it into a Stop, which is a different act.
-  button.classList.toggle('secondary', listening);
+  // screen has to say the same thing the order does. Losing the fill while listening turns it
+  // into Stop, which is a different act.
+  button.classList.toggle('listening', listening);
 }
 
 el('listen').addEventListener('click', () => {
@@ -425,6 +442,22 @@ el('listen').addEventListener('click', () => {
 });
 
 // ── Asking without speaking ────────────────────────────────────────────────────────────────
+
+/**
+ * Shows or hides the text box. Opening it focuses the field, because the only reason to open
+ * it is to type.
+ *
+ * Not remembered between panels: it starts shut every time, so the first thing under the orb is
+ * always the microphone.
+ */
+function setAsk(open) {
+  el('ask').hidden = !open;
+  el('type').setAttribute('aria-expanded', String(open));
+  label(el('type'), open ? 'Hide the text box' : 'Type a question instead');
+  if (open) el('prompt').focus();
+}
+
+el('type').addEventListener('click', () => setAsk(el('ask').hidden));
 
 async function send() {
   const input = el('prompt');
@@ -501,6 +534,7 @@ async function paintSite() {
   }
 
   const line = el('site-state');
+  const note = el('site-note');
   const grant = el('grant');
 
   if (!site.pattern) {
@@ -511,7 +545,7 @@ async function paintSite() {
     grant.hidden = true;
   } else {
     line.textContent = `${site.pattern} – no access yet`;
-    grant.textContent = `Grant access to ${site.pattern}`;
+    label(grant, `Grant access to ${site.pattern}`);
     grant.hidden = false;
   }
 
@@ -519,32 +553,46 @@ async function paintSite() {
   // offers "On all sites" in one click, and nothing in this extension asks for it or mentions it
   // afterwards – so every site reads as granted, for a reason the product never stated. It is
   // also the exact trap that made two earlier tests of the grant flow prove nothing.
+  //
+  // Its own line under the site, fainter: it is about the browser's settings rather than this
+  // page, and it is the same note on every tab.
   const { origins = [] } = await chrome.permissions.getAll().catch(() => ({ origins: [] }));
   const broad = origins.filter(isBroad);
-  if (broad.length) {
-    line.textContent += `\n${broad.join(', ')} is granted, which covers every site. `
-      + 'Chrome › Extensions › OpenPosse › Details › Site access is where that is set.';
-    line.style.whiteSpace = 'pre-line';
-  } else {
-    line.style.whiteSpace = '';
-  }
+  note.classList.remove('bad');
+  note.textContent = broad.length
+    ? `${broad.join(', ')} is granted, which covers every site. `
+      + 'Chrome › Extensions › OpenPosse › Details › Site access is where that is set.'
+    : '';
+  note.hidden = !broad.length;
 
   el('record').disabled = !site.pattern;
-  el('record').title = site.pattern ? `Record the assistant on ${site.host}` : site.why;
+  label(el('record'), site.pattern ? `Record the assistant on ${site.host}` : site.why);
+}
+
+/**
+ * Something just went wrong with site access, in the bar that is about site access.
+ *
+ * These used to replace the button's own text. An icon has no text, and a hover label is gone
+ * the moment the pointer moves, so they land under the site line – where they stay until the
+ * next repaint, which is the next time the tab or the grants change.
+ */
+function say(text) {
+  const note = el('site-note');
+  note.textContent = text;
+  note.classList.add('bad');
+  note.hidden = false;
 }
 
 // **First statement, nothing awaited before it.** See `site` above.
 el('grant').addEventListener('click', () => {
   if (!site.pattern) return;
   chrome.permissions.request({ origins: [matchPattern(site.pattern)] })
-    .then(paintSite, (error) => {
-      el('site-state').textContent = `Chrome refused the request – ${error?.message ?? error}`;
-    });
+    .then(paintSite, (error) => say(`Chrome refused the request – ${error?.message ?? error}`));
 });
 
 el('record').addEventListener('click', async () => {
   if (!site.pattern) {
-    el('record').textContent = site.why;
+    say(site.why);
     console.warn('[openposse] record pressed with no recordable tab –', site.why);
     return;
   }
@@ -554,7 +602,7 @@ el('record').addEventListener('click', async () => {
   const granted = await chrome.permissions.request({ origins: [matchPattern(pattern)] });
   if (!granted) {
     // Declining is an answer, not a failure – the panel stays put and says so.
-    el('record').textContent = 'Site access is needed to record';
+    say('Site access is needed to record');
     return;
   }
 
@@ -576,10 +624,11 @@ el('settings').addEventListener('click', (event) => {
 async function paintSurface() {
   const { surface } = await chrome.storage.local.get('surface');
   const onPanel = SURFACES.includes(surface) ? surface === 'panel' : false;
-  el('surface').textContent = onPanel ? 'Use the orb' : 'Use this panel';
-  el('surface').title = onPanel
-    ? 'Show turns on the floating orb over the page instead'
-    : 'Show turns here, which also works on pages the orb cannot reach';
+  // The icon is where a click takes you, not where you are – the same reading as the label.
+  setIcon(el('surface'), onPanel ? 'orbit' : 'panel-right', 16);
+  label(el('surface'), onPanel
+    ? 'Use the orb – show turns over the page instead'
+    : 'Use this panel – it also works on pages the orb cannot reach');
 }
 
 el('surface').addEventListener('click', async () => {
@@ -601,17 +650,98 @@ el('surface').addEventListener('click', async () => {
  * visible for a second would be pressed twice – and the second press restarts the script,
  * which looks exactly like the first press having failed.
  */
-el('demo').addEventListener('click', () => {
+const DEMO = 'Play a scripted turn – no vendor, no question spent';
+
+function showDemo(playing) {
   const button = el('demo');
-  if (button.disabled) return;
-  button.disabled = true;
-  button.textContent = 'Playing…';
+  button.disabled = playing;
+  button.classList.toggle('busy', playing);
+  setIcon(button, playing ? 'loader-circle' : 'play', playing ? 15 : 12);
+  label(button, playing ? 'Playing the scripted turn…' : DEMO);
+}
+
+el('demo').addEventListener('click', () => {
+  if (el('demo').disabled) return;
+  showDemo(true);
   chrome.runtime.sendMessage({ kind: 'openposse.demo' })
     .catch((error) => console.warn('[openposse] the demo could not start –', error?.message ?? error))
-    .finally(() => {
-      button.disabled = false;
-      button.textContent = 'Demo';
-    });
+    .finally(() => showDemo(false));
+});
+
+// ── Debug tools ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Behind one switch, as the Mac app had them – and holding less than its menu did, deliberately.
+ *
+ * Of what that menu and the summon panel's sliders carried, only the follow-up window is still a
+ * guess this extension makes. The silence threshold has nothing left to tune, because Chrome's
+ * recogniser ends a turn by itself; the agent timeout is measured per vendor when a recipe is
+ * recorded; and the rest – key focus, audio format, VAD counts, the native bridge, transcriber
+ * fixtures – described a Mac app that is parked. What is here instead is this extension's own
+ * scaffolding: the demo, E14's surface switch, and the voice diagnostics page nothing else links
+ * to.
+ *
+ * Not remembered between panels, unlike the override inside it – which is why the toggle carries
+ * a dot whenever one is in force.
+ */
+let floorOverride = null;
+
+function paintDebugToggle() {
+  const open = !el('debug-tools').hidden;
+  const toggle = el('debug');
+  toggle.setAttribute('aria-expanded', String(open));
+  toggle.classList.toggle('overridden', floorOverride !== null);
+  label(toggle, [
+    open ? 'Hide debug tools' : 'Debug tools',
+    floorOverride === null ? null : `follow-up window set to ${floorOverride / 1000} s`,
+  ].filter(Boolean).join(' – '));
+}
+
+el('debug').addEventListener('click', () => {
+  el('debug-tools').hidden = !el('debug-tools').hidden;
+  paintDebugToggle();
+});
+
+// Kokoro's layer-by-layer check, `spike.js`. A tab rather than the panel, because it runs each
+// layer inside the real extension origin and reports one row per layer.
+el('diagnostics').addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('spike.html') }).catch((error) => {
+    console.warn('[openposse] could not open the voice diagnostics –', error?.message ?? error);
+  });
+});
+
+/** The slider's own range comes from routing.js, so the panel cannot offer what the worker refuses. */
+Object.assign(el('floor'), {
+  min: String(FLOOR_RANGE.min / 1000),
+  max: String(FLOOR_RANGE.max / 1000),
+  step: String(FLOOR_RANGE.step / 1000),
+});
+
+function showFloor(ms) {
+  el('floor-value').textContent = ms === FLOOR_MS ? `${ms / 1000} s (default)` : `${ms / 1000} s`;
+}
+
+async function paintFloor() {
+  const stored = await chrome.storage.session.get(FLOOR_OVERRIDE_KEY);
+  const ms = floorWindow(stored[FLOOR_OVERRIDE_KEY]);
+  floorOverride = ms === FLOOR_MS ? null : ms;
+  el('floor').value = String(ms / 1000);
+  showFloor(ms);
+  paintDebugToggle();
+}
+
+el('floor').addEventListener('input', () => showFloor(Number(el('floor').value) * 1000));
+el('floor').addEventListener('change', () => {
+  const ms = Number(el('floor').value) * 1000;
+  // **The default is stored as nothing at all**, so "the default" means no override rather than
+  // an override that happens to equal it – and the dot goes out when somebody slides it back.
+  const write = ms === FLOOR_MS
+    ? chrome.storage.session.remove(FLOOR_OVERRIDE_KEY)
+    : chrome.storage.session.set({ [FLOOR_OVERRIDE_KEY]: ms });
+  write.catch((error) => {
+    console.warn('[openposse] could not store the follow-up window –', error?.message ?? error);
+    paintFloor();
+  });
 });
 
 // ── What arrives from the worker ───────────────────────────────────────────────────────────
@@ -677,6 +807,12 @@ chrome.permissions.onAdded.addListener(paintSite);
 chrome.permissions.onRemoved.addListener(paintSite);
 
 chrome.storage.onChanged.addListener((changes, area) => {
+  // The follow-up window, which also decides whether the lit ring is still true.
+  if (area === 'session' && changes[FLOOR_OVERRIDE_KEY]) {
+    paintFloor();
+    drawRoster();
+    return;
+  }
   if (area !== 'local') return;
   // The whole roster, not just the names: a re-record replaces a recipe, and the vendor label in
   // the status line comes from it.
@@ -724,9 +860,25 @@ chrome.runtime
   })
   .catch(() => showListening({ listening: false }));
 
+// The controls whose icon never changes get it once, here. The rest – Listen, the toggles, the
+// demo while it plays, the surface switch – set theirs wherever their state changes, starting
+// with the calls below.
+setIcon(el('type'), 'keyboard', 17);
+setIcon(el('record'), 'circle', 11);
+setIcon(el('settings'), 'settings', 17);
+setIcon(el('debug'), 'bug', 16);
+setIcon(el('send'), 'send-horizontal', 16);
+setIcon(el('grant'), 'key-round', 16);
+setIcon(el('diagnostics'), 'stethoscope', 16);
+showListening({ listening: false });
+setAsk(false);
+showDemo(false);
+paintDebugToggle();
+
 renderTurn();
 loadRosterData();
 checkMic();
 paintSite();
 paintSurface();
+paintFloor();
 requestAnimationFrame(tick);
