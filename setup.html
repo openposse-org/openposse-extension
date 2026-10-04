@@ -141,15 +141,37 @@
       /* ── The voice list ─────────────────────────────────────────────────────────────────
          Two columns and four collapsible groups, because 28 voices in one column is a scroll
          rather than a list. The grid is the full width of the step's text column; each row is
-         a play control and a name, which is narrow enough that two fit without crowding. */
+         a play control and a name, which is narrow enough that two fit without crowding.
+
+         **It fills down, not across**, which is the whole reason this is not the default grid
+         flow. A row-major grid puts A and B side by side, so the alphabet runs left-right-wrap
+         and reading one column top to bottom gives A, C, E - every other name. Nobody scans two
+         columns that way; they read one, then the other. `grid-auto-flow: column` with an
+         explicit row count puts the first half of the alphabet in the left column and the rest
+         in the right, so each column is a run you can read.
+
+         `--rows` is the count, set per group because the groups are different sizes. Without it
+         the flow has no row limit to wrap at and lays all of them out in one line. */
       .voice-grid {
         display: grid;
+        grid-auto-flow: column;
         grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: repeat(var(--rows, 1), auto);
         column-gap: 26px;
       }
       /* One column once a half is narrower than a name plus its button. Not tied to the 1000px
-         breakpoint above: that one moves the rail, and this column keeps its width through it. */
-      @media (max-width: 560px) { .voice-grid { grid-template-columns: minmax(0, 1fr); } }
+         breakpoint above: that one moves the rail, and this column keeps its width through it.
+
+         The flow goes back to rows here, and `--rows` with it. One column fills top to bottom
+         either way, and leaving the column flow in place would keep wrapping at `--rows` into
+         a second column the grid no longer has room for. */
+      @media (max-width: 560px) {
+        .voice-grid {
+          grid-auto-flow: row;
+          grid-template-columns: minmax(0, 1fr);
+          grid-template-rows: none;
+        }
+      }
 
       /* Every row keeps its rule, including the last. In one column the final border was a
          stray line under the list; across two it is the bottom edge of a table, and dropping it

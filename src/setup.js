@@ -513,8 +513,14 @@ function describeVoice(id) {
  * Fixed here rather than derived from `VOICES`, whose order is the *assignment* order and puts
  * the six original voices first so nobody's agent changes voice – see the note on `VOICES`.
  * Reading that order into the UI would produce four groups interleaved by history.
+ *
+ * **American first**, which is also what the roster does: `assignKokoroVoices` reads `en-US`
+ * unless an agent carries a British hint, so these are the voices an agent gets by default and
+ * the ones somebody opening this list is most likely choosing between. They are also two thirds
+ * of the set – 20 of 28 – so leading with the smaller pair would put the shorter answer first
+ * and the likely one last.
  */
-const VOICE_GROUPS = ['British female', 'British male', 'American female', 'American male'];
+const VOICE_GROUPS = ['American female', 'American male', 'British female', 'British male'];
 
 /** Every voice in one accent group, by name, because that is how somebody scans 28 of them. */
 const voicesIn = (accent) => VOICES
@@ -560,6 +566,10 @@ async function refreshVoices() {
 
     const grid = document.createElement('div');
     grid.className = 'voice-grid';
+    // Where the second column starts. The grid fills downwards, so this is what splits the
+    // alphabet in half rather than interleaving it – and it is set here because each group is a
+    // different size and CSS has no way to count its own children.
+    grid.style.setProperty('--rows', String(Math.ceil(voices.length / 2)));
     for (const { id, name } of voices) renderVoice(grid, id, name);
 
     group.append(summary, grid);
