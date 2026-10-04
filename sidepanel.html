@@ -124,7 +124,7 @@
          Only the states are here – and only the floor holder is lit, which is the design's rule
          and not decoration: a dimmed avatar is "not who you are talking to", never "broken".
 
-         **Every ring is drawn on `::after` at `inset: -4px`, which is the hero's geometry.** It
+         **Every ring is drawn on the face's `::after` at `inset: -4px`, the hero's geometry.** It
          puts the ring 4px clear of the circle instead of hugging it, and the gap is what makes it
          read as a halo rather than as a border the avatar grew. It also keeps the ring off the
          avatar's own `box-shadow`, so ui.css owns the circle's inner highlight and nothing here
@@ -133,26 +133,32 @@
          Dimming is the hero's rule too, and it is the inverse of the port's: full opacity is the
          resting state and `dim` is applied to the others only while somebody holds the floor. The
          old version dimmed by default and had to add an `on` class to undo it, so the roster's
-         ordinary appearance was the special case. */
-      .av {
-        position: relative; cursor: pointer;
-        transition: opacity 0.3s ease;
+         ordinary appearance was the special case.
+
+         **The avatar is a button holding the circle**, which is `.face`. The states stay on the
+         button and the dim and the ring are drawn on the face, because the button carries the
+         hover label – and an opacity on the button would fade its label along with it. */
+      button.av {
+        position: relative; display: block; padding: 0;
+        background: none; border-radius: 50%;
       }
-      .av::after {
+      button.av:focus-visible { outline: 2px solid var(--blue); outline-offset: 6px; }
+      .av .face { position: relative; transition: opacity 0.3s ease; }
+      .av .face::after {
         content: ''; position: absolute; inset: -4px; border-radius: 50%;
         box-shadow: 0 0 0 0 transparent; transition: box-shadow 0.3s ease;
         pointer-events: none;
       }
       /* Somebody else holds the floor. */
-      .av.dim { opacity: 0.42; }
-      .av.dim:hover { opacity: 0.72; }
-      .av.lit::after {
+      .av.dim .face { opacity: 0.42; }
+      .av.dim:hover .face { opacity: 0.72; }
+      .av.lit .face::after {
         box-shadow:
           0 0 0 1.5px var(--channel),
           0 0 14px color-mix(in srgb, var(--channel) 55%, transparent);
       }
-      .av.aimed:not(.lit)::after { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.35); }
-      .av.broken::after { box-shadow: 0 0 0 1.5px var(--error); }
+      .av.aimed:not(.lit) .face::after { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.35); }
+      .av.broken .face::after { box-shadow: 0 0 0 1.5px var(--error); }
 
       /* Reserved like the transcript, and for the sharper version of the same reason: an answer
          lands mid-turn, and without the reserve it shoves Listen/Stop down the panel at the exact
@@ -258,8 +264,10 @@
          show one and draws it in the OS's own small type, which is the opposite of "clear".
          The short delay keeps a pointer crossing the row from flashing every label in turn.
          `data-tip-at` pins it to one edge for the controls near the panel's sides, where a
-         centred label would run off a 320px column. */
-      button.icon[aria-label]::after {
+         centred label would run off a 320px column.
+
+         The avatars share it, so every circle in the panel answers a hover the same way. */
+      button:is(.icon, .av)[aria-label]::after {
         content: attr(aria-label);
         position: absolute; bottom: calc(100% + 8px); left: 50%; z-index: 5;
         transform: translateX(-50%);
@@ -271,11 +279,11 @@
         pointer-events: none; opacity: 0;
         transition: opacity 0.12s ease;
       }
-      button.icon[aria-label]:is(:hover, :focus-visible)::after {
+      button:is(.icon, .av)[aria-label]:is(:hover, :focus-visible)::after {
         opacity: 1; transition-delay: 0.15s;
       }
-      button.icon[data-tip-at="start"]::after { left: 0; transform: none; }
-      button.icon[data-tip-at="end"]::after { left: auto; right: 0; transform: none; }
+      button:is(.icon, .av)[data-tip-at="start"]::after { left: 0; transform: none; }
+      button:is(.icon, .av)[data-tip-at="end"]::after { left: auto; right: 0; transform: none; }
 
       /* ── The controls ──────────────────────────────────────────────────────────────────── */
 
@@ -450,9 +458,18 @@
             <output id="floor-value" for="floor"></output>
           </label>
           <div class="why">
-            How long a question with no name in it still goes to whoever answered last. Back to
-            the default when Chrome restarts.
+            How long a question with no name in it still goes to whoever answered last.
           </div>
+          <label class="knob" for="grace">
+            <span>Answer settle wait</span>
+            <input type="range" id="grace" />
+            <output id="grace-value" for="grace"></output>
+          </label>
+          <div class="why">
+            How long to wait for the rest of an answer when the assistant hasn't said it's done.
+            Shorter answers sooner; too short can read out a status line instead of the answer.
+          </div>
+          <div class="why">Both go back to their defaults when Chrome restarts.</div>
         </section>
       </section>
     </main>

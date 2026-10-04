@@ -31,6 +31,7 @@ import { FLOOR_MS, FLOOR_OVERRIDE_KEY, FLOOR_RANGE, floorWindow, productName } f
 import { patternForHost, matchPattern } from './domain.js';
 import { SURFACES, setSurface } from './surface.js';
 import { drawSphere, modeFor } from './sphere.js';
+import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from './grace.js';
 import { icon } from './icons.js';
 
 const el = (id) => document.getElementById(id);
@@ -332,9 +333,11 @@ async function drawRoster() {
     const reroutes = canReroute && !holdsFloor;
     const vendor = roster.products[agent.id];
 
-    const av = document.createElement('div');
-    // `avatar` is ui.css's, so this and Settings cannot disagree about the shape; `av` carries
-    // only the panel's states.
+    // **A button, holding the circle.** It was a clickable div, which the keyboard could not
+    // reach and which cannot carry an `aria-label`. The circle is the `.face` inside: `avatar` is
+    // ui.css's, so this and Settings cannot disagree about the shape, and the dim and the ring are
+    // drawn on the face so the button's hover label does not fade with them. `av` carries only
+    // the panel's states.
     //
     // **`lit` is the ring, and only the floor holder gets it.** Giving all four the ring and the
     // glow produced four things competing to look selected; the ring means one thing, which is
@@ -344,20 +347,29 @@ async function drawRoster() {
     // only while somebody holds the floor – the landing hero's rule, and the inverse of the
     // port's, which dimmed by default and needed an `on` class to put the roster back to normal.
     // That made the ordinary appearance of the roster the special case.
-    av.className = `avatar av${holdsFloor ? ' lit' : ''}${active && !holdsFloor ? ' dim' : ''}`
+    const av = document.createElement('button');
+    av.type = 'button';
+    av.className = `av${holdsFloor ? ' lit' : ''}${active && !holdsFloor ? ' dim' : ''}`
       + `${agent.name === aimedAt ? ' aimed' : ''}`
       + `${broken.includes(agent.id) ? ' broken' : ''}`;
-    // The name, for `aim()` to match on. **Not the title**: "Ivan" is a substring of "Ivan 2", so
+    // The name, for `aim()` to match on. **Not the label**: "Ivan" is a substring of "Ivan 2", so
     // matching on text aimed at one and highlighted both – which is exactly the roster this
     // project has, since `freeName` produces "Ivan 2" on a second import.
     av.dataset.name = agent.name;
+    // The roster starts at the panel's left edge, where a centred label would run off it.
+    av.dataset.tipAt = 'start';
     av.style.setProperty('--channel', channelFor(agent.name));
-    av.textContent = initialFor(agent.name);
-    // The name is no longer on screen beside the letter, so it has to be reachable: the title is
+
+    const face = document.createElement('span');
+    face.className = 'avatar face';
+    face.textContent = initialFor(agent.name);
+    av.append(face);
+
+    // The name is no longer on screen beside the letter, so it has to be reachable: the label is
     // the only thing carrying it for an agent who is not currently the subject of the status line.
-    av.title = broken.includes(agent.id) ? `${agent.name} needs re-recording`
+    label(av, broken.includes(agent.id) ? `${agent.name} needs re-recording`
       : reroutes ? `Put the same question to ${agent.name}`
-        : [`Ask ${agent.name}`, vendor].filter(Boolean).join(' · ');
+        : [`Ask ${agent.name}`, vendor].filter(Boolean).join(' · '));
 
     av.addEventListener('click', () => {
       if (reroutes) {
@@ -679,22 +691,39 @@ el('demo').addEventListener('click', () => {
  * recorded; and the rest – key focus, audio format, VAD counts, the native bridge, transcriber
  * fixtures – described a Mac app that is parked. What is here instead is this extension's own
  * scaffolding: the demo, E14's surface switch, and the voice diagnostics page nothing else links
- * to.
+ * to. The answer grace was never a Mac slider; it is here because it is the other clock a turn
+ * still waits on.
  *
- * Not remembered between panels, unlike the override inside it – which is why the toggle carries
+ * Not remembered between panels, unlike the overrides inside it – which is why the toggle carries
  * a dot whenever one is in force.
  */
-let floorOverride = null;
+
+/**
+ * The sliders, one row each. `resolve` is the function every reader of that value already goes
+ * through, so the panel shows exactly what the worker and the page will use – including falling
+ * back to the default for anything out of range – rather than a second opinion about it.
+ */
+const KNOBS = [
+  {
+    id: 'floor', name: 'follow-up window', key: FLOOR_OVERRIDE_KEY,
+    range: FLOOR_RANGE, fallback: FLOOR_MS, resolve: floorWindow,
+  },
+  {
+    id: 'grace', name: 'answer settle wait', key: GRACE_OVERRIDE_KEY,
+    range: GRACE_RANGE, fallback: ANSWER_GRACE_MS, resolve: graceWindow,
+  },
+];
+
+/** Overrides in force, in ms, by knob id. Absent means the shipped value. */
+const overrides = {};
 
 function paintDebugToggle() {
   const open = !el('debug-tools').hidden;
   const toggle = el('debug');
+  const set = KNOBS.filter((k) => k.id in overrides).map((k) => `${k.name} ${overrides[k.id] / 1000} s`);
   toggle.setAttribute('aria-expanded', String(open));
-  toggle.classList.toggle('overridden', floorOverride !== null);
-  label(toggle, [
-    open ? 'Hide debug tools' : 'Debug tools',
-    floorOverride === null ? null : `follow-up window set to ${floorOverride / 1000} s`,
-  ].filter(Boolean).join(' – '));
+  toggle.classList.toggle('overridden', set.length > 0);
+  label(toggle, [open ? 'Hide debug tools' : 'Debug tools', set.join(', ')].filter(Boolean).join(' – '));
 }
 
 el('debug').addEventListener('click', () => {
@@ -710,39 +739,49 @@ el('diagnostics').addEventListener('click', () => {
   });
 });
 
-/** The slider's own range comes from routing.js, so the panel cannot offer what the worker refuses. */
-Object.assign(el('floor'), {
-  min: String(FLOOR_RANGE.min / 1000),
-  max: String(FLOOR_RANGE.max / 1000),
-  step: String(FLOOR_RANGE.step / 1000),
-});
+/** Seconds on the slider, milliseconds everywhere else. Rounded: 0.75 × 1000 is not always 750. */
+const msOf = (input) => Math.round(Number(input.value) * 1000);
 
-function showFloor(ms) {
-  el('floor-value').textContent = ms === FLOOR_MS ? `${ms / 1000} s (default)` : `${ms / 1000} s`;
+function showKnob(knob, ms) {
+  el(`${knob.id}-value`).textContent = ms === knob.fallback ? `${ms / 1000} s (default)` : `${ms / 1000} s`;
 }
 
-async function paintFloor() {
-  const stored = await chrome.storage.session.get(FLOOR_OVERRIDE_KEY);
-  const ms = floorWindow(stored[FLOOR_OVERRIDE_KEY]);
-  floorOverride = ms === FLOOR_MS ? null : ms;
-  el('floor').value = String(ms / 1000);
-  showFloor(ms);
+async function paintKnobs() {
+  const stored = await chrome.storage.session.get(KNOBS.map((k) => k.key));
+  for (const knob of KNOBS) {
+    const ms = knob.resolve(stored[knob.key]);
+    if (ms === knob.fallback) delete overrides[knob.id];
+    else overrides[knob.id] = ms;
+    el(knob.id).value = String(ms / 1000);
+    showKnob(knob, ms);
+  }
   paintDebugToggle();
 }
 
-el('floor').addEventListener('input', () => showFloor(Number(el('floor').value) * 1000));
-el('floor').addEventListener('change', () => {
-  const ms = Number(el('floor').value) * 1000;
-  // **The default is stored as nothing at all**, so "the default" means no override rather than
-  // an override that happens to equal it – and the dot goes out when somebody slides it back.
-  const write = ms === FLOOR_MS
-    ? chrome.storage.session.remove(FLOOR_OVERRIDE_KEY)
-    : chrome.storage.session.set({ [FLOOR_OVERRIDE_KEY]: ms });
-  write.catch((error) => {
-    console.warn('[openposse] could not store the follow-up window –', error?.message ?? error);
-    paintFloor();
+for (const knob of KNOBS) {
+  const input = el(knob.id);
+  // The range comes from the module that enforces it, so the panel cannot offer what the worker
+  // or the page would refuse.
+  Object.assign(input, {
+    min: String(knob.range.min / 1000),
+    max: String(knob.range.max / 1000),
+    step: String(knob.range.step / 1000),
   });
-});
+  input.addEventListener('input', () => showKnob(knob, msOf(input)));
+  input.addEventListener('change', () => {
+    const ms = msOf(input);
+    // **The default is stored as nothing at all**, so "the default" means no override rather
+    // than an override that happens to equal it – and the dot goes out when somebody slides it
+    // back.
+    const write = ms === knob.fallback
+      ? chrome.storage.session.remove(knob.key)
+      : chrome.storage.session.set({ [knob.key]: ms });
+    write.catch((error) => {
+      console.warn(`[openposse] could not store the ${knob.name} –`, error?.message ?? error);
+      paintKnobs();
+    });
+  });
+}
 
 // ── What arrives from the worker ───────────────────────────────────────────────────────────
 
@@ -807,10 +846,11 @@ chrome.permissions.onAdded.addListener(paintSite);
 chrome.permissions.onRemoved.addListener(paintSite);
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  // The follow-up window, which also decides whether the lit ring is still true.
-  if (area === 'session' && changes[FLOOR_OVERRIDE_KEY]) {
-    paintFloor();
-    drawRoster();
+  // A debug slider moved, here or in another window's panel. The follow-up window also decides
+  // whether the lit ring is still true, so that one redraws the roster too.
+  if (area === 'session' && KNOBS.some((k) => changes[k.key])) {
+    paintKnobs();
+    if (changes[FLOOR_OVERRIDE_KEY]) drawRoster();
     return;
   }
   if (area !== 'local') return;
@@ -880,5 +920,5 @@ loadRosterData();
 checkMic();
 paintSite();
 paintSurface();
-paintFloor();
+paintKnobs();
 requestAnimationFrame(tick);

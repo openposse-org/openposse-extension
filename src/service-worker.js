@@ -23,6 +23,7 @@ import { runDemo, stopDemo } from './demo.js';
 import { needsShortening, spokenForm } from './saying.js';
 import { summarise } from './summariser.js';
 import { route, navigationTarget, productName, floorWindow, FLOOR_OVERRIDE_KEY } from './routing.js';
+import { GRACE_OVERRIDE_KEY } from './grace.js';
 import { matchPattern } from './domain.js';
 import { unpack } from './share.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
@@ -106,13 +107,29 @@ export async function ask(agentName, prompt, { onPartial } = {}) {
     };
   }
 
+  const graceMs = await storedGrace();
   const id = crypto.randomUUID();
   const answer = new Promise((resolve) => {
     pending.set(id, { resolve, onEvent: (event) => onPartial?.(event?.text ?? '') });
   });
 
-  dispatchIntent({ id, agent: agent.name, payload: { intent: 'ask_assistant', recipe, prompt } });
+  dispatchIntent({ id, agent: agent.name, payload: { intent: 'ask_assistant', recipe, prompt, graceMs } });
   return answer;
+}
+
+/**
+ * The panel's debug override of the answer grace, raw – `content.js` validates it on arrival,
+ * where it is spent. Read per question rather than once: MV3 kills this worker after ~30 s idle,
+ * and a slider moved after that would otherwise never reach the next turn.
+ *
+ * A failed read costs the default, never the turn. A debug value is not worth a question.
+ */
+async function storedGrace() {
+  const stored = await chrome.storage.session.get(GRACE_OVERRIDE_KEY).catch((error) => {
+    console.warn('[openposse] could not read the answer grace override –', error?.message ?? error);
+    return {};
+  });
+  return stored[GRACE_OVERRIDE_KEY] ?? null;
 }
 
 // ── The voice loop's other half (E3) ────────────────────────────────────────────────────
@@ -832,7 +849,12 @@ async function dispatchIntent(request) {
     // reload is no longer part of anyone's routine.
     await ensureContentScript(tab.id);
 
-    const message = { intent: payload.intent, recipe, prompt: payload.prompt, id };
+    // **Rebuilt field by field, not forwarded**, so a field added to the payload above stops here
+    // unless it is named here too. `tools/grace.test.mjs` checks this line against what
+    // `askAssistant` reads, because the failure is silent: the default simply applies.
+    const message = {
+      intent: payload.intent, recipe, prompt: payload.prompt, graceMs: payload.graceMs, id,
+    };
 
     let frameId = await frameOwningAssistant(tab.id, recipe.inputSelector);
     let result = await chrome.tabs.sendMessage(tab.id, message, { frameId: frameId ?? 0 });
@@ -1362,9 +1384,12 @@ async function askOnce(tabId, recipe, prompt) {
   // asks each whether it can see that element. Notion has two frames and only one holds the
   // composer, and without this the promise resolves with whichever answers first.
   const frameId = await frameOwningAssistant(tabId, recipe.inputSelector);
+  // The same grace a real turn would get, so a recipe is verified under the timing it will run
+  // with rather than passing here and misbehaving in a turn.
+  const graceMs = await storedGrace();
   return chrome.tabs.sendMessage(
     tabId,
-    { intent: 'ask_assistant', recipe, prompt },
+    { intent: 'ask_assistant', recipe, prompt, graceMs },
     frameId == null ? undefined : { frameId },
   );
 }
