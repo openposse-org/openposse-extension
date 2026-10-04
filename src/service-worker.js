@@ -19,6 +19,7 @@ import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
   isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone, say,
 } from './listening.js';
+import { runDemo, stopDemo } from './demo.js';
 import { needsShortening, spokenForm } from './saying.js';
 import { summarise } from './summariser.js';
 import { route, navigationTarget, productName, FLOOR_MS } from './routing.js';
@@ -919,7 +920,19 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   }
 
   if (request?.kind === 'openposse.listen.toggle') {
+    // A real turn always wins. Without this the demo keeps pushing scripted patches at the same
+    // surface the live turn is writing to, and the panel flickers between two transcripts –
+    // which reads as a rendering fault in the thing the demo exists to let you judge.
+    stopDemo();
     toggleListening().then((problem) => respond({ ok: !problem, failure: problem ?? null }));
+    return true;
+  }
+  if (request?.kind === 'openposse.demo') {
+    // Scaffolding, reachable only from the panel's own quiet button. See `demo.js`.
+    runDemo().then(respond, (error) => {
+      console.warn('[openposse] the demo turn failed –', error?.message ?? error);
+      respond({ ok: false, reason: error?.message ?? String(error) });
+    });
     return true;
   }
   if (request?.kind === 'openposse.listen.query') {

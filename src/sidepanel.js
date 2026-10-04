@@ -588,6 +588,32 @@ el('surface').addEventListener('click', async () => {
   await paintSurface();
 });
 
+// ── The scripted turn ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Replays a turn with no vendor in it, so this surface and the orb can be judged without
+ * spending a real question. The script lives in the worker – see `demo.js` – because it drives
+ * the same `panel()` channel a real turn does, and a copy of it here would be a second renderer
+ * able to disagree with the one being evaluated.
+ *
+ * **The button reports that it is running, and this is not polish.** It runs for about a minute
+ * and its first visible act is nine hundred milliseconds away, so a button that did nothing
+ * visible for a second would be pressed twice – and the second press restarts the script,
+ * which looks exactly like the first press having failed.
+ */
+el('demo').addEventListener('click', () => {
+  const button = el('demo');
+  if (button.disabled) return;
+  button.disabled = true;
+  button.textContent = 'Playing…';
+  chrome.runtime.sendMessage({ kind: 'openposse.demo' })
+    .catch((error) => console.warn('[openposse] the demo could not start –', error?.message ?? error))
+    .finally(() => {
+      button.disabled = false;
+      button.textContent = 'Demo';
+    });
+});
+
 // ── What arrives from the worker ───────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message) => {

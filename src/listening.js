@@ -21,7 +21,10 @@ import { beginTurn, trace } from './trace.js';
  * presentational stand-in for confidence rather than a measurement – Web Speech gives one
  * transcript per result and does not say which part it is least sure of.
  */
-const VOLATILE_TAIL = 9;
+// Exported so `demo.js` splits committed text from the revising tail with this number rather
+// than its own copy of it. A second 9 would look like agreement and drift the first time this
+// one is tuned.
+export const VOLATILE_TAIL = 9;
 
 const OFFSCREEN_PATH = 'offscreen.html';
 
