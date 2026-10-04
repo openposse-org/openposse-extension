@@ -370,7 +370,14 @@ async function speak({ text, agentID, roster = [] }) {
     // fails would be a quieter failure than it deserves: somebody who downloaded 89 MB for
     // better voices and is hearing the old ones needs telling, not soothing. The reason
     // reaches the console and, where it is actionable, the panel.
-    send('openposse.spoke', result);
+    //
+    // **The voice travels with the result**, which it did not, and the omission cost a round.
+    // Everything about *how* the speaking went was reported – load, synthesis, duration, peak –
+    // and the one thing identifying *who* spoke was dropped on the floor, two lines after being
+    // computed. `assignKokoroVoices` hands out voices by position, so an agent's voice changes
+    // when the roster does; without this, "is this the voice it used last week" is unanswerable
+    // from the log, and the answer to "why does it sound different" is a shrug.
+    send('openposse.spoke', { ...result, engine: 'kokoro', voice });
     return;
   }
 
@@ -404,7 +411,10 @@ async function speak({ text, agentID, roster = [] }) {
   // being said, which is what the orb is for, and E6's own audio can be metered properly.
   utterance.addEventListener('boundary', () => send('openposse.speaking', { pulse: true }));
   utterance.addEventListener('start', () => send('openposse.speaking', { started: true }));
-  utterance.addEventListener('end', () => send('openposse.spoke', { ok: true }));
+  // Named here too, for the same reason as the Kokoro path above – and because "which engine"
+  // and "which voice" are one question. A log line that answers it for one path and not the
+  // other is worse than one that answers neither: it reads as the system path having no voice.
+  utterance.addEventListener('end', () => send('openposse.spoke', { ok: true, engine: 'system', voice: voice.name }));
   utterance.addEventListener('error', (event) => {
     // `interrupted` and `canceled` are us stopping it on purpose, not faults.
     const ours = event.error === 'interrupted' || event.error === 'canceled';

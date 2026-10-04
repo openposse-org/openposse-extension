@@ -467,14 +467,22 @@ export function handleOffscreenMessage(message) {
       //
       // `peak` is here because "played for the right number of milliseconds" and "was audible"
       // turned out to be different claims, and only the first was ever measured.
+      // **The voice leads, because it is the only identifying fact on the line.** Everything
+      // after it describes how the speaking went; this says who did it. Voices are handed out
+      // by position, so an agent's voice moves when the roster does – and without this, "it
+      // sounds different from last week" has no measurement behind it at all.
+      //
+      // A voice id is not content. It is the name of a file that ships with the extension.
       trace('voice finished', message.ms
-        ? `first word ${message.ms.firstWord ?? '?'}ms · `
+        ? `${message.voice ?? '?'} (${message.engine ?? '?'}) · `
+          + `first word ${message.ms.firstWord ?? '?'}ms · `
           + `load ${message.ms.load ?? '?'}ms${message.ms.cold ? ' (cold)' : ''} · `
           + `synth ${message.ms.synth ?? '?'}ms → ${message.ms.audio ?? '?'}ms audio `
           + `in ${message.ms.chunks ?? '?'} chunks at ${message.ms.rate ?? '?'}Hz · `
           + `peak ${message.ms.peak ?? '?'} · spoke ${message.ms.play ?? '?'}ms`
           + (message.ok ? '' : ` · ${message.reason ?? 'failed'}`)
-        : (message.ok ? '' : (message.reason ?? 'failed')));
+        : `${message.voice ? `${message.voice} (${message.engine ?? '?'}) · ` : ''}`
+          + (message.ok ? 'spoken' : (message.reason ?? 'failed')));
       panelSpeaking(false);
       panelLevel(0);
       if (!message.ok) reportUnspoken(message.reason);
