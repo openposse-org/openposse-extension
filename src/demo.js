@@ -32,6 +32,7 @@
 // gap – and not as a dev tool somebody forgot to take out.
 
 import { panel, panelLevel } from './panel.js';
+import { beginTurn, trace } from './trace.js';
 import { say, markThinking, markDone, VOLATILE_TAIL } from './listening.js';
 import { channelFor } from './channels.js';
 import { loadRoster, recipeFor } from './storage.js';
@@ -141,6 +142,15 @@ function speakingInto(token) {
 async function playTurn(step, who, token) {
   const alive = () => generation === token;
   const utterance = step.named === false ? step.ask : `${who.name}, ${step.ask}`;
+
+  // **Named `demo`, and resetting the clock, for two separate reasons.** `trace` measures from
+  // the last `beginTurn`, so without this the voice timings would read against whatever real
+  // turn last happened – an elapsed column of nonsense beside deltas that are still correct,
+  // which is worse than no number. And the label is what tells somebody reading the worker's
+  // console that these milliseconds came from a script rather than from a vendor, which matters
+  // precisely when the console is being read to answer "is the voice slower than it was".
+  beginTurn('demo');
+  trace('scripted turn', `${who.name}${who.id ? '' : ' (stand-in)'} · ${step.answer.length} chars to speak`);
 
   // Exactly `startListening`'s opening patch, including `create` – so the orb gets injected on
   // this path too and the demo is a test of both surfaces rather than only the one in front.
