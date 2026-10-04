@@ -569,8 +569,12 @@ async function refreshVoices() {
     // Where the second column starts. The grid fills downwards, so this is what splits the
     // alphabet in half rather than interleaving it – and it is set here because each group is a
     // different size and CSS has no way to count its own children.
-    grid.style.setProperty('--rows', String(Math.ceil(voices.length / 2)));
-    for (const { id, name } of voices) renderVoice(grid, id, name);
+    const rows = Math.ceil(voices.length / 2);
+    grid.style.setProperty('--rows', String(rows));
+    // The bottom of each column, so its rule can go: the drawer's own border is directly below.
+    voices.forEach(({ id, name }, i) => {
+      renderVoice(grid, id, name, { endsColumn: i === rows - 1 || i === voices.length - 1 });
+    });
 
     group.append(summary, grid);
     list.append(group);
@@ -578,9 +582,10 @@ async function refreshVoices() {
 }
 
 /** One row of the try-it list: a play control, the name it plays, and a line for what went wrong. */
-function renderVoice(grid, id, name) {
+function renderVoice(grid, id, name, { endsColumn = false } = {}) {
   const row = document.createElement('div');
   row.className = 'voice';
+  row.classList.toggle('ends-column', endsColumn);
 
   const sub = document.createElement('div');
   sub.className = 'accent';
