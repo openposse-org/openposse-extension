@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  route, bestMatch, normalise, editDistance, navigationTarget, productName,
+  route, bestMatch, normalise, editDistance, navigationTarget, productName, productLabel,
   floorWindow, FLOOR_MS, FLOOR_RANGE,
 } from '../src/routing.js';
 
@@ -200,6 +200,15 @@ test('product names come from the domain, minus the generic subdomain', () => {
   assert.equal(productName('app.leanix.net'), 'leanix');
   assert.equal(productName('chat.openai.com'), 'openai');
   assert.equal(productName(''), '');
+});
+
+test('product labels are capitalised for reading, and only the first letter', () => {
+  // `productName` above stays lowercase – it is what spoken navigation is matched against.
+  assert.equal(productLabel('*.notion.so'), 'Notion');
+  // Not `LeanIX`: the inner capitals of a brand are not in its domain, and guessing them would
+  // be wrong more often than not.
+  assert.equal(productLabel('app.leanix.net'), 'Leanix');
+  assert.equal(productLabel(''), '');
 });
 
 test('asking a question is never navigation', () => {

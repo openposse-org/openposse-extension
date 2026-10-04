@@ -22,7 +22,9 @@ import {
 import { runDemo, stopDemo } from './demo.js';
 import { needsShortening, spokenForm } from './saying.js';
 import { summarise } from './summariser.js';
-import { route, navigationTarget, productName, floorWindow, FLOOR_OVERRIDE_KEY } from './routing.js';
+import {
+  route, navigationTarget, productName, productLabel, floorWindow, FLOOR_OVERRIDE_KEY,
+} from './routing.js';
 import { GRACE_OVERRIDE_KEY } from './grace.js';
 import { matchPattern } from './domain.js';
 import { unpack } from './share.js';
@@ -210,7 +212,9 @@ async function goToAgent(nav) {
 
   if (!tab) {
     markDone('tab-not-found');
-    announceTurn({ phase: 'problem', message: `No ${agent.product || agent.name} tab is open.` });
+    // `agent.product` is the lowercase one, for matching what was said. This is shown.
+    const vendor = productLabel(recipe?.domainPattern) || agent.name;
+    announceTurn({ phase: 'problem', message: `No ${vendor} tab is open.` });
     return;
   }
 
@@ -1132,7 +1136,7 @@ async function rerecord(agentId) {
 
   const [tab] = await chrome.tabs.query({ url: matchPattern(pattern) });
   if (!tab) {
-    return { ok: false, reason: `open a ${productName(pattern)} tab first, then try again` };
+    return { ok: false, reason: `open a ${productLabel(pattern)} tab first, then try again` };
   }
 
   // Brought forward, because the next thing asked of the user is to demonstrate the assistant
@@ -1334,16 +1338,10 @@ async function save() {
 
   const { agents } = await loadRoster();
 
-  // **Capitalised here, not in `productName`.** That function exists for matching – "take me to
-  // Notion" is normalised before it is compared – so lowercase is correct there and wrong the
-  // moment the same string becomes something a person reads and says out loud.
-  //
-  // The first letter only, because that is all a domain label supports honestly: `leanix`
-  // becomes `Leanix` rather than `LeanIX`, and guessing the inner capitals of a brand from its
-  // domain would be wrong more often than not. Renaming it takes one click in Settings, which
-  // is the whole reason naming moved there.
-  const product = productName(recipe.domainPattern);
-  const suggested = product ? product[0].toUpperCase() + product.slice(1) : 'Assistant';
+  // The product as a person writes it – see `productLabel` for why only the first letter. When
+  // it guesses a brand's casing wrong, renaming takes one click in Settings, which is the whole
+  // reason naming moved there.
+  const suggested = productLabel(recipe.domainPattern) || 'Assistant';
   const name = freeName(agents, suggested);
   // The voice comes from `assignVoices`' accent heuristic rather than being chosen here, and
   // Settings has the picker with previews for anyone who wants a different one.

@@ -210,6 +210,23 @@ export function productName(domainPattern) {
   return labels[0] ?? '';
 }
 
+/**
+ * A product name as a person reads it, or hears it: `notion` becomes `Notion`.
+ *
+ * **Separate from `productName`, which stays lowercase.** That one exists for matching – "take
+ * me to Notion" is normalised before it is compared – so lowercase is correct there and wrong
+ * the moment the same string is shown or said out loud. Everything that puts a vendor in front
+ * of a person goes through this one, so they cannot disagree about how it is written.
+ *
+ * The first letter only, because that is all a domain label supports honestly: `leanix` becomes
+ * `Leanix` rather than `LeanIX`, and guessing the inner capitals of a brand from its domain
+ * would be wrong more often than not.
+ */
+export function productLabel(domainPattern) {
+  const name = productName(domainPattern);
+  return name ? name[0].toUpperCase() + name.slice(1) : '';
+}
+
 /** Matches a fragment against what an agent can be called: its name, or its vendor's. */
 function matchTarget(fragment, agents) {
   const labelled = agents.flatMap((agent) => {

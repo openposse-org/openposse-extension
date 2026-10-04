@@ -27,7 +27,7 @@
 
 import { loadRoster, findAgent, micGranted, recipeFor } from './storage.js';
 import { channelFor, initialFor } from './channels.js';
-import { FLOOR_MS, FLOOR_OVERRIDE_KEY, FLOOR_RANGE, floorWindow, productName } from './routing.js';
+import { FLOOR_MS, FLOOR_OVERRIDE_KEY, FLOOR_RANGE, floorWindow, productLabel } from './routing.js';
 import { patternForHost, matchPattern } from './domain.js';
 import { SURFACES, setSurface } from './surface.js';
 import { drawSphere, modeFor } from './sphere.js';
@@ -292,9 +292,10 @@ async function loadRosterData() {
   const { agents, broken, problem } = await loadRoster();
   const products = {};
   await Promise.all(agents.map(async (agent) => {
-    // `productName` turns `*.notion.so` into "Notion" – the same derivation E3b's navigation uses,
-    // so "take me to Notion" and the label here cannot drift apart.
-    products[agent.id] = productName((await recipeFor(agent))?.domainPattern) ?? null;
+    // `productLabel` turns `*.notion.so` into "Notion" – the same derivation E3b's navigation
+    // matches against, so "take me to Notion" and the label here cannot drift apart. The label
+    // rather than `productName`, which is lowercase because it is for matching, not for reading.
+    products[agent.id] = productLabel((await recipeFor(agent))?.domainPattern) || null;
   }));
   roster = { agents, broken, problem, products };
   drawRoster();

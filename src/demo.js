@@ -36,7 +36,7 @@ import { beginTurn, trace } from './trace.js';
 import { say, markThinking, markDone, VOLATILE_TAIL } from './listening.js';
 import { channelFor } from './channels.js';
 import { loadRoster, recipeFor } from './storage.js';
-import { productName } from './routing.js';
+import { productLabel } from './routing.js';
 
 /**
  * The script. Three turns, chosen to cover what a single turn cannot.
@@ -112,7 +112,7 @@ async function cast() {
   const real = await Promise.all(agents.slice(0, 2).map(async (agent) => ({
     id: agent.id,
     name: agent.name,
-    product: productName((await recipeFor(agent))?.domainPattern) ?? null,
+    product: productLabel((await recipeFor(agent))?.domainPattern) || null,
   })));
   return [real[0] ?? STAND_INS[0], real[1] ?? STAND_INS[1]];
 }
