@@ -33,6 +33,7 @@ import { SURFACES, setSurface } from './surface.js';
 import { drawSphere, modeFor } from './sphere.js';
 import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from './grace.js';
 import { icon } from './icons.js';
+import { MOCK_SIZES } from './mocks.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -139,11 +140,13 @@ const STATUS = {
 function renderTurn() {
   // **Recording takes the whole panel**, because it is a different activity rather than a
   // different turn state: there is no transcript, no roster to re-route to, and the person is
-  // standing in a vendor's page being told what to click. The desk goes too – offering "Ask" and
+  // standing in a vendor's page being told what to click. The controls go too – offering "Ask" and
   // "Record this tab" in the middle of a recording is offering to start a second one.
   const recording = state.phase === 'recording';
-  el('stage').hidden = recording;
+  el('top').hidden = recording;
+  el('avatars').hidden = recording;
   el('desk').hidden = recording;
+  el('dock').hidden = recording;
   el('coach').hidden = !recording;
   if (recording) return renderCoach();
 
@@ -188,7 +191,7 @@ function renderTurn() {
   el('deadmic').hidden = state.phase !== 'not-capturing';
 
   // See `AWAITING` above, and the `.awaiting` rule in the stylesheet.
-  el('stage').classList.toggle('awaiting', AWAITING.has(state.phase));
+  el('top').classList.toggle('awaiting', AWAITING.has(state.phase));
 
   const answer = el('answer');
   answer.textContent = '';
@@ -299,6 +302,7 @@ async function loadRosterData() {
   }));
   roster = { agents, broken, problem, products };
   drawRoster();
+  paintMocks();
 }
 
 async function drawRoster() {
@@ -357,8 +361,6 @@ async function drawRoster() {
     // matching on text aimed at one and highlighted both – which is exactly the roster this
     // project has, since `freeName` produces "Ivan 2" on a second import.
     av.dataset.name = agent.name;
-    // The roster starts at the panel's left edge, where a centred label would run off it.
-    av.dataset.tipAt = 'start';
     av.style.setProperty('--channel', channelOf(agent));
 
     const face = document.createElement('span');
@@ -389,9 +391,53 @@ async function drawRoster() {
 
     target.append(av);
   }
+  alignTips();
 
   if (agents.length > 0 && !findAgent(agents, aimedAt ?? '')) aim(active ?? agents[0].name);
 }
+
+/**
+ * Which edge each avatar's label hangs from, now that the row wraps and avatars reach the right
+ * side of the panel.
+ *
+ * **An invisible label still widens the page.** It is an absolutely placed box at opacity 0, so
+ * one hanging off the right edge makes the panel scroll sideways – the bug the wrap fixed, back
+ * through the labels. By thirds of the panel: hung from the left edge on the left, centred in the
+ * middle, from the right edge on the right. A 220px label clears both edges from any of them.
+ */
+function alignTips() {
+  const width = document.documentElement.clientWidth;
+  for (const av of el('avatars').children) {
+    const { left, width: size } = av.getBoundingClientRect();
+    const at = (left + size / 2) / width;
+    if (at < 1 / 3) av.dataset.tipAt = 'start';
+    else if (at > 2 / 3) av.dataset.tipAt = 'end';
+    else delete av.dataset.tipAt;
+  }
+}
+
+// The panel's width is the user's, and dragging it re-wraps the row.
+window.addEventListener('resize', alignTips);
+
+/**
+ * Whether a label in the scrolling middle hangs below its control instead of above.
+ *
+ * **The middle clips what it holds**, so a label above a control near its top edge is cut off –
+ * and the roster's first row now sits right against that edge, under the fixed top. Decided as the
+ * label is about to show rather than once, like `alignTips`, because scrolling moves the controls.
+ * The room asked for is a two-line label, its 8px gap and the 10px fade.
+ */
+const TIP_ROOM = 60;
+
+function placeTip(event) {
+  const button = event.target.closest?.('button:is(.icon, .av)[aria-label]');
+  if (!button) return;
+  const room = button.getBoundingClientRect().top - el('middle').getBoundingClientRect().top;
+  button.toggleAttribute('data-tip-below', room < TIP_ROOM);
+}
+
+el('middle').addEventListener('pointerover', placeTip);
+el('middle').addEventListener('focusin', placeTip);
 
 function aim(name) {
   aimedAt = name;
@@ -571,7 +617,8 @@ async function paintSite() {
   // page, and it is the same note on every tab.
   const { origins = [] } = await chrome.permissions.getAll().catch(() => ({ origins: [] }));
   const broad = origins.filter(isBroad);
-  note.classList.remove('bad');
+  // A repaint is also what retires the last Grant or Record error – see `say`.
+  el('dock-note').hidden = true;
   note.textContent = broad.length
     ? `${broad.join(', ')} is granted, which covers every site. `
       + 'Chrome › Extensions › OpenPosse › Details › Site access is where that is set.'
@@ -583,16 +630,16 @@ async function paintSite() {
 }
 
 /**
- * Something just went wrong with site access, in the bar that is about site access.
+ * Something just went wrong with site access, said beside the controls that were pressed.
  *
  * These used to replace the button's own text. An icon has no text, and a hover label is gone
- * the moment the pointer moves, so they land under the site line – where they stay until the
- * next repaint, which is the next time the tab or the grants change.
+ * the moment the pointer moves, so they get a line above the controls – where they stay until the
+ * next repaint, which is the next time the tab or the grants change. **Not in the debug drawer
+ * with the site line**: an error that shows only while a drawer is open is not shown.
  */
 function say(text) {
-  const note = el('site-note');
+  const note = el('dock-note');
   note.textContent = text;
-  note.classList.add('bad');
   note.hidden = false;
 }
 
@@ -721,7 +768,11 @@ const overrides = {};
 function paintDebugToggle() {
   const open = !el('debug-tools').hidden;
   const toggle = el('debug');
-  const set = KNOBS.filter((k) => k.id in overrides).map((k) => `${k.name} ${overrides[k.id] / 1000} s`);
+  const mocks = roster.agents.filter((a) => a.mock).length;
+  const set = [
+    ...KNOBS.filter((k) => k.id in overrides).map((k) => `${k.name} ${overrides[k.id] / 1000} s`),
+    ...(mocks ? [`${mocks} mock recordings`] : []),
+  ];
   toggle.setAttribute('aria-expanded', String(open));
   toggle.classList.toggle('overridden', set.length > 0);
   label(toggle, [open ? 'Hide debug tools' : 'Debug tools', set.join(', ')].filter(Boolean).join(' – '));
@@ -730,6 +781,9 @@ function paintDebugToggle() {
 el('debug').addEventListener('click', () => {
   el('debug-tools').hidden = !el('debug-tools').hidden;
   paintDebugToggle();
+  // The drawer opens at the end of the scrolling middle, usually below what is in view – and a
+  // button that opens something you cannot see reads as a button that did nothing.
+  if (!el('debug-tools').hidden) el('debug-tools').scrollIntoView({ block: 'start' });
 });
 
 // Kokoro's layer-by-layer check, `spike.js`. A tab rather than the panel, because it runs each
@@ -784,6 +838,43 @@ for (const knob of KNOBS) {
   });
 }
 
+// ── The mock roster ────────────────────────────────────────────────────────────────────────
+//
+// Made-up recordings for judging a long roster – see `mocks.js`. Off, then one button per size,
+// pressed for whichever the roster is now. The write goes through the worker like every other
+// roster change, and the redraw arrives through `storage.onChanged` like theirs too.
+
+for (const size of [0, ...MOCK_SIZES]) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'icon';
+  button.dataset.size = String(size);
+  button.dataset.tipAt = 'start';
+  button.textContent = size ? String(size) : 'Off';
+  label(button, size ? `Fill the roster to ${size} assistants` : 'No mock recordings');
+  button.addEventListener('click', async () => {
+    const result = await chrome.runtime.sendMessage({ kind: 'openposse.agent.mocks', size })
+      .catch((error) => ({ ok: false, reason: error?.message ?? String(error) }));
+    if (!result?.ok) {
+      const why = result?.reason ?? 'the worker did not answer';
+      console.warn('[openposse] the mock roster was not changed –', why);
+      el('mock-value').textContent = `not changed – ${why}`;
+    }
+  });
+  el('mock-sizes').append(button);
+}
+
+function paintMocks() {
+  const mocks = roster.agents.filter((a) => a.mock).length;
+  const total = roster.agents.length;
+  for (const button of el('mock-sizes').children) {
+    const size = Number(button.dataset.size);
+    button.setAttribute('aria-pressed', String(size ? mocks > 0 && total === size : mocks === 0));
+  }
+  el('mock-value').textContent = mocks ? `${total} assistants, ${mocks} made up` : 'off';
+  paintDebugToggle();
+}
+
 // ── What arrives from the worker ───────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message) => {
@@ -817,6 +908,14 @@ chrome.runtime.onMessage.addListener((message) => {
   // A new turn starts from silence. Without this the orb opens at whatever the last one ended on,
   // which reads as it hearing something before anyone has spoken.
   if (patch.phase === 'listening') { level = null; eased = 0; }
+
+  // A new turn also brings the roster back into view, wherever the middle was scrolled to. A spoken
+  // turn opens on `listening`; a typed or re-asked one opens straight on `thinking` – which a spoken
+  // turn reaches too, but always by way of `routing`.
+  if (state.phase !== before.phase && (state.phase === 'listening'
+    || (state.phase === 'thinking' && before.phase !== 'routing'))) {
+    el('middle').scrollTop = 0;
+  }
 
   if (patch.shortcut !== undefined) el('shortcut').textContent = patch.shortcut || '';
 

@@ -16,3 +16,8 @@ keys/
 extension/keys/
 node_modules/
 extension/dist/
+
+# Throwaway copies of an extension page, with its CSS and bundle inlined, for previewing it in
+# the Claude app's browser pane. Never committed, and ignored so a preview does not show up as
+# ~1,900 changed lines while it exists.
+extension/preview-*-tmp.html
