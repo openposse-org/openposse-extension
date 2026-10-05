@@ -11,9 +11,13 @@
 // in front of everybody at install for the sake of a look. With no separate flag, the setting and
 // the permission cannot disagree.
 //
-// **The store is keyed by host, and a recipe holds only a pattern.** `*.leanix.net` names no page
-// anybody visits; their tenant does. An open tab of the vendor gives the real host, which is
-// remembered so the icon outlives the tab. A site Chrome has no icon for keeps its initial.
+// **Only sites seen in a tab with an icon are looked up**, for two reasons. The store is keyed by
+// host and a recipe holds only a pattern – `*.leanix.net` names no page anybody visits; their
+// tenant does – so an open tab is where the real host comes from, and it is remembered so the icon
+// outlives the tab. And **Chrome answers a site it has no icon for with its grey globe.** The
+// `forceEmptyDefaultFavicon` option that should send nothing instead did not: a 30-agent mock
+// roster came back as twenty-seven globes on 2026-10-05. Asking only about sites a tab has shown
+// an icon for means that answer never comes, and everyone else keeps their initial.
 
 import { matchPattern } from './domain.js';
 
@@ -21,52 +25,50 @@ export const ICONS = { permissions: ['favicon'] };
 
 const KNOWN_KEY = 'iconSites';
 
-// Per page: the loaded image, or null once Chrome has said it has none. The panel redraws its
-// roster on every turn change, and asking again each time would flash the initial before the icon.
+// Per page: the loaded image, or null once its request failed. The panel redraws its roster on
+// every turn change, and asking again each time would flash the initial before the icon.
 const settled = new Map();
 
 /**
- * Which page to ask the store about, for one pattern: an open tab's own URL, else the origin
- * remembered from the last one seen, else the pattern's bare domain – a guess, right for any site
- * visited at its bare domain. `origin` is set when it is new and should be remembered.
+ * Which page to ask the store about, from an open tab of the site and the origin remembered from
+ * the last one: the tab's own URL if it is showing an icon, else that origin, else nothing.
+ * `origin` is set when it is new and should be remembered.
  */
-export function pickPage(pattern, tabUrl, known) {
-  if (tabUrl) {
-    const { origin } = new URL(tabUrl);
-    return { page: tabUrl, origin: origin === known ? null : origin };
+export function pickPage(tab, known) {
+  if (tab?.url && tab.favIconUrl) {
+    const { origin } = new URL(tab.url);
+    return { page: tab.url, origin: origin === known ? null : origin };
   }
-  return { page: known ? `${known}/` : `https://${pattern.replace(/^\*\./, '')}/`, origin: null };
+  return known ? { page: `${known}/`, origin: null } : null;
 }
 
 /**
  * The page each agent's icon is looked up by, keyed by agent id – or nothing while the setting is
- * off. `patterns` maps agent id to domain pattern. `expected` marks a page taken from an open tab
- * that is showing an icon, so Chrome certainly has one for it.
+ * off. `patterns` maps agent id to domain pattern. An agent left out keeps its initial.
  */
 export async function iconPages(patterns) {
   try {
     if (!await chrome.permissions.contains(ICONS)) return {};
-    // A roster reload is the moment to try again for sites that had no icon last time.
+    // A roster reload is the moment to retry a request that failed last time.
     for (const [page, img] of settled) if (!img) settled.delete(page);
 
     const { [KNOWN_KEY]: known = {} } = await chrome.storage.local.get(KNOWN_KEY);
     const tabs = {};
     await Promise.all([...new Set(Object.values(patterns).filter(Boolean))].map(async (pattern) => {
       const open = await chrome.tabs.query({ url: matchPattern(pattern) });
-      tabs[pattern] = open.find((tab) => tab.favIconUrl) ?? open[0];
+      tabs[pattern] = open.find((tab) => tab.favIconUrl);
     }));
 
     const pages = {};
     let learned = false;
     for (const [id, pattern] of Object.entries(patterns)) {
-      if (!pattern) continue;
-      const tab = tabs[pattern];
-      const { page, origin } = pickPage(pattern, tab?.url, known[pattern]);
-      if (origin) {
-        known[pattern] = origin;
+      const pick = pattern ? pickPage(tabs[pattern], known[pattern]) : null;
+      if (!pick) continue;
+      if (pick.origin) {
+        known[pattern] = pick.origin;
         learned = true;
       }
-      pages[id] = { page, expected: Boolean(tab?.favIconUrl) };
+      pages[id] = pick.page;
     }
     if (learned) await chrome.storage.local.set({ [KNOWN_KEY]: known });
     return pages;
@@ -77,10 +79,10 @@ export async function iconPages(patterns) {
   }
 }
 
-/** Puts an agent's site icon into its avatar, which keeps its initial when there is none. */
-export function putIcon(face, entry) {
-  if (!entry) return;
-  const loaded = settled.get(entry.page);
+/** Puts an agent's site icon into its avatar, which keeps its initial if none arrives. */
+export function putIcon(face, page) {
+  if (!page) return;
+  const loaded = settled.get(page);
   if (loaded) {
     face.replaceChildren(loaded.cloneNode());
     return;
@@ -90,22 +92,19 @@ export function putIcon(face, entry) {
   const img = document.createElement('img');
   img.alt = '';
   img.addEventListener('load', () => {
-    settled.set(entry.page, img);
+    settled.set(page, img);
     face.replaceChildren(img.cloneNode());
   }, { once: true });
-  // **An error is how Chrome says it has no icon.** `forceEmptyDefaultFavicon` asks for nothing
-  // back instead of its grey globe, so for a site never visited, keeping the initial is the whole
-  // handling. It is a fault only when an open tab of the site shows an icon and none came here.
+  // Every page asked about is one a tab has shown an icon for, so an error is the request failing,
+  // not an absence. The event carries no reason to pass on; Chrome's own, if it gave one, is in
+  // this page's console.
   img.addEventListener('error', () => {
-    settled.set(entry.page, null);
-    if (entry.expected) {
-      console.warn('[openposse] an open tab of this site shows an icon, but none was served to its avatar');
-    }
+    settled.set(page, null);
+    console.warn('[openposse] a site icon Chrome has shown in a tab could not be read for its avatar');
   }, { once: true });
 
   const src = new URL(chrome.runtime.getURL('/_favicon/'));
-  src.searchParams.set('pageUrl', entry.page);
+  src.searchParams.set('pageUrl', page);
   src.searchParams.set('size', '32'); // drawn at 16px, so sharp on a 2× screen
-  src.searchParams.set('forceEmptyDefaultFavicon', '1');
   img.src = src.href;
 }
