@@ -140,11 +140,13 @@ const STATUS = {
 function renderTurn() {
   // **Recording takes the whole panel**, because it is a different activity rather than a
   // different turn state: there is no transcript, no roster to re-route to, and the person is
-  // standing in a vendor's page being told what to click. The desk goes too – offering "Ask" and
+  // standing in a vendor's page being told what to click. The controls go too – offering "Ask" and
   // "Record this tab" in the middle of a recording is offering to start a second one.
   const recording = state.phase === 'recording';
+  el('top').hidden = recording;
   el('stage').hidden = recording;
   el('desk').hidden = recording;
+  el('dock').hidden = recording;
   el('coach').hidden = !recording;
   if (recording) return renderCoach();
 
@@ -595,7 +597,8 @@ async function paintSite() {
   // page, and it is the same note on every tab.
   const { origins = [] } = await chrome.permissions.getAll().catch(() => ({ origins: [] }));
   const broad = origins.filter(isBroad);
-  note.classList.remove('bad');
+  // A repaint is also what retires the last Grant or Record error – see `say`.
+  el('dock-note').hidden = true;
   note.textContent = broad.length
     ? `${broad.join(', ')} is granted, which covers every site. `
       + 'Chrome › Extensions › OpenPosse › Details › Site access is where that is set.'
@@ -607,16 +610,16 @@ async function paintSite() {
 }
 
 /**
- * Something just went wrong with site access, in the bar that is about site access.
+ * Something just went wrong with site access, said beside the controls that were pressed.
  *
  * These used to replace the button's own text. An icon has no text, and a hover label is gone
- * the moment the pointer moves, so they land under the site line – where they stay until the
- * next repaint, which is the next time the tab or the grants change.
+ * the moment the pointer moves, so they get a line above the controls – where they stay until the
+ * next repaint, which is the next time the tab or the grants change. **Not in the debug drawer
+ * with the site line**: an error that shows only while a drawer is open is not shown.
  */
 function say(text) {
-  const note = el('site-note');
+  const note = el('dock-note');
   note.textContent = text;
-  note.classList.add('bad');
   note.hidden = false;
 }
 
@@ -758,6 +761,9 @@ function paintDebugToggle() {
 el('debug').addEventListener('click', () => {
   el('debug-tools').hidden = !el('debug-tools').hidden;
   paintDebugToggle();
+  // The drawer opens at the end of the scrolling middle, usually below what is in view – and a
+  // button that opens something you cannot see reads as a button that did nothing.
+  if (!el('debug-tools').hidden) el('debug-tools').scrollIntoView({ block: 'start' });
 });
 
 // Kokoro's layer-by-layer check, `spike.js`. A tab rather than the panel, because it runs each

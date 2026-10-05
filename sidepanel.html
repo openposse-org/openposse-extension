@@ -42,10 +42,11 @@
        * it. It is **not** tinted by the agent's channel – the orb is, and a green sphere on a
        * green field loses the sphere.
        *
-       * A column at least the window's height, so the site bar below sits at the foot of a short
-       * panel rather than under the last control. `main` and the bar carry their own padding. */
+       * Exactly the window's height, in three bands: the orb fixed at the top, the controls fixed
+       * at the foot, and `main` between them as the only part that scrolls. Each band carries its
+       * own padding. */
       body {
-        display: flex; flex-direction: column; min-height: 100vh;
+        display: flex; flex-direction: column; height: 100vh;
         background:
           radial-gradient(86% 42% at 50% 20%,
             rgba(255, 122, 24, 0.17), rgba(228, 73, 122, 0.05) 55%, transparent 75%),
@@ -54,7 +55,18 @@
         background-attachment: fixed;
       }
 
-      main { flex: 1 0 auto; padding: 10px 14px 20px; }
+      /* The orb stays in view however far the middle has scrolled, because it is the turn's state.
+         The canvas's lowest 20px is empty – the sphere fills about half of it – and the transcript
+         used to sit over that strip with a negative margin. At the top of a scroller a negative
+         margin is cut off rather than overlapped, so the strip is cropped here instead, which looks
+         the same. */
+      .top { flex: none; padding: 10px 14px 0; overflow: hidden; }
+      .top canvas { margin-bottom: -20px; }
+
+      /* The only part that scrolls. `min-height: 0` lets it shrink below its content, which a flex
+         item otherwise refuses to do – without it the column grows past the window and the controls
+         fall off the bottom again. */
+      main { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 14px 20px; }
 
       /* ── The stage ─────────────────────────────────────────────────────────────────────── */
 
@@ -78,7 +90,7 @@
          while somebody is still mid-sentence. The cost is a reserved strip on a panel that has
          not heard anything yet. */
       .transcript {
-        min-height: 66px; margin: -20px 0 0; padding: 0 6px; text-align: center;
+        min-height: 66px; margin: 0; padding: 0 6px; text-align: center;
         font-weight: 500; font-size: 21px; line-height: 1.34; letter-spacing: -0.015em;
         text-wrap: pretty; overflow-wrap: anywhere;
       }
@@ -93,10 +105,10 @@
       }
       @keyframes blink { 50% { opacity: 0; } }
 
-      /* The roster, and who the turn is with on its own line beneath it. Beside the avatars it took
-         width from them, so a long roster re-wrapped whenever it changed, and the status itself was
+      /* Who the turn is with, on its own line above the roster. Beside the avatars it took width
+         from them, so a long roster re-wrapped whenever it changed, and the status itself was
          squeezed into a column a few letters wide. **The line keeps its height when empty**, so a
-         status appearing does not move Listen.
+         status appearing does not shift the avatars under the pointer.
          **The divider is an inset hairline on this row rather than an element of its own.** A
          half-pixel `inset` shadow is what the hero uses and it is the better primitive: a 1px div
          rounds up to a whole device pixel and reads as a drawn line, where this catches the light
@@ -109,8 +121,9 @@
       }
       /* Wraps, because a long roster otherwise runs off the panel and the whole page scrolls
          sideways. Which way each avatar's label hangs then depends on where it landed – see
-         `alignTips` in sidepanel.js. */
-      #avatars { display: flex; flex-wrap: wrap; gap: 9px; }
+         `alignTips` in sidepanel.js. 8px rather than 9 puts eight to a row in a 360px panel, which
+         9 missed by three pixels. */
+      #avatars { display: flex; flex-wrap: wrap; gap: 8px; }
       .who {
         min-height: 18px; font-size: 13px; color: var(--text-dim);
         display: flex; align-items: center; gap: 7px; overflow-wrap: anywhere;
@@ -167,8 +180,8 @@
       .av.broken .face::after { box-shadow: 0 0 0 1.5px var(--error); }
 
       /* Reserved like the transcript, and for the sharper version of the same reason: an answer
-         lands mid-turn, and without the reserve it shoves Listen/Stop down the panel at the exact
-         moment somebody may be reaching for it.
+         lands mid-turn, and without the reserve it shoves the roster down the panel at the exact
+         moment somebody may be reaching for an avatar.
 
          **Reserved only while a turn is actually in flight**, which is where this departs from
          the hero. The hero's section ends under its answer, so an unconditional 84px reserve
@@ -189,9 +202,8 @@
           inset 0 0.5px 0 rgba(255, 255, 255, 0.22),
           inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
         animation: rise 0.34s cubic-bezier(0.22, 1, 0.36, 1);
-        /* Bounded so a long answer cannot push the controls off screen – they stay reachable
-           while an agent is still reading it out. */
-        max-height: 46vh; overflow-y: auto; overscroll-behavior: contain;
+        /* Not bounded. It was, so a long answer could not push the controls off screen; they are
+           fixed at the foot now, and a bound would only nest a second scroller inside the middle. */
       }
       @keyframes rise { from { opacity: 0; transform: translateY(5px); } }
       /* Inside the bubble, as drawn: it is a property of the answer, not a note beside it. */
@@ -341,8 +353,8 @@
         background: #ff7a18; box-shadow: 0 0 0 2px #0b0a0c;
       }
 
-      /* The manual path, behind the keyboard toggle. */
-      .ask { display: flex; gap: 7px; align-items: center; margin-top: 14px; }
+      /* The manual path, behind the keyboard toggle, just above the controls. */
+      .ask { display: flex; gap: 7px; align-items: center; margin-bottom: 12px; }
       .ask input { flex: 1; min-width: 0; }
 
       /* ── Debug tools ───────────────────────────────────────────────────────────────────── */
@@ -372,51 +384,57 @@
       .debug .sizes { grid-area: slider; display: flex; gap: 8px; }
       .debug .sizes .icon { font-size: 11px; font-weight: 600; font-feature-settings: var(--figures); }
 
-      /* ── The site bar ──────────────────────────────────────────────────────────────────── */
-
       /* Which site this is and whether we may drive it – the panel's own diagnostic, since a
-         popup that closes cannot tell you an hour later that access was revoked.
+         popup that closes cannot tell you an hour later that access was revoked. In the debug
+         drawer because it is a reading rather than something to act on: acting on it is the key,
+         which appears among the controls whenever there is access to grant. */
+      .debug .site { margin-top: 14px; font-size: 11.5px; color: var(--text-dim); }
+      .debug .site .host { font-feature-settings: var(--figures); overflow-wrap: anywhere; }
+      .debug .site .note { margin-top: 3px; color: var(--text-faint); overflow-wrap: anywhere; }
 
-         **Pinned to the foot of the panel, and still in the flow.** `main` grows to push it to
-         the bottom of a short panel; `sticky` keeps it there over a long one. `fixed` would need
-         a guessed padding to keep content out from under it, and that guess breaks the moment
-         the line wraps to three. Opaque, because a long answer scrolls beneath it. */
-      .site {
-        position: sticky; bottom: 0; z-index: 2;
-        display: flex; align-items: center; gap: 10px;
-        padding: 10px 14px 12px;
-        font-size: 11.5px; color: var(--text-dim);
-        background: #0b0a0c;
+      /* ── The dock ──────────────────────────────────────────────────────────────────────── */
+
+      /* The controls, fixed at the foot of the panel so Listen is never scrolled away. In the flow
+         of the column rather than `fixed`, so the middle ends where the dock begins with no guessed
+         padding – the text box and an error line can both grow it. */
+      .dock {
+        flex: none; padding: 10px 14px 12px;
         box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.14);
       }
-      .site .where { flex: 1; min-width: 0; }
-      .site .host { font-feature-settings: var(--figures); overflow-wrap: anywhere; }
-      .site .note { margin-top: 3px; color: var(--text-faint); overflow-wrap: anywhere; }
-      .site .note.bad { color: var(--error); }
+      /* What went wrong with the last Grant or Record, beside the buttons that were pressed. */
+      .dock .note {
+        margin-bottom: 8px; font-size: 11.5px; line-height: 1.4;
+        color: var(--error); overflow-wrap: anywhere;
+      }
     </style>
   </head>
   <body>
-    <main>
+    <!-- The orb, fixed at the top. -->
+    <header class="top" id="top">
       <!-- Deliberately not the design's `NOT HEARING ANYTHING – CHECK INPUT` badge. That one is
            for a microphone that is connected and silent and lives on the orb. A permission that
            was never granted needs different words and a different action.
 
            **The one button that is not an icon**, because it is a sentence you need to read
-           rather than a control you need to find. -->
+           rather than a control you need to find. Up here with the orb, so it cannot be scrolled
+           out of view. -->
       <button id="mic-warning" hidden class="card bad mic-fix"></button>
+      <div class="orbwrap">
+        <canvas id="orb"></canvas>
+        <div class="dead-mic" id="deadmic" hidden>NOT HEARING ANYTHING – CHECK INPUT</div>
+      </div>
+    </header>
 
+    <!-- The only part that scrolls. -->
+    <main>
       <section id="stage">
-        <div class="orbwrap">
-          <canvas id="orb"></canvas>
-          <div class="dead-mic" id="deadmic" hidden>NOT HEARING ANYTHING – CHECK INPUT</div>
-        </div>
         <div class="transcript" id="transcript"></div>
         <!-- The answer under the question it answers, and the roster below both: a long roster
              between the two put five rows of avatars in the middle of one exchange. -->
         <div class="answer" id="answer"></div>
         <div class="band">
-          <div id="avatars"></div>
           <div class="who" id="who"></div>
+          <div id="avatars"></div>
         </div>
       </section>
 
@@ -431,35 +449,6 @@
           No assistants yet. Open a page with an AI assistant on it, then record it.
         </div>
 
-        <!-- Icons and labels for the controls that change (Listen, the toggles) are set by the
-             script; the ones that never change carry their label here. -->
-        <div class="controls">
-          <div class="side">
-            <button class="icon" id="type" aria-controls="ask" data-tip-at="start"></button>
-            <!-- Disabled until the script has read the tab in front, so there is no window on
-                 load where it looks pressable and its click handler has no site to act on. -->
-            <button class="icon" id="record" disabled data-tip-at="start"
-                    aria-label="Reading the tab in front…"></button>
-          </div>
-          <div class="center">
-            <button class="icon mic" id="listen"></button>
-            <span class="tech" id="shortcut"></span>
-          </div>
-          <div class="side end">
-            <button class="icon" id="settings" aria-label="Settings" data-tip-at="end"></button>
-            <button class="icon" id="debug" aria-controls="debug-tools" data-tip-at="end"></button>
-          </div>
-        </div>
-
-        <!-- The manual path. Not only a fallback for a dead microphone: it is the whole product
-             minus voice, and it is the right answer in a meeting or an open-plan office. Behind
-             a toggle because most turns are spoken, and an empty field under the microphone
-             reads as the place to start. -->
-        <div class="ask" id="ask" hidden>
-          <input type="text" id="prompt" placeholder="Ask an assistant…" />
-          <button class="icon" id="send" data-tip-at="end"></button>
-        </div>
-
         <!-- Development tools, all behind one switch, as the Mac app had them. -->
         <section class="debug" id="debug-tools" hidden>
           <div class="eyebrow">Debug tools</div>
@@ -471,6 +460,11 @@
             <button class="icon" id="surface" data-tip-at="start"></button>
             <button class="icon" id="diagnostics" data-tip-at="start"
                     aria-label="Voice diagnostics – check each layer of the Kokoro voice"></button>
+          </div>
+          <!-- Which site this is and whether we may drive it. -->
+          <div class="site">
+            <div class="host" id="site-state">reading…</div>
+            <div class="note" id="site-note" hidden></div>
           </div>
           <label class="knob" for="floor">
             <span>Follow-up window</span>
@@ -504,13 +498,41 @@
       </section>
     </main>
 
-    <!-- Which site this is and whether we may drive it, pinned to the panel's foot. -->
-    <footer class="site" id="site">
-      <div class="where">
-        <div class="host" id="site-state">reading…</div>
-        <div class="note" id="site-note" hidden></div>
+    <!-- The controls, fixed at the foot. -->
+    <footer class="dock" id="dock">
+      <div class="note" id="dock-note" hidden></div>
+
+      <!-- The manual path. Not only a fallback for a dead microphone: it is the whole product
+           minus voice, and it is the right answer in a meeting or an open-plan office. Behind
+           a toggle because most turns are spoken, and an open empty field reads as the place to
+           start. -->
+      <div class="ask" id="ask" hidden>
+        <input type="text" id="prompt" placeholder="Ask an assistant…" />
+        <button class="icon" id="send" data-tip-at="end"></button>
       </div>
-      <button class="icon" id="grant" hidden data-tip-at="end"></button>
+
+      <!-- Icons and labels for the controls that change (Listen, the toggles) are set by the
+           script; the ones that never change carry their label here. -->
+      <div class="controls">
+        <div class="side">
+          <button class="icon" id="type" aria-controls="ask" data-tip-at="start"></button>
+          <!-- Disabled until the script has read the tab in front, so there is no window on
+               load where it looks pressable and its click handler has no site to act on. -->
+          <button class="icon" id="record" disabled data-tip-at="start"
+                  aria-label="Reading the tab in front…"></button>
+          <!-- Only while this tab is one we may not drive yet. Why is in the debug drawer; this
+               is the one thing to do about it. -->
+          <button class="icon" id="grant" hidden data-tip-at="start"></button>
+        </div>
+        <div class="center">
+          <button class="icon mic" id="listen"></button>
+          <span class="tech" id="shortcut"></span>
+        </div>
+        <div class="side end">
+          <button class="icon" id="settings" aria-label="Settings" data-tip-at="end"></button>
+          <button class="icon" id="debug" aria-controls="debug-tools" data-tip-at="end"></button>
+        </div>
+      </div>
     </footer>
 
     <script type="module" src="dist/sidepanel.js"></script>
