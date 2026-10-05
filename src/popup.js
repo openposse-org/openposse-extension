@@ -6,8 +6,8 @@
 // anyway: clicking the toolbar icon and having something invisible happen was never legible.
 
 import { loadRoster, findAgent, micGranted } from './storage.js';
-import { channelFor, initialFor } from './channels.js';
-import { FLOOR_MS } from './routing.js';
+import { channelOf, initialFor } from './channels.js';
+import { floorWindow, FLOOR_OVERRIDE_KEY } from './routing.js';
 import { patternForHost, matchPattern } from './domain.js';
 import { MARK_SVG, MARK_CSS } from './mark.js';
 
@@ -47,13 +47,14 @@ window.addEventListener('unhandledrejection', (e) => fatal(e.reason?.message ?? 
 /**
  * Who currently holds the floor, so the popup lights the agent a follow-up would reach.
  *
- * **Expiry is checked here too, against the same constant the worker routes by.** A ring that
+ * **Expiry is checked here too, against the same window the worker routes by.** A ring that
  * outlives the floor is not a cosmetic problem: it says a name-less question would go to Ivan
  * when it would actually be refused.
  */
 async function activeAgentName() {
-  const { floorHolder, floorAt = 0 } = await chrome.storage.session.get(['floorHolder', 'floorAt']);
-  if (!floorHolder || Date.now() - floorAt > FLOOR_MS) return null;
+  const { floorHolder, floorAt = 0, [FLOOR_OVERRIDE_KEY]: override } = await chrome.storage
+    .session.get(['floorHolder', 'floorAt', FLOOR_OVERRIDE_KEY]);
+  if (!floorHolder || Date.now() - floorAt > floorWindow(override)) return null;
   return floorHolder;
 }
 
@@ -73,7 +74,7 @@ async function render() {
     // all are lit – "no active agent" must not read as "every agent is broken".
     const isActive = !active || agent.name === active;
     row.className = `agent${isActive ? ' active' : ''}`;
-    row.style.setProperty('--channel', channelFor(agent.name));
+    row.style.setProperty('--channel', channelOf(agent));
 
     const avatar = document.createElement('div');
     avatar.className = 'avatar';

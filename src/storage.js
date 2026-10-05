@@ -13,8 +13,11 @@
 // as-is. That is not sentiment – it is the only reason V1 starts with a working Notion agent
 // instead of an empty list.
 
+import { assignChannels, pickChannel, CHANNELS } from './channels.js';
+
 const AGENTS_KEY = 'agents';
 const MIC_KEY = 'micGranted';
+const SPEED_KEY = 'voiceSpeed';
 const recipeKey = (id) => `recipe:${id}`;
 
 // ── The microphone, remembered rather than predicted ───────────────────────────────────────
@@ -41,6 +44,50 @@ export async function micGranted() {
   return stored[MIC_KEY] === true;
 }
 
+/**
+ * How fast answers are read out, as a multiplier. 1 is each engine's own pace.
+ *
+ * **One number for both engines, because they are the same scale and the user is not choosing
+ * an engine.** Kokoro takes `speed` and drives it through its duration predictor; a system voice
+ * takes `utterance.rate`; both are 1-is-normal and both stretch time without moving pitch. Which
+ * of the two is speaking depends on whether the weights downloaded, which is not a thing anybody
+ * should have to think about while deciding how fast they want to be spoken to.
+ *
+ * **The default is 1, deliberately, even though 1 measured slow.** Kokoro's own pace came out at
+ * 102–126 wpm against a natural ~150 on one roster on one machine, which is an observation about
+ * those voices rather than a finding about the product. Shipping a different default on that
+ * evidence would change what every user hears to match one person's ear. Move it when there are
+ * numbers from more than one of them.
+ */
+const SPEED_DEFAULT = 1;
+// HeadTTS refuses anything outside this and says so; `utterance.rate` would silently clamp.
+// Enforced here so one stored value cannot be valid for one engine and rejected by the other.
+const SPEED_MIN = 0.25;
+const SPEED_MAX = 4;
+
+export function clampSpeed(value) {
+  // **Empty is not zero, and `Number` disagrees.** `Number(null)`, `Number('')` and `Number([])`
+  // are all 0, which is finite – so without this guard an unset value clamps to the *slowest*
+  // pace the engines allow rather than reading as "nobody has chosen one". Caught by a test
+  // rather than by a user wondering why their assistant started drawling.
+  if (value === null || value === undefined || value === '') return SPEED_DEFAULT;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return SPEED_DEFAULT;
+  return Math.min(SPEED_MAX, Math.max(SPEED_MIN, n));
+}
+
+export async function voiceSpeed() {
+  const stored = await chrome.storage.local.get(SPEED_KEY).catch(() => ({}));
+  // A missing key is the default rather than a fault: nobody has opened Settings yet.
+  return stored[SPEED_KEY] === undefined ? SPEED_DEFAULT : clampSpeed(stored[SPEED_KEY]);
+}
+
+export async function setVoiceSpeed(value) {
+  const speed = clampSpeed(value);
+  await chrome.storage.local.set({ [SPEED_KEY]: speed });
+  return speed;
+}
+
 /** A v4-ish id. Only has to be unique within one browser profile. */
 export function newID() {
   return crypto.randomUUID().toUpperCase();
@@ -60,7 +107,9 @@ export async function loadRoster() {
   let agents = [];
   try {
     const stored = await chrome.storage.local.get(AGENTS_KEY);
-    agents = Array.isArray(stored[AGENTS_KEY]) ? stored[AGENTS_KEY] : [];
+    // Every agent leaves here with a colour. Every write below starts from this list, so the
+    // first write stores colours for agents that predate them – see `assignChannels`.
+    agents = assignChannels(Array.isArray(stored[AGENTS_KEY]) ? stored[AGENTS_KEY] : []);
   } catch {
     // Unreadable storage must not stop the extension starting. An empty roster with an
     // explanation is recoverable; throwing on every service-worker wake is not.
@@ -182,9 +231,29 @@ export async function addAgent({ name, voice, recipe }) {
   await chrome.storage.local.set({ [recipeKey(recipeID)]: stored });
 
   const { agents } = await loadRoster();
-  const agent = { id: newID(), name, voice, recipeID, connection: 'browser' };
+  // Chosen now and kept, so no later rename or deletion can recolour it – or anybody else.
+  const channel = pickChannel(agents.map((a) => a.channel));
+  const agent = { id: newID(), name, voice, recipeID, connection: 'browser', channel };
   await chrome.storage.local.set({ [AGENTS_KEY]: [...agents, agent] });
   return agent;
+}
+
+/**
+ * Gives an agent a colour from the palette, chosen in Settings.
+ *
+ * A colour another agent already has is allowed: it is the person's call, and the picker shows
+ * who has it. A value that is not in the palette is refused rather than stored, because it would
+ * be drawn as the old hash's guess and look like the choice had not been saved.
+ */
+export async function setAgentChannel(agentID, channel) {
+  if (!CHANNELS.includes(channel)) return { ok: false, reason: `${channel} is not one of the colours` };
+  const { agents } = await loadRoster();
+  if (!agents.some((a) => a.id === agentID)) return { ok: false, reason: 'no such agent' };
+
+  await chrome.storage.local.set({
+    [AGENTS_KEY]: agents.map((a) => (a.id === agentID ? { ...a, channel } : a)),
+  });
+  return { ok: true, channel };
 }
 
 /**

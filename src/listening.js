@@ -9,8 +9,8 @@
 // for something that was never meant to be kept. Only the listening *flag* is persisted, because
 // a badge that says we are listening after the worker has died is a lie a user would act on.
 
-import { loadRoster, micGranted } from './storage.js';
-import { channelFor, initialFor } from './channels.js';
+import { loadRoster, micGranted, voiceSpeed } from './storage.js';
+import { channelOf, initialFor } from './channels.js';
 import { panel, panelLevel, panelSpeaking } from './panel.js';
 import { beginTurn, trace } from './trace.js';
 
@@ -21,7 +21,10 @@ import { beginTurn, trace } from './trace.js';
  * presentational stand-in for confidence rather than a measurement – Web Speech gives one
  * transcript per result and does not say which part it is least sure of.
  */
-const VOLATILE_TAIL = 9;
+// Exported so `demo.js` splits committed text from the revising tail with this number rather
+// than its own copy of it. A second 9 would look like agreement and drift the first time this
+// one is tuned.
+export const VOLATILE_TAIL = 9;
 
 const OFFSCREEN_PATH = 'offscreen.html';
 
@@ -214,7 +217,46 @@ export async function say(text, agentID) {
     text,
     agentID,
     roster: agents.map((a) => ({ id: a.id, voice: a.voice })),
+    // Read per answer rather than cached, so a change in Settings takes on the next thing
+    // spoken. An MV3 worker is torn down every 30 s anyway, which makes a cache here a thing
+    // that is sometimes stale and sometimes not – the worst of both.
+    speed: await voiceSpeed(),
   });
+}
+
+/**
+ * Speaks a sample for Settings, down the same path an answer takes.
+ *
+ * **Settings used to speak for itself, and that is what this replaces.** It called Kokoro
+ * directly, which is the only engine a page can address a specific voice on – so the pace
+ * preview worked on the machines that had downloaded 340 MB and was a dead button on every
+ * other, which is to say on exactly the machines whose owner was deciding whether to.
+ *
+ * Going through here fixes more than the dead button. A preview is a claim about what answers
+ * will sound like, and the only way to make that claim true is to let the same code choose:
+ * `chooseEngine` picks the engine, the roster picks the voice, `voiceSpeed` is read from storage
+ * rather than passed in from a slider that may not have been saved yet. A preview that picked
+ * any of those for itself would be demonstrating something else.
+ *
+ * `voice` overrides the roster's choice, for the per-voice list where the question really is
+ * about one voice. `agents[0]` is the selector otherwise: "what Ivan will sound like" is the
+ * question somebody adjusting the pace is asking, and with no agents at all the offscreen
+ * document falls back to the first voice it has.
+ */
+export async function previewVoice(text, voice = null) {
+  if (!String(text ?? '').trim()) return { ok: false, reason: 'nothing to say' };
+  const { agents } = await loadRoster();
+  await tell('openposse.speak', {
+    text,
+    agentID: agents[0]?.id ?? null,
+    roster: agents.map((a) => ({ id: a.id, voice: a.voice })),
+    speed: await voiceSpeed(),
+    wanted: voice,
+    // Says this is not a turn. The outcome goes back to the page that asked, which is listening
+    // for it; nothing here holds a floor or a panel open on its behalf.
+    preview: true,
+  });
+  return { ok: true };
 }
 
 /**
@@ -304,7 +346,12 @@ async function settle() {
 /** `'●'` blue while listening, the agent's initial in their colour while asking, else nothing. */
 async function setBadge(state) {
   const look = state === 'listening' ? { text: '●', color: '#0A84FF' }
-    : state?.agentName ? { text: initialFor(state.agentName), color: channelFor(state.agentName) }
+    // The colour the caller passed, which is the one the agent keeps. Re-derived from the name
+    // only if a caller did not, because the name alone no longer decides it.
+    : state?.agentName ? {
+      text: initialFor(state.agentName),
+      color: state.channel ?? channelOf({ name: state.agentName }),
+    }
       : state === 'problem' ? { text: '!', color: '#FF453A' }
         : { text: '', color: '#0A84FF' };
   try {
@@ -321,8 +368,8 @@ async function setBadge(state) {
  * set. `settle` checks this flag rather than blindly clearing, which is why the flag exists at
  * all rather than the ask simply calling `setBadge` itself.
  */
-export function markThinking(agentName) {
-  thinking = agentName ? { agentName } : null;
+export function markThinking(agentName, channel = null) {
+  thinking = agentName ? { agentName, channel } : null;
   setBadge(thinking ?? 'idle');
 }
 
@@ -421,6 +468,12 @@ export function handleOffscreenMessage(message) {
       return true;
 
     case 'openposse.speaking':
+      // **A Settings preview is not a turn, and must not move anything that belongs to one.**
+      // No agent holds the floor, no panel is waiting on it, and `trace`'s clock is measuring
+      // from whatever turn last ran – so an orb springing to life while somebody drags a slider
+      // would be reporting an answer that nobody asked for. The page that asked is listening
+      // for its own result.
+      if (message.preview) return true;
       // Renamed, because it was a lie that cost a round trip: this fires *before* the model
       // loads and before a sample is synthesised, so "speaking started … speaking ended
       // +21057ms" looked like twenty-one seconds of audio for twenty words. It is the moment
@@ -439,6 +492,7 @@ export function handleOffscreenMessage(message) {
       return true;
 
     case 'openposse.spoke':
+      if (message.preview) return true;           // see `openposse.speaking` above
       // Releases the panel's dismiss timer, which was held open so it could not fade out
       // mid-sentence, and drops the orb back to rest.
       // The breakdown the previous version could not show, because it happens in the offscreen
@@ -464,14 +518,22 @@ export function handleOffscreenMessage(message) {
       //
       // `peak` is here because "played for the right number of milliseconds" and "was audible"
       // turned out to be different claims, and only the first was ever measured.
+      // **The voice leads, because it is the only identifying fact on the line.** Everything
+      // after it describes how the speaking went; this says who did it. Voices are handed out
+      // by position, so an agent's voice moves when the roster does – and without this, "it
+      // sounds different from last week" has no measurement behind it at all.
+      //
+      // A voice id is not content. It is the name of a file that ships with the extension.
       trace('voice finished', message.ms
-        ? `first word ${message.ms.firstWord ?? '?'}ms · `
+        ? `${message.voice ?? '?'} (${message.engine ?? '?'}) · `
+          + `first word ${message.ms.firstWord ?? '?'}ms · `
           + `load ${message.ms.load ?? '?'}ms${message.ms.cold ? ' (cold)' : ''} · `
           + `synth ${message.ms.synth ?? '?'}ms → ${message.ms.audio ?? '?'}ms audio `
           + `in ${message.ms.chunks ?? '?'} chunks at ${message.ms.rate ?? '?'}Hz · `
           + `peak ${message.ms.peak ?? '?'} · spoke ${message.ms.play ?? '?'}ms`
           + (message.ok ? '' : ` · ${message.reason ?? 'failed'}`)
-        : (message.ok ? '' : (message.reason ?? 'failed')));
+        : `${message.voice ? `${message.voice} (${message.engine ?? '?'}) · ` : ''}`
+          + (message.ok ? 'spoken' : (message.reason ?? 'failed')));
       panelSpeaking(false);
       panelLevel(0);
       if (!message.ok) reportUnspoken(message.reason);

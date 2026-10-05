@@ -5,15 +5,17 @@
 // with `NotAllowedError: Permission dismissed` on macOS. This page exists for that reason, not
 // for tidiness.
 
-import { loadRoster, setMicGranted, micGranted } from './storage.js';
-import { channelFor, initialFor } from './channels.js';
+import {
+  loadRoster, setMicGranted, micGranted, voiceSpeed, setVoiceSpeed, clampSpeed,
+} from './storage.js';
+import { channelOf, colourName, initialFor, PALETTE } from './channels.js';
 import { pack, unpack, toFile, filenameFor } from './share.js';
 import { matchPattern } from './domain.js';
 import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
 import {
   weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES, VOICES,
 } from './weights.js';
-import { speak as speakWithKokoro } from './kokoro.js';
+import { icon } from './icons.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const LANGS = { langs: ['en-US'], processLocally: true };
@@ -284,6 +286,182 @@ el('drop-weights').addEventListener('click', async () => {
   await refreshEngine();
 });
 
+// ── Pace ───────────────────────────────────────────────────────────────────────────────────
+//
+// **One number for both engines**, because which of the two is speaking depends on whether a
+// 340 MB download finished, and that is not a thing anybody should have to reason about while
+// deciding how fast they want to be read to. Kokoro takes it as `speed` through its duration
+// predictor; a system voice takes it as `utterance.rate`. Both are 1-is-normal and both stretch
+// time without moving pitch.
+//
+// The slider stops well inside what the engines accept – 0.7 to 1.6 against HeadTTS's 0.25 to 4
+// – because the useful range is narrow and a slider spanning the full one makes it a sliver.
+// `clampSpeed` still guards the stored value, so a number set by hand outside this remains
+// valid rather than being silently rejected by one engine and accepted by the other.
+
+/** The live value, so a preview started from this page speaks at what the slider now says. */
+let pace = 1;
+
+const showPace = () => { el('speed-value').textContent = `${pace.toFixed(2)}×`; };
+
+async function loadPace() {
+  pace = await voiceSpeed();
+  el('speed').value = String(pace);
+  showPace();
+}
+
+// `input` rather than `change`: the number has to track the thumb while it is being dragged, or
+// the only feedback is the thumb's own position, which says nothing about what it means.
+el('speed').addEventListener('input', () => {
+  pace = clampSpeed(el('speed').value);
+  showPace();
+});
+
+// **Saved on `change`, which fires when the thumb is released.** Writing on every `input` would
+// put sixty storage writes into one drag, and each one wakes the service worker through
+// `storage.onChanged`.
+//
+// **It does not speak.** It used to, on the reasoning that pace cannot be judged by reading –
+// which is true, and is the argument for *a way* to hear it rather than for hearing it on every
+// release. A drag across the slider crosses a dozen values and each release is a separate
+// change, so the setting that is hardest to judge was the one that talked back the most. Playing
+// is now its own button, below.
+el('speed').addEventListener('change', async () => {
+  pace = await setVoiceSpeed(el('speed').value);
+  showPace();
+});
+
+/**
+ * The voice the pace sample uses, or null for "nobody has said".
+ *
+ * Null is a real answer rather than a missing one: with no voice named, the preview goes down
+ * the roster's own assignment and you hear what your *assistant* will sound like, which is the
+ * question somebody adjusting the pace is actually asking. It becomes a specific voice only once
+ * you have picked one, which is when naming it starts being what you meant.
+ */
+let lastHeardVoice = null;
+
+// ── Previews ───────────────────────────────────────────────────────────────────────────────
+//
+// **This page does not speak. It asks the worker to.**
+//
+// It used to call Kokoro directly, which is the only engine a *page* can point at a named voice:
+// the system path lives in the offscreen document and picks per agent. So the pace preview
+// worked on machines that had downloaded 340 MB and was a dead button on every other one, which
+// is to say on exactly the machines whose owner was deciding whether to.
+//
+// Going through `openposse.voice.preview` fixes more than the dead button, and that is the
+// reason it is worth the round trip. A preview is a claim about what answers will sound like,
+// and the only way to make the claim true is to let the same code choose: `chooseEngine` picks
+// the engine, the roster picks the voice, the pace is read from storage rather than handed over
+// from a slider that may not have been saved yet. A preview choosing any of those for itself
+// would be demonstrating something else and sounding confident about it.
+//
+// Two consequences worth stating, because both look like side effects and are the point:
+//
+// - **Stopping is free.** `speak()` cancels whatever is speaking before it starts, so a second
+//   preview silences the first rather than playing over it, and pressing ⌥V silences it too.
+// - **It outlives this tab**, since the audio is the offscreen document's rather than this
+//   page's. Previously, navigating away mid-sample cut it off.
+
+/** Long enough for a cold Kokoro load, short enough that a lost reply is not a hung button. */
+const PREVIEW_PATIENCE_MS = 45_000;
+
+/** Who is waiting on the current preview, so the answer reaches the button that asked. */
+let awaiting = null;
+let patience = null;
+
+const SPOKEN_PROBLEM = {
+  'no-local-voice': 'no local voice is installed for this – check your system speech settings',
+  'synthesis-unavailable': 'this browser reported no speech voices at all',
+  'no-answer': 'the voice engine did not answer',
+  cancelled: 'stopped',
+};
+
+/** Hands the outcome to whoever asked, once, and lets the next preview start. */
+function settle(outcome) {
+  if (!awaiting) return;
+  const report = awaiting;
+  awaiting = null;
+  clearTimeout(patience);
+  report(outcome);
+}
+
+/**
+ * Speaks the sample down the real path and routes the result back to one caller.
+ *
+ * `report` is called exactly once, with the `openposse.spoke` message or a stand-in carrying the
+ * same shape – so a caller never has to tell "it is still synthesising" from "it refused", which
+ * is the distinction this page kept losing.
+ */
+async function playSample({ voice = null, report }) {
+  // One at a time. The engines speak one utterance at a time anyway, and two voices over each
+  // other tells you nothing about either – but the first caller has to be *told*, or its button
+  // sits on "Playing…" while the second one plays.
+  settle({ ok: false, reason: 'cancelled' });
+  awaiting = report;
+  patience = setTimeout(() => settle({ ok: false, reason: 'no-answer' }), PREVIEW_PATIENCE_MS);
+
+  const sent = await chrome.runtime
+    .sendMessage({ kind: 'openposse.voice.preview', text: sample(), voice })
+    .catch((error) => ({ ok: false, reason: error?.message ?? String(error) }));
+
+  // This only says the instruction was dispatched. The outcome arrives below, which is where the
+  // speaking actually finishes – so a failure here is a failure to *start*, and says so.
+  if (!sent?.ok) settle({ ok: false, reason: sent?.reason ?? 'could not reach the voice engine' });
+}
+
+/**
+ * The outcome of a preview, which arrives as a broadcast rather than as a reply.
+ *
+ * `preview` is what tells this apart from an answer being read out in another tab – a real turn
+ * sends the same message and this page would otherwise report somebody else's agent as its own
+ * sample.
+ */
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.kind !== 'openposse.spoke' || !message.preview) return;
+  // The same breakdown the turn logs, because this page is where a voice gets judged and
+  // "it played and I heard nothing" needs the same numbers to be answerable here.
+  const m = message.ms ?? {};
+  if (message.ms) {
+    console.info(`[openposse] preview ${message.voice ?? '?'} (${message.engine ?? '?'}) · `
+      + `first word ${m.firstWord ?? '?'}ms · synth ${m.synth ?? '?'}ms → ${m.audio ?? '?'}ms `
+      + `audio in ${m.chunks ?? '?'} chunks at ${m.rate ?? '?'}Hz · peak ${m.peak ?? '?'} · `
+      + `spoke ${m.play ?? '?'}ms${message.ok ? '' : ` · ${message.reason}`}`);
+  }
+  settle(message);
+});
+
+/** What actually spoke, which is the one thing a preview can report that reading cannot tell you. */
+function describeSpoken(message) {
+  const engine = message.engine === 'kokoro' ? 'Kokoro' : 'System voice';
+  const voice = message.engine === 'kokoro' && message.voice
+    ? describeVoice(message.voice).name
+    : message.voice;
+  return voice ? `${engine} · ${voice}` : engine;
+}
+
+el('play-sample').addEventListener('click', () => {
+  const button = el('play-sample');
+  button.disabled = true;
+  button.textContent = 'Playing…';
+  setStatus('sample-status', '');
+
+  playSample({
+    voice: lastHeardVoice,
+    report: (outcome) => {
+      button.disabled = false;
+      button.textContent = 'Play sample';
+      // Naming the engine is most of the value. "Which of the two is actually speaking" is the
+      // question this whole section is about, and a preview that answered it only by sounding a
+      // particular way would be making the reader guess at the thing it just demonstrated.
+      setStatus('sample-status', outcome.ok
+        ? describeSpoken(outcome)
+        : SPOKEN_PROBLEM[outcome.reason] ?? outcome.reason ?? 'it did not play');
+    },
+  });
+});
+
 // ── Trying the voices ──────────────────────────────────────────────────────────────────────
 //
 // **The same words in every voice**, whatever they are. Different lines per voice would sample
@@ -294,18 +472,27 @@ el('drop-weights').addEventListener('click', async () => {
 // suits prosody is no use to somebody checking how a voice handles their own product's
 // vocabulary, and vice versa.
 //
-// This one runs long on purpose: several clauses, a colon, and shifts of pace that a short
-// line cannot show. It also crosses HeadTTS's sentence split, so it exercises chunk chaining –
-// the thing that made the spike say "Hello" and stop.
-const DEFAULT_SAMPLE = 'All men dream, but not equally. Those who dream by night in the dusty '
-  + 'recesses of their minds wake in the day to find that it was vanity: but the dreamers of '
-  + 'the day are dangerous men, for they may act their dream with open eyes, to make it '
-  + 'possible.';
+// Short, and it is the product's own line rather than a passage chosen to stress the engine.
+// The previous default was four clauses of T. E. Lawrence, picked because it crosses HeadTTS's
+// sentence split and so exercises chunk chaining – a real concern while that was the bug, and
+// the wrong trade once it was fixed: comparing 28 voices means hearing the same words 28 times,
+// and a paragraph makes that a minute of listening per voice rather than two seconds.
+//
+// It still crosses the sentence split, so the chunking path is exercised anyway.
+const DEFAULT_SAMPLE = "It's time. Gather your posse.";
 
 /** What to speak: the box, or the default if it has been emptied. */
 function sample() {
   const typed = el('sample').value.trim();
   return typed || DEFAULT_SAMPLE;
+}
+
+// Seeded once at load. It used to be filled in by `refreshVoices`, which was fine while the box
+// lived inside the section that renders – now the box is always on screen and that section is
+// hidden until Kokoro is installed, so seeding there would leave it empty for everyone who has
+// not downloaded anything.
+function loadSample() {
+  if (!el('sample').value) el('sample').value = DEFAULT_SAMPLE;
 }
 
 const ACCENT = { a: 'American', b: 'British' };
@@ -326,8 +513,14 @@ function describeVoice(id) {
  * Fixed here rather than derived from `VOICES`, whose order is the *assignment* order and puts
  * the six original voices first so nobody's agent changes voice – see the note on `VOICES`.
  * Reading that order into the UI would produce four groups interleaved by history.
+ *
+ * **American first**, which is also what the roster does: `assignKokoroVoices` reads `en-US`
+ * unless an agent carries a British hint, so these are the voices an agent gets by default and
+ * the ones somebody opening this list is most likely choosing between. They are also two thirds
+ * of the set – 20 of 28 – so leading with the smaller pair would put the shorter answer first
+ * and the likely one last.
  */
-const VOICE_GROUPS = ['British female', 'British male', 'American female', 'American male'];
+const VOICE_GROUPS = ['American female', 'American male', 'British female', 'British male'];
 
 /** Every voice in one accent group, by name, because that is how somebody scans 28 of them. */
 const voicesIn = (accent) => VOICES
@@ -337,71 +530,130 @@ const voicesIn = (accent) => VOICES
 
 async function refreshVoices() {
   const ready = (await weightsStatus()).state === 'ready';
+  // Read by the pace slider, which lives outside this section and must know whether it can
+  // play anything back.
+  // **Nothing outside this section reads it any more.** It used to gate the Play sample button,
+  // because the page could only speak through Kokoro – now the worker speaks and that button is
+  // live on every machine, so "are the weights here" is only a question about whether there is a
+  // list of voices to show.
   el('voices-section').hidden = !ready;
   if (!ready) return;
-
-  // Only on the first render, so re-rendering after a download does not discard something the
-  // user has typed.
-  if (!el('sample').value) el('sample').value = DEFAULT_SAMPLE;
 
   const list = el('voice-list');
   list.textContent = '';
 
-  // Grouped, because 28 rows of "Play" with the accent repeated on every one is a wall. The
-  // heading carries the accent, so the row's second line is free to carry a failure instead –
-  // which is what it is really for.
+  // **Four collapsible groups, two columns each.** 28 rows in one column is a scroll rather
+  // than a list, and the first thing anybody narrows by is accent – so the accent is the thing
+  // that collapses. The heading carries it, which leaves each row's second line free to carry
+  // a failure instead, which is what it is really for.
   for (const accent of VOICE_GROUPS) {
     const voices = voicesIn(accent);
     if (voices.length === 0) continue;
 
-    const heading = document.createElement('div');
-    heading.className = 'voice-group';
-    heading.textContent = accent;
-    list.append(heading);
+    const group = document.createElement('details');
+    group.className = 'voice-group';
+    // Closed, which is `<details>`'s own default – stated by not setting `open` rather than by
+    // setting it false, since the attribute is presence-based and `open = false` reads as a
+    // decision that has to be kept in step with one.
 
-    for (const { id, name } of voices) renderVoice(list, id, name);
+    const summary = document.createElement('summary');
+    const label = document.createElement('span');
+    label.textContent = accent;
+    const count = document.createElement('span');
+    count.className = 'count';
+    count.textContent = String(voices.length);
+    summary.append(icon('chevron-right', { size: 12, className: 'chev' }), label, count);
+
+    const grid = document.createElement('div');
+    grid.className = 'voice-grid';
+    // Where the second column starts. The grid fills downwards, so this is what splits the
+    // alphabet in half rather than interleaving it – and it is set here because each group is a
+    // different size and CSS has no way to count its own children.
+    const rows = Math.ceil(voices.length / 2);
+    grid.style.setProperty('--rows', String(rows));
+    // The bottom of each column, so its rule can go: the drawer's own border is directly below.
+    voices.forEach(({ id, name }, i) => {
+      renderVoice(grid, id, name, { endsColumn: i === rows - 1 || i === voices.length - 1 });
+    });
+
+    group.append(summary, grid);
+    list.append(group);
   }
 }
 
-/** One row of the try-it list: a name, a line for whatever goes wrong, and a Play button. */
-function renderVoice(list, id, name) {
+/** One row of the try-it list: a play control, the name it plays, and a line for what went wrong. */
+function renderVoice(grid, id, name, { endsColumn = false } = {}) {
   const row = document.createElement('div');
   row.className = 'voice';
+  row.classList.toggle('ends-column', endsColumn);
 
-  const label = document.createElement('div');
-  label.className = 'name';
-  label.textContent = name;
   const sub = document.createElement('div');
   sub.className = 'accent';
 
+  // **The whole row is the button, with the icon leading it.**
+  //
+  // The icon was a separate control on the right, which is where a trailing action goes and is
+  // wrong here: the name took the remaining width, so each button sat far from its own name and
+  // close to the next column's. Adam's button read as Echo's, and no column gap fixes that –
+  // nothing makes 150px of intra-row space read as closer than 26px of gutter.
+  //
+  // Leading the name removes the question rather than arguing with it: there is nothing between
+  // the triangle and the word it plays. Making the row the target rather than the circle is the
+  // other half, because the hover tint then shows how far one voice's row extends.
+  //
+  // **Icon rather than the word "Play", still.** Twenty-eight rows carrying the same five
+  // letters was the noisiest thing on the page, competing with the one word that varies. The
+  // name is the button's own text now, so a screen reader reads it either way; `aria-label`
+  // keeps the verb, and contains the visible name so the two do not disagree.
   const play = document.createElement('button');
-  play.className = 'secondary';
-  play.textContent = 'Play';
-  play.addEventListener('click', async () => {
-    // Every button disabled, not just this one: two voices over each other tells you nothing
-    // about either, and the engine speaks one utterance at a time anyway.
-    const buttons = [...list.querySelectorAll('button')];
-    for (const b of buttons) b.disabled = true;
-    play.textContent = 'Loading…';
+  play.className = 'play';
+  play.setAttribute('aria-label', `Play ${name}`);
 
-    const result = await speakWithKokoro(sample(), id);
-    // The same breakdown the turn logs, because this page is where a voice gets judged and
-    // "it played and I heard nothing" needs the same two numbers to be answerable here.
-    const m = result.ms ?? {};
-    console.info(`[openposse] voice ${id} · first word ${m.firstWord ?? '?'}ms · `
-      + `synth ${m.synth ?? '?'}ms → ${m.audio ?? '?'}ms `
-      + `audio in ${m.chunks ?? '?'} chunks at ${m.rate ?? '?'}Hz · peak ${m.peak ?? '?'} · `
-      + `spoke ${m.play ?? '?'}ms${result.ok ? '' : ` · ${result.reason}`}`);
-    if (!result.ok) {
-      sub.textContent = result.reason;
-      sub.style.color = 'var(--error)';
-    }
-    play.textContent = 'Play';
-    for (const b of buttons) b.disabled = false;
+  const glyph = document.createElement('span');
+  glyph.className = 'glyph';
+  glyph.append(icon('play', { size: 11 }));
+
+  const label = document.createElement('span');
+  label.className = 'name';
+  label.textContent = name;
+  play.append(glyph, label);
+
+  /** Swaps the glyph in place, so the name does not move while it loads. */
+  const show = (which) => {
+    glyph.textContent = '';
+    glyph.append(icon(which, { size: 11 }));
+    play.classList.toggle('busy', which === 'loader-circle');
+  };
+
+  play.addEventListener('click', () => {
+    // Every button disabled, not just this one: the engines speak one utterance at a time, and
+    // leaving the rest live would mean a second click cancels a sample that is still loading –
+    // which looks like the first voice simply failing. `#play-sample` is in the set too; it goes
+    // down the same path.
+    const buttons = [...grid.closest('#voice-list').querySelectorAll('button'), el('play-sample')];
+    for (const b of buttons) b.disabled = true;
+    show('loader-circle');
+    sub.textContent = '';
+
+    // Remembered, so the pace sample above speaks in whatever was last judged here rather than
+    // reverting to the roster's choice. The pace itself is not passed: the worker reads what is
+    // *stored*, which is the number an answer will actually use.
+    lastHeardVoice = id;
+    playSample({
+      voice: id,
+      report: (outcome) => {
+        if (!outcome.ok && outcome.reason !== 'cancelled') {
+          sub.textContent = SPOKEN_PROBLEM[outcome.reason] ?? outcome.reason;
+          sub.style.color = 'var(--error)';
+        }
+        show('play');
+        for (const b of buttons) b.disabled = false;
+      },
+    });
   });
 
-  row.append(label, sub, play);
-  list.append(row);
+  row.append(play, sub);
+  grid.append(row);
 }
 
 // ── Roster ─────────────────────────────────────────────────────────────────────────────────
@@ -427,11 +679,64 @@ async function refreshRoster() {
     const row = document.createElement('div');
     // Everyone is shown lit here: this is a list of what exists, not of who is speaking.
     row.className = 'agent active';
-    row.style.setProperty('--channel', channelFor(agent.name));
+    row.style.setProperty('--channel', channelOf(agent));
 
-    const avatar = document.createElement('div');
+    // ── Its colour ─────────────────────────────────────────────────────────────────────
+    //
+    // **The avatar is the control, because the colour is the avatar.** Clicking it opens the
+    // palette under the name, the way See opens the recipe. Every swatch already held by
+    // another agent carries that agent's initial, so taking a colour somebody else has is a
+    // choice made knowingly rather than a clash found later on the panel – allowed, because it
+    // is the person's call, but never by accident.
+    const avatar = document.createElement('button');
     avatar.className = 'avatar';
     avatar.textContent = initialFor(agent.name);
+    avatar.setAttribute('aria-expanded', 'false');
+    avatar.title = `${agent.name} is ${colourName(channelOf(agent))} – change`;
+    avatar.setAttribute('aria-label', avatar.title);
+
+    const palette = document.createElement('div');
+    palette.className = 'palette';
+    palette.hidden = true;
+    palette.setAttribute('role', 'group');
+    palette.setAttribute('aria-label', `Colours for ${agent.name}`);
+
+    for (const { hex, name: colour } of PALETTE) {
+      const mine = channelOf(agent) === hex;
+      const holders = agents.filter((a) => a.id !== agent.id && channelOf(a) === hex);
+
+      const swatch = document.createElement('button');
+      swatch.className = `swatch${mine ? ' mine' : ''}`;
+      swatch.style.setProperty('--swatch', hex);
+      swatch.textContent = holders.length ? initialFor(holders[0].name) : '';
+      swatch.setAttribute('aria-pressed', String(mine));
+      swatch.title = [
+        colour,
+        mine ? `${agent.name}'s now` : null,
+        holders.length ? `${holders.map((h) => h.name).join(' and ')} already has it` : null,
+      ].filter(Boolean).join(' – ');
+      swatch.setAttribute('aria-label', swatch.title);
+
+      swatch.addEventListener('click', async () => {
+        if (mine) return;
+        const result = await chrome.runtime
+          .sendMessage({ kind: 'openposse.agent.channel', agentId: agent.id, channel: hex })
+          .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+        if (!result?.ok) {
+          problemLine.textContent = result?.reason ?? 'could not set that colour';
+          problemLine.className = 'kind bad';
+          problemLine.hidden = false;
+          return;
+        }
+        await refreshRoster();
+      });
+      palette.append(swatch);
+    }
+
+    avatar.addEventListener('click', () => {
+      palette.hidden = !palette.hidden;
+      avatar.setAttribute('aria-expanded', String(!palette.hidden));
+    });
 
     // Named so the rail can give it a line of its own. The roster now sits in a 340px column
     // rather than the 620px one this row was laid out for, and the alternative – selecting it
@@ -545,7 +850,19 @@ async function refreshRoster() {
       }
       // Spoken back rather than only saved. A voice is the one setting here you cannot judge
       // by reading, and hearing it immediately is the difference between choosing and guessing.
-      if (voice.value) speakWithKokoro(sample(), voice.value).catch(() => {});
+      //
+      // "Chosen for me" deliberately says nothing: the heuristic picks from the whole roster, so
+      // the voice this agent lands on is not knowable until every agent has been placed, and
+      // playing *a* voice would be asserting one that may not be the one it gets.
+      if (voice.value) {
+        lastHeardVoice = voice.value;
+        playSample({ voice: voice.value, report: (outcome) => {
+          if (outcome.ok || outcome.reason === 'cancelled') return;
+          problemLine.textContent = SPOKEN_PROBLEM[outcome.reason] ?? outcome.reason;
+          problemLine.className = 'kind bad';
+          problemLine.hidden = false;
+        } });
+      }
     });
 
     // ── What it captured, re-recording, and removing ───────────────────────────────────
@@ -669,7 +986,7 @@ async function refreshRoster() {
     });
 
     tools.append(see, share, again, remove);
-    text.append(problemLine, details, bundle);
+    text.append(problemLine, palette, details, bundle);
     row.append(rename, voice, tools);
     target.append(row);
   }
@@ -826,6 +1143,8 @@ for (const [name, refresh] of Object.entries({
   'panel access': refreshPanelAccess,
   'voice engine': refreshEngine,
   weights: refreshWeights,
+  pace: loadPace,
+  sample: loadSample,
   voices: refreshVoices,
   roster: refreshRoster,
 })) {

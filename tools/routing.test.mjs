@@ -8,7 +8,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { route, bestMatch, normalise, editDistance, navigationTarget, productName } from '../src/routing.js';
+import {
+  route, bestMatch, normalise, editDistance, navigationTarget, productName, productLabel,
+  floorWindow, FLOOR_MS, FLOOR_RANGE,
+} from '../src/routing.js';
 
 const ROSTER = [
   { id: '1', name: 'Ivan' },
@@ -199,8 +202,35 @@ test('product names come from the domain, minus the generic subdomain', () => {
   assert.equal(productName(''), '');
 });
 
+test('product labels are capitalised for reading, with the brands that need it spelt out', () => {
+  // `productName` above stays lowercase – it is what spoken navigation is matched against.
+  assert.equal(productLabel('*.notion.so'), 'Notion');
+  assert.equal(productLabel('*.atlassian.net'), 'Atlassian');
+  // Inner capitals are not in a domain, so they come from the table rather than a guess.
+  assert.equal(productLabel('app.leanix.net'), 'LeanIX');
+  assert.equal(productLabel('chat.openai.com'), 'OpenAI');
+  // A real company whose name is an `Object.prototype` key. On a plain-object table this label
+  // would be a function, printed into the status line as "function Object() { [native code] }".
+  assert.equal(productLabel('constructor.io'), 'Constructor');
+  assert.equal(productLabel(''), '');
+});
+
 test('asking a question is never navigation', () => {
   // The ordinary case, stated so a future prefix cannot quietly capture it.
   assert.equal(navigationTarget('Ivan tell me a joke', NAV_ROSTER), null);
   assert.equal(navigationTarget('and what about last quarter', NAV_ROSTER), null);
+});
+
+test('the floor window takes a debug override only when it is a usable number', () => {
+  assert.equal(floorWindow(undefined), FLOOR_MS, 'nothing stored is the shipped value');
+  assert.equal(floorWindow(45_000), 45_000);
+  assert.equal(floorWindow(FLOOR_RANGE.min), FLOOR_RANGE.min);
+  assert.equal(floorWindow(FLOOR_RANGE.max), FLOOR_RANGE.max);
+  // **Empty is not zero.** `Number(null)` and `Number('')` are 0, which is finite – without the
+  // range check a cleared value would close the floor the instant it opened.
+  assert.equal(floorWindow(null), FLOOR_MS);
+  assert.equal(floorWindow(''), FLOOR_MS);
+  assert.equal(floorWindow(0), FLOOR_MS);
+  assert.equal(floorWindow('soon'), FLOOR_MS);
+  assert.equal(floorWindow(FLOOR_RANGE.max + 1), FLOOR_MS);
 });

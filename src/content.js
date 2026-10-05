@@ -25,6 +25,7 @@ import {
   arm as armRecorder, disarm as disarmRecorder, isArmed, MIN_ANSWER_TEXT,
 } from './recorder.js';
 import { tell } from './tell.js';
+import { graceWindow } from './grace.js';
 
 /** Wire error codes this script can originate. Mirrors `docs/protocol.md`. */
 const ERROR = {
@@ -173,7 +174,7 @@ function watchBusy(selector, { timeoutMs, steadyMs = 900 }) {
   };
 }
 
-async function askAssistant({ recipe, prompt }, emit) {
+async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
   // Open the assistant if it is closed, rather than failing.
   //
   // Checking first is what makes the shortcut safe to send at all: these shortcuts are
@@ -273,19 +274,11 @@ async function askAssistant({ recipe, prompt }, emit) {
   // The honest fix is to record the vendor's own "still generating" indicator during setup –
   // Notion shows one – and wait on that disappearing instead of on a clock. That is a recorder
   // change, so it belongs to E8. Until then this is a guess with a ceiling.
-  // **2.5 s, down from 10.** The first version was a guess with a ceiling and the ceiling was
-  // being paid on every successful exchange: `settling 11998ms over 3 passes` for an answer
-  // already sitting in the tab. Pass 1 waits for a row *beyond* the one just read, and when
-  // pass 0 already had the answer – the common case – no such row is ever coming, so the whole
-  // window is spent discovering that.
   //
-  // The replacement is measured rather than guessed. The same trace reports the vendor's own
-  // thinking time at 1.5–2 s, so the status-row-to-answer gap is that order, and 2.5 s covers
-  // it with margin. Worst case is now ~4 s of settling instead of ~12.
-  //
-  // Still a clock, and still the wrong instrument. The honest fix is the vendor's own "still
-  // generating" indicator, recorded during setup – E8.
-  const ANSWER_GRACE_MS = 2_500;
+  // The number, and why it is that number, live in `grace.js`. `graceMs` is the panel's debug
+  // override when one is set, carried here by the worker because this script cannot read session
+  // storage; `graceWindow` turns anything absent or malformed back into the default.
+  const grace = graceWindow(graceMs);
 
   /**
    * Which of the rows that appeared is the answer.
@@ -425,7 +418,7 @@ async function askAssistant({ recipe, prompt }, emit) {
       // by then it had replaced "Working on your request" with the joke.
       //
       // `waitForNewMatch` returns the moment a row arrives, so a vendor that adds one costs
-      // nothing. A vendor that never adds another pays `ANSWER_GRACE_MS` once and then returns
+      // nothing. A vendor that never adds another pays the grace once and then returns
       // null, ending the loop with the text we already had – which is the right answer for it.
       : await waitForNewMatch(
         recipe.responseContainerSelector,
@@ -441,7 +434,7 @@ async function askAssistant({ recipe, prompt }, emit) {
           // than waited for earlier. While it is still working, this pass is the one that
           // catches the answer row, and shortening it is how a status row got spoken instead.
           timeoutMs: Math.min(
-            pass === 1 && !busy.finished() ? ANSWER_GRACE_MS : (recipe.quietPeriodMs ?? 900),
+            pass === 1 && !busy.finished() ? grace : (recipe.quietPeriodMs ?? 900),
             responseTimeoutMs,
           ),
           settleMs: recipe.quietPeriodMs ?? 900,

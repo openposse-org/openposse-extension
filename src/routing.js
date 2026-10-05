@@ -37,6 +37,34 @@ const MAX_NAME_WORDS = 3;
 export const FLOOR_MS = 90_000;
 
 /**
+ * Where the panel's debug tools keep an override of `FLOOR_MS`, and the range they offer.
+ *
+ * It is still a guess, and this is what lets it be tuned the way the Mac app's slider did. The
+ * range is that slider's, unchanged: 15 s is too short to read an answer, 300 s is long enough
+ * that a follow-up after a coffee would reach a vendor.
+ *
+ * **In `chrome.storage.session`, so it dies with the browser.** A debug value nobody remembers
+ * setting would otherwise change where name-less questions go for weeks, with nothing on screen
+ * once the debug drawer is shut. Session storage puts a ceiling on how long that can last.
+ */
+export const FLOOR_OVERRIDE_KEY = 'floorOverrideMs';
+export const FLOOR_RANGE = { min: 15_000, max: 300_000, step: 15_000 };
+
+/**
+ * The floor window in force: a stored override when it is a usable number, else `FLOOR_MS`.
+ *
+ * Every reader goes through this rather than comparing against `FLOOR_MS`, because three places
+ * enforce the window – the worker routing, the panel and the popup lighting a ring – and one of
+ * them honouring the override while another ignored it would light a ring on an agent the next
+ * question would not reach.
+ */
+export function floorWindow(override) {
+  // The range check also catches empty: `Number(null)` and `Number('')` are 0, which is finite.
+  const ms = Number(override);
+  return Number.isFinite(ms) && ms >= FLOOR_RANGE.min && ms <= FLOOR_RANGE.max ? ms : FLOOR_MS;
+}
+
+/**
  * Ordinary English words, which may match a name **exactly** but never approximately.
  *
  * This exists because of a real failure, caught by the test below rather than by a person being
@@ -181,6 +209,39 @@ export function productName(domainPattern) {
   while (labels.length > 1 && GENERIC_SUBDOMAINS.has(labels[0])) labels.shift();
   return labels[0] ?? '';
 }
+
+/**
+ * A product name as a person reads it, or hears it: `notion` becomes `Notion`.
+ *
+ * **Separate from `productName`, which stays lowercase.** That one exists for matching – "take
+ * me to Notion" is normalised before it is compared – so lowercase is correct there and wrong
+ * the moment the same string is shown or said out loud. Everything that puts a vendor in front
+ * of a person goes through this one, so they cannot disagree about how it is written.
+ *
+ * The first letter, unless the brand is in `BRAND_CASING`. A domain label carries no inner
+ * capitals, and guessing them would be wrong more often than not – so they are written down for
+ * the brands that have them, and only those.
+ */
+export function productLabel(domainPattern) {
+  const name = productName(domainPattern);
+  if (!name) return '';
+  return BRAND_CASING.get(name) ?? name[0].toUpperCase() + name.slice(1);
+}
+
+/**
+ * Brands whose capitals are not just the first letter, keyed by `productName`'s lowercase form.
+ *
+ * **Display only, and not a vendor list.** A vendor missing from here still works everywhere and
+ * reads with its first letter capitalised, so an entry is a courtesy to a brand's spelling rather
+ * than support for it – adding a vendor never requires one.
+ *
+ * A `Map`, not an object literal: `productName('constructor.io')` is `constructor`, and on a plain
+ * object that key finds `Object.prototype.constructor` – a function, printed as the vendor's name.
+ */
+const BRAND_CASING = new Map([
+  ['leanix', 'LeanIX'],
+  ['openai', 'OpenAI'],
+]);
 
 /** Matches a fragment against what an agent can be called: its name, or its vendor's. */
 function matchTarget(fragment, agents) {

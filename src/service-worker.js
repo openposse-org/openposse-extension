@@ -13,15 +13,19 @@
 
 import {
   loadRoster, recipeFor, findAgent, addAgent, replaceRecipe, freeName, renameAgent, removeAgent,
-  setAgentVoice,
+  setAgentVoice, setAgentChannel,
 } from './storage.js';
 import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
-  isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone, say,
+  isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone, say, previewVoice,
 } from './listening.js';
+import { runDemo, stopDemo } from './demo.js';
 import { needsShortening, spokenForm } from './saying.js';
 import { summarise } from './summariser.js';
-import { route, navigationTarget, productName, FLOOR_MS } from './routing.js';
+import {
+  route, navigationTarget, productName, productLabel, floorWindow, FLOOR_OVERRIDE_KEY,
+} from './routing.js';
+import { GRACE_OVERRIDE_KEY } from './grace.js';
 import { matchPattern } from './domain.js';
 import { unpack } from './share.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
@@ -34,7 +38,7 @@ import {
 } from './surface.js';
 import { frontWindowNow, hydrate as hydrateFront, watchFront } from './front.js';
 import { trace } from './trace.js';
-import { channelFor } from './channels.js';
+import { channelOf } from './channels.js';
 
 /**
  * The last thing asked, so clicking a different avatar can put it to them instead.
@@ -50,8 +54,9 @@ async function rememberPrompt(prompt) {
 }
 
 async function recallPrompt() {
-  const { lastPrompt, lastPromptAt = 0 } = await chrome.storage.session.get(['lastPrompt', 'lastPromptAt']);
-  return lastPrompt && Date.now() - lastPromptAt <= FLOOR_MS ? lastPrompt : '';
+  const { lastPrompt, lastPromptAt = 0, [FLOOR_OVERRIDE_KEY]: override } = await chrome.storage
+    .session.get(['lastPrompt', 'lastPromptAt', FLOOR_OVERRIDE_KEY]);
+  return lastPrompt && Date.now() - lastPromptAt <= floorWindow(override) ? lastPrompt : '';
 }
 
 /**
@@ -104,13 +109,29 @@ export async function ask(agentName, prompt, { onPartial } = {}) {
     };
   }
 
+  const graceMs = await storedGrace();
   const id = crypto.randomUUID();
   const answer = new Promise((resolve) => {
     pending.set(id, { resolve, onEvent: (event) => onPartial?.(event?.text ?? '') });
   });
 
-  dispatchIntent({ id, agent: agent.name, payload: { intent: 'ask_assistant', recipe, prompt } });
+  dispatchIntent({ id, agent: agent.name, payload: { intent: 'ask_assistant', recipe, prompt, graceMs } });
   return answer;
+}
+
+/**
+ * The panel's debug override of the answer grace, raw – `content.js` validates it on arrival,
+ * where it is spent. Read per question rather than once: MV3 kills this worker after ~30 s idle,
+ * and a slider moved after that would otherwise never reach the next turn.
+ *
+ * A failed read costs the default, never the turn. A debug value is not worth a question.
+ */
+async function storedGrace() {
+  const stored = await chrome.storage.session.get(GRACE_OVERRIDE_KEY).catch((error) => {
+    console.warn('[openposse] could not read the answer grace override –', error?.message ?? error);
+    return {};
+  });
+  return stored[GRACE_OVERRIDE_KEY] ?? null;
 }
 
 // ── The voice loop's other half (E3) ────────────────────────────────────────────────────
@@ -121,8 +142,9 @@ export async function ask(agentName, prompt, { onPartial } = {}) {
 
 /** Session state, so it dies with the browser – a floor held across a restart is meaningless. */
 async function floorHolder(agents) {
-  const { floorHolder: name, floorAt = 0 } = await chrome.storage.session.get(['floorHolder', 'floorAt']);
-  if (!name || Date.now() - floorAt > FLOOR_MS) return null;
+  const { floorHolder: name, floorAt = 0, [FLOOR_OVERRIDE_KEY]: override } = await chrome.storage
+    .session.get(['floorHolder', 'floorAt', FLOOR_OVERRIDE_KEY]);
+  if (!name || Date.now() - floorAt > floorWindow(override)) return null;
   return findAgent(agents, name);
 }
 
@@ -190,7 +212,9 @@ async function goToAgent(nav) {
 
   if (!tab) {
     markDone('tab-not-found');
-    announceTurn({ phase: 'problem', message: `No ${agent.product || agent.name} tab is open.` });
+    // `agent.product` is the lowercase one, for matching what was said. This is shown.
+    const vendor = productLabel(recipe?.domainPattern) || agent.name;
+    announceTurn({ phase: 'problem', message: `No ${vendor} tab is open.` });
     return;
   }
 
@@ -249,9 +273,9 @@ async function handleUtterance(text) {
 async function putQuestion(agent, prompt, matched) {
   trace('routed', `${agent.name} (${matched}), ${prompt.length} chars`);
   await rememberPrompt(prompt);
-  markThinking(agent.name);
+  markThinking(agent.name, channelOf(agent));
   panel({
-    phase: 'thinking', agentName: agent.name, channel: channelFor(agent.name),
+    phase: 'thinking', agentName: agent.name, channel: channelOf(agent),
     transcript: prompt, volatile: '', answer: '', message: '', visible: true,
   }, { create: true });
   announceTurn({ phase: 'thinking', agentName: agent.name, matched });
@@ -829,7 +853,12 @@ async function dispatchIntent(request) {
     // reload is no longer part of anyone's routine.
     await ensureContentScript(tab.id);
 
-    const message = { intent: payload.intent, recipe, prompt: payload.prompt, id };
+    // **Rebuilt field by field, not forwarded**, so a field added to the payload above stops here
+    // unless it is named here too. `tools/grace.test.mjs` checks this line against what
+    // `askAssistant` reads, because the failure is silent: the default simply applies.
+    const message = {
+      intent: payload.intent, recipe, prompt: payload.prompt, graceMs: payload.graceMs, id,
+    };
 
     let frameId = await frameOwningAssistant(tab.id, recipe.inputSelector);
     let result = await chrome.tabs.sendMessage(tab.id, message, { frameId: frameId ?? 0 });
@@ -919,7 +948,31 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   }
 
   if (request?.kind === 'openposse.listen.toggle') {
+    // A real turn always wins. Without this the demo keeps pushing scripted patches at the same
+    // surface the live turn is writing to, and the panel flickers between two transcripts –
+    // which reads as a rendering fault in the thing the demo exists to let you judge.
+    stopDemo();
     toggleListening().then((problem) => respond({ ok: !problem, failure: problem ?? null }));
+    return true;
+  }
+  if (request?.kind === 'openposse.demo') {
+    // Scaffolding, reachable only from the panel's own quiet button. See `demo.js`.
+    runDemo().then(respond, (error) => {
+      console.warn('[openposse] the demo turn failed –', error?.message ?? error);
+      respond({ ok: false, reason: error?.message ?? String(error) });
+    });
+    return true;
+  }
+  if (request?.kind === 'openposse.voice.preview') {
+    // Settings asking to hear a sample. Here rather than in the page because the offscreen
+    // document is the worker's to create, and because the whole value of this is that the
+    // engine, the voice and the pace are chosen by the same code that chooses them for an
+    // answer. The reply only says the instruction was dispatched – the outcome arrives on the
+    // page as `openposse.spoke`, which is where the speaking actually finishes.
+    previewVoice(request.text, request.voice ?? null).then(respond, (error) => {
+      console.warn('[openposse] the voice preview failed –', error?.message ?? error);
+      respond({ ok: false, reason: error?.message ?? String(error) });
+    });
     return true;
   }
   if (request?.kind === 'openposse.listen.query') {
@@ -981,6 +1034,14 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   if (request?.kind === 'openposse.agent.voice') {
     setAgentVoice(request.agentId, request.voice).then(respond, (error) => {
       console.error('[openposse] voice could not be set –', error);
+      respond({ ok: false, reason: String(error?.message ?? error) });
+    });
+    return true;
+  }
+
+  if (request?.kind === 'openposse.agent.channel') {
+    setAgentChannel(request.agentId, request.channel).then(respond, (error) => {
+      console.error('[openposse] colour could not be set –', error);
       respond({ ok: false, reason: String(error?.message ?? error) });
     });
     return true;
@@ -1083,7 +1144,7 @@ async function rerecord(agentId) {
 
   const [tab] = await chrome.tabs.query({ url: matchPattern(pattern) });
   if (!tab) {
-    return { ok: false, reason: `open a ${productName(pattern)} tab first, then try again` };
+    return { ok: false, reason: `open a ${productLabel(pattern)} tab first, then try again` };
   }
 
   // Brought forward, because the next thing asked of the user is to demonstrate the assistant
@@ -1285,16 +1346,10 @@ async function save() {
 
   const { agents } = await loadRoster();
 
-  // **Capitalised here, not in `productName`.** That function exists for matching – "take me to
-  // Notion" is normalised before it is compared – so lowercase is correct there and wrong the
-  // moment the same string becomes something a person reads and says out loud.
-  //
-  // The first letter only, because that is all a domain label supports honestly: `leanix`
-  // becomes `Leanix` rather than `LeanIX`, and guessing the inner capitals of a brand from its
-  // domain would be wrong more often than not. Renaming it takes one click in Settings, which
+  // The product as a person writes it – see `productLabel` for how it is cased. When that is
+  // still wrong for a brand nobody has written down, renaming takes one click in Settings, which
   // is the whole reason naming moved there.
-  const product = productName(recipe.domainPattern);
-  const suggested = product ? product[0].toUpperCase() + product.slice(1) : 'Assistant';
+  const suggested = productLabel(recipe.domainPattern) || 'Assistant';
   const name = freeName(agents, suggested);
   // The voice comes from `assignVoices`' accent heuristic rather than being chosen here, and
   // Settings has the picker with previews for anyone who wants a different one.
@@ -1335,9 +1390,12 @@ async function askOnce(tabId, recipe, prompt) {
   // asks each whether it can see that element. Notion has two frames and only one holds the
   // composer, and without this the promise resolves with whichever answers first.
   const frameId = await frameOwningAssistant(tabId, recipe.inputSelector);
+  // The same grace a real turn would get, so a recipe is verified under the timing it will run
+  // with rather than passing here and misbehaving in a turn.
+  const graceMs = await storedGrace();
   return chrome.tabs.sendMessage(
     tabId,
-    { intent: 'ask_assistant', recipe, prompt },
+    { intent: 'ask_assistant', recipe, prompt, graceMs },
     frameId == null ? undefined : { frameId },
   );
 }

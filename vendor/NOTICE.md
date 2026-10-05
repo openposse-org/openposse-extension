@@ -17,6 +17,7 @@ distinction is this project's standing rule and it has already caught one real p
 | `transformers/transformers.min.js` | 4.0.0 | Apache-2.0 | [@huggingface/transformers](https://www.npmjs.com/package/@huggingface/transformers) |
 | `transformers/ort-wasm-simd-threaded.asyncify.*` | 1.25.0-dev | MIT | [onnxruntime-web](https://www.npmjs.com/package/onnxruntime-web) |
 | `inter/InterVariable.woff2` | 4.1 | OFL-1.1 | [rsms/inter](https://github.com/rsms/inter) |
+| `lucide/LICENSE` (covering `../src/icons.js`) | `main` @ 2026-10-04 | ISC, plus MIT for the Feather-derived icons | [lucide-icons/lucide](https://github.com/lucide-icons/lucide) |
 | `../dictionaries/en-us.txt` | with HeadTTS | see below | CMU Pronouncing Dictionary, via HeadTTS |
 
 Each licence text travels with the code it covers: `headtts/LICENSE`,
@@ -44,6 +45,32 @@ that uses it, so it does not touch OpenPosse's own Apache-2.0.
 face on the vendor's own `document.fonts`, because `@font-face` inside a shadow root is not
 reliably honoured. A vendor shipping its own Inter — and plenty do — would then have two faces
 competing under one name, and its typography could change. This panel is a guest.
+
+## Lucide
+
+The icon set, and **the only entry here whose code is not in this directory**. `src/icons.js`
+holds the path data for the handful of icons actually rendered; this directory holds the licence
+that data arrived under. The split is the same reasoning as the paragraph below about
+`node_modules`: Chrome loads the whole unpacked directory and reports its size, so vendoring
+1,600 icons to draw fourteen is charged to the extension in full. A copied element costs one
+line and nothing when unused.
+
+ISC asks only that the notice is kept, which `lucide/LICENSE` does. That file also carries
+**Feather's MIT notice**, because around a hundred Lucide icons are derived from Feather and
+`chevron-right` is one of them — so both notices have to travel, and the upstream LICENSE is
+committed whole rather than excerpted for exactly that reason.
+
+Neither licence is copyleft, so this does not touch OpenPosse's own Apache-2.0.
+
+To add an icon, copy its geometry rather than redrawing it:
+
+```bash
+curl https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/<name>.svg
+```
+
+and copy each element inside it into `NODES` as `[tag, attributes]` – Lucide's own icon-node
+format – under **Lucide's own name** for it. Renaming an icon to something that reads better
+locally is how the next person fails to find one that is already there.
 
 ## What was checked, and what was found
 

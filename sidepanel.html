@@ -5,76 +5,112 @@
     <title>OpenPosse</title>
     <link rel="stylesheet" href="ui.css" />
     <style>
-      /* ── E14: one surface ──────────────────────────────────────────────────────────────
+      /* ── E14's panel, rebuilt to the mockup of 2026-10-01 ──────────────────────────────
        *
-       * The popup's contents and the orb's six turn states, in one column that does not close
-       * when you look away.
+       * The first version ported the popup's markup more or less verbatim and it showed: a
+       * second header under Chrome's own, a list of full-width rows where the design uses
+       * avatars, and the product's primary action styled as a secondary control. This is the
+       * orb's own visual language – `design/README.md` – carried onto a surface that has no
+       * page behind it.
        *
-       * **No Liquid Glass here, and the reason is structural rather than fashionable.** The orb
-       * floats over somebody's page, so a blurred, saturated backdrop is the material doing its
-       * job – it is showing you the page underneath. A side panel has nothing behind it. The
-       * same treatment would be a photograph of frosted glass over a flat grey, which is the
-       * expensive way to look slightly wrong. Flat surfaces, the channel colours, ordinary
-       * contrast.
+       * **The mockup is a style reference, not a measurement one.** It is drawn far wider than
+       * a side panel, so matching its proportions literally would give a 7px transcript. What
+       * carries over is the language: ambient light, avatars not rows, the status line naming
+       * who the turn is with in their own colour, an answer in a bubble with its source under
+       * it. The numbers are re-derived for a column that reopens at ~360px and may be narrower.
        *
-       * **Nothing may assume a width.** Chrome does not persist the panel's width, does not
-       * expose an API to set it, reopens at roughly 360px, and lets the *user* choose which
-       * side it appears on. So: one column, no fixed dimensions, nothing with a min-width
-       * above ~320px, and the orb sized as a fraction of the panel rather than in pixels.
+       * **No Liquid Glass**, and now also **no header**. There is nothing behind a side panel
+       * to blur, and Chrome already draws `OpenPosse` with the extension's own icon directly
+       * above this document – so the port's header repeated both, twenty pixels apart. The only
+       * thing in it Chrome does not show is the shortcut, which moves into the panel's body.
        */
 
-      body { padding: 14px 14px 18px; }
-
-      header {
-        display: flex; align-items: center; gap: 8px;
-        margin-bottom: 12px;
+      /* The ambient wash, which is doing most of the work the glass used to.
+       *
+       * **The colour ramp is the landing hero's, not a second guess at it.** Orange at the core,
+       * falling through `rgba(228,73,122,.05)` to nothing on `#0B0A0C` – the same ramp the hero
+       * puts behind its logo, so the site and the extension are lit by one light. The first
+       * version used orange twice and read flatter for it: magenta is what makes the falloff
+       * look like distance rather than like the gradient running out.
+       *
+       * The *geometry* is re-derived rather than ported. The hero's ellipse sits at `74% 50%`
+       * because its orb is in the right column of a two-column header; here the orb is centred
+       * near the top of a column that reopens at ~360px. Two layers, because the hero's single
+       * ellipse leaves the bottom of a tall narrow panel dead.
+       *
+       * Fixed rather than scrolling, so a long answer slides over the light rather than dragging
+       * it. It is **not** tinted by the agent's channel – the orb is, and a green sphere on a
+       * green field loses the sphere.
+       *
+       * A column at least the window's height, so the site bar below sits at the foot of a short
+       * panel rather than under the last control. `main` and the bar carry their own padding. */
+      body {
+        display: flex; flex-direction: column; min-height: 100vh;
+        background:
+          radial-gradient(86% 42% at 50% 20%,
+            rgba(255, 122, 24, 0.17), rgba(228, 73, 122, 0.05) 55%, transparent 75%),
+          radial-gradient(130% 72% at 50% 30%, rgba(255, 122, 24, 0.06), transparent 78%),
+          #0b0a0c;
+        background-attachment: fixed;
       }
-      /* Sizing ships with the artwork in `src/mark.js`, so this only reserves the space before
-         the script fills it and the header does not jump on open. */
-      #mark { width: 22px; height: 22px; flex: 0 0 22px; }
-      header .title { font-size: 13.5px; font-weight: 600; letter-spacing: -0.008em; }
-      header .spacer { flex: 1; }
-      header .hint { color: var(--text-faint); }
 
-      .mic-fix {
-        display: block; width: 100%; margin-bottom: 11px;
-        font: inherit; font-size: 12px; text-align: left; cursor: pointer;
-      }
+      main { flex: 1 0 auto; padding: 10px 14px 20px; }
 
-      /* ── The stage: what a turn looks like ──────────────────────────────────────────── */
+      /* ── The stage ─────────────────────────────────────────────────────────────────────── */
 
-      /* It collapses to nothing when idle rather than reserving space for an answer that is
-         not coming. A persistent panel holding 200px of blank waiting area is a worse use of
-         the screen than the popup it replaces. */
-      .stage { display: flex; flex-direction: column; align-items: center; }
+      .orbwrap { position: relative; display: flex; justify-content: center; }
+      /* **The hero's proportion, not its pixel count.** It draws the orb at 320px inside a 520px
+         column, so the rule is 62% of whatever column it is in, capped where the hero caps it.
+         Writing `320px` literally would fill a 360px panel edge to edge, which is a different
+         picture from the one being matched.
+         Note the sphere fills about half of its canvas – the rest was reserved for a halo that
+         is switched off. On flat black that read as a hole; with the wash behind it, it reads as
+         the light the sphere is sitting in, which is why the canvas is not simply cropped. */
+      canvas { width: min(320px, 62%); aspect-ratio: 1; display: block; }
+      .orbwrap .dead-mic { position: absolute; bottom: 6px; }
 
-      .orbwrap { position: relative; display: flex; justify-content: center; width: 100%; }
-      /* A fraction of the panel, not 168px. The design's size assumes a 452px card floating
-         over a page; here the container is whatever the user dragged the divider to. */
-      canvas { width: min(168px, 46vw); aspect-ratio: 1; display: block; }
-      .orbwrap .dead-mic { position: absolute; bottom: 4px; }
+      /* 21px/500, which is four points larger than the port guessed at. What the transcript is,
+         on either surface, is the thing you just said being read back – so it is the one piece of
+         text that has to carry from across a desk.
 
+         **`min-height` is why there is no `:empty` rule any more.** It reserves two lines, so a
+         one-line utterance growing to two does not shove the roster and the answer down the panel
+         while somebody is still mid-sentence. The cost is a reserved strip on a panel that has
+         not heard anything yet. */
       .transcript {
-        margin-top: -6px; padding: 0 2px; text-align: center;
-        font-size: 16px; line-height: 1.34; letter-spacing: -0.011em;
+        min-height: 66px; margin: -20px 0 0; padding: 0 6px; text-align: center;
+        font-weight: 500; font-size: 21px; line-height: 1.34; letter-spacing: -0.015em;
         text-wrap: pretty; overflow-wrap: anywhere;
       }
-      .transcript:empty { display: none; }
-      .volatile { color: var(--text-dim); }
+      /* Dimmer than `--text-dim`, deliberately: this is the tail the recogniser is still
+         revising, and it has to read as less settled than ordinary secondary text rather than
+         the same as it. */
+      .volatile { color: rgba(235, 235, 245, 0.52); }
       .caret {
-        display: inline-block; width: 2px; height: 15px; vertical-align: -2px;
-        background: var(--text); opacity: 0.9; margin-left: 1px;
+        display: inline-block; width: 2px; height: 22px; vertical-align: -3px;
+        background: var(--text); opacity: 0.9; margin-left: 2px;
         animation: blink 1.1s steps(2) infinite;
       }
       @keyframes blink { 50% { opacity: 0; } }
 
-      .status {
-        margin-top: 8px; font-size: 12px; color: var(--text-dim);
-        display: flex; align-items: center; gap: 7px;
+      /* Avatars on the left, who the turn is with on the right.
+         **The divider is an inset hairline on this row rather than an element of its own.** A
+         half-pixel `inset` shadow is what the hero uses and it is the better primitive: a 1px div
+         rounds up to a whole device pixel and reads as a drawn line, where this catches the light
+         the way the edge of a raised surface does. It also cannot drift out of alignment with the
+         row it divides, having no margins of its own to keep in step. */
+      .band {
+        display: flex; align-items: center; gap: 10px;
+        margin-top: 18px; padding-top: 14px;
+        box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.14);
       }
-      .status:empty { display: none; }
-      .status.tinted { color: var(--channel); }
-      .status.bad { color: var(--error); }
+      #avatars { display: flex; gap: 9px; }
+      .who {
+        margin-left: auto; text-align: right; font-size: 13px; color: var(--text-dim);
+        display: flex; align-items: center; gap: 7px; overflow-wrap: anywhere;
+      }
+      .who.tinted { color: var(--channel); }
+      .who.bad { color: var(--error); }
       .pulse {
         width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: currentColor;
         animation: breathe 1.3s ease-in-out infinite;
@@ -84,24 +120,78 @@
         50% { opacity: 1; transform: scale(1); }
       }
 
-      .answer { width: 100%; margin-top: 11px; }
-      .answer:empty { display: none; }
+      /* `.avatar` itself comes from ui.css so the panel and Settings cannot disagree about it.
+         Only the states are here – and only the floor holder is lit, which is the design's rule
+         and not decoration: a dimmed avatar is "not who you are talking to", never "broken".
+
+         **Every ring is drawn on the face's `::after` at `inset: -4px`, the hero's geometry.** It
+         puts the ring 4px clear of the circle instead of hugging it, and the gap is what makes it
+         read as a halo rather than as a border the avatar grew. It also keeps the ring off the
+         avatar's own `box-shadow`, so ui.css owns the circle's inner highlight and nothing here
+         has to restate it to avoid wiping it out – which is exactly what `.lit` used to do.
+
+         Dimming is the hero's rule too, and it is the inverse of the port's: full opacity is the
+         resting state and `dim` is applied to the others only while somebody holds the floor. The
+         old version dimmed by default and had to add an `on` class to undo it, so the roster's
+         ordinary appearance was the special case.
+
+         **The avatar is a button holding the circle**, which is `.face`. The states stay on the
+         button and the dim and the ring are drawn on the face, because the button carries the
+         hover label – and an opacity on the button would fade its label along with it. */
+      button.av {
+        position: relative; display: block; padding: 0;
+        background: none; border-radius: 50%;
+      }
+      button.av:focus-visible { outline: 2px solid var(--blue); outline-offset: 6px; }
+      .av .face { position: relative; transition: opacity 0.3s ease; }
+      .av .face::after {
+        content: ''; position: absolute; inset: -4px; border-radius: 50%;
+        box-shadow: 0 0 0 0 transparent; transition: box-shadow 0.3s ease;
+        pointer-events: none;
+      }
+      /* Somebody else holds the floor. */
+      .av.dim .face { opacity: 0.42; }
+      .av.dim:hover .face { opacity: 0.72; }
+      .av.lit .face::after {
+        box-shadow:
+          0 0 0 1.5px var(--channel),
+          0 0 14px color-mix(in srgb, var(--channel) 55%, transparent);
+      }
+      .av.aimed:not(.lit) .face::after { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.35); }
+      .av.broken .face::after { box-shadow: 0 0 0 1.5px var(--error); }
+
+      /* Reserved like the transcript, and for the sharper version of the same reason: an answer
+         lands mid-turn, and without the reserve it shoves Listen/Stop down the panel at the exact
+         moment somebody may be reaching for it.
+
+         **Reserved only while a turn is actually in flight**, which is where this departs from
+         the hero. The hero's section ends under its answer, so an unconditional 84px reserve
+         costs it nothing; here the desk sits below, so the same reserve on a panel that has never
+         answered is a hole *between* two things rather than space at the end of one. Holding it
+         from `routing` onward buys the no-jump where it is wanted – the move it does make is at
+         listening → routing, which is the moment somebody has just stopped talking. */
+      .answer { padding-top: 14px; }
+      #stage.awaiting .answer { min-height: 84px; }
       .bubble {
-        border-radius: 12px; padding: 10px 12px;
-        font-size: 14px; line-height: 1.47;
+        border-radius: 16px; padding: 12px 15px;
+        font-size: 15.5px; line-height: 1.47;
         background: rgba(255, 255, 255, 0.075);
-        box-shadow: inset 0 0 0 0.5px var(--glass-edge);
+        /* Two insets, not one. The hairline alone drew an outlined box; the top highlight is
+           what tips it into reading as a raised surface catching the wash behind it. */
+        box-shadow:
+          inset 0 0.5px 0 rgba(255, 255, 255, 0.22),
+          inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
         animation: rise 0.34s cubic-bezier(0.22, 1, 0.36, 1);
-        /* Bounded so a long answer cannot push the roster and the text box off screen – the
-           controls stay reachable while an answer is being read out. */
-        max-height: 42vh; overflow-y: auto; overscroll-behavior: contain;
+        /* Bounded so a long answer cannot push the controls off screen – they stay reachable
+           while an agent is still reading it out. */
+        max-height: 46vh; overflow-y: auto; overscroll-behavior: contain;
       }
       @keyframes rise { from { opacity: 0; transform: translateY(5px); } }
-      .sub { font-size: 11.5px; color: var(--text-faint); margin-top: 5px; }
+      /* Inside the bubble, as drawn: it is a property of the answer, not a note beside it. */
+      .sub { font-size: 12.5px; color: rgba(235, 235, 245, 0.55); margin-top: 4px; }
 
-      /* ── The coaching card, during a recording ──────────────────────────────────────── */
+      /* ── The coaching card, during a recording ─────────────────────────────────────────── */
 
-      .coach { padding-top: 2px; }
       .coach .step {
         font-size: 9.5px; font-weight: 600;
         letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 10px;
@@ -126,115 +216,272 @@
         overflow-wrap: anywhere;
       }
       .coach .row .detail.none { color: var(--text-faint); font-feature-settings: normal; }
-      /* A shortcut is something you pressed, not page structure, so it is not a code chip. */
       .coach .row .detail.keys {
         font-feature-settings: normal; font-size: 13px; letter-spacing: 0.12em;
       }
 
-      /* ── The desk: everything transactional ─────────────────────────────────────────── */
+      /* ── The desk ──────────────────────────────────────────────────────────────────────── */
 
-      .rule { height: 1px; background: var(--line); margin: 14px 0 12px; }
-      #agents { margin-bottom: 10px; }
-      #empty { color: var(--text-dim); font-size: 12.5px; margin-bottom: 10px; }
+      #desk { margin-top: 20px; }
+      #empty { color: var(--text-dim); font-size: 12.5px; margin-bottom: 12px; }
       /* An unreadable roster is not an empty one, and they must not read the same. */
       #empty.problem { color: var(--error); }
-      /* A row is a target for the text box, so it has to look like one. */
-      .agent { cursor: pointer; border-radius: 8px; padding: 7px 6px; margin: 0 -6px; }
-      .agent:hover { background: rgba(255, 255, 255, 0.05); }
-      .agent .text { min-width: 0; }
-      .agent .name, .agent .kind { overflow-wrap: anywhere; }
-      .agent.aimed { background: rgba(255, 255, 255, 0.07); }
 
-      .listen { display: flex; }
-      .listen button { flex: 1; }
-      .ask { display: flex; gap: 7px; margin-top: 9px; }
+      .mic-fix {
+        display: block; width: 100%; margin-bottom: 12px;
+        font: inherit; font-size: 12px; text-align: left; cursor: pointer;
+      }
+
+      /* ── Icon buttons ──────────────────────────────────────────────────────────────────── */
+
+      /* **Every control is an icon, and its name is its `aria-label`.** The hover label below
+         draws that same attribute, so what a screen reader says and what appears on hover are
+         one string and cannot disagree. A control with no label shows no empty pill. */
+      button.icon {
+        position: relative;
+        width: 34px; height: 34px; flex: 0 0 34px; padding: 0;
+        display: grid; place-items: center;
+        border-radius: 50%;
+        background: transparent; color: var(--text-dim);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+        transition: color 0.15s ease, background-color 0.15s ease;
+      }
+      button.icon:hover:not(:disabled), button.icon[aria-expanded="true"] {
+        color: var(--text); background: rgba(255, 255, 255, 0.08);
+      }
+      button.icon[aria-expanded="true"] { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28); }
+      button.icon:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+      /* Dimmed by colour, not by ui.css's `opacity`, which would fade the label with the icon –
+         and on Record the label is where the reason it is disabled is written. */
+      button.icon:disabled {
+        opacity: 1; color: rgba(235, 235, 245, 0.2);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+      }
+      button.icon.busy svg { animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* The label, on hover and on keyboard focus. Not `title`: Chrome waits about a second to
+         show one and draws it in the OS's own small type, which is the opposite of "clear".
+         The short delay keeps a pointer crossing the row from flashing every label in turn.
+         `data-tip-at` pins it to one edge for the controls near the panel's sides, where a
+         centred label would run off a 320px column.
+
+         The avatars share it, so every circle in the panel answers a hover the same way. */
+      button:is(.icon, .av)[aria-label]::after {
+        content: attr(aria-label);
+        position: absolute; bottom: calc(100% + 8px); left: 50%; z-index: 5;
+        transform: translateX(-50%);
+        width: max-content; max-width: 220px;
+        padding: 5px 9px; border-radius: 7px;
+        background: var(--raised); color: var(--text);
+        box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14), 0 6px 18px rgba(0, 0, 0, 0.5);
+        font-size: 11.5px; font-weight: 500; line-height: 1.35; text-align: left;
+        pointer-events: none; opacity: 0;
+        transition: opacity 0.12s ease;
+      }
+      button:is(.icon, .av)[aria-label]:is(:hover, :focus-visible)::after {
+        opacity: 1; transition-delay: 0.15s;
+      }
+      button:is(.icon, .av)[data-tip-at="start"]::after { left: 0; transform: none; }
+      button:is(.icon, .av)[data-tip-at="end"]::after { left: auto; right: 0; transform: none; }
+
+      /* ── The controls ──────────────────────────────────────────────────────────────────── */
+
+      /* The microphone centred, two controls either side. A three-column grid rather than flex
+         with a spacer, so the microphone stays on the panel's centre line – under the orb – however
+         wide either side is. */
+      .controls { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; }
+      .controls .side { display: flex; gap: 8px; align-items: center; height: 50px; }
+      .controls .side.end { justify-content: flex-end; }
+      .controls .center { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+
+      /* **Listen is the one filled control**, and with every button an icon that is the only
+         thing left to say it is primary. The first version had Listen as a faint outline and the
+         fallback filled, which said the opposite of what the layout said. */
+      button.icon.mic {
+        width: 50px; height: 50px; flex-basis: 50px;
+        background: var(--blue); color: #fff;
+        box-shadow:
+          inset 0 0.5px 0 rgba(255, 255, 255, 0.35),
+          0 6px 22px color-mix(in srgb, var(--blue) 36%, transparent);
+      }
+      button.icon.mic:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 86%, #fff); }
+      /* While listening it is Stop, which is a different act, so it stops looking like Listen. */
+      button.icon.mic.listening {
+        background: rgba(255, 255, 255, 0.08); color: var(--text);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+      }
+      button.icon.mic.listening:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); }
+
+      /* The shortcut, which is the one thing Chrome's own panel header does not show. Under the
+         microphone, because it is the other way to press it. */
+      #shortcut { color: var(--text-faint); }
+
+      /* Quieter than the rest: a developer's control, sitting where everybody can see it. */
+      #debug:not([aria-expanded="true"], :hover) { box-shadow: none; color: var(--text-faint); }
+      /* A debug value is in force. On the toggle, because the drawer being shut is exactly when
+         a changed timing would otherwise be invisible. */
+      #debug.overridden::before {
+        content: ''; position: absolute; top: 4px; right: 4px;
+        width: 7px; height: 7px; border-radius: 50%;
+        background: #ff7a18; box-shadow: 0 0 0 2px #0b0a0c;
+      }
+
+      /* The manual path, behind the keyboard toggle. */
+      .ask { display: flex; gap: 7px; align-items: center; margin-top: 14px; }
       .ask input { flex: 1; min-width: 0; }
 
-      /* Site access. The panel's one irreplaceable job, and the diagnostic the popup could
-         never offer because it closed: which site this is and whether we may drive it. */
-      .site { margin-top: 13px; font-size: 11.5px; color: var(--text-dim); }
-      .site .host { font-feature-settings: var(--figures); overflow-wrap: anywhere; }
-      .site button { margin-top: 7px; width: 100%; }
+      /* ── Debug tools ───────────────────────────────────────────────────────────────────── */
 
-      footer {
-        margin-top: 13px; padding-top: 11px;
-        border-top: 1px solid var(--line);
-        display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+      .debug {
+        margin-top: 16px; padding-top: 12px;
+        box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.14);
       }
-      footer .spacer { flex: 1; }
-      a { color: var(--text-dim); font-size: 11.5px; text-decoration: none; cursor: pointer; }
-      a:hover { color: var(--text); }
-      #surface { margin-top: 9px; width: 100%; font-size: 11.5px; }
+      .debug .eyebrow {
+        font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--text-faint); margin-bottom: 10px;
+      }
+      .debug .tools { display: flex; gap: 8px; }
+      /* Name and value on one line, the slider full width under them: side by side, a 320px
+         panel leaves the slider about 80px to travel 15 positions in. */
+      .debug .knob {
+        display: grid; grid-template-columns: 1fr auto; gap: 6px 10px;
+        grid-template-areas: "name value" "slider slider";
+        margin-top: 14px; font-size: 12px; color: var(--text-dim);
+      }
+      .debug .knob span { grid-area: name; }
+      .debug .knob output { grid-area: value; font-feature-settings: var(--figures); color: var(--text); }
+      .debug .knob input { grid-area: slider; width: 100%; margin: 0; accent-color: var(--blue); }
+      .debug .why { margin-top: 5px; font-size: 11px; line-height: 1.4; color: var(--text-faint); }
+
+      /* ── The site bar ──────────────────────────────────────────────────────────────────── */
+
+      /* Which site this is and whether we may drive it – the panel's own diagnostic, since a
+         popup that closes cannot tell you an hour later that access was revoked.
+
+         **Pinned to the foot of the panel, and still in the flow.** `main` grows to push it to
+         the bottom of a short panel; `sticky` keeps it there over a long one. `fixed` would need
+         a guessed padding to keep content out from under it, and that guess breaks the moment
+         the line wraps to three. Opaque, because a long answer scrolls beneath it. */
+      .site {
+        position: sticky; bottom: 0; z-index: 2;
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px 12px;
+        font-size: 11.5px; color: var(--text-dim);
+        background: #0b0a0c;
+        box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.14);
+      }
+      .site .where { flex: 1; min-width: 0; }
+      .site .host { font-feature-settings: var(--figures); overflow-wrap: anywhere; }
+      .site .note { margin-top: 3px; color: var(--text-faint); overflow-wrap: anywhere; }
+      .site .note.bad { color: var(--error); }
     </style>
   </head>
   <body>
-    <header>
-      <div id="mark"></div>
-      <div class="title">OpenPosse</div>
-      <div class="spacer"></div>
-      <div class="hint tech" id="shortcut"></div>
-    </header>
+    <main>
+      <!-- Deliberately not the design's `NOT HEARING ANYTHING – CHECK INPUT` badge. That one is
+           for a microphone that is connected and silent and lives on the orb. A permission that
+           was never granted needs different words and a different action.
 
-    <!-- Deliberately not the design's `NOT HEARING ANYTHING – CHECK INPUT` badge. That one is
-         for a microphone that is connected and silent and lives on the stage below. A
-         permission that was never granted needs different words and a different action. -->
-    <button id="mic-warning" hidden class="card bad mic-fix"></button>
+           **The one button that is not an icon**, because it is a sentence you need to read
+           rather than a control you need to find. -->
+      <button id="mic-warning" hidden class="card bad mic-fix"></button>
 
-    <section class="stage" id="stage">
-      <div class="orbwrap">
-        <canvas id="orb"></canvas>
-        <div class="dead-mic" id="deadmic" hidden>NOT HEARING ANYTHING – CHECK INPUT</div>
-      </div>
-      <div class="transcript" id="transcript"></div>
-      <div class="status" id="status"></div>
-      <div class="answer" id="answer"></div>
-    </section>
+      <section id="stage">
+        <div class="orbwrap">
+          <canvas id="orb"></canvas>
+          <div class="dead-mic" id="deadmic" hidden>NOT HEARING ANYTHING – CHECK INPUT</div>
+        </div>
+        <div class="transcript" id="transcript"></div>
+        <div class="band">
+          <div id="avatars"></div>
+          <div class="who" id="who"></div>
+        </div>
+        <div class="answer" id="answer"></div>
+      </section>
 
-    <section class="coach" id="coach" hidden>
-      <div class="step" id="coach-step"></div>
-      <div class="say" id="coach-say"></div>
-      <div class="list" id="coach-list"></div>
-    </section>
+      <section class="coach" id="coach" hidden>
+        <div class="step" id="coach-step"></div>
+        <div class="say" id="coach-say"></div>
+        <div class="list" id="coach-list"></div>
+      </section>
 
-    <section class="desk" id="desk">
-      <div class="rule"></div>
+      <section id="desk">
+        <div id="empty" hidden>
+          No assistants yet. Open a page with an AI assistant on it, then record it.
+        </div>
 
-      <div id="agents"></div>
-      <div id="empty" hidden>
-        No assistants yet. Open a page with an AI assistant on it, then record it.
-      </div>
+        <!-- Icons and labels for the controls that change (Listen, the toggles) are set by the
+             script; the ones that never change carry their label here. -->
+        <div class="controls">
+          <div class="side">
+            <button class="icon" id="type" aria-controls="ask" data-tip-at="start"></button>
+            <!-- Disabled until the script has read the tab in front, so there is no window on
+                 load where it looks pressable and its click handler has no site to act on. -->
+            <button class="icon" id="record" disabled data-tip-at="start"
+                    aria-label="Reading the tab in front…"></button>
+          </div>
+          <div class="center">
+            <button class="icon mic" id="listen"></button>
+            <span class="tech" id="shortcut"></span>
+          </div>
+          <div class="side end">
+            <button class="icon" id="settings" aria-label="Settings" data-tip-at="end"></button>
+            <button class="icon" id="debug" aria-controls="debug-tools" data-tip-at="end"></button>
+          </div>
+        </div>
 
-      <div class="listen">
-        <button id="listen" class="secondary">Listen</button>
-      </div>
+        <!-- The manual path. Not only a fallback for a dead microphone: it is the whole product
+             minus voice, and it is the right answer in a meeting or an open-plan office. Behind
+             a toggle because most turns are spoken, and an empty field under the microphone
+             reads as the place to start. -->
+        <div class="ask" id="ask" hidden>
+          <input type="text" id="prompt" placeholder="Ask an assistant…" />
+          <button class="icon" id="send" data-tip-at="end"></button>
+        </div>
 
-      <!-- The manual path. Not only a fallback for a dead microphone: it is the whole product
-           minus voice, and it is the right answer in a meeting or an open-plan office. -->
-      <div class="ask">
-        <!-- Neutral until a roster exists. The popup hardcoded "Ask Ivan to…", which names an
-             agent nobody has on a first run – the script overwrites it the moment there is a
-             real name to use. -->
-        <input type="text" id="prompt" placeholder="Ask an assistant…" />
-        <button id="send">Ask</button>
-      </div>
+        <!-- Development tools, all behind one switch, as the Mac app had them. -->
+        <section class="debug" id="debug-tools" hidden>
+          <div class="eyebrow">Debug tools</div>
+          <div class="tools">
+            <!-- A scripted turn, for judging the UI and the voice without spending a vendor
+                 query. Here with E14's surface switch beside it: both are scaffolding with an
+                 expiry, deleted when user testing picks a surface. -->
+            <button class="icon" id="demo" data-tip-at="start"></button>
+            <button class="icon" id="surface" data-tip-at="start"></button>
+            <button class="icon" id="diagnostics" data-tip-at="start"
+                    aria-label="Voice diagnostics – check each layer of the Kokoro voice"></button>
+          </div>
+          <label class="knob" for="floor">
+            <span>Follow-up window</span>
+            <input type="range" id="floor" />
+            <output id="floor-value" for="floor"></output>
+          </label>
+          <div class="why">
+            How long a question with no name in it still goes to whoever answered last.
+          </div>
+          <label class="knob" for="grace">
+            <span>Answer settle wait</span>
+            <input type="range" id="grace" />
+            <output id="grace-value" for="grace"></output>
+          </label>
+          <div class="why">
+            How long to wait for the rest of an answer when the assistant hasn't said it's done.
+            Shorter answers sooner; too short can read out a status line instead of the answer.
+          </div>
+          <div class="why">Both go back to their defaults when Chrome restarts.</div>
+        </section>
+      </section>
+    </main>
 
-      <div class="site">
+    <!-- Which site this is and whether we may drive it, pinned to the panel's foot. -->
+    <footer class="site" id="site">
+      <div class="where">
         <div class="host" id="site-state">reading…</div>
-        <button id="grant" class="secondary" hidden></button>
+        <div class="note" id="site-note" hidden></div>
       </div>
-
-      <footer>
-        <!-- Disabled until the script has read the tab in front. Otherwise there is a window on
-             load where it looks pressable and its click handler has no site to act on. -->
-        <button class="secondary" id="record" disabled>Record this tab</button>
-        <div class="spacer"></div>
-        <a id="settings">Settings</a>
-      </footer>
-
-      <!-- E14's surface switch, and it is temporary: it goes when user testing picks a surface
-           and the other one is deleted. -->
-      <button id="surface" class="secondary"></button>
-    </section>
+      <button class="icon" id="grant" hidden data-tip-at="end"></button>
+    </footer>
 
     <script type="module" src="dist/sidepanel.js"></script>
   </body>
