@@ -144,7 +144,7 @@ function renderTurn() {
   // "Record this tab" in the middle of a recording is offering to start a second one.
   const recording = state.phase === 'recording';
   el('top').hidden = recording;
-  el('stage').hidden = recording;
+  el('avatars').hidden = recording;
   el('desk').hidden = recording;
   el('dock').hidden = recording;
   el('coach').hidden = !recording;
@@ -191,7 +191,7 @@ function renderTurn() {
   el('deadmic').hidden = state.phase !== 'not-capturing';
 
   // See `AWAITING` above, and the `.awaiting` rule in the stylesheet.
-  el('stage').classList.toggle('awaiting', AWAITING.has(state.phase));
+  el('top').classList.toggle('awaiting', AWAITING.has(state.phase));
 
   const answer = el('answer');
   answer.textContent = '';
@@ -418,6 +418,26 @@ function alignTips() {
 
 // The panel's width is the user's, and dragging it re-wraps the row.
 window.addEventListener('resize', alignTips);
+
+/**
+ * Whether a label in the scrolling middle hangs below its control instead of above.
+ *
+ * **The middle clips what it holds**, so a label above a control near its top edge is cut off –
+ * and the roster's first row now sits right against that edge, under the fixed top. Decided as the
+ * label is about to show rather than once, like `alignTips`, because scrolling moves the controls.
+ * The room asked for is a two-line label, its 8px gap and the 10px fade.
+ */
+const TIP_ROOM = 60;
+
+function placeTip(event) {
+  const button = event.target.closest?.('button:is(.icon, .av)[aria-label]');
+  if (!button) return;
+  const room = button.getBoundingClientRect().top - el('middle').getBoundingClientRect().top;
+  button.toggleAttribute('data-tip-below', room < TIP_ROOM);
+}
+
+el('middle').addEventListener('pointerover', placeTip);
+el('middle').addEventListener('focusin', placeTip);
 
 function aim(name) {
   aimedAt = name;
@@ -888,6 +908,14 @@ chrome.runtime.onMessage.addListener((message) => {
   // A new turn starts from silence. Without this the orb opens at whatever the last one ended on,
   // which reads as it hearing something before anyone has spoken.
   if (patch.phase === 'listening') { level = null; eased = 0; }
+
+  // A new turn also brings the roster back into view, wherever the middle was scrolled to. A spoken
+  // turn opens on `listening`; a typed or re-asked one opens straight on `thinking` – which a spoken
+  // turn reaches too, but always by way of `routing`.
+  if (state.phase !== before.phase && (state.phase === 'listening'
+    || (state.phase === 'thinking' && before.phase !== 'routing'))) {
+    el('middle').scrollTop = 0;
+  }
 
   if (patch.shortcut !== undefined) el('shortcut').textContent = patch.shortcut || '';
 
