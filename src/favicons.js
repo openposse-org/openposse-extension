@@ -60,23 +60,33 @@ export async function iconPages(patterns) {
     }));
 
     const pages = {};
-    let learned = false;
+    const learned = {};
     for (const [id, pattern] of Object.entries(patterns)) {
       const pick = pattern ? pickPage(tabs[pattern], known[pattern]) : null;
       if (!pick) continue;
-      if (pick.origin) {
-        known[pattern] = pick.origin;
-        learned = true;
-      }
+      if (pick.origin) learned[pattern] = pick.origin;
       pages[id] = pick.page;
     }
-    if (learned) await chrome.storage.local.set({ [KNOWN_KEY]: known });
+    if (Object.keys(learned).length) await remember(learned);
     return pages;
   } catch (error) {
     // Icons are decoration. Failing to find them must never cost the roster they sit in.
     console.warn('[openposse] no site icons this time –', error?.message ?? error);
     return {};
   }
+}
+
+/**
+ * Adds newly seen sites to the remembered ones, re-reading the list under a lock. Several lookups
+ * can run at once – vendor tabs restored together, or Load all in the panel's debug drawer – and
+ * each used to write back the list as it read it at the start, so the last to finish erased what
+ * the others had found. The lock is per extension origin, so the panel and Settings queue too.
+ */
+function remember(learned) {
+  return navigator.locks.request(KNOWN_KEY, async () => {
+    const { [KNOWN_KEY]: known = {} } = await chrome.storage.local.get(KNOWN_KEY);
+    await chrome.storage.local.set({ [KNOWN_KEY]: { ...known, ...learned } });
+  });
 }
 
 /** Puts an agent's site icon into its avatar, which keeps its initial if none arrives. */

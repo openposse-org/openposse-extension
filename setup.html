@@ -311,6 +311,18 @@
 
       <div class="columns">
         <div class="setup">
+      <!-- At the top of this column rather than under the roster, where a long roster buried it.
+           Holding Chrome's `favicon` permission is this setting (src/favicons.js), so the button
+           asks for it or gives it back, the way step 4 does with site access. -->
+      <div class="row">
+        <button class="secondary" id="grant-icons">Show site icons</button>
+        <span class="status kind bad" id="icons-status" hidden></span>
+      </div>
+      <p class="kind">
+        Uses the icon Chrome already has for each assistant's site, so nothing is downloaded.
+        An assistant keeps its letter until its site has been open in a tab. Chrome words
+        the request as “Read the icons of the websites you visit”.
+      </p>
       <h1>Set up OpenPosse</h1>
       <p>
         Three things, once. Everything after this happens on your machine – speech recognition
@@ -487,17 +499,6 @@
           <section>
             <h2>Assistants</h2>
             <div id="roster" class="card">none yet</div>
-            <!-- Holding Chrome's `favicon` permission is this setting (src/favicons.js), so the
-                 button asks for it or gives it back, the way step 4 does with site access. -->
-            <div class="row" style="margin-top:12px">
-              <button class="secondary" id="grant-icons">Show site icons</button>
-              <span class="status kind bad" id="icons-status" hidden></span>
-            </div>
-            <p class="kind">
-              Uses the icon Chrome already has for each assistant's site, so nothing is downloaded.
-              An assistant keeps its letter until its site has been open in a tab. Chrome words
-              the request as “Read the icons of the websites you visit”.
-            </p>
           </section>
 
           <!-- Recording an assistant helps one person. This is how it reaches everyone else.

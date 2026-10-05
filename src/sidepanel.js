@@ -880,6 +880,81 @@ function paintMocks() {
   paintDebugToggle();
 }
 
+// ── Site icons, all at once ─────────────────────────────────────────────────────────────────
+//
+// Chrome only has an icon for a site it has loaded, and a mock roster is thirty sites nobody has
+// open. This loads every site still showing a letter in one minimized window, lets the first-visit
+// listener learn each icon exactly as it would from a tab opened by hand, then closes the window.
+
+const ICON_WAIT_MS = 20_000;
+
+el('load-icons').addEventListener('click', async () => {
+  const button = el('load-icons');
+  const value = el('icons-value');
+  const misses = el('icons-misses');
+  misses.hidden = true;
+  if (!await chrome.permissions.contains(ICONS)) {
+    value.textContent = 'switch site icons on in Settings first';
+    return;
+  }
+  // One page per site: the bare domain, which is where a vendor keeps its icon.
+  const sites = new Map();
+  for (const agent of roster.agents) {
+    const pattern = roster.patterns[agent.id];
+    if (pattern && !roster.icons[agent.id]) sites.set(pattern, `https://${pattern.replace(/^\*\./, '')}/`);
+  }
+  if (!sites.size) {
+    value.textContent = 'every assistant has one';
+    return;
+  }
+
+  button.disabled = true;
+  value.textContent = `loading ${sites.size} sites…`;
+  let win = null;
+  try {
+    win = await chrome.windows.create({ url: [...sites.values()], focused: false, state: 'minimized' });
+    const ids = win.tabs.map((tab) => tab.id); // in the order of `sites`
+    const deadline = Date.now() + ICON_WAIT_MS;
+    let tabs = win.tabs;
+    while (Date.now() < deadline && tabs.some((tab) => !tab.favIconUrl)) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      tabs = await chrome.tabs.query({ windowId: win.id });
+    }
+    // One more pass with every tab still open, so the outcome does not depend on which of the
+    // listener's overlapping lookups finished last.
+    await loadRosterData();
+    const byId = new Map(tabs.map((tab) => [tab.id, tab]));
+    const failed = [...sites.keys()].flatMap((pattern, i) => {
+      const lit = roster.agents.some((a) => roster.patterns[a.id] === pattern && roster.icons[a.id]);
+      return lit ? [] : [`${pattern.replace(/^\*\./, '')} – ${whyNoIcon(byId.get(ids[i]), pattern)}`];
+    });
+    value.textContent = failed.length ? `${failed.length} of ${sites.size} without an icon` : 'done';
+    misses.textContent = failed.join(' · ');
+    misses.hidden = failed.length === 0;
+  } catch (error) {
+    console.warn('[openposse] site icons were not loaded –', error?.message ?? error);
+    value.textContent = `not loaded – ${error?.message ?? error}`;
+  } finally {
+    if (win) {
+      await chrome.windows.remove(win.id).catch((error) => {
+        console.warn('[openposse] the window that loaded site icons did not close –', error?.message ?? error);
+      });
+    }
+    button.disabled = false;
+  }
+});
+
+/** Why a site Load all opened left its assistant with a letter, read from the tab it loaded in. */
+function whyNoIcon(tab, pattern) {
+  if (!tab) return 'its tab was closed';
+  if (!tab.favIconUrl) {
+    return tab.status === 'loading' ? `still loading after ${ICON_WAIT_MS / 1000} s` : 'the page has no icon';
+  }
+  const url = new URL(tab.url);
+  if (url.protocol !== 'https:' || patternForHost(url.hostname) !== pattern) return `it went to ${url.origin}`;
+  return 'its icon arrived but was not picked up';
+}
+
 // ── What arrives from the worker ───────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message) => {
