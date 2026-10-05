@@ -1338,9 +1338,9 @@ async function save() {
 
   const { agents } = await loadRoster();
 
-  // The product as a person writes it – see `productLabel` for why only the first letter. When
-  // it guesses a brand's casing wrong, renaming takes one click in Settings, which is the whole
-  // reason naming moved there.
+  // The product as a person writes it – see `productLabel` for how it is cased. When that is
+  // still wrong for a brand nobody has written down, renaming takes one click in Settings, which
+  // is the whole reason naming moved there.
   const suggested = productLabel(recipe.domainPattern) || 'Assistant';
   const name = freeName(agents, suggested);
   // The voice comes from `assignVoices`' accent heuristic rather than being chosen here, and

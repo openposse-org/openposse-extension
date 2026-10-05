@@ -202,12 +202,16 @@ test('product names come from the domain, minus the generic subdomain', () => {
   assert.equal(productName(''), '');
 });
 
-test('product labels are capitalised for reading, and only the first letter', () => {
+test('product labels are capitalised for reading, with the brands that need it spelt out', () => {
   // `productName` above stays lowercase – it is what spoken navigation is matched against.
   assert.equal(productLabel('*.notion.so'), 'Notion');
-  // Not `LeanIX`: the inner capitals of a brand are not in its domain, and guessing them would
-  // be wrong more often than not.
-  assert.equal(productLabel('app.leanix.net'), 'Leanix');
+  assert.equal(productLabel('*.atlassian.net'), 'Atlassian');
+  // Inner capitals are not in a domain, so they come from the table rather than a guess.
+  assert.equal(productLabel('app.leanix.net'), 'LeanIX');
+  assert.equal(productLabel('chat.openai.com'), 'OpenAI');
+  // A real company whose name is an `Object.prototype` key. On a plain-object table this label
+  // would be a function, printed into the status line as "function Object() { [native code] }".
+  assert.equal(productLabel('constructor.io'), 'Constructor');
   assert.equal(productLabel(''), '');
 });
 

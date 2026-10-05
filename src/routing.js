@@ -218,14 +218,30 @@ export function productName(domainPattern) {
  * the moment the same string is shown or said out loud. Everything that puts a vendor in front
  * of a person goes through this one, so they cannot disagree about how it is written.
  *
- * The first letter only, because that is all a domain label supports honestly: `leanix` becomes
- * `Leanix` rather than `LeanIX`, and guessing the inner capitals of a brand from its domain
- * would be wrong more often than not.
+ * The first letter, unless the brand is in `BRAND_CASING`. A domain label carries no inner
+ * capitals, and guessing them would be wrong more often than not – so they are written down for
+ * the brands that have them, and only those.
  */
 export function productLabel(domainPattern) {
   const name = productName(domainPattern);
-  return name ? name[0].toUpperCase() + name.slice(1) : '';
+  if (!name) return '';
+  return BRAND_CASING.get(name) ?? name[0].toUpperCase() + name.slice(1);
 }
+
+/**
+ * Brands whose capitals are not just the first letter, keyed by `productName`'s lowercase form.
+ *
+ * **Display only, and not a vendor list.** A vendor missing from here still works everywhere and
+ * reads with its first letter capitalised, so an entry is a courtesy to a brand's spelling rather
+ * than support for it – adding a vendor never requires one.
+ *
+ * A `Map`, not an object literal: `productName('constructor.io')` is `constructor`, and on a plain
+ * object that key finds `Object.prototype.constructor` – a function, printed as the vendor's name.
+ */
+const BRAND_CASING = new Map([
+  ['leanix', 'LeanIX'],
+  ['openai', 'OpenAI'],
+]);
 
 /** Matches a fragment against what an agent can be called: its name, or its vendor's. */
 function matchTarget(fragment, agents) {
