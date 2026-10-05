@@ -34,7 +34,7 @@ import { drawSphere, modeFor } from './sphere.js';
 import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from './grace.js';
 import { icon } from './icons.js';
 import { MOCK_SIZES } from './mocks.js';
-import { iconPages, putIcon } from './favicons.js';
+import { ICONS, iconPages, putIcon } from './favicons.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -271,7 +271,7 @@ function renderCoach() {
  * it would hit storage per agent on every phase change, six times a turn, to draw the same four
  * strings. `load()` fetches; `draw()` is synchronous and cheap and runs whenever the turn moves.
  */
-let roster = { agents: [], broken: [], problem: null, products: {}, icons: {} };
+let roster = { agents: [], broken: [], problem: null, products: {}, patterns: {}, icons: {} };
 
 /** Whom the text box is currently aimed at. Survives re-renders; the roster does not own it. */
 let aimedAt = null;
@@ -304,7 +304,7 @@ async function loadRosterData() {
     products[agent.id] = productLabel(patterns[agent.id]) || null;
   }));
   // Empty unless site icons are switched on in Settings – see favicons.js.
-  roster = { agents, broken, problem, products, icons: await iconPages(patterns) };
+  roster = { agents, broken, problem, products, patterns, icons: await iconPages(patterns) };
   drawRoster();
   paintMocks();
 }
@@ -956,6 +956,18 @@ const iconsSwitched = ({ permissions = [] }) => {
 };
 chrome.permissions.onAdded.addListener(iconsSwitched);
 chrome.permissions.onRemoved.addListener(iconsSwitched);
+
+// A site seen for the first time while the panel is open: its assistant's letter becomes the icon
+// as soon as the tab has one, not at the next panel open. Only https pages count, as in the tab
+// query in favicons.js, and only for an assistant still showing its letter – which, with the
+// setting off, is every one of them, hence the permission check.
+chrome.tabs.onUpdated.addListener(async (_id, change, tab) => {
+  if (!change.favIconUrl || !tab.url?.startsWith('https://')) return;
+  const pattern = patternForHost(new URL(tab.url).hostname);
+  const lettered = roster.agents.some((agent) =>
+    !roster.icons[agent.id] && roster.patterns[agent.id] === pattern);
+  if (lettered && await chrome.permissions.contains(ICONS)) loadRosterData();
+});
 
 chrome.storage.onChanged.addListener((changes, area) => {
   // A debug slider moved, here or in another window's panel. The follow-up window also decides
