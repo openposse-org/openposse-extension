@@ -34,6 +34,7 @@ import { drawSphere, modeFor } from './sphere.js';
 import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from './grace.js';
 import { icon } from './icons.js';
 import { MOCK_SIZES } from './mocks.js';
+import { iconPages, putIcon } from './favicons.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -270,7 +271,7 @@ function renderCoach() {
  * it would hit storage per agent on every phase change, six times a turn, to draw the same four
  * strings. `load()` fetches; `draw()` is synchronous and cheap and runs whenever the turn moves.
  */
-let roster = { agents: [], broken: [], problem: null, products: {} };
+let roster = { agents: [], broken: [], problem: null, products: {}, icons: {} };
 
 /** Whom the text box is currently aimed at. Survives re-renders; the roster does not own it. */
 let aimedAt = null;
@@ -294,13 +295,16 @@ async function floorHolderName() {
 async function loadRosterData() {
   const { agents, broken, problem } = await loadRoster();
   const products = {};
+  const patterns = {};
   await Promise.all(agents.map(async (agent) => {
+    patterns[agent.id] = (await recipeFor(agent))?.domainPattern;
     // `productLabel` turns `*.notion.so` into "Notion" – the same derivation E3b's navigation
     // matches against, so "take me to Notion" and the label here cannot drift apart. The label
     // rather than `productName`, which is lowercase because it is for matching, not for reading.
-    products[agent.id] = productLabel((await recipeFor(agent))?.domainPattern) || null;
+    products[agent.id] = productLabel(patterns[agent.id]) || null;
   }));
-  roster = { agents, broken, problem, products };
+  // Empty unless site icons are switched on in Settings – see favicons.js.
+  roster = { agents, broken, problem, products, icons: await iconPages(patterns) };
   drawRoster();
   paintMocks();
 }
@@ -366,6 +370,7 @@ async function drawRoster() {
     const face = document.createElement('span');
     face.className = 'avatar face';
     face.textContent = initialFor(agent.name);
+    putIcon(face, roster.icons[agent.id]);
     av.append(face);
 
     // The name is no longer on screen beside the letter, so it has to be reachable: the label is
@@ -944,6 +949,13 @@ chrome.windows?.onFocusChanged?.addListener(paintSite);
 // which is precisely how an agent can go dead with nothing on screen to say why.
 chrome.permissions.onAdded.addListener(paintSite);
 chrome.permissions.onRemoved.addListener(paintSite);
+
+// Site icons on the avatars: the setting is the `favicon` permission itself, switched in Settings.
+const iconsSwitched = ({ permissions = [] }) => {
+  if (permissions.includes('favicon')) loadRosterData();
+};
+chrome.permissions.onAdded.addListener(iconsSwitched);
+chrome.permissions.onRemoved.addListener(iconsSwitched);
 
 chrome.storage.onChanged.addListener((changes, area) => {
   // A debug slider moved, here or in another window's panel. The follow-up window also decides
