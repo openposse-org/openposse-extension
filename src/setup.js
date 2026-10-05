@@ -8,7 +8,7 @@
 import {
   loadRoster, setMicGranted, micGranted, voiceSpeed, setVoiceSpeed, clampSpeed,
 } from './storage.js';
-import { channelFor, initialFor } from './channels.js';
+import { channelOf, colourName, initialFor, PALETTE } from './channels.js';
 import { pack, unpack, toFile, filenameFor } from './share.js';
 import { matchPattern } from './domain.js';
 import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
@@ -679,11 +679,64 @@ async function refreshRoster() {
     const row = document.createElement('div');
     // Everyone is shown lit here: this is a list of what exists, not of who is speaking.
     row.className = 'agent active';
-    row.style.setProperty('--channel', channelFor(agent.name));
+    row.style.setProperty('--channel', channelOf(agent));
 
-    const avatar = document.createElement('div');
+    // ── Its colour ─────────────────────────────────────────────────────────────────────
+    //
+    // **The avatar is the control, because the colour is the avatar.** Clicking it opens the
+    // palette under the name, the way See opens the recipe. Every swatch already held by
+    // another agent carries that agent's initial, so taking a colour somebody else has is a
+    // choice made knowingly rather than a clash found later on the panel – allowed, because it
+    // is the person's call, but never by accident.
+    const avatar = document.createElement('button');
     avatar.className = 'avatar';
     avatar.textContent = initialFor(agent.name);
+    avatar.setAttribute('aria-expanded', 'false');
+    avatar.title = `${agent.name} is ${colourName(channelOf(agent))} – change`;
+    avatar.setAttribute('aria-label', avatar.title);
+
+    const palette = document.createElement('div');
+    palette.className = 'palette';
+    palette.hidden = true;
+    palette.setAttribute('role', 'group');
+    palette.setAttribute('aria-label', `Colours for ${agent.name}`);
+
+    for (const { hex, name: colour } of PALETTE) {
+      const mine = channelOf(agent) === hex;
+      const holders = agents.filter((a) => a.id !== agent.id && channelOf(a) === hex);
+
+      const swatch = document.createElement('button');
+      swatch.className = `swatch${mine ? ' mine' : ''}`;
+      swatch.style.setProperty('--swatch', hex);
+      swatch.textContent = holders.length ? initialFor(holders[0].name) : '';
+      swatch.setAttribute('aria-pressed', String(mine));
+      swatch.title = [
+        colour,
+        mine ? `${agent.name}'s now` : null,
+        holders.length ? `${holders.map((h) => h.name).join(' and ')} already has it` : null,
+      ].filter(Boolean).join(' – ');
+      swatch.setAttribute('aria-label', swatch.title);
+
+      swatch.addEventListener('click', async () => {
+        if (mine) return;
+        const result = await chrome.runtime
+          .sendMessage({ kind: 'openposse.agent.channel', agentId: agent.id, channel: hex })
+          .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+        if (!result?.ok) {
+          problemLine.textContent = result?.reason ?? 'could not set that colour';
+          problemLine.className = 'kind bad';
+          problemLine.hidden = false;
+          return;
+        }
+        await refreshRoster();
+      });
+      palette.append(swatch);
+    }
+
+    avatar.addEventListener('click', () => {
+      palette.hidden = !palette.hidden;
+      avatar.setAttribute('aria-expanded', String(!palette.hidden));
+    });
 
     // Named so the rail can give it a line of its own. The roster now sits in a 340px column
     // rather than the 620px one this row was laid out for, and the alternative – selecting it
@@ -933,7 +986,7 @@ async function refreshRoster() {
     });
 
     tools.append(see, share, again, remove);
-    text.append(problemLine, details, bundle);
+    text.append(problemLine, palette, details, bundle);
     row.append(rename, voice, tools);
     target.append(row);
   }

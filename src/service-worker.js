@@ -13,7 +13,7 @@
 
 import {
   loadRoster, recipeFor, findAgent, addAgent, replaceRecipe, freeName, renameAgent, removeAgent,
-  setAgentVoice,
+  setAgentVoice, setAgentChannel,
 } from './storage.js';
 import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
@@ -38,7 +38,7 @@ import {
 } from './surface.js';
 import { frontWindowNow, hydrate as hydrateFront, watchFront } from './front.js';
 import { trace } from './trace.js';
-import { channelFor } from './channels.js';
+import { channelOf } from './channels.js';
 
 /**
  * The last thing asked, so clicking a different avatar can put it to them instead.
@@ -273,9 +273,9 @@ async function handleUtterance(text) {
 async function putQuestion(agent, prompt, matched) {
   trace('routed', `${agent.name} (${matched}), ${prompt.length} chars`);
   await rememberPrompt(prompt);
-  markThinking(agent.name);
+  markThinking(agent.name, channelOf(agent));
   panel({
-    phase: 'thinking', agentName: agent.name, channel: channelFor(agent.name),
+    phase: 'thinking', agentName: agent.name, channel: channelOf(agent),
     transcript: prompt, volatile: '', answer: '', message: '', visible: true,
   }, { create: true });
   announceTurn({ phase: 'thinking', agentName: agent.name, matched });
@@ -1034,6 +1034,14 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   if (request?.kind === 'openposse.agent.voice') {
     setAgentVoice(request.agentId, request.voice).then(respond, (error) => {
       console.error('[openposse] voice could not be set –', error);
+      respond({ ok: false, reason: String(error?.message ?? error) });
+    });
+    return true;
+  }
+
+  if (request?.kind === 'openposse.agent.channel') {
+    setAgentChannel(request.agentId, request.channel).then(respond, (error) => {
+      console.error('[openposse] colour could not be set –', error);
       respond({ ok: false, reason: String(error?.message ?? error) });
     });
     return true;

@@ -6,7 +6,7 @@
 // anyway: clicking the toolbar icon and having something invisible happen was never legible.
 
 import { loadRoster, findAgent, micGranted } from './storage.js';
-import { channelFor, initialFor } from './channels.js';
+import { channelOf, initialFor } from './channels.js';
 import { floorWindow, FLOOR_OVERRIDE_KEY } from './routing.js';
 import { patternForHost, matchPattern } from './domain.js';
 import { MARK_SVG, MARK_CSS } from './mark.js';
@@ -74,7 +74,7 @@ async function render() {
     // all are lit – "no active agent" must not read as "every agent is broken".
     const isActive = !active || agent.name === active;
     row.className = `agent${isActive ? ' active' : ''}`;
-    row.style.setProperty('--channel', channelFor(agent.name));
+    row.style.setProperty('--channel', channelOf(agent));
 
     const avatar = document.createElement('div');
     avatar.className = 'avatar';

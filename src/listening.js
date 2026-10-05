@@ -10,7 +10,7 @@
 // a badge that says we are listening after the worker has died is a lie a user would act on.
 
 import { loadRoster, micGranted, voiceSpeed } from './storage.js';
-import { channelFor, initialFor } from './channels.js';
+import { channelOf, initialFor } from './channels.js';
 import { panel, panelLevel, panelSpeaking } from './panel.js';
 import { beginTurn, trace } from './trace.js';
 
@@ -346,7 +346,12 @@ async function settle() {
 /** `'●'` blue while listening, the agent's initial in their colour while asking, else nothing. */
 async function setBadge(state) {
   const look = state === 'listening' ? { text: '●', color: '#0A84FF' }
-    : state?.agentName ? { text: initialFor(state.agentName), color: channelFor(state.agentName) }
+    // The colour the caller passed, which is the one the agent keeps. Re-derived from the name
+    // only if a caller did not, because the name alone no longer decides it.
+    : state?.agentName ? {
+      text: initialFor(state.agentName),
+      color: state.channel ?? channelOf({ name: state.agentName }),
+    }
       : state === 'problem' ? { text: '!', color: '#FF453A' }
         : { text: '', color: '#0A84FF' };
   try {
@@ -363,8 +368,8 @@ async function setBadge(state) {
  * set. `settle` checks this flag rather than blindly clearing, which is why the flag exists at
  * all rather than the ask simply calling `setBadge` itself.
  */
-export function markThinking(agentName) {
-  thinking = agentName ? { agentName } : null;
+export function markThinking(agentName, channel = null) {
+  thinking = agentName ? { agentName, channel } : null;
   setBadge(thinking ?? 'idle');
 }
 

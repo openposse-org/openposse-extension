@@ -11,7 +11,7 @@
 // thing this extension's permission model exists to avoid.
 
 import { loadRoster } from './storage.js';
-import { channelFor, initialFor } from './channels.js';
+import { channelOf, initialFor } from './channels.js';
 import { surfaceNow } from './surface.js';
 
 /** Where the panel currently is, so state updates go to one tab rather than being broadcast. */
@@ -128,7 +128,7 @@ async function rosterForPanel() {
   return agents.map((agent) => ({
     name: agent.name,
     initial: initialFor(agent.name),
-    channel: channelFor(agent.name),
+    channel: channelOf(agent),
   }));
 }
 

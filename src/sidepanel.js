@@ -26,7 +26,7 @@
 // API to set it, reopens at roughly 360px, and lets the user put it left or right.
 
 import { loadRoster, findAgent, micGranted, recipeFor } from './storage.js';
-import { channelFor, initialFor } from './channels.js';
+import { channelOf, initialFor } from './channels.js';
 import { FLOOR_MS, FLOOR_OVERRIDE_KEY, FLOOR_RANGE, floorWindow, productLabel } from './routing.js';
 import { patternForHost, matchPattern } from './domain.js';
 import { SURFACES, setSurface } from './surface.js';
@@ -359,7 +359,7 @@ async function drawRoster() {
     av.dataset.name = agent.name;
     // The roster starts at the panel's left edge, where a centred label would run off it.
     av.dataset.tipAt = 'start';
-    av.style.setProperty('--channel', channelFor(agent.name));
+    av.style.setProperty('--channel', channelOf(agent));
 
     const face = document.createElement('span');
     face.className = 'avatar face';

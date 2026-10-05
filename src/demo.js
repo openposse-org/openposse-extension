@@ -34,7 +34,7 @@
 import { panel, panelLevel } from './panel.js';
 import { beginTurn, trace } from './trace.js';
 import { say, markThinking, markDone, VOLATILE_TAIL } from './listening.js';
-import { channelFor } from './channels.js';
+import { channelOf, pickChannel } from './channels.js';
 import { loadRoster, recipeFor } from './storage.js';
 import { productLabel } from './routing.js';
 
@@ -113,8 +113,20 @@ async function cast() {
     id: agent.id,
     name: agent.name,
     product: productLabel((await recipeFor(agent))?.domainPattern) || null,
+    channel: channelOf(agent),
   })));
-  return [real[0] ?? STAND_INS[0], real[1] ?? STAND_INS[1]];
+  const pair = [real[0] ?? STAND_INS[0], real[1] ?? STAND_INS[1]];
+
+  // A stand-in takes the colour a new agent would get next to whoever is already in the cast.
+  // Its name alone would hash to green for both of them, which is the clash colours are now
+  // assigned to prevent – and the demo exists to show a hand-off between two agents.
+  const taken = pair.flatMap((member) => (member.channel ? [member.channel] : []));
+  return pair.map((member) => {
+    if (member.channel) return member;
+    const channel = pickChannel(taken);
+    taken.push(channel);
+    return { ...member, channel };
+  });
 }
 
 /**
@@ -182,9 +194,9 @@ async function playTurn(step, who, token) {
 
   await wait(TIMING.routing);
   if (!alive()) return;
-  markThinking(who.name);
+  markThinking(who.name, who.channel);
   panel({
-    phase: 'thinking', agentName: who.name, channel: channelFor(who.name),
+    phase: 'thinking', agentName: who.name, channel: who.channel,
     transcript: utterance, volatile: '', answer: '', message: '', visible: true,
   });
 

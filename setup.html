@@ -98,6 +98,34 @@
       }
       .rail .agent .voice-pick { margin-left: 0; max-width: none; }
       .rail .agent .tools { margin-left: auto; }
+
+      /* ── An agent's colour ──────────────────────────────────────────────────────────────
+         The avatar is a button now – ui.css's `button` padding would squeeze the letter out of
+         a 34px circle, so it goes. Eight swatches a row: 241px, inside the rail's name column.
+
+         Pinned to the top of its row: centred, it slid down whenever the palette – or See, or
+         Share – opened beneath the name, so the avatar you had just clicked moved out from under
+         the pointer. */
+      .agent button.avatar { padding: 0; cursor: pointer; align-self: flex-start; }
+      .agent button.avatar:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+      .palette {
+        display: grid; grid-template-columns: repeat(8, 24px); gap: 7px;
+        margin: 10px 0 4px;
+      }
+      /* The initial is whoever already has the colour. White with a shadow rather than a colour
+         per swatch, so it reads on Lilac and on Indigo alike. */
+      .swatch {
+        width: 24px; height: 24px; padding: 0; border-radius: 50%;
+        display: grid; place-items: center;
+        background: var(--swatch); color: #fff;
+        font-size: 10.5px; font-weight: 700; text-shadow: 0 0 3px rgba(0, 0, 0, 0.7);
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.22);
+        transition: transform 0.12s ease;
+      }
+      .swatch:hover { transform: scale(1.12); }
+      .swatch.mine { outline: 2px solid var(--text); outline-offset: 2px; cursor: default; }
+      .swatch.mine:hover { transform: none; }
+      .swatch:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
       .step {
         display: flex;
         gap: 13px;

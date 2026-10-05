@@ -13,6 +13,8 @@
 // as-is. That is not sentiment – it is the only reason V1 starts with a working Notion agent
 // instead of an empty list.
 
+import { assignChannels, pickChannel, CHANNELS } from './channels.js';
+
 const AGENTS_KEY = 'agents';
 const MIC_KEY = 'micGranted';
 const SPEED_KEY = 'voiceSpeed';
@@ -105,7 +107,9 @@ export async function loadRoster() {
   let agents = [];
   try {
     const stored = await chrome.storage.local.get(AGENTS_KEY);
-    agents = Array.isArray(stored[AGENTS_KEY]) ? stored[AGENTS_KEY] : [];
+    // Every agent leaves here with a colour. Every write below starts from this list, so the
+    // first write stores colours for agents that predate them – see `assignChannels`.
+    agents = assignChannels(Array.isArray(stored[AGENTS_KEY]) ? stored[AGENTS_KEY] : []);
   } catch {
     // Unreadable storage must not stop the extension starting. An empty roster with an
     // explanation is recoverable; throwing on every service-worker wake is not.
@@ -227,9 +231,29 @@ export async function addAgent({ name, voice, recipe }) {
   await chrome.storage.local.set({ [recipeKey(recipeID)]: stored });
 
   const { agents } = await loadRoster();
-  const agent = { id: newID(), name, voice, recipeID, connection: 'browser' };
+  // Chosen now and kept, so no later rename or deletion can recolour it – or anybody else.
+  const channel = pickChannel(agents.map((a) => a.channel));
+  const agent = { id: newID(), name, voice, recipeID, connection: 'browser', channel };
   await chrome.storage.local.set({ [AGENTS_KEY]: [...agents, agent] });
   return agent;
+}
+
+/**
+ * Gives an agent a colour from the palette, chosen in Settings.
+ *
+ * A colour another agent already has is allowed: it is the person's call, and the picker shows
+ * who has it. A value that is not in the palette is refused rather than stored, because it would
+ * be drawn as the old hash's guess and look like the choice had not been saved.
+ */
+export async function setAgentChannel(agentID, channel) {
+  if (!CHANNELS.includes(channel)) return { ok: false, reason: `${channel} is not one of the colours` };
+  const { agents } = await loadRoster();
+  if (!agents.some((a) => a.id === agentID)) return { ok: false, reason: 'no such agent' };
+
+  await chrome.storage.local.set({
+    [AGENTS_KEY]: agents.map((a) => (a.id === agentID ? { ...a, channel } : a)),
+  });
+  return { ok: true, channel };
 }
 
 /**
