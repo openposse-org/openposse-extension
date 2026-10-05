@@ -64,6 +64,10 @@
         flex: 0 1 auto; min-height: 0;
         display: flex; flex-direction: column; padding: 10px 14px 0;
       }
+      /* Everything but the answer keeps its height. The question and the status line set a
+         `min-height`, which replaces the content-sized minimum, so a long answer could otherwise
+         squeeze a three-line question below its text and into the answer. */
+      .top > :not(.answer) { flex-shrink: 0; }
 
       /* The only part that scrolls: the roster, and the debug drawer under it. It takes whatever the
          top and the controls leave, but never less than a row of avatars and most of the next – so
