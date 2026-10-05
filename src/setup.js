@@ -675,7 +675,7 @@ async function refreshRoster() {
     return;
   }
 
-  for (const agent of agents) {
+  for (const [index, agent] of agents.entries()) {
     const row = document.createElement('div');
     // Everyone is shown lit here: this is a list of what exists, not of who is speaking.
     row.className = 'agent active';
@@ -684,7 +684,7 @@ async function refreshRoster() {
     // ── Its colour ─────────────────────────────────────────────────────────────────────
     //
     // **The avatar is the control, because the colour is the avatar.** Clicking it opens the
-    // palette under the name, the way See opens the recipe. Every swatch already held by
+    // palette over the list, under the avatar. Every swatch already held by
     // another agent carries that agent's initial, so taking a colour somebody else has is a
     // choice made knowingly rather than a clash found later on the panel – allowed, because it
     // is the person's call, but never by accident.
@@ -695,11 +695,17 @@ async function refreshRoster() {
     avatar.title = `${agent.name} is ${colourName(channelOf(agent))} – change`;
     avatar.setAttribute('aria-label', avatar.title);
 
+    // **A popover, so it floats over the list instead of pushing it down.** Chrome draws it in
+    // the top layer and closes it on a click elsewhere or Escape, and `auto` also closes any
+    // other palette left open. Each row anchors its own: one shared anchor name would put every
+    // palette under whichever avatar was laid out last.
     const palette = document.createElement('div');
     palette.className = 'palette';
-    palette.hidden = true;
+    palette.popover = 'auto';
     palette.setAttribute('role', 'group');
     palette.setAttribute('aria-label', `Colours for ${agent.name}`);
+    avatar.style.setProperty('anchor-name', `--avatar-${index}`);
+    palette.style.setProperty('position-anchor', `--avatar-${index}`);
 
     for (const { hex, name: colour } of PALETTE) {
       const mine = channelOf(agent) === hex;
@@ -733,9 +739,11 @@ async function refreshRoster() {
       palette.append(swatch);
     }
 
-    avatar.addEventListener('click', () => {
-      palette.hidden = !palette.hidden;
-      avatar.setAttribute('aria-expanded', String(!palette.hidden));
+    // The browser opens and closes it now, light dismiss included, so the expanded state is read
+    // back from the popover rather than kept beside it.
+    avatar.popoverTargetElement = palette;
+    palette.addEventListener('toggle', (event) => {
+      avatar.setAttribute('aria-expanded', String(event.newState === 'open'));
     });
 
     // Named so the rail can give it a line of its own. The roster now sits in a 340px column

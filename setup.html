@@ -101,17 +101,29 @@
 
       /* ── An agent's colour ──────────────────────────────────────────────────────────────
          The avatar is a button now – ui.css's `button` padding would squeeze the letter out of
-         a 34px circle, so it goes. Eight swatches a row: 241px, inside the rail's name column.
+         a 34px circle, so it goes. Eight swatches a row: 241px.
 
-         Pinned to the top of its row: centred, it slid down whenever the palette – or See, or
-         Share – opened beneath the name, so the avatar you had just clicked moved out from under
-         the pointer. */
+         Pinned to the top of its row: centred, it slid down whenever See or Share opened
+         beneath the name, so the avatar you had just clicked moved out from under the pointer. */
       .agent button.avatar { padding: 0; cursor: pointer; align-self: flex-start; }
       .agent button.avatar:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+      /* Floats over the list rather than pushing it down: a popover in Chrome's top layer,
+         anchored under the avatar that opened it (setup.js names the anchor per row).
+
+         **`display` only while open.** A closed popover is hidden by a UA rule, and any author
+         `display` outranks it – the `[hidden]` trap in ui.css under a different attribute. Set
+         on `.palette` itself, every agent's palette would be on screen at once. */
       .palette {
-        display: grid; grid-template-columns: repeat(8, 24px); gap: 7px;
-        margin: 10px 0 4px;
+        /* The UA centres a popover in the viewport; this one belongs under its avatar. */
+        inset: auto; margin: 8px 0 0;
+        position-area: bottom span-right;
+        /* Near the bottom of the window it opens upwards rather than running off the edge. */
+        position-try-fallbacks: flip-block;
+        padding: 12px; border: 1px solid var(--glass-edge); border-radius: var(--radius-card);
+        background: var(--raised); color: var(--text);
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
       }
+      .palette:popover-open { display: grid; grid-template-columns: repeat(8, 24px); gap: 7px; }
       /* The initial is whoever already has the colour. White with a shadow rather than a colour
          per swatch, so it reads on Lilac and on Indigo alike. */
       .swatch {
