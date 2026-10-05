@@ -13,7 +13,7 @@
 
 import {
   loadRoster, recipeFor, findAgent, addAgent, replaceRecipe, freeName, renameAgent, removeAgent,
-  setAgentVoice, setAgentChannel,
+  setAgentVoice, setAgentChannel, setMockRoster,
 } from './storage.js';
 import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
@@ -1042,6 +1042,16 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   if (request?.kind === 'openposse.agent.channel') {
     setAgentChannel(request.agentId, request.channel).then(respond, (error) => {
       console.error('[openposse] colour could not be set –', error);
+      respond({ ok: false, reason: String(error?.message ?? error) });
+    });
+    return true;
+  }
+
+  // The debug drawer's made-up roster. Through here like every other roster write, so the panel
+  // and Settings are never both writing it.
+  if (request?.kind === 'openposse.agent.mocks') {
+    setMockRoster(request.size).then(respond, (error) => {
+      console.error('[openposse] mock roster could not be changed –', error);
       respond({ ok: false, reason: String(error?.message ?? error) });
     });
     return true;

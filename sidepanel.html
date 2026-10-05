@@ -249,10 +249,12 @@
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24);
         transition: color 0.15s ease, background-color 0.15s ease;
       }
-      button.icon:hover:not(:disabled), button.icon[aria-expanded="true"] {
+      button.icon:hover:not(:disabled), button.icon:is([aria-expanded="true"], [aria-pressed="true"]) {
         color: var(--text); background: rgba(255, 255, 255, 0.15);
       }
-      button.icon[aria-expanded="true"] { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42); }
+      button.icon:is([aria-expanded="true"], [aria-pressed="true"]) {
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42);
+      }
       button.icon:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
       /* Dimmed by colour, not by ui.css's `opacity`, which would fade the label with the icon –
          and on Record the label is where the reason it is disabled is written. */
@@ -324,8 +326,8 @@
       #debug:not([aria-expanded="true"], :hover) {
         box-shadow: none; background: transparent; color: var(--text-dim);
       }
-      /* A debug value is in force. On the toggle, because the drawer being shut is exactly when
-         a changed timing would otherwise be invisible. */
+      /* A debug value is in force – a changed timing, or mock recordings in the roster. On the
+         toggle, because the drawer being shut is exactly when either would otherwise be invisible. */
       #debug.overridden::before {
         content: ''; position: absolute; top: 4px; right: 4px;
         width: 7px; height: 7px; border-radius: 50%;
@@ -358,6 +360,10 @@
       .debug .knob output { grid-area: value; font-feature-settings: var(--figures); color: var(--text); }
       .debug .knob input { grid-area: slider; width: 100%; margin: 0; accent-color: var(--blue); }
       .debug .why { margin-top: 5px; font-size: 11px; line-height: 1.4; color: var(--text-faint); }
+      /* The mock roster's sizes, in the row a slider would take. Numbers in the circles, set like
+         the values beside them. */
+      .debug .sizes { grid-area: slider; display: flex; gap: 8px; }
+      .debug .sizes .icon { font-size: 11px; font-weight: 600; font-feature-settings: var(--figures); }
 
       /* ── The site bar ──────────────────────────────────────────────────────────────────── */
 
@@ -475,6 +481,16 @@
             Shorter answers sooner; too short can read out a status line instead of the answer.
           </div>
           <div class="why">Both go back to their defaults when Chrome restarts.</div>
+          <!-- Sizes come from `mocks.js`, so the buttons are built by the script. -->
+          <div class="knob" role="group" aria-labelledby="mock-name">
+            <span id="mock-name">Mock roster</span>
+            <output id="mock-value"></output>
+            <div class="sizes" id="mock-sizes"></div>
+          </div>
+          <div class="why">
+            Made-up recordings, after your own, to see how a long roster looks. They can't answer,
+            since there is no page behind them, and they stay until you turn them off.
+          </div>
         </section>
       </section>
     </main>

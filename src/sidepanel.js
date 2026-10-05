@@ -33,6 +33,7 @@ import { SURFACES, setSurface } from './surface.js';
 import { drawSphere, modeFor } from './sphere.js';
 import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from './grace.js';
 import { icon } from './icons.js';
+import { MOCK_SIZES } from './mocks.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -299,6 +300,7 @@ async function loadRosterData() {
   }));
   roster = { agents, broken, problem, products };
   drawRoster();
+  paintMocks();
 }
 
 async function drawRoster() {
@@ -721,7 +723,11 @@ const overrides = {};
 function paintDebugToggle() {
   const open = !el('debug-tools').hidden;
   const toggle = el('debug');
-  const set = KNOBS.filter((k) => k.id in overrides).map((k) => `${k.name} ${overrides[k.id] / 1000} s`);
+  const mocks = roster.agents.filter((a) => a.mock).length;
+  const set = [
+    ...KNOBS.filter((k) => k.id in overrides).map((k) => `${k.name} ${overrides[k.id] / 1000} s`),
+    ...(mocks ? [`${mocks} mock recordings`] : []),
+  ];
   toggle.setAttribute('aria-expanded', String(open));
   toggle.classList.toggle('overridden', set.length > 0);
   label(toggle, [open ? 'Hide debug tools' : 'Debug tools', set.join(', ')].filter(Boolean).join(' – '));
@@ -782,6 +788,43 @@ for (const knob of KNOBS) {
       paintKnobs();
     });
   });
+}
+
+// ── The mock roster ────────────────────────────────────────────────────────────────────────
+//
+// Made-up recordings for judging a long roster – see `mocks.js`. Off, then one button per size,
+// pressed for whichever the roster is now. The write goes through the worker like every other
+// roster change, and the redraw arrives through `storage.onChanged` like theirs too.
+
+for (const size of [0, ...MOCK_SIZES]) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'icon';
+  button.dataset.size = String(size);
+  button.dataset.tipAt = 'start';
+  button.textContent = size ? String(size) : 'Off';
+  label(button, size ? `Fill the roster to ${size} assistants` : 'No mock recordings');
+  button.addEventListener('click', async () => {
+    const result = await chrome.runtime.sendMessage({ kind: 'openposse.agent.mocks', size })
+      .catch((error) => ({ ok: false, reason: error?.message ?? String(error) }));
+    if (!result?.ok) {
+      const why = result?.reason ?? 'the worker did not answer';
+      console.warn('[openposse] the mock roster was not changed –', why);
+      el('mock-value').textContent = `not changed – ${why}`;
+    }
+  });
+  el('mock-sizes').append(button);
+}
+
+function paintMocks() {
+  const mocks = roster.agents.filter((a) => a.mock).length;
+  const total = roster.agents.length;
+  for (const button of el('mock-sizes').children) {
+    const size = Number(button.dataset.size);
+    button.setAttribute('aria-pressed', String(size ? mocks > 0 && total === size : mocks === 0));
+  }
+  el('mock-value').textContent = mocks ? `${total} assistants, ${mocks} made up` : 'off';
+  paintDebugToggle();
 }
 
 // ── What arrives from the worker ───────────────────────────────────────────────────────────

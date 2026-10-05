@@ -14,6 +14,7 @@
 // instead of an empty list.
 
 import { assignChannels, pickChannel, CHANNELS } from './channels.js';
+import { MOCK_SIZES, mockRecordings } from './mocks.js';
 
 const AGENTS_KEY = 'agents';
 const MIC_KEY = 'micGranted';
@@ -282,6 +283,43 @@ export async function removeAgent(agentID) {
   await chrome.storage.local.set({ [AGENTS_KEY]: agents.filter((a) => a.id !== agentID) });
   await chrome.storage.local.remove(recipeKey(agent.recipeID));
   return true;
+}
+
+/**
+ * Fills the roster to `size` with made-up recordings, replacing any already there, or takes them
+ * all out with 0. Why they live in the real roster is in `mocks.js`.
+ *
+ * **Real agents are carried through untouched and stay first**, so nobody real changes colour on
+ * the way in, or voice on the way out – voices are assigned by position. The mocks take colours
+ * the way a new recording would, after them.
+ */
+export async function setMockRoster(size) {
+  if (size !== 0 && !MOCK_SIZES.includes(size)) return { ok: false, reason: `${size} is not one of the sizes` };
+  const { agents, problem } = await loadRoster();
+  // An unreadable roster loads as empty, and writing "empty plus mocks" back would delete
+  // every real agent.
+  if (problem) return { ok: false, reason: problem };
+
+  const real = agents.filter((a) => !a.mock);
+  const gone = agents.filter((a) => a.mock).map((a) => recipeKey(a.recipeID));
+  const mocks = [];
+  const recipes = {};
+  for (const { name, recipe } of mockRecordings(real.length, size)) {
+    const taken = [...real, ...mocks];
+    const agent = {
+      id: newID(), name: freeName(taken, name), voice: null, recipeID: newID(),
+      connection: 'browser', channel: pickChannel(taken.map((a) => a.channel)), mock: true,
+    };
+    recipes[recipeKey(agent.recipeID)] = { ...recipe, agentName: agent.name };
+    mocks.push(agent);
+  }
+
+  // The order `addAgent` and `removeAgent` keep: new recipes before the roster that points at
+  // them, old ones only once nothing does.
+  if (mocks.length) await chrome.storage.local.set(recipes);
+  await chrome.storage.local.set({ [AGENTS_KEY]: [...real, ...mocks] });
+  if (gone.length) await chrome.storage.local.remove(gone);
+  return { ok: true, total: real.length + mocks.length, mocks: mocks.length };
 }
 
 // Importing a roster from the parked Mac app lived here until 2026-09-30. It came out with the
