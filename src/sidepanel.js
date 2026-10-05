@@ -359,8 +359,6 @@ async function drawRoster() {
     // matching on text aimed at one and highlighted both – which is exactly the roster this
     // project has, since `freeName` produces "Ivan 2" on a second import.
     av.dataset.name = agent.name;
-    // The roster starts at the panel's left edge, where a centred label would run off it.
-    av.dataset.tipAt = 'start';
     av.style.setProperty('--channel', channelOf(agent));
 
     const face = document.createElement('span');
@@ -391,9 +389,33 @@ async function drawRoster() {
 
     target.append(av);
   }
+  alignTips();
 
   if (agents.length > 0 && !findAgent(agents, aimedAt ?? '')) aim(active ?? agents[0].name);
 }
+
+/**
+ * Which edge each avatar's label hangs from, now that the row wraps and avatars reach the right
+ * side of the panel.
+ *
+ * **An invisible label still widens the page.** It is an absolutely placed box at opacity 0, so
+ * one hanging off the right edge makes the panel scroll sideways – the bug the wrap fixed, back
+ * through the labels. By thirds of the panel: hung from the left edge on the left, centred in the
+ * middle, from the right edge on the right. A 220px label clears both edges from any of them.
+ */
+function alignTips() {
+  const width = document.documentElement.clientWidth;
+  for (const av of el('avatars').children) {
+    const { left, width: size } = av.getBoundingClientRect();
+    const at = (left + size / 2) / width;
+    if (at < 1 / 3) av.dataset.tipAt = 'start';
+    else if (at > 2 / 3) av.dataset.tipAt = 'end';
+    else delete av.dataset.tipAt;
+  }
+}
+
+// The panel's width is the user's, and dragging it re-wraps the row.
+window.addEventListener('resize', alignTips);
 
 function aim(name) {
   aimedAt = name;

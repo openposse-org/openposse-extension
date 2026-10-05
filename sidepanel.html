@@ -104,7 +104,10 @@
         margin-top: 18px; padding-top: 14px;
         box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.14);
       }
-      #avatars { display: flex; gap: 9px; }
+      /* Wraps, because a long roster otherwise runs off the panel and the whole page scrolls
+         sideways. Which way each avatar's label hangs then depends on where it landed – see
+         `alignTips` in sidepanel.js. */
+      #avatars { display: flex; flex-wrap: wrap; gap: 9px; }
       .who {
         margin-left: auto; text-align: right; font-size: 13px; color: var(--text-dim);
         display: flex; align-items: center; gap: 7px; overflow-wrap: anywhere;
