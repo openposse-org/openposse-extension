@@ -50,8 +50,7 @@ import { productLabel } from './routing.js';
  *
  * Turn 5 is a "show me", added the same day: the one turn that leaves the panel. It opens a
  * notion.com tab of its own where a real one finds the agent's tab, so it works with no vendor tab
- * open. After the switch it writes to the panel exactly what `goToAgent` does, which today is
- * nothing.
+ * open. After the switch it writes to the panel exactly what `goToAgent` does: the agent, at rest.
  *
  * **The script writes no note under an answer**, though the panel has a line for one. A real turn
  * writes there only when an answer was shortened or could not be spoken, so a note here – a
@@ -234,11 +233,13 @@ async function playTurn(step, who, token, readAloud) {
 
   if (step.show) {
     // `goToAgent`'s steps in its order: the orb hidden first, then the tab made active, then its
-    // window raised. Only the destination differs. The floor stays where it was, as it does for
-    // every scripted turn, and there is no answer, because a real one gives none.
+    // window raised, then the panel left at rest on the agent. Only the destination differs. The
+    // floor stays where it was, as it does for every scripted turn, and there is no answer,
+    // because a real one gives none.
     await hidePanel();
     const tab = await chrome.tabs.create({ url: step.show });
     await chrome.windows.update(tab.windowId, { focused: true });
+    panel({ phase: 'idle', agentName: who.name, channel: who.channel });
     markDone(null);
     return;
   }

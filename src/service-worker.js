@@ -198,8 +198,10 @@ async function rosterWithProducts() {
  */
 async function goToAgent(nav) {
   if (nav.problem) {
+    const message = 'Show you what? Ask an assistant something first.';
     markDone(nav.problem);
-    announceTurn({ phase: 'problem', message: 'Show you what? Ask an assistant something first.' });
+    panel({ phase: 'needs-attention', message });
+    announceTurn({ phase: 'problem', message });
     return;
   }
 
@@ -214,7 +216,9 @@ async function goToAgent(nav) {
     markDone('tab-not-found');
     // `agent.product` is the lowercase one, for matching what was said. This is shown.
     const vendor = productLabel(recipe?.domainPattern) || agent.name;
-    announceTurn({ phase: 'problem', message: `No ${vendor} tab is open.` });
+    const message = `No ${vendor} tab is open.`;
+    panel({ phase: 'needs-attention', message });
+    announceTurn({ phase: 'problem', message });
     return;
   }
 
@@ -225,6 +229,11 @@ async function goToAgent(nav) {
   // Being shown an agent's tab is as much a reason to expect a follow-up as being answered by
   // it, so the floor moves here too – "show me Notion", then "what changed last week".
   await holdFloor(agent.name);
+  // The side panel has to be told separately, because the hide above means nothing to it:
+  // `visible` is the orb's alone. Until 2026-10-06 nothing told it, and it went on saying
+  // "Working out who that's for…" until the next turn. Left at rest on the agent, its name in
+  // its colour, the same as the minute after an answer. The hidden orb stays hidden.
+  panel({ phase: 'idle', agentName: agent.name, channel: channelOf(agent) });
   markDone(null);
   announceTurn({ phase: 'navigated', agentName: agent.name });
 }
