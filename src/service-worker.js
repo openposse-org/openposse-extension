@@ -1519,6 +1519,8 @@ chrome.commands.onCommand.addListener((command, tab) => {
   // read from a synchronous cache (`surface.js`) rather than from storage: a read here would
   // spend the very gesture it is deciding how to use.
   showSurface(tab);
+  // A real turn always wins, from the keyboard as from the panel's Listen button.
+  stopDemo();
   toggleListening();
 });
 
