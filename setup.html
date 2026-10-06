@@ -337,6 +337,36 @@
       #roster-search::placeholder { color: var(--text-faint); }
       #roster-search:focus { outline: 1px solid var(--blue); }
       #roster-none { margin: 10px 0 0; }
+
+      /* ── Arranging and sorting ────────────────────────────────────────────────────────────
+         An assistant moves by its avatar, which still opens the colours on a click; the blue
+         line is where it will land. The site icon is kept out of the pointer's way, or the
+         browser drags the image instead of the assistant. */
+      #roster .avatar { cursor: grab; }
+      #roster .avatar > img { pointer-events: none; }
+      #roster .agent.dragging { opacity: 0.4; }
+      #roster .agent.drop-before { box-shadow: 0 -2px 0 var(--blue); }
+      #roster .agent.drop-after { box-shadow: 0 2px 0 var(--blue); }
+      /* The Sort menu hangs under its button, the palette's way – `display` only while open. */
+      #sort-roster { anchor-name: --sort; }
+      #sort-menu {
+        inset: auto; margin: 6px 0 0;
+        position-anchor: --sort;
+        position-area: bottom span-right;
+        position-try-fallbacks: flip-block;
+        min-width: 200px; padding: 6px;
+        border: 1px solid var(--glass-edge); border-radius: var(--radius-card);
+        background: var(--raised); color: var(--text);
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+      }
+      #sort-menu:popover-open { display: grid; gap: 1px; }
+      #sort-menu .note { margin: 2px 8px 6px; color: var(--text-faint); font-size: 11.5px; }
+      #sort-menu button {
+        padding: 6px 8px; border-radius: 6px; text-align: left;
+        background: transparent; color: var(--text); font-weight: 400;
+      }
+      #sort-menu button:is(:hover, :focus-visible) { background: rgba(255, 255, 255, 0.08); outline: 0; }
+
       /* One column once a half is narrower than an assistant's two lines. */
       @media (max-width: 700px) {
         #roster.grid {
@@ -590,6 +620,17 @@
                  it back, the way step 4's does with site access. -->
             <div class="head">
               <h2>Assistants</h2>
+              <!-- Sorting sets the order once; dragging an avatar moves one after that. -->
+              <button class="icon small" id="sort-roster" popovertarget="sort-menu"
+                      data-icon="arrow-up-down" data-size="14" data-tip-at="start"
+                      aria-label="Sort assistants" hidden></button>
+              <div id="sort-menu" popover="auto" role="group" aria-label="Sort assistants">
+                <p class="note">Sorts the list once. Drag an avatar to move one.</p>
+                <button type="button" data-sort="name">Name</button>
+                <button type="button" data-sort="site">Site</button>
+                <button type="button" data-sort="newest">Newest first</button>
+                <button type="button" data-sort="oldest">Oldest first</button>
+              </div>
               <input type="search" id="roster-search" placeholder="Find an assistant"
                      aria-label="Find an assistant" autocomplete="off" spellcheck="false" hidden>
               <div class="end">
@@ -611,6 +652,7 @@
               </div>
             </div>
             <span class="status kind bad" id="icons-status" hidden></span>
+            <span class="status kind bad" id="order-status" hidden></span>
             <div id="roster" class="card">none yet</div>
             <p id="roster-none" hidden></p>
           </section>

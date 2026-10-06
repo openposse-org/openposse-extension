@@ -9,6 +9,7 @@ import {
   loadRoster, recipeFor, setMicGranted, micGranted, voiceSpeed, setVoiceSpeed, clampSpeed,
 } from './storage.js';
 import { channelOf, colourName, initialFor, PALETTE } from './channels.js';
+import { sortedIDs } from './order.js';
 import { pack, unpack, toFile, filenameFor } from './share.js';
 import { matchPattern } from './domain.js';
 import { productLabel } from './routing.js';
@@ -735,7 +736,8 @@ async function refreshRoster() {
   // interleave into one list twice as long; swapping the finished list in at the end, and only
   // from the newest pass, means an older read can never land on top of a newer one.
   const drawing = ++rosterDrawn;
-  const { agents, broken, problem } = await loadRoster();
+  // In the order arranged here – by dragging, or by the Sort menu.
+  const { arranged: agents, broken, problem } = await loadRoster();
   const target = el('roster');
   const search = el('roster-search');
 
@@ -743,6 +745,7 @@ async function refreshRoster() {
     if (drawing !== rosterDrawn) return;
     target.className = problem ? 'card bad' : 'card';
     target.textContent = problem ?? 'none yet – record one from the toolbar button';
+    el('sort-roster').hidden = true;
     search.hidden = true;
     search.value = '';
     el('roster-none').hidden = true;
@@ -759,6 +762,7 @@ async function refreshRoster() {
     const row = document.createElement('div');
     // Everyone is shown lit here: this is a list of what exists, not of who is speaking.
     row.className = 'agent active';
+    row.dataset.id = agent.id;
     row.style.setProperty('--channel', channelOf(agent));
     // What See's and Share's sheets hang from – one name per row, like the palette's.
     row.style.setProperty('anchor-name', `--tile-${index}`);
@@ -775,7 +779,9 @@ async function refreshRoster() {
     avatar.textContent = initialFor(agent.name);
     putIcon(avatar, icons[agent.id]);
     avatar.setAttribute('aria-expanded', 'false');
-    avatar.title = `${agent.name} is ${colourName(channelOf(agent))} – change`;
+    // It is also what you drag the assistant by – see "Arranging" below.
+    avatar.draggable = true;
+    avatar.title = `${agent.name} is ${colourName(channelOf(agent))} – click to change, drag to move`;
     avatar.setAttribute('aria-label', avatar.title);
 
     // **A popover, so it floats over the list instead of pushing it down.** Chrome draws it in
@@ -1153,6 +1159,7 @@ async function refreshRoster() {
 
   target.className = 'grid';
   target.replaceChildren(...built);
+  el('sort-roster').hidden = agents.length < 2;
   // Only worth its space once the list is long; hidden, it must not go on filtering.
   search.hidden = agents.length < SEARCH_FROM;
   if (search.hidden) search.value = '';
@@ -1188,14 +1195,134 @@ function filterRoster() {
 
 el('roster-search').addEventListener('input', filterRoster);
 
+// ── Arranging ──────────────────────────────────────────────────────────────────────────────
+//
+// **An assistant is dragged by its avatar.** A click on it still opens the colours – to the
+// browser a drag is a different gesture – so a tile that already holds six controls gets no
+// seventh. The order is saved apart from the roster, for the reason in order.js, and the panel and
+// the popup draw from it too.
+
+/** Our own type, so a dragged avatar cannot be dropped into the search box or a name as text. */
+const DRAGGED = 'application/x-openposse-agent';
+
+/** The assistant being dragged from this page, by id; null between drags. */
+let dragged = null;
+/** Set when the list changed in storage mid-drag – its redraw waits for the drag to end. */
+let redrawAfterDrag = false;
+
+/** Shows where a drop would land: a line above `row`, or below it with `after`. No row clears it. */
+function mark(row = null, after = false) {
+  for (const marked of el('roster').querySelectorAll('.drop-before, .drop-after')) {
+    if (marked !== row) marked.classList.remove('drop-before', 'drop-after');
+  }
+  row?.classList.toggle('drop-before', !after);
+  row?.classList.toggle('drop-after', after);
+}
+
+/** Saves `ids` as the order, or says why not – `failed` leads the sentence – and redraws either way. */
+async function saveOrder(ids, failed) {
+  const status = el('order-status');
+  status.hidden = true;
+  const result = await chrome.runtime
+    .sendMessage({ kind: 'openposse.agent.order', ids })
+    .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+  if (!result?.ok) {
+    status.textContent = `${failed} – ${result?.reason ?? 'the extension did not answer'}`;
+    status.hidden = false;
+  }
+  // From storage, so a move that was not saved goes back to where it is saved.
+  await refreshRoster();
+}
+
+el('roster').addEventListener('dragstart', (event) => {
+  const row = event.target.closest?.('.agent');
+  if (!row || !event.target.matches('.avatar')) return;
+  dragged = row.dataset.id;
+  event.dataTransfer.setData(DRAGGED, dragged);
+  event.dataTransfer.effectAllowed = 'move';
+  // The whole tile, held where it was picked up, so it is clear what is moving.
+  const box = row.getBoundingClientRect();
+  event.dataTransfer.setDragImage(row, event.clientX - box.left, event.clientY - box.top);
+  row.classList.add('dragging');
+});
+
+el('roster').addEventListener('dragover', (event) => {
+  if (!event.dataTransfer.types.includes(DRAGGED)) return;
+  const row = event.target.closest?.('.agent');
+  // Over itself it would land where it already is, so that is no place to drop.
+  if (!row || row.dataset.id === dragged) { mark(); return; }
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  const box = row.getBoundingClientRect();
+  mark(row, event.clientY > box.top + box.height / 2);
+});
+
+// Off the list nothing would land, so no line. Not `dragleave`: it also fires on moving between a
+// tile's own parts, and the line would flicker.
+document.addEventListener('dragover', (event) => {
+  if (!el('roster').contains(event.target)) mark();
+});
+
+el('roster').addEventListener('drop', (event) => {
+  const row = event.target.closest?.('.agent');
+  const after = row?.classList.contains('drop-after');
+  mark();
+  const id = event.dataTransfer.getData(DRAGGED);
+  const moving = id && el('roster').querySelector(`.agent[data-id="${CSS.escape(id)}"]`);
+  if (!row || !moving || moving === row) return;
+  event.preventDefault();
+  // Moved at once, so the list answers the drop itself rather than after a trip to storage.
+  if (after) row.after(moving); else row.before(moving);
+  filterRoster();
+  saveOrder([...el('roster').children].map((tile) => tile.dataset.id), 'not moved');
+});
+
+el('roster').addEventListener('dragend', () => {
+  dragged = null;
+  mark();
+  for (const row of el('roster').querySelectorAll('.dragging')) row.classList.remove('dragging');
+  if (redrawAfterDrag) { redrawAfterDrag = false; refreshRoster(); }
+});
+
+// ── Sorting ────────────────────────────────────────────────────────────────────────────────
+//
+// **A sort sets the order once, and then it is yours to drag.** Not a mode the list stays in:
+// there is one order, everywhere, so the panel and Settings never disagree about who is first.
+
+el('sort-menu').addEventListener('toggle', (event) => {
+  el('sort-roster').setAttribute('aria-expanded', String(event.newState === 'open'));
+});
+
+for (const choice of el('sort-menu').querySelectorAll('button[data-sort]')) {
+  choice.addEventListener('click', async () => {
+    el('sort-menu').hidePopover();
+    // From storage rather than the screen: Newest and Oldest need the order they were added in.
+    const { agents, problem } = await loadRoster();
+    if (problem) {
+      el('order-status').textContent = `not sorted – ${problem}`;
+      el('order-status').hidden = false;
+      return;
+    }
+    const sites = Object.fromEntries(await Promise.all(agents.map(async (agent) => {
+      const pattern = (await recipeFor(agent))?.domainPattern;
+      return [agent.id, productLabel(pattern) || pattern || ''];
+    })));
+    await saveOrder(sortedIDs(agents, choice.dataset.sort, (agent) => sites[agent.id]), 'not sorted');
+  });
+}
+
 // **The list keeps itself current.** A recording finishing, the panel's mock roster, a colour or a
 // voice changed in another window – each lands in storage, and this page used to show none of it
 // until it was reloaded. `iconSites` is in the set because a site icon learned elsewhere is a
-// change to how the list looks.
+// change to how the list looks, and `rosterOrder` for an order changed in another window.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   const keys = Object.keys(changes);
-  if (!keys.some((key) => key === 'agents' || key === 'iconSites' || key.startsWith('recipe:'))) return;
+  const watched = ['agents', 'rosterOrder', 'iconSites'];
+  if (!keys.some((key) => watched.includes(key) || key.startsWith('recipe:'))) return;
+
+  // Not mid-drag either: a redraw would take the tile out from under the pointer.
+  if (dragged) { redrawAfterDrag = true; return; }
 
   // Not under somebody's typing. A redraw replaces every field in the list, so one arriving
   // while a name or a voice is being changed would take the field out from under them; it waits

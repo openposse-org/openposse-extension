@@ -13,7 +13,7 @@
 
 import {
   loadRoster, recipeFor, findAgent, addAgent, replaceRecipe, freeName, renameAgent, removeAgent,
-  setAgentVoice, setAgentChannel, setMockRoster,
+  setAgentVoice, setAgentChannel, setMockRoster, setRosterOrder,
 } from './storage.js';
 import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
@@ -1042,6 +1042,15 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   if (request?.kind === 'openposse.agent.channel') {
     setAgentChannel(request.agentId, request.channel).then(respond, (error) => {
       console.error('[openposse] colour could not be set –', error);
+      respond({ ok: false, reason: String(error?.message ?? error) });
+    });
+    return true;
+  }
+
+  // Settings' drag and Sort menu. Only the drawing order: the roster itself is not touched.
+  if (request?.kind === 'openposse.agent.order') {
+    setRosterOrder(request.ids).then(respond, (error) => {
+      console.error('[openposse] order could not be saved –', error);
       respond({ ok: false, reason: String(error?.message ?? error) });
     });
     return true;

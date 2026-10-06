@@ -293,7 +293,8 @@ async function floorHolderName() {
 }
 
 async function loadRosterData() {
-  const { agents, broken, problem } = await loadRoster();
+  // In the order arranged in Settings – so the first one is also the typed box's default.
+  const { arranged: agents, broken, problem } = await loadRoster();
   const products = {};
   const patterns = {};
   await Promise.all(agents.map(async (agent) => {
@@ -1055,7 +1056,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   // The whole roster, not just the names: a re-record replaces a recipe, and the vendor label in
   // the status line comes from it.
-  if (changes.agents || Object.keys(changes).some((k) => k.startsWith('recipe:'))) loadRosterData();
+  if (changes.agents || changes.rosterOrder || Object.keys(changes).some((k) => k.startsWith('recipe:'))) {
+    loadRosterData();
+  }
   if (changes.surface) paintSurface();
   if (changes.micGranted) checkMic();
 });

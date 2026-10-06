@@ -15,8 +15,11 @@
 
 import { assignChannels, pickChannel, CHANNELS } from './channels.js';
 import { MOCK_SIZES, mockRecordings } from './mocks.js';
+import { inOrder } from './order.js';
 
 const AGENTS_KEY = 'agents';
+// How the roster is drawn, apart from `agents` – see order.js for why it cannot be that list.
+const ORDER_KEY = 'rosterOrder';
 const MIC_KEY = 'micGranted';
 const SPEED_KEY = 'voiceSpeed';
 const recipeKey = (id) => `recipe:${id}`;
@@ -103,18 +106,24 @@ export function newID() {
  * will happily decide an utterance was meant for it – and then fails when asked. Naming it is
  * what lets the popup offer a re-record instead of the user discovering it by being answered
  * with an error.
+ *
+ * `arranged` is the same agents in the order arranged in Settings, for drawing the roster.
+ * `agents` stays in the order they were added, because voices are handed out by position –
+ * see order.js.
  */
 export async function loadRoster() {
   let agents = [];
+  let order = [];
   try {
-    const stored = await chrome.storage.local.get(AGENTS_KEY);
+    const stored = await chrome.storage.local.get([AGENTS_KEY, ORDER_KEY]);
     // Every agent leaves here with a colour. Every write below starts from this list, so the
     // first write stores colours for agents that predate them – see `assignChannels`.
     agents = assignChannels(Array.isArray(stored[AGENTS_KEY]) ? stored[AGENTS_KEY] : []);
+    order = stored[ORDER_KEY];
   } catch {
     // Unreadable storage must not stop the extension starting. An empty roster with an
     // explanation is recoverable; throwing on every service-worker wake is not.
-    return { agents: [], broken: [], problem: "Your saved assistants couldn't be read." };
+    return { agents: [], arranged: [], broken: [], problem: "Your saved assistants couldn't be read." };
   }
 
   const keys = agents.map((a) => recipeKey(a.recipeID)).filter(Boolean);
@@ -123,7 +132,26 @@ export async function loadRoster() {
     .filter((a) => !recipes[recipeKey(a.recipeID)])
     .map((a) => a.id);
 
-  return { agents, broken, problem: null };
+  return { agents, arranged: inOrder(agents, order), broken, problem: null };
+}
+
+/**
+ * Saves the order the roster is drawn in – a list of agent ids, from Settings.
+ *
+ * Only ids that exist are kept, so the list never collects the dead. Anyone missing from it is
+ * drawn after everyone in it, which is where a new recording lands.
+ */
+export async function setRosterOrder(ids) {
+  if (!Array.isArray(ids) || !ids.every((id) => typeof id === 'string')) {
+    return { ok: false, reason: 'the new order was not a list of assistants' };
+  }
+  const { agents, problem } = await loadRoster();
+  // An unreadable roster would make every id look dead, and saving that would forget the order.
+  if (problem) return { ok: false, reason: problem };
+
+  const known = new Set(agents.map((a) => a.id));
+  await chrome.storage.local.set({ [ORDER_KEY]: ids.filter((id) => known.has(id)) });
+  return { ok: true };
 }
 
 export async function recipeFor(agent) {
