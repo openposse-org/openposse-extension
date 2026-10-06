@@ -198,10 +198,8 @@ async function rosterWithProducts() {
  */
 async function goToAgent(nav) {
   if (nav.problem) {
-    const message = 'Show you what? Ask an assistant something first.';
     markDone(nav.problem);
-    panel({ phase: 'needs-attention', message });
-    announceTurn({ phase: 'problem', message });
+    panel({ phase: 'needs-attention', message: 'Show you what? Ask an assistant something first.' });
     return;
   }
 
@@ -216,9 +214,7 @@ async function goToAgent(nav) {
     markDone('tab-not-found');
     // `agent.product` is the lowercase one, for matching what was said. This is shown.
     const vendor = productLabel(recipe?.domainPattern) || agent.name;
-    const message = `No ${vendor} tab is open.`;
-    panel({ phase: 'needs-attention', message });
-    announceTurn({ phase: 'problem', message });
+    panel({ phase: 'needs-attention', message: `No ${vendor} tab is open.` });
     return;
   }
 
@@ -235,7 +231,6 @@ async function goToAgent(nav) {
   // its colour, the same as the minute after an answer. The hidden orb stays hidden.
   panel({ phase: 'idle', agentName: agent.name, channel: channelOf(agent) });
   markDone(null);
-  announceTurn({ phase: 'navigated', agentName: agent.name });
 }
 
 async function handleUtterance(text) {
@@ -254,12 +249,6 @@ async function handleUtterance(text) {
     markDone(decision.problem);
     panel({
       phase: 'needs-attention',
-      message: decision.problem === 'name-only'
-        ? `${decision.agent.name}?`
-        : ROUTING_COPY[decision.problem] ?? 'Something went wrong.',
-    });
-    announceTurn({
-      phase: 'problem',
       // `name-only` is answered by the agent's own name with a question mark – the spoken
       // equivalent of looking up. It is the one "failure" that is really just a pause.
       message: decision.problem === 'name-only'
@@ -289,7 +278,6 @@ async function putQuestion(agent, prompt, matched) {
     phase: 'thinking', agentName: agent.name, channel: channelOf(agent),
     transcript: prompt, volatile: '', answer: '', sub: '', message: '', visible: true,
   }, { create: true });
-  announceTurn({ phase: 'thinking', agentName: agent.name, matched });
 
   trace('asking the vendor');
   const result = await ask(agent.name, prompt);
@@ -310,17 +298,11 @@ async function putQuestion(agent, prompt, matched) {
     markDone(null);
     const answer = result.payload?.text ?? '';
     panel({ phase: 'answering', agentName: agent.name, answer });
-    announceTurn({ phase: 'answered', agentName: agent.name, text: answer });
     await readAloud(answer, agent);
   } else {
     markDone(result.payload?.code ?? 'failed');
     panel({
       phase: 'needs-attention',
-      agentName: agent.name,
-      message: result.payload?.message ?? `${agent.name} could not answer.`,
-    });
-    announceTurn({
-      phase: 'problem',
       agentName: agent.name,
       message: result.payload?.message ?? `${agent.name} could not answer.`,
     });
@@ -353,18 +335,13 @@ async function readAloud(answer, agent) {
   await say(text, agent.id);
 }
 
-/** Tells any open surface where the turn has got to. Nothing is stored and nothing is logged. */
-function announceTurn(detail) {
-  chrome.runtime.sendMessage({ kind: 'openposse.turn', ...detail }).catch(() => { /* nothing open */ });
-}
-
 // Wrapped, because nothing awaits this. An unhandled rejection in a service worker is silent,
 // and the visible symptom would be a badge stuck on an agent who is not thinking about
 // anything – the turn simply stopping, with no way to tell it from a slow vendor.
 setTurnHandler((text) => {
   handleUtterance(text).catch((error) => {
     markDone('failed');
-    announceTurn({ phase: 'problem', message: 'Something went wrong handling that.' });
+    panel({ phase: 'needs-attention', message: 'Something went wrong handling that.' });
     console.error('[openposse] turn failed:', error?.message ?? error);
   });
 });
@@ -1000,7 +977,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
       .then(({ agents }) => findAgent(agents, request.agentName))
       .then((agent) => (agent
         ? putQuestion(agent, request.prompt, 'typed')
-        : announceTurn({ phase: 'problem', message: `No agent called ${request.agentName}.` })))
+        : panel({ phase: 'needs-attention', message: `No agent called ${request.agentName}.` })))
       .catch(() => {});
     respond({ ok: true });
     return true;
