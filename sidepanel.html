@@ -71,13 +71,15 @@
 
       /* The only part that scrolls: the roster. It takes whatever the top and the controls leave,
          but never less than a row of avatars and most of the next – so when an answer is long it is
-         the answer that scrolls, and the roster is still there.
+         the answer that scrolls, and the roster is still there. `--av` is the avatars' size, which
+         `sizeAvatars` in sidepanel.js sets here so this minimum grows with them.
 
          **Its top 10px fade out**, so avatars scrolling up go under the divider softly instead of
          being cut in half against it. At rest that strip is padding, so nothing is faded until it
          scrolls. */
       main {
-        flex: 1 1 0; min-height: 76px; overflow-y: auto;
+        --av: 34px;
+        flex: 1 1 0; min-height: calc(var(--av) + 42px); overflow-y: auto;
         padding: 14px 14px 20px;
         mask-image: linear-gradient(transparent, #000 10px);
       }
@@ -143,6 +145,14 @@
          `alignTips` in sidepanel.js. 8px rather than 9 puts eight to a row in a 360px panel, which
          9 missed by three pixels. */
       #avatars { display: flex; flex-wrap: wrap; gap: 8px; }
+      /* **Sized to fill the row**, between 34px and the orb's size – `sizeAvatars` sets `--av`. The
+         letter and the site icon keep their proportions to the circle; the rings keep their 4px
+         and 1.5px, because a line weight does not grow with what it surrounds. */
+      #avatars .avatar { width: var(--av); height: var(--av); font-size: calc(var(--av) * 14 / 34); }
+      #avatars .avatar > img {
+        width: calc(var(--av) * 24 / 34); height: calc(var(--av) * 24 / 34);
+        padding: calc(var(--av) * 4 / 34);
+      }
       .who.tinted { color: var(--channel); }
       .who.bad { color: var(--error); }
       .pulse {

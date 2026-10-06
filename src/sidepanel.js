@@ -30,7 +30,7 @@ import { loadRoster, findAgent, micGranted, recipeFor } from './storage.js';
 import { channelOf, initialFor } from './channels.js';
 import { FLOOR_OVERRIDE_KEY, floorWindow, productLabel } from './routing.js';
 import { patternForHost, matchPattern } from './domain.js';
-import { drawSphere, modeFor } from './sphere.js';
+import { drawSphere, modeFor, SPHERE_RADIUS } from './sphere.js';
 import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
 
@@ -444,9 +444,30 @@ async function drawRoster() {
 
     target.append(av);
   }
+  sizeAvatars();
   alignTips();
 
   if (agents.length > 0 && !findAgent(agents, aimedAt ?? '')) aim(active ?? agents[0].name);
+}
+
+/**
+ * How big the avatars are: whatever fills the row, but never smaller than the 34px a long roster
+ * wraps at and never larger than the orb. So a few assistants sit at the orb's size, each one more
+ * makes them all smaller, and from eight in a 360px panel they are 34px and wrap as before.
+ *
+ * Set on the middle rather than on the row, because the middle's `min-height` – a row of avatars
+ * and most of the next – has to grow with them.
+ */
+const AVATAR_MIN = 34; // ui.css's circle
+const AVATAR_GAP = 8; // #avatars' gap
+
+function sizeAvatars() {
+  const row = el('avatars');
+  const count = row.children.length;
+  const orb = el('orb').getBoundingClientRect().width * 2 * SPHERE_RADIUS;
+  const fill = count ? (row.clientWidth - (count - 1) * AVATAR_GAP) / count : AVATAR_MIN;
+  const size = Math.floor(Math.max(AVATAR_MIN, Math.min(orb, fill)));
+  el('middle').style.setProperty('--av', `${size}px`);
 }
 
 /**
@@ -470,7 +491,7 @@ function alignTips() {
 }
 
 // The panel's width is the user's, and dragging it re-wraps the row.
-window.addEventListener('resize', alignTips);
+window.addEventListener('resize', () => { sizeAvatars(); alignTips(); });
 
 /**
  * Whether a label in the scrolling middle hangs below its control instead of above.
