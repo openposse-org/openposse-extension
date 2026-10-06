@@ -476,26 +476,31 @@
       .swatch.mine:hover { transform: none; }
       .swatch:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
-      /* ── See and Share ──────────────────────────────────────────────────────────────────
-         The recipe, or the file that shares it, in a sheet over the list under its assistant –
-         the palette's mechanism. Opened inside a tile half the column wide, a recipe dump
-         wrapped every selector, and it pushed one column out of step with the other. Opens to
-         the right of the tile, or to the left when the right would run off the page. */
+      /* ── Share ──────────────────────────────────────────────────────────────────────────
+         What an assistant does and the file that shares it, in one sheet over the list under
+         its assistant – the palette's mechanism. Opened inside a tile half the column wide, a
+         recipe dump wrapped every selector, and it pushed one column out of step with the other.
+         Opens to the right of the tile, or to the left when the right would run off the page. */
       .sheet {
         inset: auto; margin: 6px 0 0;
         position-area: bottom span-right;
         position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
         width: min(520px, calc(100vw - 32px));
-        max-height: min(60vh, 480px); overflow: auto;
+        max-height: min(70vh, 620px); overflow: auto;
         padding: 12px; border: 1px solid var(--glass-edge); border-radius: var(--radius-card);
         background: var(--raised); color: var(--text-dim);
         box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
       }
       .sheet .recipe { margin: 0; }
-      /* Save and the filename on the left, Copy on the right, and between them the reason if a
+      /* The title on the left, Save and Copy on the right, and between them the reason if a
          copy was refused. */
       .sheet .bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+      .sheet .bar h3 { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text); }
       .sheet .bar .note { margin-left: auto; color: var(--error); }
+      /* What each block below is: the steps, then the file. */
+      .sheet .lede { margin: 0 0 6px; }
+      .sheet .recipe + .lede { margin-top: 14px; }
+      .sheet .lede .tech { color: var(--text-faint); }
 
       /* ── The voice list ─────────────────────────────────────────────────────────────────
          Two columns and four collapsible groups, because 28 voices in one column is a scroll

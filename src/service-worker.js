@@ -1567,7 +1567,7 @@ function pointActionAt(surface) {
 }
 
 // Top level, not awaited by anything: both caches have to be warm before a shortcut arrives, and
-// `surface.js` defaults to `orb` precisely because it sometimes will not be. Measured warm in
+// `surface.js` has a default precisely because they sometimes will not be. Measured warm in
 // practice – Chrome lets a storage read settle before dispatching the event that woke the worker.
 hydrateSurface().then(pointActionAt);
 watchSurface(pointActionAt);

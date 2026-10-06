@@ -14,7 +14,7 @@ import { pack, unpack, toFile, filenameFor } from './share.js';
 import { matchPattern, patternForHost } from './domain.js';
 import { FLOOR_MS, FLOOR_OVERRIDE_KEY, FLOOR_RANGE, floorWindow, productLabel } from './routing.js';
 import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from './grace.js';
-import { SURFACES, setSurface } from './surface.js';
+import { setSurface } from './surface.js';
 import { MOCK_SIZES } from './mocks.js';
 import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
 import {
@@ -768,7 +768,7 @@ async function refreshRoster() {
     row.className = 'agent active';
     row.dataset.id = agent.id;
     row.style.setProperty('--channel', channelOf(agent));
-    // What See's and Share's sheets hang from – one name per row, like the palette's.
+    // What the Share sheet hangs from – one name per row, like the palette's.
     row.style.setProperty('anchor-name', `--tile-${index}`);
 
     // ── Its colour ─────────────────────────────────────────────────────────────────────
@@ -1025,11 +1025,11 @@ async function refreshRoster() {
     };
 
     /**
-     * The strip along a sheet's top: whatever `start` holds, then Copy at the far end. A copy the
-     * clipboard refused says why, in the strip – one that silently did nothing would be found out
-     * later, somewhere else, as an empty paste.
+     * The strip along a sheet's top: its title, then its actions and Copy at the far end. A copy
+     * the clipboard refused says why, in the strip – one that silently did nothing would be found
+     * out later, somewhere else, as an empty paste.
      */
-    const toolbar = (text, what, ...start) => {
+    const toolbar = (text, what, title, ...actions) => {
       const note = document.createElement('span');
       note.className = 'tech note';
       const copy = tool('copy', `Copy ${what}`);
@@ -1050,38 +1050,48 @@ async function refreshRoster() {
       });
       const bar = document.createElement('div');
       bar.className = 'bar';
-      bar.append(...start, note, copy);
+      bar.append(title, note, ...actions, copy);
       return bar;
     };
 
-    // **See** – the recipe as the runtime will read it, not a reconstruction of it.
-    const see = tool('eye', `See what ${agent.name} recorded`);
-    const seeing = sheetFor(see, (sheet, recipe) => {
-      const text = describeRecipe(recipe);
-      const details = document.createElement('pre');
-      details.className = 'recipe';
-      details.textContent = text;
-      sheet.append(toolbar(text, 'what it recorded'), details);
-    });
+    /** A sheet's lines: a lead-in saying what follows, and a block of it. */
+    const lede = (...words) => {
+      const line = document.createElement('p');
+      line.className = 'lede';
+      line.append(...words);
+      return line;
+    };
+    const block = (text) => {
+      const pre = document.createElement('pre');
+      pre.className = 'recipe';
+      pre.textContent = text;
+      return pre;
+    };
 
-    // **Share** – shown before it is saved, because the JSON *is* the review surface.
+    // **Share** – what this assistant does, then the file that carries it, in one sheet. It was
+    // two, until 2026-10-06: See showed the steps as rows and Share the file as JSON, and nothing
+    // said they were the same recording.
     //
-    // Downloading it silently would make the file the thing you trust without ever having seen
-    // it. Shown, it can be read before it is sent and read again by whoever receives it, which
-    // is half of what stands between an imported recipe and a bad host permission. The other
-    // half is Chrome's own prompt, on the far side.
+    // Shown before it is saved, because the JSON *is* the review surface. Downloading it silently
+    // would make the file the thing you trust without ever having seen it. Shown, it can be read
+    // before it is sent and read again by whoever receives it, which is half of what stands
+    // between an imported recipe and a bad host permission. The other half is Chrome's own
+    // prompt, on the far side.
     const share = tool('share', `Share ${agent.name}`);
     const sharing = sheetFor(share, (sheet, recipe) => {
       const text = toFile(pack({ name: agent.name, recipe }));
-      const bundle = document.createElement('pre');
-      bundle.className = 'recipe';
-      bundle.textContent = text;
-
       const file = filenameFor(agent.name);
+      const site = recipe.domainPattern?.replace(/^\*\./, '') || 'its site';
+
+      const title = document.createElement('h3');
+      title.textContent = `Share ${agent.name}`;
+      const filename = document.createElement('span');
+      filename.className = 'tech';
+      filename.textContent = file;
+
       const save = tool('download', `Save ${file}`);
-      // Its label opens rightwards and downwards: the button sits in the sheet's top-left corner,
-      // and the sheet scrolls, so a label running left or up would be clipped by it.
-      save.dataset.tipAt = 'start';
+      // Its label opens downwards: the sheet scrolls, so a label drawn above its top strip would
+      // be clipped by it.
       save.dataset.tipBelow = '';
       save.addEventListener('click', () => {
         // A blob URL from an extension page needs no `downloads` permission, and revoking it
@@ -1093,12 +1103,13 @@ async function refreshRoster() {
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       });
-      const filename = document.createElement('span');
-      filename.className = 'tech';
-      filename.textContent = file;
 
-      // Save at the top now, beside Copy, rather than under a file that can run past the fold.
-      sheet.append(toolbar(text, 'the file', save, filename), bundle);
+      // Save at the top, beside Copy, rather than under a file that can run past the fold.
+      sheet.append(
+        toolbar(text, 'the file', title, save),
+        lede(`What ${agent.name} does on ${site}:`), block(describeRecipe(recipe)),
+        lede('As a file, for someone else to add: ', filename), block(text),
+      );
     });
 
     // **Re-record** – same wizard, keeping this agent's name and voice.
@@ -1142,7 +1153,7 @@ async function refreshRoster() {
       await refreshRoster();
     });
 
-    tools.append(see, share, again, remove);
+    tools.append(share, again, remove);
 
     // Two lines beside the avatar: the name, which is the rename field, and its tools; then what
     // it drives and its voice. The sheets and the palette are in the row only to be found –
@@ -1157,7 +1168,7 @@ async function refreshRoster() {
     who.className = 'who';
     who.append(named, about, problemLine);
 
-    row.append(avatar, who, palette, seeing, sharing);
+    row.append(avatar, who, palette, sharing);
     built.push(row);
   }
 
@@ -1575,7 +1586,8 @@ for (const knob of KNOBS) {
  */
 async function paintSurface() {
   const { surface } = await chrome.storage.local.get('surface');
-  const onPanel = SURFACES.includes(surface) ? surface === 'panel' : false;
+  // Nothing stored, or nothing valid, is the panel – `surface.js`'s default.
+  const onPanel = surface !== 'orb';
   // The icon is where a click takes you, not where you are – the same reading as the label.
   glyph(el('surface'), onPanel ? 'orbit' : 'panel-right', 16);
   label(el('surface'), onPanel
@@ -1585,7 +1597,7 @@ async function paintSurface() {
 
 el('surface').addEventListener('click', async () => {
   const { surface } = await chrome.storage.local.get('surface');
-  await setSurface(surface === 'panel' ? 'orb' : 'panel');
+  await setSurface(surface === 'orb' ? 'panel' : 'orb');
   await paintSurface();
 });
 
