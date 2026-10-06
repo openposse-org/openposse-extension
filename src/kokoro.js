@@ -118,13 +118,15 @@ export async function warm() {
  * @param text     what to say
  * @param voice    a Kokoro voice id, e.g. `bm_george`
  * @param onLevel  called with an amplitude as each chunk plays, for the orb
+ * @param onStart  called once, as the first chunk starts playing – the first sound, which a
+ *                 cold load and the first sentence's synthesis can put seconds after the call
  * @param speed    pace multiplier, 1 being this voice's own. Kokoro drives it through the
  *                 duration predictor, so the speech is stretched rather than resampled and the
  *                 pitch does not move. HeadTTS refuses anything outside 0.25–4 – `clampSpeed`
  *                 in `storage.js` is what guarantees this never arrives out of range.
  * @returns `{ ok }` or `{ ok: false, reason }`
  */
-export async function speak(text, voice, { onLevel = () => {}, speed = 1 } = {}) {
+export async function speak(text, voice, { onLevel = () => {}, onStart = () => {}, speed = 1 } = {}) {
   if (!text) return { ok: true };
 
   // Measured and handed back rather than logged here: this runs in the offscreen document, so
@@ -189,7 +191,10 @@ export async function speak(text, voice, { onLevel = () => {}, speed = 1 } = {})
       if (chunks.length === 1 && peak([audio]) < 1e-4) { silent = true; return; }
       if (silent) return;
 
-      if (chunks.length === 1) ms.firstWord = Math.round(performance.now() - started);
+      if (chunks.length === 1) {
+        ms.firstWord = Math.round(performance.now() - started);
+        onStart();
+      }
       player.push(audio);
     });
 

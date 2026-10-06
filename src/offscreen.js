@@ -384,6 +384,8 @@ async function speak({ text, agentID, roster = [], speed = 1, wanted = null, pre
       // answering agent exactly as it follows you. The system-voice path can only send
       // `pulse`, because `speechSynthesis` exposes no audio to measure.
       onLevel: (level) => send('openposse.speaking', { level }),
+      // The first sound, which `started` above is not: that fires before the model has loaded.
+      onStart: () => send('openposse.speaking', { audible: true, preview }),
       speed,
     });
 
@@ -441,7 +443,7 @@ async function speak({ text, agentID, roster = [], speed = 1, wanted = null, pre
   // word, which is speech *rate* rather than loudness. It is honestly synchronised with what is
   // being said, which is what the orb is for, and E6's own audio can be metered properly.
   utterance.addEventListener('boundary', () => send('openposse.speaking', { pulse: true, preview }));
-  utterance.addEventListener('start', () => send('openposse.speaking', { started: true, preview }));
+  utterance.addEventListener('start', () => send('openposse.speaking', { started: true, audible: true, preview }));
   // Named here too, for the same reason as the Kokoro path above – and because "which engine"
   // and "which voice" are one question. A log line that answers it for one path and not the
   // other is worse than one that answers neither: it reads as the system path having no voice.

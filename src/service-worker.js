@@ -323,11 +323,19 @@ async function putQuestion(agent, prompt, matched) {
  */
 async function readAloud(answer, agent) {
   if (!answer) return;
+  // The answer is on screen seconds before a word of it can be heard – a cold Kokoro load and the
+  // first sentence's synthesis – and "is speaking" over that silence reads as broken. Set before
+  // the summariser rather than just before `say`, so a long answer never shows it either. The
+  // voice clears it at its first sound: `audible` in `listening.js`.
+  panel({ warming: true });
   const long = needsShortening(answer);
   const summary = long ? await summarise(answer) : null;
   if (long) trace('shortened', summary ? 'by the summariser' : 'first sentence (no summariser)');
   const { text, shortened } = spokenForm(answer, summary);
-  if (!text) return;
+  if (!text) {
+    panel({ warming: false });
+    return;
+  }
 
   // The panel says when it is reading a shortened version, because someone hearing one sentence
   // about a six-paragraph answer should know that is what happened.

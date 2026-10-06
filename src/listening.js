@@ -479,6 +479,9 @@ export function handleOffscreenMessage(message) {
       // +21057ms" looked like twenty-one seconds of audio for twenty words. It is the moment
       // the speaking *path* begins.
       if (message.started) trace('handing to the voice');
+      // `audible` is the moment `started` is not: the first sound. Until it arrives the side panel
+      // says the voice is warming up, rather than that an agent is speaking over silence.
+      if (message.audible) panel({ warming: false });
       // Two engines, two grades of signal, one channel.
       //
       // Kokoro sends a real `level` measured off the audio on its way to the speakers, so the
@@ -536,6 +539,8 @@ export function handleOffscreenMessage(message) {
           + (message.ok ? 'spoken' : (message.reason ?? 'failed')));
       panelSpeaking(false);
       panelLevel(0);
+      // A voice that failed or was cancelled before making a sound never sent `audible`.
+      panel({ warming: false });
       if (!message.ok) reportUnspoken(message.reason);
       return true;
 

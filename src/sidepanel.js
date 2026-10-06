@@ -75,7 +75,7 @@ window.addEventListener('unhandledrejection', (e) => fatal(e.reason?.message ?? 
  */
 let state = {
   phase: 'idle', agentName: null, channel: null,
-  transcript: '', volatile: '', answer: '', sub: '', message: '',
+  transcript: '', volatile: '', answer: '', sub: '', message: '', warming: false,
 };
 
 /** The microphone level, and whether there is a meter at all. `null` is *no meter*, not silence. */
@@ -113,13 +113,16 @@ function tick() {
  * and the only thing that moved was the orb. The verb says a turn is still in flight; the vendor
  * is what a person checks when an answer looks wrong, and it is wanted once it is over.
  *
- * Plain words are for where there is no agent to name, or where something needs saying.
+ * Plain words are for where there is no agent to name, or where something needs saying – such as
+ * the seconds between an answer landing and the voice making its first sound.
  */
 const STATUS = {
   listening: () => ({ text: 'Listening' }),
   routing: () => ({ text: "Working out who that's for…", pulse: true }),
   thinking: (s) => ({ who: s.agentName, verb: 'is thinking…', pulse: true, tinted: true }),
-  answering: (s) => ({ who: s.agentName, verb: 'is speaking', tinted: true }),
+  answering: (s) => (s.warming
+    ? { text: 'Warming up speech engine…', pulse: true }
+    : { who: s.agentName, verb: 'is speaking', tinted: true }),
   'needs-attention': () => ({ text: 'Needs attention', bad: true }),
   'not-capturing': () => ({ text: 'No input', bad: true }),
   idle: (s) => (s.agentName ? { who: s.agentName, tinted: true } : { text: '' }),
