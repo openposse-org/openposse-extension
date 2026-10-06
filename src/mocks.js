@@ -18,14 +18,15 @@ export const MOCK_SIZES = [10, 20, 30];
  * No vendor here is one somebody has likely recorded for real, so "take me to Notion" still means
  * the real Notion agent while mocks are in.
  *
- * **Each domain's home page must stay on that domain**, or Load all in the debug drawer cannot
- * match the page it loads to the mock and the avatar keeps its letter. zoom.us, freshdesk.com and
- * greenhouse.io went to zoom.com, freshworks.com and greenhouse.com, so on 2026-10-06 they were
- * swapped for ClickUp, HubSpot and Box from the recipe library's top-50 list.
+ * **Each domain's home page must load and stay on that domain**, or Load all in the debug drawer
+ * cannot match the page it loads to the mock and the avatar keeps its letter. On 2026-10-06
+ * zoom.us, freshdesk.com and greenhouse.io went to zoom.com, freshworks.com and greenhouse.com,
+ * and miro.com was blocked by the development network's DNS filter, so they were swapped for
+ * ClickUp, HubSpot, Box and Loom from the recipe library's top-50 list.
  */
 const CAST = [
   ['Maya', 'salesforce.com'], ['Theo', 'zendesk.com'], ['Ines', 'asana.com'],
-  ['Bartholomew', 'linear.app'], ['Kofi', 'miro.com'], ['Lena', 'figma.com'],
+  ['Bartholomew', 'linear.app'], ['Kofi', 'loom.com'], ['Lena', 'figma.com'],
   ['Data Team', 'slack.com'], ['Omar', 'basecamp.com'], ['Sofia', 'workday.com'],
   ['Ravi', 'intercom.com'], ['Hana', 'airtable.com'], ['Felix', 'coda.io'],
   ['Zara', 'dropbox.com'], ['Mateo', 'clickup.com'], ['Yuki', 'canva.com'],
