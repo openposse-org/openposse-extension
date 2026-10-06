@@ -99,7 +99,8 @@ async function refreshModel() {
   }
   const state = await SR.available(LANGS);
   const ready = state === 'available';
-  setStatus('model-status', ready ? 'ready' : state, ready ? 'good' : 'warn');
+  const words = { available: 'ready', downloadable: 'not downloaded yet', downloading: 'downloading…' };
+  setStatus('model-status', words[state] ?? state, ready ? 'good' : 'warn');
   markDone('step-model', ready);
   el('install-model').disabled = ready || state === 'unavailable';
 
@@ -167,8 +168,8 @@ async function refreshPanelAccess() {
   const granted = await chrome.permissions.contains(ALL_SITES);
   // Off is not a problem to fix – the step is optional – so it is neutral rather than amber.
   setStatus('panel-status', granted
-    ? 'on – the panel appears on any page'
-    : "off – the panel appears on assistants' pages only", granted ? 'good' : '');
+    ? 'on – the orb appears on any page'
+    : "off – the orb appears on assistants' pages only", granted ? 'good' : '');
   markDone('step-panel', granted);
   el('grant-panel').setAttribute('aria-checked', String(granted));
   return granted;
