@@ -11,8 +11,11 @@ import {
 import { channelOf, colourName, initialFor, PALETTE } from './channels.js';
 import { sortedIDs } from './order.js';
 import { pack, unpack, toFile, filenameFor } from './share.js';
-import { matchPattern } from './domain.js';
-import { productLabel } from './routing.js';
+import { matchPattern, patternForHost } from './domain.js';
+import { FLOOR_MS, FLOOR_OVERRIDE_KEY, FLOOR_RANGE, floorWindow, productLabel } from './routing.js';
+import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from './grace.js';
+import { SURFACES, setSurface } from './surface.js';
+import { MOCK_SIZES } from './mocks.js';
 import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
 import {
   weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES, VOICES,
@@ -1476,6 +1479,306 @@ el('import-add').addEventListener('click', async () => {
   await refreshRoster();
 });
 
+// ── Debug tools ────────────────────────────────────────────────────────────────────────────
+//
+// Behind the bug icon by the logo – moved from the panel's dock on 2026-10-06, so the panel
+// keeps only what a turn needs. Of what the Mac app's menu and sliders carried, only the
+// follow-up window is still a guess this extension makes; the answer settle wait is here because
+// it is the other clock a turn still waits on. The rest is this extension's own scaffolding: the
+// demo, E14's surface switch, the voice diagnostics, the mock roster and the site-icon loader.
+//
+// The panel's site line did not come with them. It described the tab in front of the panel, and
+// this page has no such tab; the panel's key button still appears whenever there is access to
+// grant. Its all-sites note did come, because that is about the browser rather than any tab.
+
+el('debug-tools').addEventListener('toggle', (event) => {
+  el('debug').setAttribute('aria-expanded', String(event.newState === 'open'));
+});
+
+/**
+ * The sliders, one row each. `resolve` is the function every reader of that value already goes
+ * through, so this shows exactly what the worker and the page will use – including falling back
+ * to the default for anything out of range – rather than a second opinion about it.
+ */
+const KNOBS = [
+  {
+    id: 'floor', name: 'follow-up window', key: FLOOR_OVERRIDE_KEY,
+    range: FLOOR_RANGE, fallback: FLOOR_MS, resolve: floorWindow,
+  },
+  {
+    id: 'grace', name: 'answer settle wait', key: GRACE_OVERRIDE_KEY,
+    range: GRACE_RANGE, fallback: ANSWER_GRACE_MS, resolve: graceWindow,
+  },
+];
+
+/** Overrides in force, in ms, by knob id. Absent means the shipped value. */
+const overrides = {};
+/** Mock recordings in the roster, for the icon's dot. */
+let mockCount = 0;
+
+function paintDebugToggle() {
+  const set = [
+    ...KNOBS.filter((k) => k.id in overrides).map((k) => `${k.name} ${overrides[k.id] / 1000} s`),
+    ...(mockCount ? [`${mockCount} mock recordings`] : []),
+  ];
+  el('debug').classList.toggle('overridden', set.length > 0);
+  label(el('debug'), ['Debug tools', set.join(', ')].filter(Boolean).join(' – '));
+}
+
+/** Seconds on the slider, milliseconds everywhere else. Rounded: 0.75 × 1000 is not always 750. */
+const msOf = (input) => Math.round(Number(input.value) * 1000);
+
+function showKnob(knob, ms) {
+  el(`${knob.id}-value`).textContent = ms === knob.fallback ? `${ms / 1000} s (default)` : `${ms / 1000} s`;
+}
+
+async function paintKnobs() {
+  const stored = await chrome.storage.session.get(KNOBS.map((k) => k.key));
+  for (const knob of KNOBS) {
+    const ms = knob.resolve(stored[knob.key]);
+    if (ms === knob.fallback) delete overrides[knob.id];
+    else overrides[knob.id] = ms;
+    el(knob.id).value = String(ms / 1000);
+    showKnob(knob, ms);
+  }
+  paintDebugToggle();
+}
+
+for (const knob of KNOBS) {
+  const input = el(knob.id);
+  // The range comes from the module that enforces it, so this cannot offer what the worker or
+  // the page would refuse.
+  Object.assign(input, {
+    min: String(knob.range.min / 1000),
+    max: String(knob.range.max / 1000),
+    step: String(knob.range.step / 1000),
+  });
+  input.addEventListener('input', () => showKnob(knob, msOf(input)));
+  input.addEventListener('change', () => {
+    const ms = msOf(input);
+    // **The default is stored as nothing at all**, so "the default" means no override rather
+    // than an override that happens to equal it – and the dot goes out when somebody slides it
+    // back.
+    const write = ms === knob.fallback
+      ? chrome.storage.session.remove(knob.key)
+      : chrome.storage.session.set({ [knob.key]: ms });
+    write.catch((error) => {
+      console.warn(`[openposse] could not store the ${knob.name} –`, error?.message ?? error);
+      paintKnobs();
+    });
+  });
+}
+
+/**
+ * E14's switch, and it is temporary by decision: when user testing picks a surface, the other is
+ * deleted along with everything that exists to defend it.
+ */
+async function paintSurface() {
+  const { surface } = await chrome.storage.local.get('surface');
+  const onPanel = SURFACES.includes(surface) ? surface === 'panel' : false;
+  // The icon is where a click takes you, not where you are – the same reading as the label.
+  glyph(el('surface'), onPanel ? 'orbit' : 'panel-right', 16);
+  label(el('surface'), onPanel
+    ? 'Use the orb – show turns over the page instead'
+    : 'Use the side panel – it also works on pages the orb cannot reach');
+}
+
+el('surface').addEventListener('click', async () => {
+  const { surface } = await chrome.storage.local.get('surface');
+  await setSurface(surface === 'panel' ? 'orb' : 'panel');
+  await paintSurface();
+});
+
+/**
+ * Replays a turn with no vendor in it, so a surface can be judged without spending a real
+ * question. The script lives in the worker – see `demo.js` – and plays wherever a real turn
+ * would show: the side panel, or the orb on the tab in front.
+ *
+ * **The button reports that it is running, and this is not polish.** It runs for about a minute
+ * and its first visible act is nine hundred milliseconds away, so a button that did nothing
+ * visible for a second would be pressed twice – and the second press restarts the script.
+ */
+const DEMO = 'Play a scripted turn – no vendor, no question spent';
+
+function showDemo(playing) {
+  const button = el('demo');
+  button.disabled = playing;
+  button.classList.toggle('busy', playing);
+  glyph(button, playing ? 'loader-circle' : 'play', playing ? 15 : 12);
+  label(button, playing ? 'Playing the scripted turn…' : DEMO);
+}
+
+el('demo').addEventListener('click', () => {
+  if (el('demo').disabled) return;
+  showDemo(true);
+  chrome.runtime.sendMessage({ kind: 'openposse.demo' })
+    .catch((error) => console.warn('[openposse] the demo could not start –', error?.message ?? error))
+    .finally(() => showDemo(false));
+});
+
+// Kokoro's layer-by-layer check, `spike.js`, in a tab of its own.
+el('diagnostics').addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('spike.html') }).catch((error) => {
+    console.warn('[openposse] could not open the voice diagnostics –', error?.message ?? error);
+  });
+});
+
+// Whether a granted origin is a wildcard over every host.
+//
+// Line comments, deliberately: writing that pattern out inside a slash-star block ends the
+// comment at its own star-slash and the rest parses as code – the backtick-in-a-template trap
+// in extension/CLAUDE.md, a sequence inside a comment that terminates its container.
+const isBroad = (origin) => origin === '<all_urls>' || /^(\*|https?):\/\/\*\//.test(origin);
+
+/**
+ * **Said out loud, because it was not and that cost an hour.** Chrome's own Site access menu
+ * offers "On all sites" in one click, and nothing else in this extension mentions it afterwards –
+ * so every site reads as granted, for a reason the product never stated. It is also the exact
+ * trap that made two earlier tests of the grant flow prove nothing.
+ */
+async function paintBroadNote() {
+  const { origins = [] } = await chrome.permissions.getAll().catch((error) => {
+    console.warn('[openposse] could not read the granted sites –', error?.message ?? error);
+    return { origins: [] };
+  });
+  const broad = origins.filter(isBroad);
+  el('broad-note').textContent = broad.length
+    ? `${broad.join(', ')} is granted, which covers every site. `
+      + 'Chrome › Extensions › OpenPosse › Details › Site access is where that is set.'
+    : '';
+  el('broad-note').hidden = !broad.length;
+}
+
+chrome.permissions.onAdded.addListener(paintBroadNote);
+chrome.permissions.onRemoved.addListener(paintBroadNote);
+
+// The mock roster: made-up recordings for judging a long roster – see `mocks.js`. Off, then one
+// button per size, pressed for whichever the roster is now. The write goes through the worker
+// like every other roster change, and the redraw arrives through `storage.onChanged`.
+
+for (const size of [0, ...MOCK_SIZES]) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'icon';
+  button.dataset.size = String(size);
+  button.dataset.tipAt = 'start';
+  button.textContent = size ? String(size) : 'Off';
+  label(button, size ? `Fill the roster to ${size} assistants` : 'No mock recordings');
+  button.addEventListener('click', async () => {
+    const result = await chrome.runtime.sendMessage({ kind: 'openposse.agent.mocks', size })
+      .catch((error) => ({ ok: false, reason: error?.message ?? String(error) }));
+    if (!result?.ok) {
+      const why = result?.reason ?? 'the worker did not answer';
+      console.warn('[openposse] the mock roster was not changed –', why);
+      el('mock-value').textContent = `not changed – ${why}`;
+    }
+  });
+  el('mock-sizes').append(button);
+}
+
+async function paintMocks() {
+  const { agents } = await loadRoster();
+  mockCount = agents.filter((a) => a.mock).length;
+  for (const button of el('mock-sizes').children) {
+    const size = Number(button.dataset.size);
+    button.setAttribute('aria-pressed', String(size ? mockCount > 0 && agents.length === size : mockCount === 0));
+  }
+  el('mock-value').textContent = mockCount ? `${agents.length} assistants, ${mockCount} made up` : 'off';
+  paintDebugToggle();
+}
+
+// Site icons, all at once. Chrome only has an icon for a site it has loaded, and a mock roster is
+// thirty sites nobody has open. This loads every site still showing a letter in one minimized
+// window, reads the icons while every tab is still open, then closes it.
+
+const ICON_WAIT_MS = 20_000;
+
+/** Every assistant's site, and which of them already has an icon to show. */
+async function siteIcons() {
+  const { agents } = await loadRoster();
+  const patterns = Object.fromEntries(await Promise.all(
+    agents.map(async (agent) => [agent.id, (await recipeFor(agent))?.domainPattern])));
+  return { agents, patterns, icons: await iconPages(patterns) };
+}
+
+el('load-icons').addEventListener('click', async () => {
+  const button = el('load-icons');
+  const value = el('icons-value');
+  const misses = el('icons-misses');
+  misses.hidden = true;
+  if (!await chrome.permissions.contains(ICONS)) {
+    value.textContent = 'switch Site icons on first';
+    return;
+  }
+  // One page per site: the bare domain, which is where a vendor keeps its icon.
+  const before = await siteIcons();
+  const sites = new Map();
+  for (const agent of before.agents) {
+    const pattern = before.patterns[agent.id];
+    if (pattern && !before.icons[agent.id]) sites.set(pattern, `https://${pattern.replace(/^\*\./, '')}/`);
+  }
+  if (!sites.size) {
+    value.textContent = 'every assistant has one';
+    return;
+  }
+
+  button.disabled = true;
+  value.textContent = `loading ${sites.size} sites…`;
+  let win = null;
+  try {
+    win = await chrome.windows.create({ url: [...sites.values()], focused: false, state: 'minimized' });
+    const ids = win.tabs.map((tab) => tab.id); // in the order of `sites`
+    const deadline = Date.now() + ICON_WAIT_MS;
+    let tabs = win.tabs;
+    while (Date.now() < deadline && tabs.some((tab) => !tab.favIconUrl)) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      tabs = await chrome.tabs.query({ windowId: win.id });
+    }
+    // With every tab still open, which is when `iconPages` can learn each site's icon – the
+    // roster redraws itself from the `iconSites` change that follows.
+    const after = await siteIcons();
+    const byId = new Map(tabs.map((tab) => [tab.id, tab]));
+    const failed = [...sites.keys()].flatMap((pattern, i) => {
+      const lit = after.agents.some((a) => after.patterns[a.id] === pattern && after.icons[a.id]);
+      return lit ? [] : [`${pattern.replace(/^\*\./, '')} – ${whyNoIcon(byId.get(ids[i]), pattern)}`];
+    });
+    value.textContent = failed.length ? `${failed.length} of ${sites.size} without an icon` : 'done';
+    misses.textContent = failed.join(' · ');
+    misses.hidden = failed.length === 0;
+  } catch (error) {
+    console.warn('[openposse] site icons were not loaded –', error?.message ?? error);
+    value.textContent = `not loaded – ${error?.message ?? error}`;
+  } finally {
+    if (win) {
+      await chrome.windows.remove(win.id).catch((error) => {
+        console.warn('[openposse] the window that loaded site icons did not close –', error?.message ?? error);
+      });
+    }
+    button.disabled = false;
+  }
+});
+
+/** Why a site All opened left its assistant with a letter, read from the tab it loaded in. */
+function whyNoIcon(tab, pattern) {
+  if (!tab) return 'its tab was closed';
+  if (!tab.favIconUrl) {
+    return tab.status === 'loading' ? `still loading after ${ICON_WAIT_MS / 1000} s` : 'the page has no icon';
+  }
+  const url = new URL(tab.url);
+  if (url.protocol !== 'https:' || patternForHost(url.hostname) !== pattern) return `it went to ${url.origin}`;
+  return 'its icon arrived but was not picked up';
+}
+
+// A slider moved in another window, the surface was switched elsewhere, or the roster changed.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'session' && KNOBS.some((k) => changes[k.key])) paintKnobs();
+  if (area !== 'local') return;
+  if (changes.surface) paintSurface();
+  if (changes.agents) paintMocks();
+});
+
+showDemo(false);
+
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
 
 // Each section independently, and loudly when one fails.
@@ -1497,6 +1800,10 @@ for (const [name, refresh] of Object.entries({
   voices: refreshVoices,
   roster: refreshRoster,
   'site icons': refreshIcons,
+  'surface switch': paintSurface,
+  'debug timings': paintKnobs,
+  'mock roster': paintMocks,
+  'all-sites note': paintBroadNote,
 })) {
   try {
     await refresh();

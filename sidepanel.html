@@ -69,16 +69,16 @@
          squeeze a three-line question below its text and into the answer. */
       .top > :not(.answer) { flex-shrink: 0; }
 
-      /* The only part that scrolls: the roster, and the debug drawer under it. It takes whatever the
-         top and the controls leave, but never less than a row of avatars and most of the next – so
-         when an answer is long it is the answer that scrolls, and the roster is still there.
+      /* The only part that scrolls: the roster. It takes whatever the top and the controls leave,
+         but never less than a row of avatars and most of the next – so when an answer is long it is
+         the answer that scrolls, and the roster is still there.
 
          **Its top 10px fade out**, so avatars scrolling up go under the status line softly instead of
          being cut in half against it. At rest that strip is padding, so nothing is faded until it
-         scrolls; `scroll-padding-top` keeps the debug drawer's jump into view out of it too. */
+         scrolls. */
       main {
         flex: 1 1 0; min-height: 76px; overflow-y: auto;
-        padding: 10px 14px 20px; scroll-padding-top: 10px;
+        padding: 10px 14px 20px;
         mask-image: linear-gradient(transparent, #000 10px);
       }
 
@@ -361,56 +361,9 @@
          microphone, because it is the other way to press it. */
       #shortcut { color: var(--text-faint); }
 
-      /* Quieter than the rest: a developer's control, sitting where everybody can see it. */
-      #debug:not([aria-expanded="true"], :hover) {
-        box-shadow: none; background: transparent; color: var(--text-dim);
-      }
-      /* A debug value is in force – a changed timing, or mock recordings in the roster. On the
-         toggle, because the drawer being shut is exactly when either would otherwise be invisible. */
-      #debug.overridden::before {
-        content: ''; position: absolute; top: 4px; right: 4px;
-        width: 7px; height: 7px; border-radius: 50%;
-        background: #ff7a18; box-shadow: 0 0 0 2px #0b0a0c;
-      }
-
       /* The manual path, behind the keyboard toggle, just above the controls. */
       .ask { display: flex; gap: 7px; align-items: center; margin-bottom: 12px; }
       .ask input { flex: 1; min-width: 0; }
-
-      /* ── Debug tools ───────────────────────────────────────────────────────────────────── */
-
-      .debug {
-        margin-top: 16px; padding-top: 12px;
-        box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.14);
-      }
-      .debug .eyebrow {
-        font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
-        color: var(--text-faint); margin-bottom: 10px;
-      }
-      .debug .tools { display: flex; gap: 8px; }
-      /* Name and value on one line, the slider full width under them: side by side, a 320px
-         panel leaves the slider about 80px to travel 15 positions in. */
-      .debug .knob {
-        display: grid; grid-template-columns: 1fr auto; gap: 6px 10px;
-        grid-template-areas: "name value" "slider slider";
-        margin-top: 14px; font-size: 12px; color: var(--text-dim);
-      }
-      .debug .knob span { grid-area: name; }
-      .debug .knob output { grid-area: value; font-feature-settings: var(--figures); color: var(--text); }
-      .debug .knob input { grid-area: slider; width: 100%; margin: 0; accent-color: var(--blue); }
-      .debug .why { margin-top: 5px; font-size: 11px; line-height: 1.4; color: var(--text-faint); }
-      /* The mock roster's sizes, in the row a slider would take. Numbers in the circles, set like
-         the values beside them. */
-      .debug .sizes { grid-area: slider; display: flex; gap: 8px; }
-      .debug .sizes .icon { font-size: 11px; font-weight: 600; font-feature-settings: var(--figures); }
-
-      /* Which site this is and whether we may drive it – the panel's own diagnostic, since a
-         popup that closes cannot tell you an hour later that access was revoked. In the debug
-         drawer because it is a reading rather than something to act on: acting on it is the key,
-         which appears among the controls whenever there is access to grant. */
-      .debug .site { margin-top: 14px; font-size: 11.5px; color: var(--text-dim); }
-      .debug .site .host { font-feature-settings: var(--figures); overflow-wrap: anywhere; }
-      .debug .site .note { margin-top: 3px; color: var(--text-faint); overflow-wrap: anywhere; }
 
       /* ── The dock ──────────────────────────────────────────────────────────────────────── */
 
@@ -465,67 +418,6 @@
           No assistants yet. Open a page with an AI assistant on it, then record it.
         </div>
 
-        <!-- Development tools, all behind one switch, as the Mac app had them. -->
-        <section class="debug" id="debug-tools" hidden>
-          <div class="eyebrow">Debug tools</div>
-          <div class="tools">
-            <!-- A scripted turn, for judging the UI and the voice without spending a vendor
-                 query. Here with E14's surface switch beside it: both are scaffolding with an
-                 expiry, deleted when user testing picks a surface. -->
-            <button class="icon" id="demo" data-tip-at="start"></button>
-            <button class="icon" id="surface" data-tip-at="start"></button>
-            <button class="icon" id="diagnostics" data-tip-at="start"
-                    aria-label="Voice diagnostics – check each layer of the Kokoro voice"></button>
-          </div>
-          <!-- Which site this is and whether we may drive it. -->
-          <div class="site">
-            <div class="host" id="site-state">reading…</div>
-            <div class="note" id="site-note" hidden></div>
-          </div>
-          <label class="knob" for="floor">
-            <span>Follow-up window</span>
-            <input type="range" id="floor" />
-            <output id="floor-value" for="floor"></output>
-          </label>
-          <div class="why">
-            How long a question with no name in it still goes to whoever answered last.
-          </div>
-          <label class="knob" for="grace">
-            <span>Answer settle wait</span>
-            <input type="range" id="grace" />
-            <output id="grace-value" for="grace"></output>
-          </label>
-          <div class="why">
-            How long to wait for the rest of an answer when the assistant hasn't said it's done.
-            Shorter answers sooner; too short can read out a status line instead of the answer.
-          </div>
-          <div class="why">Both go back to their defaults when Chrome restarts.</div>
-          <!-- Sizes come from `mocks.js`, so the buttons are built by the script. -->
-          <div class="knob" role="group" aria-labelledby="mock-name">
-            <span id="mock-name">Mock roster</span>
-            <output id="mock-value"></output>
-            <div class="sizes" id="mock-sizes"></div>
-          </div>
-          <div class="why">
-            Made-up recordings, after your own, to see how a long roster looks. They can't answer,
-            since there is no page behind them, and they stay until you turn them off.
-          </div>
-          <!-- Chrome only has an icon for a site it has loaded, so getting thirty means loading
-               thirty sites. This does it for you, through the same first-visit path as a tab. -->
-          <div class="knob" role="group" aria-labelledby="icons-name">
-            <span id="icons-name">Site icons</span>
-            <output id="icons-value"></output>
-            <div class="sizes">
-              <button class="icon" id="load-icons" data-tip-at="start"
-                      aria-label="Load the icon of every assistant still showing its letter">All</button>
-            </div>
-          </div>
-          <div class="why" id="icons-misses" hidden></div>
-          <div class="why">
-            Opens each of their sites in a minimized window and closes it once the icons are in.
-            These are real page loads, so the sites appear in your history.
-          </div>
-        </section>
       </section>
     </main>
 
@@ -551,8 +443,7 @@
                load where it looks pressable and its click handler has no site to act on. -->
           <button class="icon" id="record" disabled data-tip-at="start"
                   aria-label="Reading the tab in front…"></button>
-          <!-- Only while this tab is one we may not drive yet. Why is in the debug drawer; this
-               is the one thing to do about it. -->
+          <!-- Only while this tab is one we may not drive yet: the one thing to do about it. -->
           <button class="icon" id="grant" hidden data-tip-at="start"></button>
         </div>
         <div class="center">
@@ -561,7 +452,6 @@
         </div>
         <div class="side end">
           <button class="icon" id="settings" aria-label="Settings" data-tip-at="end"></button>
-          <button class="icon" id="debug" aria-controls="debug-tools" data-tip-at="end"></button>
         </div>
       </div>
     </footer>
