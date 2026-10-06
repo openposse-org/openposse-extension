@@ -33,7 +33,7 @@
 
 import { panel, panelLevel } from './panel.js';
 import { beginTurn, trace } from './trace.js';
-import { say, markThinking, markDone, VOLATILE_TAIL } from './listening.js';
+import { markThinking, markDone, VOLATILE_TAIL } from './listening.js';
 import { channelOf, pickChannel } from './channels.js';
 import { loadRoster, recipeFor } from './storage.js';
 import { productLabel } from './routing.js';
@@ -48,10 +48,11 @@ import { productLabel } from './routing.js';
  * Turn 4 is for judging overflow, added 2026-10-06: a question too long for its slot even at the
  * smallest size, so it is cut, and an answer several times the box's height, so it scrolls.
  *
- * **No turn carries a note under its answer**, though the panel has a line for one. A real turn
+ * **The script writes no note under an answer**, though the panel has a line for one. A real turn
  * writes there only when an answer was shortened or could not be spoken, so a note here – a
  * source, or "the floor was still held" – would show the panel something no real turn does. The
- * status line and the lit avatar already say who took a follow-up.
+ * status line and the lit avatar already say who took a follow-up. Turn 4 does get one, from the
+ * real turn's `readAloud`, because its answer is long enough to be shortened.
  */
 const SCRIPT = [
   {
@@ -174,7 +175,7 @@ function speakingInto(token) {
 }
 
 /** One turn of the script, from the shortcut to the answer being read out. */
-async function playTurn(step, who, token) {
+async function playTurn(step, who, token, readAloud) {
   const alive = () => generation === token;
   const utterance = step.named === false ? step.ask : `${who.name}, ${step.ask}`;
 
@@ -228,9 +229,10 @@ async function playTurn(step, who, token) {
   markDone(null);
   panel({ phase: 'answering', agentName: who.name, answer: step.answer });
 
-  // The real `say`, so the voice this picks is the voice a real answer would get. Awaited, so
-  // the next turn does not start talking over this one.
-  await say(step.answer, who.id);
+  // The real turn's `readAloud`, so a long answer is shortened and noted as a real one is, and the
+  // voice this picks is the voice a real answer would get. Awaited, so the next turn does not
+  // start talking over this one.
+  await readAloud(step.answer, who);
 }
 
 /**
@@ -238,8 +240,12 @@ async function playTurn(step, who, token) {
  *
  * Returns once it is finished or interrupted, so the caller can report which. Nothing is thrown
  * on interruption: being cut off by a real turn is the intended behaviour, not a failure.
+ *
+ * `readAloud` is the worker's own, passed in because it lives in the file that imports this one,
+ * so importing it back would be a cycle. Added 2026-10-06, when turn 4 made an answer long enough
+ * to be shortened.
  */
-export async function runDemo() {
+export async function runDemo(readAloud) {
   const token = ++generation;
   const who = await cast();
   // The recorder's own keep-alive, for the same reason: MV3 kills an idle worker in ~30 s and
@@ -251,7 +257,7 @@ export async function runDemo() {
   try {
     for (const step of SCRIPT) {
       if (generation !== token) return { ok: false, reason: 'interrupted' };
-      await playTurn(step, who[step.cast], token);
+      await playTurn(step, who[step.cast], token, readAloud);
       if (generation !== token) return { ok: false, reason: 'interrupted' };
       await wait(TIMING.betweenTurns);
     }

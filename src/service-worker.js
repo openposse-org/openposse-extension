@@ -959,7 +959,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   }
   if (request?.kind === 'openposse.demo') {
     // Scaffolding, reachable only from the panel's own quiet button. See `demo.js`.
-    runDemo().then(respond, (error) => {
+    runDemo(readAloud).then(respond, (error) => {
       console.warn('[openposse] the demo turn failed –', error?.message ?? error);
       respond({ ok: false, reason: error?.message ?? String(error) });
     });
