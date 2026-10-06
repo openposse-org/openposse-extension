@@ -164,6 +164,18 @@ input[type="text"]::placeholder { color: var(--text-faint); }
     inset 0 0 0 0.5px rgba(255, 255, 255, 0.18);
 }
 
+/* A site icon in place of the initial, when that is switched on under Assistants in Settings. On a
+ * white disc because favicons are drawn for a light tab strip – a dark glyph straight on the tinted
+ * circle would vanish – and smaller than the circle, so the agent's colour still rings it. */
+.avatar > img {
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  border-radius: 50%;
+  background: #fff;
+  object-fit: contain;
+}
+
 /* Only the agent holding the floor is lit. Everyone else is dimmed — the same treatment the
  * panel uses, so "who is active" reads identically on both surfaces. */
 .agent.active .avatar {

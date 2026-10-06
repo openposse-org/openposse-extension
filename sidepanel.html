@@ -510,6 +510,21 @@
             Made-up recordings, after your own, to see how a long roster looks. They can't answer,
             since there is no page behind them, and they stay until you turn them off.
           </div>
+          <!-- Chrome only has an icon for a site it has loaded, so getting thirty means loading
+               thirty sites. This does it for you, through the same first-visit path as a tab. -->
+          <div class="knob" role="group" aria-labelledby="icons-name">
+            <span id="icons-name">Site icons</span>
+            <output id="icons-value"></output>
+            <div class="sizes">
+              <button class="icon" id="load-icons" data-tip-at="start"
+                      aria-label="Load the icon of every assistant still showing its letter">All</button>
+            </div>
+          </div>
+          <div class="why" id="icons-misses" hidden></div>
+          <div class="why">
+            Opens each of their sites in a minimized window and closes it once the icons are in.
+            These are real page loads, so the sites appear in your history.
+          </div>
         </section>
       </section>
     </main>

@@ -34,6 +34,7 @@ import { drawSphere, modeFor } from './sphere.js';
 import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from './grace.js';
 import { icon } from './icons.js';
 import { MOCK_SIZES } from './mocks.js';
+import { ICONS, iconPages, putIcon } from './favicons.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -270,7 +271,7 @@ function renderCoach() {
  * it would hit storage per agent on every phase change, six times a turn, to draw the same four
  * strings. `load()` fetches; `draw()` is synchronous and cheap and runs whenever the turn moves.
  */
-let roster = { agents: [], broken: [], problem: null, products: {} };
+let roster = { agents: [], broken: [], problem: null, products: {}, patterns: {}, icons: {} };
 
 /** Whom the text box is currently aimed at. Survives re-renders; the roster does not own it. */
 let aimedAt = null;
@@ -294,13 +295,16 @@ async function floorHolderName() {
 async function loadRosterData() {
   const { agents, broken, problem } = await loadRoster();
   const products = {};
+  const patterns = {};
   await Promise.all(agents.map(async (agent) => {
+    patterns[agent.id] = (await recipeFor(agent))?.domainPattern;
     // `productLabel` turns `*.notion.so` into "Notion" – the same derivation E3b's navigation
     // matches against, so "take me to Notion" and the label here cannot drift apart. The label
     // rather than `productName`, which is lowercase because it is for matching, not for reading.
-    products[agent.id] = productLabel((await recipeFor(agent))?.domainPattern) || null;
+    products[agent.id] = productLabel(patterns[agent.id]) || null;
   }));
-  roster = { agents, broken, problem, products };
+  // Empty unless site icons are switched on in Settings – see favicons.js.
+  roster = { agents, broken, problem, products, patterns, icons: await iconPages(patterns) };
   drawRoster();
   paintMocks();
 }
@@ -366,6 +370,7 @@ async function drawRoster() {
     const face = document.createElement('span');
     face.className = 'avatar face';
     face.textContent = initialFor(agent.name);
+    putIcon(face, roster.icons[agent.id]);
     av.append(face);
 
     // The name is no longer on screen beside the letter, so it has to be reachable: the label is
@@ -875,6 +880,81 @@ function paintMocks() {
   paintDebugToggle();
 }
 
+// ── Site icons, all at once ─────────────────────────────────────────────────────────────────
+//
+// Chrome only has an icon for a site it has loaded, and a mock roster is thirty sites nobody has
+// open. This loads every site still showing a letter in one minimized window, lets the first-visit
+// listener learn each icon exactly as it would from a tab opened by hand, then closes the window.
+
+const ICON_WAIT_MS = 20_000;
+
+el('load-icons').addEventListener('click', async () => {
+  const button = el('load-icons');
+  const value = el('icons-value');
+  const misses = el('icons-misses');
+  misses.hidden = true;
+  if (!await chrome.permissions.contains(ICONS)) {
+    value.textContent = 'switch site icons on in Settings first';
+    return;
+  }
+  // One page per site: the bare domain, which is where a vendor keeps its icon.
+  const sites = new Map();
+  for (const agent of roster.agents) {
+    const pattern = roster.patterns[agent.id];
+    if (pattern && !roster.icons[agent.id]) sites.set(pattern, `https://${pattern.replace(/^\*\./, '')}/`);
+  }
+  if (!sites.size) {
+    value.textContent = 'every assistant has one';
+    return;
+  }
+
+  button.disabled = true;
+  value.textContent = `loading ${sites.size} sites…`;
+  let win = null;
+  try {
+    win = await chrome.windows.create({ url: [...sites.values()], focused: false, state: 'minimized' });
+    const ids = win.tabs.map((tab) => tab.id); // in the order of `sites`
+    const deadline = Date.now() + ICON_WAIT_MS;
+    let tabs = win.tabs;
+    while (Date.now() < deadline && tabs.some((tab) => !tab.favIconUrl)) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      tabs = await chrome.tabs.query({ windowId: win.id });
+    }
+    // One more pass with every tab still open, so the outcome does not depend on which of the
+    // listener's overlapping lookups finished last.
+    await loadRosterData();
+    const byId = new Map(tabs.map((tab) => [tab.id, tab]));
+    const failed = [...sites.keys()].flatMap((pattern, i) => {
+      const lit = roster.agents.some((a) => roster.patterns[a.id] === pattern && roster.icons[a.id]);
+      return lit ? [] : [`${pattern.replace(/^\*\./, '')} – ${whyNoIcon(byId.get(ids[i]), pattern)}`];
+    });
+    value.textContent = failed.length ? `${failed.length} of ${sites.size} without an icon` : 'done';
+    misses.textContent = failed.join(' · ');
+    misses.hidden = failed.length === 0;
+  } catch (error) {
+    console.warn('[openposse] site icons were not loaded –', error?.message ?? error);
+    value.textContent = `not loaded – ${error?.message ?? error}`;
+  } finally {
+    if (win) {
+      await chrome.windows.remove(win.id).catch((error) => {
+        console.warn('[openposse] the window that loaded site icons did not close –', error?.message ?? error);
+      });
+    }
+    button.disabled = false;
+  }
+});
+
+/** Why a site Load all opened left its assistant with a letter, read from the tab it loaded in. */
+function whyNoIcon(tab, pattern) {
+  if (!tab) return 'its tab was closed';
+  if (!tab.favIconUrl) {
+    return tab.status === 'loading' ? `still loading after ${ICON_WAIT_MS / 1000} s` : 'the page has no icon';
+  }
+  const url = new URL(tab.url);
+  if (url.protocol !== 'https:' || patternForHost(url.hostname) !== pattern) return `it went to ${url.origin}`;
+  return 'its icon arrived but was not picked up';
+}
+
 // ── What arrives from the worker ───────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message) => {
@@ -944,6 +1024,25 @@ chrome.windows?.onFocusChanged?.addListener(paintSite);
 // which is precisely how an agent can go dead with nothing on screen to say why.
 chrome.permissions.onAdded.addListener(paintSite);
 chrome.permissions.onRemoved.addListener(paintSite);
+
+// Site icons on the avatars: the setting is the `favicon` permission itself, switched in Settings.
+const iconsSwitched = ({ permissions = [] }) => {
+  if (permissions.includes('favicon')) loadRosterData();
+};
+chrome.permissions.onAdded.addListener(iconsSwitched);
+chrome.permissions.onRemoved.addListener(iconsSwitched);
+
+// A site seen for the first time while the panel is open: its assistant's letter becomes the icon
+// as soon as the tab has one, not at the next panel open. Only https pages count, as in the tab
+// query in favicons.js, and only for an assistant still showing its letter – which, with the
+// setting off, is every one of them, hence the permission check.
+chrome.tabs.onUpdated.addListener(async (_id, change, tab) => {
+  if (!change.favIconUrl || !tab.url?.startsWith('https://')) return;
+  const pattern = patternForHost(new URL(tab.url).hostname);
+  const lettered = roster.agents.some((agent) =>
+    !roster.icons[agent.id] && roster.patterns[agent.id] === pattern);
+  if (lettered && await chrome.permissions.contains(ICONS)) loadRosterData();
+});
 
 chrome.storage.onChanged.addListener((changes, area) => {
   // A debug slider moved, here or in another window's panel. The follow-up window also decides

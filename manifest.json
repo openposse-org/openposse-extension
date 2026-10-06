@@ -17,6 +17,9 @@
     "scripting",
     "sidePanel"
   ],
+  "optional_permissions": [
+    "favicon"
+  ],
   "optional_host_permissions": [
     "https://*/*"
   ],

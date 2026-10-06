@@ -6,7 +6,7 @@
 // for tidiness.
 
 import {
-  loadRoster, setMicGranted, micGranted, voiceSpeed, setVoiceSpeed, clampSpeed,
+  loadRoster, recipeFor, setMicGranted, micGranted, voiceSpeed, setVoiceSpeed, clampSpeed,
 } from './storage.js';
 import { channelOf, colourName, initialFor, PALETTE } from './channels.js';
 import { pack, unpack, toFile, filenameFor } from './share.js';
@@ -16,6 +16,7 @@ import {
   weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES, VOICES,
 } from './weights.js';
 import { icon } from './icons.js';
+import { ICONS, iconPages, putIcon } from './favicons.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const LANGS = { langs: ['en-US'], processLocally: true };
@@ -656,6 +657,31 @@ function renderVoice(grid, id, name, { endsColumn = false } = {}) {
   grid.append(row);
 }
 
+// ── Site icons on the avatars ──────────────────────────────────────────────────────────────
+//
+// Holding the `favicon` permission is the setting – see favicons.js – so this toggles a grant the
+// way step 4 does, and the panel redraws itself from `permissions.onAdded` and `onRemoved`.
+
+async function refreshIcons() {
+  el('grant-icons').textContent = await chrome.permissions.contains(ICONS)
+    ? 'Show initials' : 'Show site icons';
+}
+
+el('grant-icons').addEventListener('click', async () => {
+  const status = el('icons-status');
+  status.hidden = true;
+  try {
+    // Step 4's shape: `contains` is the one hop the click's gesture survives before `request`.
+    if (await chrome.permissions.contains(ICONS)) await chrome.permissions.remove(ICONS);
+    else await chrome.permissions.request(ICONS);
+  } catch (error) {
+    status.textContent = `not changed – ${error?.message ?? error}`;
+    status.hidden = false;
+  }
+  await refreshIcons();
+  await refreshRoster();
+});
+
 // ── Roster ─────────────────────────────────────────────────────────────────────────────────
 
 async function refreshRoster() {
@@ -674,6 +700,8 @@ async function refreshRoster() {
     target.textContent = 'none yet – record one from the toolbar button';
     return;
   }
+  const icons = await iconPages(Object.fromEntries(await Promise.all(
+    agents.map(async (agent) => [agent.id, (await recipeFor(agent))?.domainPattern]))));
 
   for (const [index, agent] of agents.entries()) {
     const row = document.createElement('div');
@@ -691,6 +719,7 @@ async function refreshRoster() {
     const avatar = document.createElement('button');
     avatar.className = 'avatar';
     avatar.textContent = initialFor(agent.name);
+    putIcon(avatar, icons[agent.id]);
     avatar.setAttribute('aria-expanded', 'false');
     avatar.title = `${agent.name} is ${colourName(channelOf(agent))} – change`;
     avatar.setAttribute('aria-label', avatar.title);
@@ -1155,6 +1184,7 @@ for (const [name, refresh] of Object.entries({
   sample: loadSample,
   voices: refreshVoices,
   roster: refreshRoster,
+  'site icons': refreshIcons,
 })) {
   try {
     await refresh();
