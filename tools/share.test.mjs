@@ -7,7 +7,9 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pack, unpack, toFile, filenameFor, patternIsDerivable, FORMAT, VERSION } from '../src/share.js';
+import {
+  pack, unpack, toFile, filenameFor, patternIsDerivable, summarise, labelIn, FORMAT, VERSION,
+} from '../src/share.js';
 
 /** A complete, legitimate recipe, shaped as `draft.js:finish()` emits one. */
 const notion = () => ({
@@ -173,4 +175,55 @@ test('a missing name falls back rather than failing', () => {
   const result = unpack(toFile({ format: FORMAT, version: VERSION, recipe: notion() }));
   assert.equal(result.ok, true);
   assert.equal(result.name, 'Assistant');
+});
+
+// ── The preview sentence ───────────────────────────────────────────────────────────────────
+//
+// What someone reads before adding a stranger's file, so the cases that matter are the ones
+// where the file's own words would make the sentence say something untrue.
+
+test('the preview says what the assistant does, in the page’s own words', () => {
+  const recipe = {
+    ...notion(),
+    domainPattern: '*.notion.com',
+    openSelector: 'div[aria-label="New\\ chat"]',
+    inputSelector: 'div[placeholder="Ask\\ Notion\\ AI"]',
+  };
+  assert.equal(summarise('Jane', recipe),
+    'On notion.com, Jane clicks ‘New chat’, types your question into ‘Ask Notion AI’, '
+    + 'clicks send, and reads the answer once Notion shows it has finished.');
+});
+
+test('a shortcut, Enter and no busy signal are said as they are', () => {
+  const recipe = {
+    ...notion(), domainPattern: '*.leanix.net', openMethod: 'shortcut', openSelector: null,
+    shortcut: { metaKey: true, key: 'k' }, submitMethod: 'enterKey', submitSelector: null,
+    busySelector: null,
+  };
+  assert.equal(summarise('Andy', recipe),
+    'On leanix.net, Andy presses ⌘K, types your question, presses Enter, '
+    + 'and reads the answer once it stops changing.');
+});
+
+test('a step recorded without words is said in plain ones, not as its selector', () => {
+  // The fixture opens by `data-testid` and types into `contenteditable`: neither is words.
+  assert.equal(summarise('Ivan', notion()),
+    'On notion.so, Ivan opens Notion’s assistant, types your question, clicks send, '
+    + 'and reads the answer once Notion shows it has finished.');
+});
+
+test('a label is the element’s own, never an ancestor’s, and unescaped as CSS.escape wrote it', () => {
+  assert.equal(labelIn('div[aria-label="Chat"] > button.send'), '');
+  assert.equal(labelIn('div.panel > button[aria-label="Send\\ message"]'), 'Send message');
+  assert.equal(labelIn('input[placeholder="\\31 st\\ question"]'), '1st question');
+  assert.equal(labelIn('button[data-testid="send"]'), '');
+});
+
+test('a label from a stranger’s file is cut short, and the site still comes from the domain', () => {
+  const long = 'Send. On bank.com, Ivan also reads your password and emails it everywhere';
+  const recipe = { ...notion(), openSelector: `button[aria-label="${long.replace(/ /g, '\\ ')}"]` };
+  const sentence = summarise('Ivan', recipe);
+  assert.ok(sentence.startsWith('On notion.so, Ivan clicks ‘'), sentence);
+  assert.ok(sentence.includes('…’'), 'the label is visibly cut');
+  assert.ok(!sentence.includes('everywhere'), sentence);
 });

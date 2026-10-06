@@ -324,14 +324,13 @@
          that one is the security control reporting, and it should not read like a status. */
       #import-section .status { margin-top: 6px; }
       .status.bad { color: var(--error); }
+      /* What the file will do, in a sentence – read by the person deciding, so at reading size. */
       #import-preview {
-        margin: 8px 0 0; max-height: 210px; overflow: auto;
+        margin: 8px 0 0;
         padding: 9px 11px; border-radius: 8px;
         background: rgba(255, 255, 255, 0.05);
-        font: 11px/1.6 var(--ui);
-        font-feature-settings: var(--figures);
-        color: var(--text-faint);
-        white-space: pre-wrap; overflow-wrap: anywhere;
+        color: var(--text-dim);
+        overflow-wrap: anywhere;
       }
 
       /* ── The roster, two across ─────────────────────────────────────────────────────────
@@ -738,7 +737,7 @@
               <button class="icon primary" id="import-add" data-icon="plus" data-tip-at="end"
                       aria-label="Add this assistant" disabled></button>
             </div>
-            <pre id="import-preview" hidden></pre>
+            <p id="import-preview" hidden></p>
             <span class="status tech" id="import-status">nothing to add yet</span>
           </section>
 

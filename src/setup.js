@@ -10,7 +10,7 @@ import {
 } from './storage.js';
 import { channelOf, colourName, initialFor, PALETTE } from './channels.js';
 import { sortedIDs } from './order.js';
-import { pack, unpack, toFile, filenameFor } from './share.js';
+import { pack, unpack, toFile, filenameFor, summarise } from './share.js';
 import { matchPattern, patternForHost } from './domain.js';
 import { FLOOR_MS, FLOOR_OVERRIDE_KEY, FLOOR_RANGE, floorWindow, productLabel } from './routing.js';
 import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from './grace.js';
@@ -1351,32 +1351,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
   refreshRoster();
 });
 
-/**
- * A recipe as something a person can read.
- *
- * Every field, including the ones that are null: "there is no busy indicator" is a fact about
- * this recording worth seeing, and a list that silently omits what it does not have cannot be
- * used to check anything.
- */
-function describeRecipe(recipe) {
-  const rows = [
-    ['site', recipe.domainPattern],
-    ['opens with', recipe.openMethod === 'shortcut'
-      ? [recipe.shortcut?.metaKey && '⌘', recipe.shortcut?.ctrlKey && '⌃',
-        recipe.shortcut?.altKey && '⌥', recipe.shortcut?.shiftKey && '⇧',
-        recipe.shortcut?.key?.toUpperCase()].filter(Boolean).join(' ')
-      : recipe.openSelector],
-    ['message box', recipe.inputSelector],
-    ['sends with', recipe.submitMethod === 'enterKey' ? '↩ Enter' : recipe.submitSelector],
-    ['answer appears', recipe.responseContainerSelector],
-    ['knows when done', recipe.busySelector ?? '– none, so a timer is used'],
-    ['quiet period', `${recipe.quietPeriodMs ?? 900} ms`],
-    ['gives up after', `${Math.round((recipe.responseTimeoutMs ?? 60000) / 1000)} s`],
-  ];
-  const width = Math.max(...rows.map(([label]) => label.length));
-  return rows.map(([label, value]) => `${label.padEnd(width)}  ${value ?? '–'}`).join('\n');
-}
-
 // ── Adding an assistant somebody else recorded ─────────────────────────────────────────────
 //
 // **Two beats, and the split is load-bearing rather than tidy.** `permissions.request` needs a
@@ -1422,10 +1396,9 @@ function offer(text) {
     return;
   }
 
-  // `describeRecipe` renders a recipe as something a person can check. This is the one place it
-  // is shown: before a stranger's file is trusted with a site, rather than when sharing your own.
-  preview.textContent = `${read.name} – on ${read.recipe.domainPattern}\n\n`
-    + describeRecipe(read.recipe);
+  // What it will do, in a sentence – the selectors themselves were too technical for the person
+  // deciding. The site it names is the one Chrome's prompt will name too.
+  preview.textContent = summarise(read.name, read.recipe);
   preview.hidden = false;
 
   // **The raw text is kept, not just the parsed result.** The worker re-validates on the bytes

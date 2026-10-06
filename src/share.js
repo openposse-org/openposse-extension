@@ -30,6 +30,7 @@
 // rather than hiding it behind a download.
 
 import { patternForHost } from './domain.js';
+import { productLabel } from './routing.js';
 
 export const FORMAT = 'openposse.recipe';
 export const VERSION = 1;
@@ -194,4 +195,74 @@ export function unpack(text) {
     recipe,
     notes,
   };
+}
+
+// ── The preview, in a sentence ─────────────────────────────────────────────────────────────
+
+/** Attributes that name an element by the words a person sees. */
+const READABLE = ['aria-label', 'placeholder', 'data-placeholder', 'title', 'alt'];
+/** Long enough for a button's words, short enough that a crafted one cannot read as a sentence. */
+const LABEL_MAX = 40;
+
+/**
+ * The words a selector finds its element by, if it finds it by words: `aria-label="New\ chat"`
+ * gives "New chat". Unescaped the way `CSS.escape` wrote them and cut short; empty for a
+ * selector that names its element by an id or a test hook.
+ *
+ * **Only the element's own words, never an ancestor's** – `div[aria-label="Chat"] > button`
+ * clicks a button inside the chat, and calling that click 'Chat' would be a small lie.
+ */
+export function labelIn(selector) {
+  const text = String(selector ?? '');
+  let found = null;
+  for (const match of text.matchAll(/\[([\w-]+)[~|^$*]?="((?:[^"\\]|\\.)*)"\]/g)) {
+    const rest = text.slice(match.index + match[0].length).replace(/\[[^\]]*\]|\([^)]*\)/g, '');
+    if (READABLE.includes(match[1]) && !/[\s>+~]/.test(rest)) found = match[2];
+  }
+  if (found === null) return '';
+  const words = found
+    .replace(/\\([0-9a-fA-F]{1,6}) ?/g, (_, hex) => {
+      const point = parseInt(hex, 16);
+      return point > 0 && point <= 0x10ffff ? String.fromCodePoint(point) : '\u{FFFD}';
+    })
+    .replace(/\\(.)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return words.length > LABEL_MAX ? `${words.slice(0, LABEL_MAX - 1).trimEnd()}…` : words;
+}
+
+/**
+ * A recipe as one sentence a person can follow – what the assistant does on the page, in the
+ * page's own words where the recording kept them. For the Add a shared assistant preview, which
+ * listed the selectors themselves until 2026-10-06, and those were too technical for the person
+ * deciding whether to add it.
+ *
+ * Every quoted word came from a stranger's file. `labelIn` cuts them short, and the site comes
+ * from `domainPattern`, which `unpack` has already checked – so a label can make the sentence
+ * odd, never change which site it names. Chrome's own prompt names that site again.
+ */
+export function summarise(name, recipe) {
+  const site = String(recipe.domainPattern ?? '').replace(/^\*\./, '') || 'its site';
+  const product = productLabel(recipe.domainPattern) || site;
+  const quoted = (words) => `‘${words}’`;
+
+  const keys = recipe.shortcut ? [
+    recipe.shortcut.metaKey && '⌘', recipe.shortcut.ctrlKey && '⌃',
+    recipe.shortcut.altKey && '⌥', recipe.shortcut.shiftKey && '⇧',
+    String(recipe.shortcut.key ?? '').toUpperCase(),
+  ].filter(Boolean).join('') : '';
+  const opener = labelIn(recipe.openSelector);
+  // The same branch `content.js` takes: a click when it says click, the shortcut otherwise.
+  const open = recipe.openMethod === 'click'
+    ? (opener ? `clicks ${quoted(opener)}` : `opens ${product}’s assistant`)
+    : (keys ? `presses ${keys}` : null);
+
+  const box = labelIn(recipe.inputSelector);
+  const type = box ? `types your question into ${quoted(box)}` : 'types your question';
+  const send = recipe.submitMethod === 'enterKey' ? 'presses Enter' : 'clicks send';
+  const read = recipe.busySelector
+    ? `reads the answer once ${product} shows it has finished`
+    : 'reads the answer once it stops changing';
+
+  return `On ${site}, ${name} ${[open, type, send].filter(Boolean).join(', ')}, and ${read}.`;
 }
