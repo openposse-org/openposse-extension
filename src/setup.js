@@ -1106,7 +1106,7 @@ async function refreshRoster() {
       // Save at the top, beside Copy, rather than under a file that can run past the fold.
       sheet.append(
         toolbar(text, 'the file', title, save),
-        lede(filename, ' – send it to someone, and they add it under Add a shared assistant.'),
+        lede(filename, ' – send it to someone to add under Add a shared assistant.'),
         block(text),
       );
     });
