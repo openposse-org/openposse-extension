@@ -115,17 +115,6 @@ function tick() {
  *
  * Plain words are for where there is no agent to name, or where something needs saying.
  */
-/**
- * The phases where an answer is on its way, so the panel holds a space open for it.
- *
- * **Not simply "a turn is running".** `listening` is deliberately out: nothing is about to land
- * while somebody is still talking, and on a panel that has never answered the reserve would be a
- * gap between the roster and the controls rather than space at the end of anything. Holding it
- * from `routing` means the one move the layout makes is at the moment the person stopped speaking
- * – not at the moment the bubble appears, which is when a hand is most likely on its way to Stop.
- */
-const AWAITING = new Set(['routing', 'thinking', 'answering']);
-
 const STATUS = {
   listening: () => ({ text: 'Listening' }),
   routing: () => ({ text: "Working out who that's for…", pulse: true }),
@@ -189,23 +178,20 @@ function renderTurn() {
 
   el('deadmic').hidden = state.phase !== 'not-capturing';
 
-  // See `AWAITING` above, and the `.awaiting` rule in the stylesheet.
-  el('top').classList.toggle('awaiting', AWAITING.has(state.phase));
-
-  const answer = el('answer');
-  answer.textContent = '';
-  if (state.answer) {
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble';
-    bubble.append(document.createTextNode(state.answer));
-    if (state.sub) {
-      const sub = document.createElement('div');
-      sub.className = 'sub';
-      sub.textContent = state.sub;
-      bubble.append(sub);
-    }
-    answer.append(bubble);
+  // **Filled in place, never rebuilt.** The box is in the markup and shows from the first status
+  // on, so rebuilding it per patch would replay its entrance with every word somebody says. See
+  // `.bubble` in the stylesheet for why it is one height throughout.
+  el('answer').hidden = !words && !state.answer;
+  const text = el('answer-text');
+  text.hidden = !state.answer;
+  if (text.textContent !== (state.answer ?? '')) {
+    text.textContent = state.answer ?? '';
+    // A new answer starts at its first line, wherever the last one was scrolled to.
+    text.scrollTop = 0;
   }
+  const sub = el('answer-sub');
+  sub.hidden = !state.answer || !state.sub;
+  sub.textContent = state.sub ?? '';
 }
 
 /**

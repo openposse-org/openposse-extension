@@ -64,16 +64,16 @@
         flex: 0 1 auto; min-height: 0;
         display: flex; flex-direction: column; padding: 10px 14px 0;
       }
-      /* Everything but the answer keeps its height. The question and the status line set a
-         `min-height`, which replaces the content-sized minimum, so a long answer could otherwise
-         squeeze a three-line question below its text and into the answer. */
+      /* Everything but the answer keeps its height. The question sets a `min-height`, which
+         replaces the content-sized minimum, so a long answer could otherwise squeeze a three-line
+         question below its text and into the answer. */
       .top > :not(.answer) { flex-shrink: 0; }
 
       /* The only part that scrolls: the roster. It takes whatever the top and the controls leave,
          but never less than a row of avatars and most of the next – so when an answer is long it is
          the answer that scrolls, and the roster is still there.
 
-         **Its top 10px fade out**, so avatars scrolling up go under the status line softly instead of
+         **Its top 10px fade out**, so avatars scrolling up go under the turn softly instead of
          being cut in half against it. At rest that strip is padding, so nothing is faded until it
          scrolls. */
       main {
@@ -121,20 +121,14 @@
       }
       @keyframes blink { 50% { opacity: 0; } }
 
-      /* Who the turn is with: the last line of the top, directly above the roster. Beside the
-         avatars it took width from them, so a long roster re-wrapped whenever it changed, and the
-         status itself was squeezed into a column a few letters wide. **The line keeps its height
-         when empty** – 18px under the divider's padding – so a status appearing does not shift
-         anything under the pointer.
-         **The divider is an inset hairline on this row rather than an element of its own.** A
-         half-pixel `inset` shadow is what the hero uses and it is the better primitive: a 1px div
-         rounds up to a whole device pixel and reads as a drawn line, where this catches the light
-         the way the edge of a raised surface does. It also cannot drift out of alignment with the
-         row it divides, having no margins of its own to keep in step. */
+      /* Who the turn is with, heading the answer box in its top-left corner. It was a line of its
+         own under the box, behind a divider, so one exchange was read in two places; inside, the
+         status and the answer it is about read as one thing. The divider went with it, and the
+         box's own edge now separates the turn from the roster. **The line keeps its height when
+         empty**, so a status appearing never moves the answer under it. */
       .who {
-        min-height: 32px; margin-top: 18px; padding-top: 14px;
-        box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.14);
-        font-size: 13px; color: var(--text-dim);
+        flex: none; min-height: 18px; margin-bottom: 6px;
+        font-size: 13px; line-height: 18px; color: var(--text-dim);
         display: flex; align-items: center; gap: 7px; overflow-wrap: anywhere;
       }
       /* Wraps, because a long roster otherwise runs off the panel and the whole page scrolls
@@ -193,22 +187,25 @@
       .av.aimed:not(.lit) .face::after { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.35); }
       .av.broken .face::after { box-shadow: 0 0 0 1.5px var(--error); }
 
-      /* Reserved like the transcript, and for the sharper version of the same reason: an answer
-         lands mid-turn, and without the reserve it shoves the roster down the panel at the exact
-         moment somebody may be reaching for an avatar.
+      /* **One height, whatever is in it**: the status line and three lines of answer, which is
+         two ordinary sentences at the panel's usual width. So the roster below never moves
+         between a short answer, a long one and none yet – an answer lands mid-turn, at the
+         moment somebody may be reaching for an avatar – and a longer one scrolls inside.
 
-         **Reserved only while a turn is actually in flight**, which is where this departs from
-         the hero. The hero's section ends under its answer, so an unconditional 84px reserve
-         costs it nothing; here the roster and the desk sit below, so the same reserve on a panel
-         that has never answered is a hole *between* two things rather than space at the end of
-         one. Holding it from `routing` onward buys the no-jump where it is wanted – the move it
-         does make is at listening → routing, which is the moment somebody has just stopped
-         talking. */
-      /* **The give in the top's column.** Everything else up there keeps its height; this shrinks
-         when the panel is too short for all of it, and the bubble scrolls inside. */
+         The box appears with the first status of the panel's first turn and stays from then on,
+         since every phase after that has a status to show. That is the one move the layout makes,
+         at the press that started the turn. It replaces the reserve that used to hold the space
+         from `routing` on: a box that is always this tall has nothing left to reserve.
+
+         **Still the give in the top's column.** On a panel too short for all of it, the box
+         shrinks below that height rather than pushing the roster off, and the answer scrolls in
+         what is left. */
       .answer { padding-top: 14px; min-height: 0; display: flex; flex-direction: column; }
-      .top.awaiting .answer { min-height: 84px; }
       .bubble {
+        --answer-lines: 3;
+        /* 24px of padding and 24px of status line, then the lines, in the bubble's own `em`. */
+        height: calc(48px + var(--answer-lines) * 1.47em); min-height: 0;
+        display: flex; flex-direction: column; overflow: hidden;
         border-radius: 16px; padding: 12px 15px;
         font-size: 15.5px; line-height: 1.47;
         background: rgba(255, 255, 255, 0.075);
@@ -218,13 +215,19 @@
           inset 0 0.5px 0 rgba(255, 255, 255, 0.22),
           inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
         animation: rise 0.34s cubic-bezier(0.22, 1, 0.36, 1);
-        /* Scrolls once the top runs out of room – see `.answer`. A scroller is also exempt from a
-           flex item's content-sized minimum, which is what lets it shrink at all. */
-        overflow-y: auto; overscroll-behavior: contain;
+      }
+      /* The only part of the box that scrolls. A scroller is also exempt from a flex item's
+         content-sized minimum, which is what lets it shrink at all. It rises in when an answer
+         lands, as the whole bubble used to. */
+      .bubble .text {
+        min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+        animation: rise 0.34s cubic-bezier(0.22, 1, 0.36, 1);
       }
       @keyframes rise { from { opacity: 0; transform: translateY(5px); } }
-      /* Inside the bubble, as drawn: it is a property of the answer, not a note beside it. */
-      .sub { font-size: 12.5px; color: rgba(235, 235, 245, 0.55); margin-top: 4px; }
+      /* Inside the bubble, as drawn: it is a property of the answer, not a note beside it. Under
+         the scroller rather than in it, so a note about a long answer – "Shortened" is one – is
+         never scrolled out of sight by that answer. */
+      .sub { flex: none; font-size: 12.5px; color: rgba(235, 235, 245, 0.55); margin-top: 4px; }
 
       /* ── The coaching card, during a recording ─────────────────────────────────────────── */
 
@@ -398,9 +401,15 @@
       </div>
       <div class="transcript" id="transcript"></div>
       <!-- The answer under the question it answers, and the roster below both: a long roster
-           between the two put five rows of avatars in the middle of one exchange. -->
-      <div class="answer" id="answer"></div>
-      <div class="who" id="who"></div>
+           between the two put five rows of avatars in the middle of one exchange. Who the turn is
+           with heads the box, and a note on the answer sits under it. -->
+      <div class="answer" id="answer" hidden>
+        <div class="bubble">
+          <div class="who" id="who"></div>
+          <div class="text" id="answer-text" hidden></div>
+          <div class="sub" id="answer-sub" hidden></div>
+        </div>
+      </div>
     </header>
 
     <!-- The only part that scrolls. -->

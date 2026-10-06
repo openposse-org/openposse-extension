@@ -63,7 +63,8 @@ const SCRIPT = [
     named: false,
     ask: 'and which are still open?',
     answer: 'Eleven are still open. Three are due to close by Friday.',
-    sub: 'No name needed – the floor was still held.',
+    // No note saying the floor was held. A real follow-up never explains itself, and the status
+    // line and the lit avatar already show who took it.
   },
 ];
 
