@@ -197,6 +197,24 @@ const NODES = {
       ['path', { d: 'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2' }],
     ],
   },
+  // Settings' setup sheet and its import row, taken the same day. Lucide has removed its brand
+  // icons, `github` among them, so getting a recipe from GitHub is drawn as a cloud.
+  'list-checks': {
+    nodes: [
+      ['path', { d: 'M13 5h8' }],
+      ['path', { d: 'M13 12h8' }],
+      ['path', { d: 'M13 19h8' }],
+      ['path', { d: 'm3 17 2 2 4-4' }],
+      ['path', { d: 'm3 7 2 2 4-4' }],
+    ],
+  },
+  'cloud-download': {
+    nodes: [
+      ['path', { d: 'M12 13v8l-4-4' }],
+      ['path', { d: 'm12 21 4-4' }],
+      ['path', { d: 'M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284' }],
+    ],
+  },
 };
 
 /** Every name this module knows, so a caller can check rather than discover at render time. */

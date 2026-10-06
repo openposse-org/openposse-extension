@@ -1180,12 +1180,17 @@ async function refreshRoster() {
   filterRoster();
 }
 
+/** How many columns the stylesheet gives the roster at this width – `--columns` in setup.html. */
+const columnsOf = (target) => Number.parseInt(getComputedStyle(target).getPropertyValue('--columns'), 10) || 1;
+/** The count the roster was last laid out for, so a resize lays it out again only past a breakpoint. */
+let laidOutFor = 0;
+
 /**
- * Shows the assistants the search box matches, and lays the two columns out over what is shown.
+ * Shows the assistants the search box matches, and lays the columns out over what is shown.
  *
- * The roster fills down, so the split point is a count – and it has to be the count of what is
- * on screen. Kept at the whole roster's half, five matches out of thirty would all sit in the
- * left column with an empty one beside them.
+ * The roster fills down, so where each column starts is a count – and it has to be the count of
+ * what is on screen. Kept at the whole roster's share, five matches out of thirty would all sit
+ * in the first column with empty ones beside it.
  */
 function filterRoster() {
   const target = el('roster');
@@ -1197,12 +1202,14 @@ function filterRoster() {
   for (const row of rows) row.hidden = Boolean(wanted) && !row.dataset.find.includes(wanted);
   const shown = rows.filter((row) => !row.hidden);
 
-  const half = Math.ceil(shown.length / 2);
-  target.style.setProperty('--rows', String(Math.max(half, 1)));
-  // One match fills only the left column, and a divider beside nothing reads as a stray line.
-  target.classList.toggle('one-column', shown.length < 2);
+  laidOutFor = columnsOf(target);
+  const down = Math.max(Math.ceil(shown.length / laidOutFor), 1);
+  target.style.setProperty('--rows', String(down));
+  // How many columns have anyone in them – one match fills only the first, and four across three
+  // fill two – so no divider is drawn beside nothing, where it reads as a stray line.
+  target.dataset.columns = String(Math.ceil(shown.length / down));
   // The bottom of each column drops its rule, as the voice list's do.
-  shown.forEach((row, i) => row.classList.toggle('ends-column', i === half - 1 || i === shown.length - 1));
+  shown.forEach((row, i) => row.classList.toggle('ends-column', (i + 1) % down === 0 || i === shown.length - 1));
 
   const none = el('roster-none');
   none.hidden = shown.length > 0;
@@ -1210,6 +1217,9 @@ function filterRoster() {
 }
 
 el('roster-search').addEventListener('input', filterRoster);
+window.addEventListener('resize', () => {
+  if (columnsOf(el('roster')) !== laidOutFor) filterRoster();
+});
 
 // ── Arranging ──────────────────────────────────────────────────────────────────────────────
 //
@@ -1791,6 +1801,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 showDemo(false);
 
+// ── Setup's sheet ──────────────────────────────────────────────────────────────────────────
+//
+// The steps, behind the checklist icon beside Debug's. Whether it opens by itself is decided at
+// the end, once the checks below have said what is done.
+el('setup-sheet').addEventListener('toggle', (event) => {
+  el('setup').setAttribute('aria-expanded', String(event.newState === 'open'));
+});
+
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
 
 // Each section independently, and loudly when one fails.
@@ -1824,15 +1842,19 @@ for (const [name, refresh] of Object.entries({
   }
 }
 
-// **Folded once the three steps the product needs are done** – the microphone, the speech
-// model and a shortcut. Steps 4 and 6 are optional and step 5 is settings rather than a task, so
-// none of them holds the column open. Decided here, once, from what the checks above found:
-// folding it under somebody who has just finished a step would take it away while they read.
+// **The setup sheet opens by itself until the three steps the product needs are done** – the
+// microphone, the speech model and a shortcut. The rest are optional, or settings rather than
+// tasks, so none of them holds it open. Decided here, once, from what the checks above found, and
+// never closed by us: shutting it under somebody who has just finished a step would take it away
+// while they read. Until 2026-10-06 the steps were a column beside the roster, folded the same way.
 const complete = ['step-mic', 'step-model', 'step-shortcut']
   .every((id) => el(id).classList.contains('done'));
-el('setup-steps').open = !complete;
 el('setup-done').hidden = !complete;
 el('setup-title').textContent = complete ? 'Setup complete' : 'Set up OpenPosse';
+// Lit while there is something to do, as each step's own next button is.
+el('setup').classList.toggle('primary', !complete);
+label(el('setup'), complete ? 'Setup – done' : 'Set up OpenPosse');
+if (!complete && !el('setup-sheet').matches(':popover-open')) el('setup-sheet').showPopover();
 
 // Shortcuts are changed on another tab, so this page is stale the moment they leave it. Chrome
 // has no event for a rebinding – re-reading on focus is the only way the status can be true
