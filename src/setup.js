@@ -11,6 +11,7 @@ import {
 import { channelOf, colourName, initialFor, PALETTE } from './channels.js';
 import { pack, unpack, toFile, filenameFor } from './share.js';
 import { matchPattern } from './domain.js';
+import { productLabel } from './routing.js';
 import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
 import {
   weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES, VOICES,
@@ -24,6 +25,16 @@ const LANGS = { langs: ['en-US'], processLocally: true };
 const el = (id) => document.getElementById(id);
 const setStatus = (id, text) => { el(id).textContent = text; };
 const markDone = (section, done) => el(section).classList.toggle('done', done);
+/** The words of an icon button: its hover label, and what a screen reader says for it. */
+const label = (button, text) => button.setAttribute('aria-label', text);
+/** Swaps an icon button's glyph in place. */
+const glyph = (button, name, size = 15) => button.replaceChildren(icon(name, { size }));
+
+// The page's own icon buttons name their glyph in the markup, `data-icon`, and are drawn from
+// icons.js here – the same table the roster's buttons come from, so the geometry has one home.
+for (const button of document.querySelectorAll('[data-icon]')) {
+  glyph(button, button.dataset.icon, Number(button.dataset.size ?? 15));
+}
 
 // ── 1. Microphone ──────────────────────────────────────────────────────────────────────────
 
@@ -147,7 +158,7 @@ async function refreshPanelAccess() {
     ? 'on – the panel appears on any page'
     : "off – the panel appears on assistants' pages only");
   markDone('step-panel', granted);
-  el('grant-panel').textContent = granted ? 'Turn off' : 'Turn on';
+  el('grant-panel').setAttribute('aria-checked', String(granted));
   return granted;
 }
 
@@ -216,7 +227,8 @@ async function refreshWeights() {
   // the two, and the word has to follow – "Resume" and "interrupted" send somebody looking for
   // a failure that did not happen.
   const extending = state === 'partial' && core;
-  el('get-weights').textContent = extending ? 'Add them' : state === 'partial' ? 'Resume' : 'Download';
+  label(el('get-weights'), extending
+    ? 'Download the new voices' : state === 'partial' ? 'Resume the download' : 'Download the voices');
   // Says what is on disk, and nothing about whether it is being used – the engine line above
   // owns that, and this claiming "used whenever WebGPU is available" directly contradicted it
   // while the engine was still unbuilt. One fact, one place.
@@ -445,14 +457,16 @@ function describeSpoken(message) {
 el('play-sample').addEventListener('click', () => {
   const button = el('play-sample');
   button.disabled = true;
-  button.textContent = 'Playing…';
+  glyph(button, 'loader-circle');
+  button.classList.add('busy');
   setStatus('sample-status', '');
 
   playSample({
     voice: lastHeardVoice,
     report: (outcome) => {
       button.disabled = false;
-      button.textContent = 'Play sample';
+      glyph(button, 'play');
+      button.classList.remove('busy');
       // Naming the engine is most of the value. "Which of the two is actually speaking" is the
       // question this whole section is about, and a preview that answered it only by sounding a
       // particular way would be making the reader guess at the thing it just demonstrated.
@@ -663,8 +677,7 @@ function renderVoice(grid, id, name, { endsColumn = false } = {}) {
 // way step 4 does, and the panel redraws itself from `permissions.onAdded` and `onRemoved`.
 
 async function refreshIcons() {
-  el('grant-icons').textContent = await chrome.permissions.contains(ICONS)
-    ? 'Show initials' : 'Show site icons';
+  el('grant-icons').setAttribute('aria-checked', String(await chrome.permissions.contains(ICONS)));
 }
 
 el('grant-icons').addEventListener('click', async () => {
@@ -694,20 +707,31 @@ async function refreshRoster() {
     target.textContent = problem;
     return;
   }
-  target.className = 'card';
 
   if (agents.length === 0) {
+    target.className = 'card';
     target.textContent = 'none yet – record one from the toolbar button';
     return;
   }
-  const icons = await iconPages(Object.fromEntries(await Promise.all(
-    agents.map(async (agent) => [agent.id, (await recipeFor(agent))?.domainPattern]))));
+  // Two across, filling down – see `#roster.grid` in setup.html. This is where the second column
+  // starts, set here because CSS has no way to count its own children.
+  target.className = 'grid';
+  const rows = Math.ceil(agents.length / 2);
+  target.style.setProperty('--rows', String(rows));
+
+  const patterns = Object.fromEntries(await Promise.all(
+    agents.map(async (agent) => [agent.id, (await recipeFor(agent))?.domainPattern])));
+  const icons = await iconPages(patterns);
 
   for (const [index, agent] of agents.entries()) {
     const row = document.createElement('div');
     // Everyone is shown lit here: this is a list of what exists, not of who is speaking.
     row.className = 'agent active';
+    // The bottom of each column drops its rule, as the voice list's do.
+    row.classList.toggle('ends-column', index === rows - 1 || index === agents.length - 1);
     row.style.setProperty('--channel', channelOf(agent));
+    // What See's and Share's sheets hang from – one name per row, like the palette's.
+    row.style.setProperty('anchor-name', `--tile-${index}`);
 
     // ── Its colour ─────────────────────────────────────────────────────────────────────
     //
@@ -775,24 +799,17 @@ async function refreshRoster() {
       avatar.setAttribute('aria-expanded', String(event.newState === 'open'));
     });
 
-    // Named so the rail can give it a line of its own. The roster now sits in a 340px column
-    // rather than the 620px one this row was laid out for, and the alternative – selecting it
-    // as "the child with no class" – breaks silently the first time anyone adds one.
-    const text = document.createElement('div');
-    text.className = 'who';
-    const name = document.createElement('div');
-    name.className = 'name';
-    name.textContent = agent.name;
+    // What it drives – "Notion", "LeanIX" – where every row used to say "Via browser", which
+    // was true of all of them and so told nobody anything. The panel's label, from the same
+    // derivation.
     const kind = document.createElement('div');
-    kind.className = 'kind';
     // A broken agent is listed, not hidden. It still routes, so being told beats finding out
     // when it is asked a question.
-    kind.textContent = broken.includes(agent.id)
+    const isBroken = broken.includes(agent.id);
+    kind.className = isBroken ? 'kind bad' : 'kind';
+    kind.textContent = isBroken
       ? 'needs re-recording – its recipe is missing'
-      : 'Via browser';
-
-    text.append(name, kind);
-    row.append(avatar, text);
+      : productLabel(patterns[agent.id]) || patterns[agent.id] || '';
 
     // ── Renaming lives here, and that is deliberate ────────────────────────────────────
     //
@@ -912,81 +929,99 @@ async function refreshRoster() {
       problemLine.hidden = false;
     };
 
+    /** One of the row's icon buttons, its words in the hover label. */
+    const tool = (name, words, className = '') => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `icon small ${className}`.trim();
+      button.dataset.tipAt = 'end';
+      glyph(button, name, 14);
+      label(button, words);
+      return button;
+    };
+
+    /**
+     * A sheet over the list, hung from this row, that `button` opens and closes – the palette's
+     * mechanism, so a second click, a click elsewhere and Escape all close it, and opening one
+     * closes any other. The recipe is asked for when it opens, not on every redraw of every row,
+     * and `fill` writes it in.
+     */
+    const sheetFor = (button, fill) => {
+      const sheet = document.createElement('div');
+      sheet.className = 'sheet';
+      sheet.popover = 'auto';
+      sheet.style.setProperty('position-anchor', `--tile-${index}`);
+      button.popoverTargetElement = sheet;
+      button.setAttribute('aria-expanded', 'false');
+      sheet.addEventListener('toggle', async (event) => {
+        button.setAttribute('aria-expanded', String(event.newState === 'open'));
+        if (event.newState !== 'open') return;
+
+        sheet.textContent = 'reading…';
+        const result = await chrome.runtime
+          .sendMessage({ kind: 'openposse.agent.recipe', agentId: agent.id })
+          .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+
+        if (!result?.ok || !result.recipe) {
+          sheet.hidePopover();
+          say(result?.reason ?? 'its recipe is missing', true);
+          return;
+        }
+        sheet.textContent = '';
+        fill(sheet, result.recipe);
+      });
+      return sheet;
+    };
+
     // **See** – the recipe as the runtime will read it, not a reconstruction of it.
-    const details = document.createElement('pre');
-    details.className = 'recipe';
-    details.hidden = true;
-
-    const see = document.createElement('button');
-    see.className = 'ghost';
-    see.textContent = 'See';
-    see.addEventListener('click', async () => {
-      if (!details.hidden) { details.hidden = true; see.textContent = 'See'; return; }
-
-      const result = await chrome.runtime
-        .sendMessage({ kind: 'openposse.agent.recipe', agentId: agent.id })
-        .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
-
-      if (!result?.ok || !result.recipe) {
-        say(result?.reason ?? 'its recipe is missing', true);
-        return;
-      }
-      details.textContent = describeRecipe(result.recipe);
-      details.hidden = false;
-      see.textContent = 'Hide';
+    const see = tool('eye', `See what ${agent.name} recorded`);
+    const seeing = sheetFor(see, (sheet, recipe) => {
+      const details = document.createElement('pre');
+      details.className = 'recipe';
+      details.textContent = describeRecipe(recipe);
+      sheet.append(details);
     });
 
-    // **Share** – the same show/hide as See, because the JSON *is* the review surface.
+    // **Share** – shown before it is saved, because the JSON *is* the review surface.
     //
     // Downloading it silently would make the file the thing you trust without ever having seen
     // it. Shown, it can be read before it is sent and read again by whoever receives it, which
     // is half of what stands between an imported recipe and a bad host permission. The other
     // half is Chrome's own prompt, on the far side.
-    const bundle = document.createElement('pre');
-    bundle.className = 'recipe';
-    bundle.hidden = true;
+    const share = tool('share', `Share ${agent.name}`);
+    const sharing = sheetFor(share, (sheet, recipe) => {
+      const text = toFile(pack({ name: agent.name, recipe }));
+      const bundle = document.createElement('pre');
+      bundle.className = 'recipe';
+      bundle.textContent = text;
 
-    const share = document.createElement('button');
-    share.className = 'ghost';
-    share.textContent = 'Share';
-    share.addEventListener('click', async () => {
-      if (!bundle.hidden) { bundle.hidden = true; share.textContent = 'Share'; return; }
-
-      const result = await chrome.runtime
-        .sendMessage({ kind: 'openposse.agent.recipe', agentId: agent.id })
-        .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
-
-      if (!result?.ok || !result.recipe) {
-        say(result?.reason ?? 'its recipe is missing', true);
-        return;
-      }
-
-      const text = toFile(pack({ name: agent.name, recipe: result.recipe }));
-      bundle.textContent = '';
-
-      const save = document.createElement('button');
-      save.className = 'ghost';
-      save.textContent = `Save ${filenameFor(agent.name)}`;
+      const file = filenameFor(agent.name);
+      const save = tool('download', `Save ${file}`);
+      // Its label opens rightwards: the button sits at the sheet's left edge, and the sheet
+      // scrolls, so a label running left would be clipped by it.
+      save.dataset.tipAt = 'start';
       save.addEventListener('click', () => {
         // A blob URL from an extension page needs no `downloads` permission, and revoking it
         // after the click keeps the object out of memory for the life of the page.
         const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
         const link = document.createElement('a');
         link.href = url;
-        link.download = filenameFor(agent.name);
+        link.download = file;
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       });
+      const filename = document.createElement('span');
+      filename.className = 'tech';
+      filename.textContent = file;
+      const saving = document.createElement('div');
+      saving.className = 'save';
+      saving.append(save, filename);
 
-      bundle.append(text, save);
-      bundle.hidden = false;
-      share.textContent = 'Hide';
+      sheet.append(bundle, saving);
     });
 
     // **Re-record** – same wizard, keeping this agent's name and voice.
-    const again = document.createElement('button');
-    again.className = 'ghost';
-    again.textContent = 'Re-record';
+    const again = tool('rotate-ccw', `Record ${agent.name} again`);
     again.addEventListener('click', async () => {
       again.disabled = true;
       say('opening the page…');
@@ -1002,16 +1037,20 @@ async function refreshRoster() {
     // **Delete** – confirmed in place. A dialog would be a second surface to build and would
     // still be a yes/no; turning the button itself into the confirmation keeps the question
     // attached to the row it is about, so there is no chance of confirming the wrong one.
-    const remove = document.createElement('button');
-    remove.className = 'ghost bad';
-    remove.textContent = 'Delete';
+    const remove = tool('trash', `Delete ${agent.name}`, 'bad');
     let armed = false;
+    /** Loaded, it turns into a red tick whose label says what the next click does. */
+    const arm = (on) => {
+      armed = on;
+      remove.classList.toggle('armed', on);
+      glyph(remove, on ? 'check' : 'trash', 14);
+      label(remove, on ? `Click again to delete ${agent.name}` : `Delete ${agent.name}`);
+    };
     remove.addEventListener('click', async () => {
       if (!armed) {
-        armed = true;
-        remove.textContent = 'Sure?';
+        arm(true);
         // Disarms itself, so a stray click cannot leave a loaded button waiting for the next one.
-        setTimeout(() => { armed = false; remove.textContent = 'Delete'; }, 4000);
+        setTimeout(() => arm(false), 4000);
         return;
       }
       const result = await chrome.runtime
@@ -1023,8 +1062,21 @@ async function refreshRoster() {
     });
 
     tools.append(see, share, again, remove);
-    text.append(problemLine, palette, details, bundle);
-    row.append(rename, voice, tools);
+
+    // Two lines beside the avatar: the name, which is the rename field, and its tools; then what
+    // it drives and its voice. The sheets and the palette are in the row only to be found –
+    // they are drawn in Chrome's top layer, over the list.
+    const named = document.createElement('div');
+    named.className = 'line';
+    named.append(rename, tools);
+    const about = document.createElement('div');
+    about.className = 'line';
+    about.append(kind, voice);
+    const who = document.createElement('div');
+    who.className = 'who';
+    who.append(named, about, problemLine);
+
+    row.append(avatar, who, palette, seeing, sharing);
     target.append(row);
   }
 }
@@ -1129,6 +1181,9 @@ el('import-file').addEventListener('change', async (event) => {
 });
 
 el('import-text').addEventListener('input', (event) => offer(event.target.value));
+
+// The file input is hidden – Chrome's own "Choose File" cannot be restyled – and this opens it.
+el('import-pick').addEventListener('click', () => el('import-file').click());
 
 el('import-add').addEventListener('click', async () => {
   if (!pending) return;                       // the button is disabled; this is belt and braces

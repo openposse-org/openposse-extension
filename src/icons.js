@@ -130,6 +130,59 @@ const NODES = {
       ['circle', { cx: '16.5', cy: '7.5', r: '.5', fill: 'currentColor' }],
     ],
   },
+  // Settings' controls, taken 2026-10-06. Lucide has since renamed `trash-2` to `trash`, so the
+  // name here is the current one rather than the one older docs use.
+  eye: {
+    nodes: [
+      ['path', { d: 'M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0' }],
+      ['circle', { cx: '12', cy: '12', r: '3' }],
+    ],
+  },
+  share: {
+    nodes: [
+      ['path', { d: 'M12 2v13' }],
+      ['path', { d: 'm16 6-4-4-4 4' }],
+      ['path', { d: 'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8' }],
+    ],
+  },
+  'rotate-ccw': {
+    nodes: [
+      ['path', { d: 'M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8' }],
+      ['path', { d: 'M3 3v5h5' }],
+    ],
+  },
+  trash: {
+    nodes: [
+      ['path', { d: 'M10 11v6' }],
+      ['path', { d: 'M14 11v6' }],
+      ['path', { d: 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6' }],
+      ['path', { d: 'M3 6h18' }],
+      ['path', { d: 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2' }],
+    ],
+  },
+  download: {
+    nodes: [
+      ['path', { d: 'M12 15V3' }],
+      ['path', { d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' }],
+      ['path', { d: 'm7 10 5 5 5-5' }],
+    ],
+  },
+  upload: {
+    nodes: [
+      ['path', { d: 'M12 3v12' }],
+      ['path', { d: 'm17 8-5-5-5 5' }],
+      ['path', { d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' }],
+    ],
+  },
+  info: {
+    nodes: [
+      ['circle', { cx: '12', cy: '12', r: '10' }],
+      ['path', { d: 'M12 16v-4' }],
+      ['path', { d: 'M12 8h.01' }],
+    ],
+  },
+  plus: { nodes: [['path', { d: 'M5 12h14' }], ['path', { d: 'M12 5v14' }]] },
+  check: { nodes: [['path', { d: 'M20 6 9 17l-5-5' }]] },
 };
 
 /** Every name this module knows, so a caller can check rather than discover at render time. */
