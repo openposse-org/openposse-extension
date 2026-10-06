@@ -147,10 +147,10 @@
          `alignTips` in sidepanel.js. 8px rather than 9 puts eight to a row in a 360px panel, which
          9 missed by three pixels. */
       #avatars { display: flex; flex-wrap: wrap; gap: 8px; }
-      /* **Sized to fill the row**, as wide as it is in a 360px panel and no wider, between 34px and
-         the orb's size – `sizeAvatars` sets `--av`. The letter and the site icon keep their
-         proportions to the circle; the rings keep their 4px and 1.5px, because a line weight does
-         not grow with what it surrounds. */
+      /* **Sized in steps by how many there are**, each filling a row as wide as it is in a 360px
+         panel – `sizeAvatars` sets `--av`. The letter and the site icon keep their proportions to
+         the circle; the rings keep their 4px and 1.5px, because a line weight does not grow with
+         what it surrounds. */
       #avatars .avatar { width: var(--av); height: var(--av); font-size: calc(var(--av) * 14 / 34); }
       #avatars .avatar > img {
         width: calc(var(--av) * 24 / 34); height: calc(var(--av) * 24 / 34);

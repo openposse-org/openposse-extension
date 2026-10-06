@@ -35,12 +35,6 @@
 /** The outer bloom. Off – see the note where it is drawn. */
 const SHOW_HALO = false;
 
-/**
- * The sphere's radius as a share of its canvas's shorter side, before the amplitude moves it a
- * few percent either way. Exported because the panel's largest avatar is the orb's own size.
- */
-export const SPHERE_RADIUS = 0.232;
-
 const PAL = [[255, 122, 24], [255, 63, 216], [138, 92, 255], [34, 216, 255], [196, 242, 255], [255, 122, 24]];
 let POINTS = null;
 
@@ -180,7 +174,7 @@ export function drawSphere(cv, { t, mode, tint, level = null }) {
   const grey = mode === 'dead';
   const mix = toward(cv, '__mix', grey || hexArr(tint) ? 1 : 0, grey ? 0.12 : 0.05);
 
-  const R = Math.min(w, h) * SPHERE_RADIUS * (0.93 + 0.13 * amp);
+  const R = Math.min(w, h) * 0.232 * (0.93 + 0.13 * amp);
   const L = lut(grey ? '#8E8E93' : tint, mix);
 
   // Diffuse halo – **off by request, 2026-09-26.**

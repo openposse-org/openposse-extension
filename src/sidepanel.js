@@ -30,7 +30,7 @@ import { loadRoster, findAgent, micGranted, recipeFor } from './storage.js';
 import { channelOf, initialFor } from './channels.js';
 import { FLOOR_OVERRIDE_KEY, floorWindow, productLabel } from './routing.js';
 import { patternForHost, matchPattern } from './domain.js';
-import { drawSphere, modeFor, SPHERE_RADIUS } from './sphere.js';
+import { drawSphere, modeFor } from './sphere.js';
 import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
 
@@ -451,9 +451,10 @@ async function drawRoster() {
 }
 
 /**
- * How big the avatars are: whatever fills the row, but never smaller than the 34px a long roster
- * wraps at and never larger than the orb. So a few assistants sit at the orb's size, each one more
- * makes them all smaller, and from eight in a 360px panel they are 34px and wrap as before.
+ * How big the avatars are, in four steps by how many there are. Up to 4 sit four to a row, up to
+ * 10 five, up to 20 six, and beyond that eight – the 34px a long roster has always been. Each step
+ * is the size that fills a row with that many, so in a 360px panel they are 77, 60, 48 and 34px.
+ * Steps by request, 2026-10-06: a size for every count reached the smallest by eight assistants.
  *
  * **No bigger than they are in a 360px panel**, the width Chrome opens one at – like the orb. A
  * wider panel leaves them that size rather than filling it; a narrower one still shrinks them.
@@ -465,14 +466,21 @@ async function drawRoster() {
 const AVATAR_MIN = 34; // ui.css's circle
 const AVATAR_GAP = 8; // #avatars' gap
 const AVATAR_ROW = 332; // the row in a 360px panel, inside the middle's 14px sides
+/** Up to `upTo` assistants sit `perRow` to a row. */
+const AVATAR_STEPS = [
+  { upTo: 4, perRow: 4 },
+  { upTo: 10, perRow: 5 },
+  { upTo: 20, perRow: 6 },
+  { upTo: Infinity, perRow: 8 },
+];
 
 function sizeAvatars() {
   const row = el('avatars');
   const count = row.children.length;
-  const orb = el('orb').getBoundingClientRect().width * 2 * SPHERE_RADIUS;
+  const { perRow } = AVATAR_STEPS.find((step) => count <= step.upTo);
   const width = Math.min(row.clientWidth, AVATAR_ROW);
-  const fill = count ? (width - (count - 1) * AVATAR_GAP) / count : AVATAR_MIN;
-  const size = Math.floor(Math.max(AVATAR_MIN, Math.min(orb, fill)));
+  const fill = count ? (width - (perRow - 1) * AVATAR_GAP) / perRow : AVATAR_MIN;
+  const size = Math.floor(Math.max(AVATAR_MIN, fill));
   el('middle').style.setProperty('--av', `${size}px`);
 }
 
