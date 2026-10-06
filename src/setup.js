@@ -1054,7 +1054,7 @@ async function refreshRoster() {
       return bar;
     };
 
-    /** A sheet's lines: a lead-in saying what follows, and a block of it. */
+    /** A sheet's lines: a lead-in saying what follows, and the block itself. */
     const lede = (...words) => {
       const line = document.createElement('p');
       line.className = 'lede';
@@ -1068,9 +1068,9 @@ async function refreshRoster() {
       return pre;
     };
 
-    // **Share** – what this assistant does, then the file that carries it, in one sheet. It was
-    // two, until 2026-10-06: See showed the steps as rows and Share the file as JSON, and nothing
-    // said they were the same recording.
+    // **Share** – the file that carries this assistant. A See button listing its steps as rows
+    // went on 2026-10-06, too technical for a sheet about sending it; whoever receives the file
+    // still sees those rows in the Add a shared assistant preview, before they grant anything.
     //
     // Shown before it is saved, because the JSON *is* the review surface. Downloading it silently
     // would make the file the thing you trust without ever having seen it. Shown, it can be read
@@ -1081,7 +1081,6 @@ async function refreshRoster() {
     const sharing = sheetFor(share, (sheet, recipe) => {
       const text = toFile(pack({ name: agent.name, recipe }));
       const file = filenameFor(agent.name);
-      const site = recipe.domainPattern?.replace(/^\*\./, '') || 'its site';
 
       const title = document.createElement('h3');
       title.textContent = `Share ${agent.name}`;
@@ -1107,8 +1106,8 @@ async function refreshRoster() {
       // Save at the top, beside Copy, rather than under a file that can run past the fold.
       sheet.append(
         toolbar(text, 'the file', title, save),
-        lede(`What ${agent.name} does on ${site}:`), block(describeRecipe(recipe)),
-        lede('As a file, for someone else to add: ', filename), block(text),
+        lede(filename, ' – send it to someone, and they add it under Add a shared assistant.'),
+        block(text),
       );
     });
 
@@ -1423,8 +1422,8 @@ function offer(text) {
     return;
   }
 
-  // `describeRecipe` already renders a recipe as something a person can check, and it is the
-  // same view the See button shows for an agent that is already installed. One surface.
+  // `describeRecipe` renders a recipe as something a person can check. This is the one place it
+  // is shown: before a stranger's file is trusted with a site, rather than when sharing your own.
   preview.textContent = `${read.name} – on ${read.recipe.domainPattern}\n\n`
     + describeRecipe(read.recipe);
   preview.hidden = false;
