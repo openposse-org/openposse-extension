@@ -21,7 +21,10 @@
 import { assignVoices, localVoices } from './voices.js';
 import { chooseEngine, hasWebGPU, assignKokoroVoices, KOKORO_VOICES } from './tts.js';
 import { weightsStatus } from './weights.js';
-import { speak as speakWithKokoro, cancel as cancelKokoro, warm as warmKokoro } from './kokoro.js';
+import {
+  speak as speakWithKokoro, cancel as cancelKokoro, warm as warmKokoro,
+  pause as pauseKokoro, resume as resumeKokoro,
+} from './kokoro.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const Phrase = globalThis.SpeechRecognitionPhrase;
@@ -275,9 +278,7 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
   startMeter();
 
   // Loads the model while the turn is still happening, so the ~1.7 s never lands on the answer.
-  // Not awaited and not reported: if it fails, the speaking path will say so with a reason, and
-  // a warm-up complaining before anything needs it would be noise.
-  engine().then(({ engine: chosen }) => { if (chosen === 'kokoro') warmKokoro(); });
+  warmVoice();
   send('openposse.listen.started', { biased: Boolean(Phrase) && phrases.length > 0 });
 }
 
@@ -338,6 +339,18 @@ async function engine() {
   });
 }
 
+/**
+ * Loads Kokoro before an answer needs it. Asked for by a spoken turn as listening starts, and by
+ * the worker as a typed turn or the demo starts – neither opens the microphone, so neither would
+ * reach the first, and both used to wait out the whole load after the answer had landed.
+ *
+ * Not awaited and not reported: if it fails, the speaking path will say so with a reason, and a
+ * warm-up complaining before anything needs it would be noise.
+ */
+function warmVoice() {
+  engine().then(({ engine: chosen }) => { if (chosen === 'kokoro') warmKokoro(); });
+}
+
 // `speed` arrives with the message rather than being read from storage here, for the same
 // reason `roster` does: this document is handed everything it needs and keeps no copy of
 // anything that can change behind its back.
@@ -357,6 +370,9 @@ async function engine() {
 async function speak({ text, agentID, roster = [], speed = 1, wanted = null, preview = false }) {
   if (!text) return;
   speechSynthesis.cancel();                 // never two agents at once
+  // `cancel` leaves a paused synthesizer paused, by the spec, so an answer queued after the demo
+  // was paused would wait, silent, for a resume that is never coming.
+  speechSynthesis.resume();
   cancelKokoro();
 
   // E6's fork. `chooseEngine` routes to Kokoro when WebGPU *and* the weights are both present,
@@ -384,6 +400,8 @@ async function speak({ text, agentID, roster = [], speed = 1, wanted = null, pre
       // answering agent exactly as it follows you. The system-voice path can only send
       // `pulse`, because `speechSynthesis` exposes no audio to measure.
       onLevel: (level) => send('openposse.speaking', { level }),
+      // The first sound, which `started` above is not: that fires before the model has loaded.
+      onStart: () => send('openposse.speaking', { audible: true, preview }),
       speed,
     });
 
@@ -441,7 +459,7 @@ async function speak({ text, agentID, roster = [], speed = 1, wanted = null, pre
   // word, which is speech *rate* rather than loudness. It is honestly synchronised with what is
   // being said, which is what the orb is for, and E6's own audio can be metered properly.
   utterance.addEventListener('boundary', () => send('openposse.speaking', { pulse: true, preview }));
-  utterance.addEventListener('start', () => send('openposse.speaking', { started: true, preview }));
+  utterance.addEventListener('start', () => send('openposse.speaking', { started: true, audible: true, preview }));
   // Named here too, for the same reason as the Kokoro path above – and because "which engine"
   // and "which voice" are one question. A log line that answers it for one path and not the
   // other is worse than one that answers neither: it reads as the system path having no voice.
@@ -464,7 +482,24 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
       // Both engines, unconditionally. Which one is speaking depends on state this does not
       // have, and stopping the wrong one is worse than stopping one that was already silent.
       speechSynthesis.cancel();
+      speechSynthesis.resume();                 // see `speak` – a cancel keeps a pause
       cancelKokoro();
+      respond({ ok: true });
+      return true;
+    case 'openposse.voice.pause':
+      // The demo's Pause. Both engines for the same reason as `hush`, and Kokoro's holds even if
+      // the model is still loading.
+      speechSynthesis.pause();
+      pauseKokoro();
+      respond({ ok: true });
+      return true;
+    case 'openposse.voice.resume':
+      speechSynthesis.resume();
+      resumeKokoro();
+      respond({ ok: true });
+      return true;
+    case 'openposse.voice.warm':
+      warmVoice();
       respond({ ok: true });
       return true;
     case 'openposse.engine.query':

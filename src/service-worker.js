@@ -18,8 +18,11 @@ import {
 import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
   isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone, say, previewVoice,
+  warmVoice,
 } from './listening.js';
-import { runDemo, stopDemo } from './demo.js';
+import {
+  runDemo, stopDemo, pauseDemo, resumeDemo, endDemo,
+} from './demo.js';
 import { needsShortening, spokenForm } from './saying.js';
 import { summarise } from './summariser.js';
 import {
@@ -323,11 +326,19 @@ async function putQuestion(agent, prompt, matched) {
  */
 async function readAloud(answer, agent) {
   if (!answer) return;
+  // The answer is on screen seconds before a word of it can be heard – a cold Kokoro load and the
+  // first sentence's synthesis – and "is speaking" over that silence reads as broken. Set before
+  // the summariser rather than just before `say`, so a long answer never shows it either. The
+  // voice clears it at its first sound: `audible` in `listening.js`.
+  panel({ warming: true });
   const long = needsShortening(answer);
   const summary = long ? await summarise(answer) : null;
   if (long) trace('shortened', summary ? 'by the summariser' : 'first sentence (no summariser)');
   const { text, shortened } = spokenForm(answer, summary);
-  if (!text) return;
+  if (!text) {
+    panel({ warming: false });
+    return;
+  }
 
   // The panel says when it is reading a shortened version, because someone hearing one sentence
   // about a six-paragraph answer should know that is what happened.
@@ -945,8 +956,24 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   }
   if (request?.kind === 'openposse.demo') {
     // Scaffolding, reachable only from the panel's own quiet button. See `demo.js`.
+    warmVoice();
     runDemo(readAloud).then(respond, (error) => {
       console.warn('[openposse] the demo turn failed –', error?.message ?? error);
+      respond({ ok: false, reason: error?.message ?? String(error) });
+    });
+    return true;
+  }
+  if (request?.kind === 'openposse.demo.pause') {
+    respond(pauseDemo());
+    return true;
+  }
+  if (request?.kind === 'openposse.demo.resume') {
+    respond(resumeDemo());
+    return true;
+  }
+  if (request?.kind === 'openposse.demo.stop') {
+    endDemo().then(() => respond({ ok: true }), (error) => {
+      console.warn('[openposse] the demo could not be stopped –', error?.message ?? error);
       respond({ ok: false, reason: error?.message ?? String(error) });
     });
     return true;
@@ -973,6 +1000,9 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   if (request?.kind === 'openposse.ask') {
     // The typed path, through the same door as the spoken one – so the answer lands on the orb
     // rather than in a popup that closes the moment you look away.
+    // A real turn always wins, typed as well as spoken.
+    stopDemo();
+    warmVoice();
     loadRoster()
       .then(({ agents }) => findAgent(agents, request.agentName))
       .then((agent) => (agent
@@ -1491,6 +1521,8 @@ chrome.commands.onCommand.addListener((command, tab) => {
   // read from a synchronous cache (`surface.js`) rather than from storage: a read here would
   // spend the very gesture it is deciding how to use.
   showSurface(tab);
+  // A real turn always wins, from the keyboard as from the panel's Listen button.
+  stopDemo();
   toggleListening();
 });
 

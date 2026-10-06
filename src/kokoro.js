@@ -20,6 +20,20 @@ let session = null;
 /** What `speak` is currently playing, so it can be stopped. */
 let playing = null;
 
+/**
+ * Whether the voice is held. A flag rather than only a call on `playing`, because a pause can
+ * arrive during the model load, before there is any player to hold – and the player made after
+ * it has to start held, not speak the first sentence and then stop.
+ */
+let paused = false;
+
+/**
+ * Bumped by every `cancel`. A cancel during the model load also has no player to stop, so `speak`
+ * compares this before it makes one; without that, an answer cancelled while the voice warmed up
+ * starts speaking seconds after the Stop or the new turn that cancelled it.
+ */
+let cancels = 0;
+
 /** So the backend report goes out once rather than on every answer. */
 let reportedBackend = false;
 
@@ -118,13 +132,15 @@ export async function warm() {
  * @param text     what to say
  * @param voice    a Kokoro voice id, e.g. `bm_george`
  * @param onLevel  called with an amplitude as each chunk plays, for the orb
+ * @param onStart  called once, as the first chunk starts playing – the first sound, which a
+ *                 cold load and the first sentence's synthesis can put seconds after the call
  * @param speed    pace multiplier, 1 being this voice's own. Kokoro drives it through the
  *                 duration predictor, so the speech is stretched rather than resampled and the
  *                 pitch does not move. HeadTTS refuses anything outside 0.25–4 – `clampSpeed`
  *                 in `storage.js` is what guarantees this never arrives out of range.
  * @returns `{ ok }` or `{ ok: false, reason }`
  */
-export async function speak(text, voice, { onLevel = () => {}, speed = 1 } = {}) {
+export async function speak(text, voice, { onLevel = () => {}, onStart = () => {}, speed = 1 } = {}) {
   if (!text) return { ok: true };
 
   // Measured and handed back rather than logged here: this runs in the offscreen document, so
@@ -132,6 +148,7 @@ export async function speak(text, voice, { onLevel = () => {}, speed = 1 } = {})
   // which is exactly why "speaking" read as one 21-second step with nothing inside it.
   const ms = {};
   const started = performance.now();
+  const mine = cancels;
 
   try {
     const cold = session === null;
@@ -157,6 +174,7 @@ export async function speak(text, voice, { onLevel = () => {}, speed = 1 } = {})
       voice, language: 'en-us', audioEncoding: 'wav', speed,
     });
     ms.speed = speed;
+    if (cancels !== mine) return { ok: false, reason: 'cancelled', ms };
 
     // Playback is ours rather than HeadTTS's, because `cancel` must be able to stop
     // mid-sentence when somebody interrupts, and an engine that owns its own output gives us
@@ -189,7 +207,10 @@ export async function speak(text, voice, { onLevel = () => {}, speed = 1 } = {})
       if (chunks.length === 1 && peak([audio]) < 1e-4) { silent = true; return; }
       if (silent) return;
 
-      if (chunks.length === 1) ms.firstWord = Math.round(performance.now() - started);
+      if (chunks.length === 1) {
+        ms.firstWord = Math.round(performance.now() - started);
+        onStart();
+      }
       player.push(audio);
     });
 
@@ -276,7 +297,11 @@ function play(onLevel) {
   analyser.connect(ctx.destination);
   const samples = new Float32Array(analyser.fftSize);
 
+  // A suspended context keeps its last frame in the analyser, so a held voice would go on
+  // reporting the syllable it stopped on, and the orb would keep moving to a voice that is silent.
+  let held = false;
   const meter = setInterval(() => {
+    if (held) return;
     analyser.getFloatTimeDomainData(samples);
     let sum = 0;
     for (let i = 0; i < samples.length; i += 1) sum += samples[i] * samples[i];
@@ -341,15 +366,52 @@ function play(onLevel) {
       }
       teardown({ ok: false, reason: 'cancelled' });
     },
+
+    /**
+     * Holds the voice mid-word by suspending the audio clock. Everything scheduled is scheduled
+     * against that clock, so the queue stays in step and synthesis can carry on filling it.
+     */
+    pause() {
+      if (held || stopped) return;
+      held = true;
+      onLevel(0);
+      ctx.suspend().catch((error) => {
+        console.warn('[openposse] the voice could not be paused –', error?.message ?? error);
+      });
+    },
+
+    resume() {
+      if (!held || stopped) return;
+      held = false;
+      ctx.resume().catch((error) => {
+        console.warn('[openposse] the voice could not be resumed –', error?.message ?? error);
+      });
+    },
   };
 
+  if (paused) player.pause();
   return player;
 }
 
 /** Stops mid-sentence. The promise from `speak` resolves as cancelled, not as an error. */
 export function cancel() {
+  cancels += 1;
+  // Every answer starts with a cancel, so a pause never outlives what it paused: the next thing
+  // spoken, a real answer included, is never born held.
+  paused = false;
   if (!playing) return;
   const player = playing;
   playing = null;
   player.stop();
+}
+
+/** Holds the voice where it is. Safe during the model load: the player starts held. */
+export function pause() {
+  paused = true;
+  playing?.pause();
+}
+
+export function resume() {
+  paused = false;
+  playing?.resume();
 }

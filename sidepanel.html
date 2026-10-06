@@ -100,8 +100,9 @@
       .orbwrap .dead-mic { position: absolute; bottom: 6px; }
       /* The demo's play button, top right. Laid over the stage rather than given a row of its own,
          so the top keeps one height; at any panel width it clears the canvas, which is at most 62%
-         of the column and centred. */
+         of the column and centred. Stop goes under it, only while the demo is playing or paused. */
       .orbwrap .demo { position: absolute; top: 0; right: 0; }
+      .orbwrap .demo-stop { position: absolute; top: 40px; right: 0; }
 
       /* 21px/500, which is four points larger than the port guessed at. What the transcript is,
          on either surface, is the thing you just said being read back – so it is the one piece of
@@ -330,8 +331,6 @@
         opacity: 1; color: var(--text-faint); background: transparent;
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
       }
-      button.icon.busy svg { animation: spin 0.8s linear infinite; }
-      @keyframes spin { to { transform: rotate(360deg); } }
 
       /* The label, on hover and on keyboard focus. Not `title`: Chrome waits about a second to
          show one and draws it in the OS's own small type, which is the opposite of "clear".
@@ -430,6 +429,8 @@
         <!-- A scripted turn, for judging this surface and the voice without spending a vendor
              query. Scaffolding – see `demo.js`. -->
         <button class="icon demo" id="demo" data-tip-at="end" data-tip-below></button>
+        <!-- Ends the demo and clears the panel. Shown only while there is something to stop. -->
+        <button class="icon demo-stop" id="demostop" data-tip-at="end" data-tip-below hidden></button>
       </div>
       <div class="transcript" id="transcript"></div>
       <!-- The answer under the question it answers, and the roster below both: a long roster

@@ -225,6 +225,30 @@ export async function say(text, agentID) {
 }
 
 /**
+ * Loads the voice while a turn that never opens the microphone is still being answered – a typed
+ * question, or the demo. A spoken turn needs no call: the offscreen document warms as it starts
+ * listening. Fire and forget; an answer that lands first just waits out the load, as before.
+ */
+export function warmVoice() {
+  tell('openposse.voice.warm').catch((error) => {
+    console.warn('[openposse] the voice could not be warmed –', error?.message ?? error);
+  });
+}
+
+/** Holds whatever is being read out, mid-word. The demo's Pause; a real turn has none. */
+export function pauseVoice() {
+  tell('openposse.voice.pause').catch((error) => {
+    console.warn('[openposse] the voice could not be paused –', error?.message ?? error);
+  });
+}
+
+export function resumeVoice() {
+  tell('openposse.voice.resume').catch((error) => {
+    console.warn('[openposse] the voice could not be resumed –', error?.message ?? error);
+  });
+}
+
+/**
  * Speaks a sample for Settings, down the same path an answer takes.
  *
  * **Settings used to speak for itself, and that is what this replaces.** It called Kokoro
@@ -479,6 +503,9 @@ export function handleOffscreenMessage(message) {
       // +21057ms" looked like twenty-one seconds of audio for twenty words. It is the moment
       // the speaking *path* begins.
       if (message.started) trace('handing to the voice');
+      // `audible` is the moment `started` is not: the first sound. Until it arrives the side panel
+      // says the voice is warming up, rather than that an agent is speaking over silence.
+      if (message.audible) panel({ warming: false });
       // Two engines, two grades of signal, one channel.
       //
       // Kokoro sends a real `level` measured off the audio on its way to the speakers, so the
@@ -536,6 +563,8 @@ export function handleOffscreenMessage(message) {
           + (message.ok ? 'spoken' : (message.reason ?? 'failed')));
       panelSpeaking(false);
       panelLevel(0);
+      // A voice that failed or was cancelled before making a sound never sent `audible`.
+      panel({ warming: false });
       if (!message.ok) reportUnspoken(message.reason);
       return true;
 
