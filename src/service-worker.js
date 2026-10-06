@@ -1000,6 +1000,8 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   if (request?.kind === 'openposse.ask') {
     // The typed path, through the same door as the spoken one – so the answer lands on the orb
     // rather than in a popup that closes the moment you look away.
+    // A real turn always wins, typed as well as spoken.
+    stopDemo();
     warmVoice();
     loadRoster()
       .then(({ agents }) => findAgent(agents, request.agentName))
