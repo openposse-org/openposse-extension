@@ -295,12 +295,21 @@
          twice, as a label and again in the field, and "Via browser" under every one of them
          said the same thing thirty times. */
       #roster.grid {
+        position: relative;
         display: grid;
         grid-auto-flow: column;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         grid-template-rows: repeat(var(--rows, 1), auto);
-        column-gap: 26px;
+        column-gap: 48px;
       }
+      /* A rule down the middle of the gap, so the columns read as two lists – at 26px apart, one
+         column's Delete sat against the next one's avatar like a single row. Absolutely placed,
+         so it takes no grid cell; not drawn when a search leaves one column to show. */
+      #roster.grid::before {
+        content: ''; position: absolute; top: 0; bottom: 0; left: 50%;
+        width: 1px; background: var(--line);
+      }
+      #roster.grid.one-column::before { display: none; }
       #roster .agent {
         align-items: flex-start; gap: 10px;
         padding: 9px 0;
@@ -374,6 +383,7 @@
           grid-template-columns: minmax(0, 1fr);
           grid-template-rows: none;
         }
+        #roster.grid::before { display: none; }
         #roster .agent.ends-column:not(:last-child) { border-bottom: 1px solid var(--line); }
       }
 

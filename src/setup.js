@@ -1185,6 +1185,8 @@ function filterRoster() {
 
   const half = Math.ceil(shown.length / 2);
   target.style.setProperty('--rows', String(Math.max(half, 1)));
+  // One match fills only the left column, and a divider beside nothing reads as a stray line.
+  target.classList.toggle('one-column', shown.length < 2);
   // The bottom of each column drops its rule, as the voice list's do.
   shown.forEach((row, i) => row.classList.toggle('ends-column', i === half - 1 || i === shown.length - 1));
 
