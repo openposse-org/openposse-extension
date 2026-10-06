@@ -1406,10 +1406,38 @@ function offer(text) {
   // parsed object would hand it something this page had already touched.
   pending = { ...read, raw: String(text) };
   el('import-add').disabled = false;
-  showImport(read.notes.length
-    ? read.notes.join(' ')
-    : `ready – you will be asked for access to ${read.recipe.domainPattern}`);
+  if (read.notes.length) showImport(read.notes.join(' '));
+  else sayAccess(pending);
 }
+
+/**
+ * Whether adding it will bring up Chrome's prompt – said once Chrome has answered, not assumed.
+ *
+ * The line used to promise a prompt every time, and a site already granted is never asked about
+ * again: by an earlier recording on it, or by an all-sites grant from Chrome's Site access menu
+ * or the old step 4. `contains` answers whether the site is *covered*, which is the question.
+ */
+async function sayAccess(waiting) {
+  const site = waiting.recipe.domainPattern.replace(/^\*\./, '');
+  showImport('checking site access…');
+  const covered = await chrome.permissions
+    .contains({ origins: [matchPattern(waiting.recipe.domainPattern)] })
+    .catch((error) => {
+      console.warn('[openposse] could not check site access –', error?.message ?? error);
+      return null;
+    });
+  // Something else was pasted or picked while Chrome answered; that one says its own.
+  if (pending !== waiting) return;
+  if (covered === null) showImport(`ready – could not check access to ${site}, so Chrome may ask`);
+  else if (covered) showImport(`ready – OpenPosse already has access to ${site}, so Chrome won’t ask`);
+  else showImport(`ready – Chrome will ask you to allow access to ${site}`);
+}
+
+// Access changing while a file waits here – granted by recording on that site, or switched in
+// Chrome's own Site access menu – changes whether Chrome will ask, so the line is checked again.
+const recheckAccess = () => { if (pending && !pending.notes.length) sayAccess(pending); };
+chrome.permissions.onAdded.addListener(recheckAccess);
+chrome.permissions.onRemoved.addListener(recheckAccess);
 
 el('import-file').addEventListener('change', async (event) => {
   const file = event.target.files?.[0];
