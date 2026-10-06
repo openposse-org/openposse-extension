@@ -130,6 +130,90 @@ const NODES = {
       ['circle', { cx: '16.5', cy: '7.5', r: '.5', fill: 'currentColor' }],
     ],
   },
+  // Settings' controls, taken 2026-10-06. Lucide has since renamed `trash-2` to `trash`, so the
+  // name here is the current one rather than the one older docs use.
+  eye: {
+    nodes: [
+      ['path', { d: 'M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0' }],
+      ['circle', { cx: '12', cy: '12', r: '3' }],
+    ],
+  },
+  share: {
+    nodes: [
+      ['path', { d: 'M12 2v13' }],
+      ['path', { d: 'm16 6-4-4-4 4' }],
+      ['path', { d: 'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8' }],
+    ],
+  },
+  'rotate-ccw': {
+    nodes: [
+      ['path', { d: 'M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8' }],
+      ['path', { d: 'M3 3v5h5' }],
+    ],
+  },
+  trash: {
+    nodes: [
+      ['path', { d: 'M10 11v6' }],
+      ['path', { d: 'M14 11v6' }],
+      ['path', { d: 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6' }],
+      ['path', { d: 'M3 6h18' }],
+      ['path', { d: 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2' }],
+    ],
+  },
+  download: {
+    nodes: [
+      ['path', { d: 'M12 15V3' }],
+      ['path', { d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' }],
+      ['path', { d: 'm7 10 5 5 5-5' }],
+    ],
+  },
+  // Picking a shared file. It was `upload`, whose arrow rising out of a tray read as Share's.
+  'folder-open': {
+    nodes: [
+      ['path', { d: 'm6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2' }],
+    ],
+  },
+  info: {
+    nodes: [
+      ['circle', { cx: '12', cy: '12', r: '10' }],
+      ['path', { d: 'M12 16v-4' }],
+      ['path', { d: 'M12 8h.01' }],
+    ],
+  },
+  plus: { nodes: [['path', { d: 'M5 12h14' }], ['path', { d: 'M12 5v14' }]] },
+  check: { nodes: [['path', { d: 'M20 6 9 17l-5-5' }]] },
+  'arrow-up-down': {
+    nodes: [
+      ['path', { d: 'm21 16-4 4-4-4' }],
+      ['path', { d: 'M17 20V4' }],
+      ['path', { d: 'm3 8 4-4 4 4' }],
+      ['path', { d: 'M7 4v16' }],
+    ],
+  },
+  copy: {
+    nodes: [
+      ['rect', { width: '14', height: '14', x: '8', y: '8', rx: '2', ry: '2' }],
+      ['path', { d: 'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2' }],
+    ],
+  },
+  // Settings' setup sheet and its import row, taken the same day. Lucide has removed its brand
+  // icons, `github` among them, so getting a recipe from GitHub is drawn as a cloud.
+  'list-checks': {
+    nodes: [
+      ['path', { d: 'M13 5h8' }],
+      ['path', { d: 'M13 12h8' }],
+      ['path', { d: 'M13 19h8' }],
+      ['path', { d: 'm3 17 2 2 4-4' }],
+      ['path', { d: 'm3 7 2 2 4-4' }],
+    ],
+  },
+  'cloud-download': {
+    nodes: [
+      ['path', { d: 'M12 13v8l-4-4' }],
+      ['path', { d: 'm12 21 4-4' }],
+      ['path', { d: 'M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284' }],
+    ],
+  },
 };
 
 /** Every name this module knows, so a caller can check rather than discover at render time. */

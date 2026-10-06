@@ -13,7 +13,7 @@
 
 import {
   loadRoster, recipeFor, findAgent, addAgent, replaceRecipe, freeName, renameAgent, removeAgent,
-  setAgentVoice, setAgentChannel, setMockRoster,
+  setAgentVoice, setAgentChannel, setMockRoster, setRosterOrder,
 } from './storage.js';
 import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
@@ -1047,6 +1047,15 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
     return true;
   }
 
+  // Settings' drag and Sort menu. Only the drawing order: the roster itself is not touched.
+  if (request?.kind === 'openposse.agent.order') {
+    setRosterOrder(request.ids).then(respond, (error) => {
+      console.error('[openposse] order could not be saved –', error);
+      respond({ ok: false, reason: String(error?.message ?? error) });
+    });
+    return true;
+  }
+
   // The debug drawer's made-up roster. Through here like every other roster write, so the panel
   // and Settings are never both writing it.
   if (request?.kind === 'openposse.agent.mocks') {
@@ -1558,7 +1567,7 @@ function pointActionAt(surface) {
 }
 
 // Top level, not awaited by anything: both caches have to be warm before a shortcut arrives, and
-// `surface.js` defaults to `orb` precisely because it sometimes will not be. Measured warm in
+// `surface.js` has a default precisely because they sometimes will not be. Measured warm in
 // practice – Chrome lets a storage read settle before dispatching the event that woke the worker.
 hydrateSurface().then(pointActionAt);
 watchSurface(pointActionAt);

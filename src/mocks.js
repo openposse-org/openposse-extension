@@ -23,9 +23,13 @@ export const MOCK_SIZES = [10, 20, 30];
  * zoom.us, freshdesk.com and greenhouse.io went to zoom.com, freshworks.com and greenhouse.com,
  * and miro.com was blocked by the development network's DNS filter, so they were swapped for
  * ClickUp, HubSpot, Box and Loom from the recipe library's top-50 list.
+ *
+ * **The site's icon has to show on a dark avatar, too.** zendesk.com's is an SVG drawn in
+ * `currentColor`, which comes out black as an image, so its avatar looked empty. The same day it
+ * was swapped for Mailchimp, whose icon is a yellow tile.
  */
 const CAST = [
-  ['Maya', 'salesforce.com'], ['Theo', 'zendesk.com'], ['Ines', 'asana.com'],
+  ['Maya', 'salesforce.com'], ['Theo', 'mailchimp.com'], ['Ines', 'asana.com'],
   ['Bartholomew', 'linear.app'], ['Kofi', 'loom.com'], ['Lena', 'figma.com'],
   ['Data Team', 'slack.com'], ['Omar', 'basecamp.com'], ['Sofia', 'workday.com'],
   ['Ravi', 'intercom.com'], ['Hana', 'airtable.com'], ['Felix', 'coda.io'],

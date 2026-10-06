@@ -6,8 +6,8 @@
     <link rel="stylesheet" href="ui.css" />
     <style>
       body { padding: 36px 40px 60px; }
-      main { max-width: 1030px; margin: 0 auto; }
-      section { margin-bottom: 34px; }
+      main { max-width: 1080px; margin: 0 auto; }
+      section { margin-bottom: 30px; }
 
       /* `design/assets/openposse-lockup-dark.png`, copied byte-for-byte rather than rebuilt
          from the mark plus a webfont – the wordmark is drawn artwork, and setting "OpenPosse"
@@ -28,82 +28,411 @@
       .lockup {
         display: block;
         width: 100%; max-width: 420px; height: auto;
-        /* Centred on the page rather than on the left column. It is the one thing here that
+        /* Centred on the page rather than on either column. It is the one thing here that
            belongs to the whole page instead of to a column, and `main` is the full width, so
-           hanging it off the left edge made it read as a heading for the setup steps. */
+           hanging it off one edge made it read as a heading for whatever sat under it. */
         margin: 0 auto 32px;
       }
 
-      /* Setup on the left, what you come back for on the right. The steps are done once; the
-         roster is the reason to open this page again, and it used to be below all of them. */
-      .columns {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 340px;
-        gap: 46px;
-        align-items: start;
+      /* ── Setup and debug tools ───────────────────────────────────────────────────────────
+         Two icons at the far end of the logo's row, quieter than the page's other buttons, each
+         opening a sheet under itself the Sort menu's way. Debug tools moved here from the panel's
+         dock on 2026-10-06, so the panel keeps only what a turn needs, and the setup steps
+         followed the same day, so the roster has the page's width. Setup comes first: it is the
+         one somebody is sent here for. `display` is left to the UA, so a closed sheet stays
+         hidden – see `.palette`. */
+      .page-head { position: relative; }
+      /* Centred, and narrowed before it reaches the icons. */
+      .page-head .lockup { max-width: min(420px, 100% - 160px); }
+      #setup { position: absolute; top: 0; right: 38px; anchor-name: --setup; }
+      #debug { position: absolute; top: 0; right: 0; anchor-name: --debug; }
+      :is(#setup, #debug):not([aria-expanded="true"], :hover, .primary) { border-color: transparent; }
+      /* A debug value is in force – a changed timing, or mock recordings in the roster. On the
+         icon, because the sheet being shut is exactly when either would otherwise be invisible. */
+      #debug.overridden::before {
+        content: ''; position: absolute; top: 4px; right: 4px;
+        width: 7px; height: 7px; border-radius: 50%;
+        background: #ff7a18; box-shadow: 0 0 0 2px var(--stage);
       }
-      /* The measure the copy was written for. Paragraphs do not get wider just because the
-         page did – 620px is about 80 characters of this size, and past that prose is harder
-         to read, not easier. */
-      .setup { max-width: 620px; }
+      :is(#setup-sheet, #debug-tools) {
+        inset: auto; margin: 8px 0 0;
+        position-area: bottom span-left;
+        max-height: calc(100vh - 110px); overflow-y: auto;
+        border: 1px solid var(--glass-edge); border-radius: var(--radius-card);
+        background: var(--raised); color: var(--text);
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+      }
+      #debug-tools { position-anchor: --debug; width: min(340px, 100vw - 32px); padding: 14px 16px 16px; }
+      #debug-tools .eyebrow {
+        font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--text-faint); margin-bottom: 10px;
+      }
+      #debug-tools .tools { display: flex; gap: 8px; }
+      /* Name and value on one line, the slider full width under them. */
+      #debug-tools .knob {
+        display: grid; grid-template-columns: 1fr auto; gap: 6px 10px;
+        grid-template-areas: "name value" "slider slider";
+        margin-top: 14px; font-size: 12px; color: var(--text-dim);
+      }
+      #debug-tools .knob span { grid-area: name; }
+      #debug-tools .knob output { grid-area: value; font-feature-settings: var(--figures); color: var(--text); }
+      #debug-tools .knob input { grid-area: slider; width: 100%; margin: 0; accent-color: var(--blue); }
+      #debug-tools .why { margin-top: 5px; font-size: 11px; line-height: 1.4; color: var(--text-faint); }
+      #debug-tools #broad-note { margin-top: 12px; overflow-wrap: anywhere; }
+      /* The mock roster's sizes, in the row a slider would take. */
+      #debug-tools .sizes { grid-area: slider; display: flex; gap: 8px; }
+      #debug-tools .sizes .icon { font-size: 11px; font-weight: 600; font-feature-settings: var(--figures); }
 
-      /* Sticky, so the roster is still there after scrolling through six steps. */
-      .rail { position: sticky; top: 36px; }
-      /* The last one only. The rail holds the roster *and* the import block, and zeroing both
-         ran them together with nothing between them. */
-      .rail > section { margin-bottom: 30px; }
-      .rail > section:last-child { margin-bottom: 0; }
+      /* ── A heading and what belongs to it ───────────────────────────────────────────────
+         One line: the title, the (i) that explains it, and at the far end the switch or button
+         that acts on it. 30px tall, the height of the controls, so a heading with nothing at
+         its end lines up with one that has. */
+      .head {
+        position: relative;
+        display: flex; align-items: center; gap: 7px;
+        min-height: 30px;
+      }
+      .head h1, .head h2 { margin: 0; }
+      .head .end { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+      /* "– optional", "Site icons": said beside a heading, quieter than it. */
+      .head .kind { color: var(--text-dim); font-weight: 400; }
 
-      /* The import block lives in 340px too, so its controls stack rather than share a line. */
-      #import-section .card { display: flex; flex-direction: column; gap: 10px; }
-      #import-section textarea { width: 100%; box-sizing: border-box; margin: 0; }
-      #import-section input[type="file"] { font: inherit; font-size: 12px; color: var(--text-dim); }
-      /* `.row` already lays this out; only the stray top margin `.status` carries for the
-         non-flex steps needs undoing, since the card's own gap is doing that job here. */
-      #import-section .status { margin-top: 0; }
+      /* ── (i) ───────────────────────────────────────────────────────────────────────────
+         The explanations every step used to lead with, shown on hover and on keyboard focus.
+         They were the right words for a first read and noise on every read after it – the
+         steps are done once, and the screenshot that prompted this had all six ticked and
+         twenty-five lines of prose still on screen.
+
+         The card hangs under the heading at the column's width, over whatever is below it.
+         `visibility` rather than `display`, so it can fade and so a hidden card cannot catch the
+         pointer; the `::before` strip bridges the gap under the heading, so moving down onto
+         the card to read it does not close it on the way. */
+      .about { display: flex; }
+      button.info {
+        width: 20px; height: 20px; padding: 0;
+        display: grid; place-items: center;
+        border-radius: 50%;
+        background: transparent; color: var(--text-faint);
+      }
+      button.info:is(:hover, :focus-visible) { color: var(--text); }
+      button.info:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+      .tip {
+        position: absolute; top: calc(100% + 6px); left: 0; z-index: 20;
+        width: min(100%, 440px);
+        padding: 10px 12px;
+        border: 1px solid var(--glass-edge); border-radius: var(--radius-card);
+        background: var(--raised);
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+        font-size: 12px; font-weight: 400; line-height: 1.5;
+        visibility: hidden; opacity: 0;
+        transition: opacity 0.12s ease, visibility 0s linear 0.12s;
+      }
+      /* An (i) at the end of a row hangs its card from the right, or it opens under the far end. */
+      .head .end .tip { left: auto; right: 0; }
+      .tip::before { content: ''; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
+      .tip p { margin: 0 0 8px; }
+      .tip p:last-child { margin-bottom: 0; }
+      .about:is(:hover, :focus-within) .tip {
+        visibility: visible; opacity: 1;
+        transition-delay: 0.15s, 0s;
+      }
+
+      /* ── Icon buttons ───────────────────────────────────────────────────────────────────
+         Every action on this page is one of these, with its words in a label on hover. They
+         were buttons with words, four to an assistant, which is 132 buttons at thirty-three.
+         The glyph comes from icons.js through `data-icon`, so the geometry has one home. */
+      button.icon {
+        position: relative; flex: 0 0 auto;
+        width: 30px; height: 30px; padding: 0;
+        display: grid; place-items: center;
+        border-radius: 8px;
+        background: transparent; color: var(--text-dim);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        font-weight: 400;
+      }
+      button.icon:hover:not(:disabled) {
+        color: var(--text); background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.3);
+      }
+      button.icon:is([aria-expanded="true"], [aria-pressed="true"]) {
+        color: var(--text); background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.34);
+      }
+      button.icon:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+      /* The thing to do next, when there is one. Done, it reads like the rest: the step's
+         green number already says so, and a lit button for an action that is over is noise. */
+      button.icon.primary:not(:disabled) { background: var(--blue); border-color: var(--blue); color: #fff; }
+      button.icon.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 86%, #fff); }
+      button.icon:disabled {
+        opacity: 1; color: var(--text-faint);
+        border-color: rgba(255, 255, 255, 0.08);
+      }
+      button.icon.bad:hover:not(:disabled), button.icon.armed { color: var(--error); border-color: var(--error); }
+      button.icon.small { width: 26px; height: 26px; border-radius: 7px; }
+      button.icon.busy svg { animation: spin 0.8s linear infinite; }
+
+      /* The label, on hover and on keyboard focus – the panel's own, so the two surfaces answer a
+         hover the same way. Not `title`: Chrome waits about a second to show one and draws it in
+         the OS's small type. `data-tip-at="end"` pins it to the right edge for controls near
+         one, where a centred label would run off the column. */
+      button.icon[aria-label]::after {
+        content: attr(aria-label);
+        position: absolute; bottom: calc(100% + 8px); left: 50%; z-index: 5;
+        transform: translateX(-50%);
+        width: max-content; max-width: 240px;
+        padding: 5px 9px; border-radius: 7px;
+        background: var(--raised); color: var(--text);
+        box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14), 0 6px 18px rgba(0, 0, 0, 0.5);
+        font-size: 11.5px; font-weight: 500; line-height: 1.35; text-align: left;
+        pointer-events: none; opacity: 0;
+        transition: opacity 0.12s ease;
+      }
+      button.icon[aria-label]:is(:hover, :focus-visible)::after { opacity: 1; transition-delay: 0.15s; }
+      button.icon[data-tip-at="start"]::after { left: 0; transform: none; }
+      button.icon[data-tip-at="end"]::after { left: auto; right: 0; transform: none; }
+      /* Below instead, for a control at the top of a sheet that scrolls, which would clip a
+         label drawn above it. */
+      button.icon[data-tip-below]::after { bottom: auto; top: calc(100% + 8px); }
+
+      /* ── Switches ───────────────────────────────────────────────────────────────────────
+         For the two settings that are on or off. A button rather than a checkbox because both
+         ask Chrome for a permission, and `permissions.request` wants the click itself; the
+         state is `aria-checked`, set from what Chrome reports rather than from the click, so a
+         declined prompt leaves the switch where it was. Apple's proportions and its green. */
+      button.switch {
+        position: relative; flex: 0 0 auto;
+        width: 38px; height: 22px; padding: 0;
+        border-radius: 11px;
+        background: rgba(120, 120, 128, 0.36);
+        transition: background-color 0.2s ease;
+      }
+      button.switch::before {
+        content: ''; position: absolute; top: 2px; left: 2px;
+        width: 18px; height: 18px; border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        transition: transform 0.2s ease;
+      }
+      button.switch[aria-checked="true"] { background: var(--green); }
+      button.switch[aria-checked="true"]::before { transform: translateX(16px); }
+      button.switch:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+      /* ── Setup ──────────────────────────────────────────────────────────────────────────── */
+      /* The steps' sheet, about the width of the column they had, which their voice list was laid
+         out for. setup.js opens it by itself until steps 1–3 are done. */
+      #setup-sheet { position-anchor: --setup; width: min(440px, 100vw - 32px); padding: 16px 18px 0; }
+      #setup-sheet > .title { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+      #setup-sheet > .title h1 { margin: 0; }
+      #setup-done { display: grid; color: var(--green); }
+      #setup-sheet > p { margin-top: 4px; }
+      /* An (i) card hangs from its heading over what is below, and in this sheet that would be cut
+         off at the scrolling edge – and even hidden, it would stretch what the sheet scrolls over.
+         So here the card is fixed to the window and anchored to its own heading, which takes it
+         out of the sheet's scroll, and near the bottom of the window it opens upwards. */
+      #setup-sheet .head { anchor-name: --head; anchor-scope: --head; }
+      #setup-sheet .tip {
+        position: fixed; inset: auto; margin-top: 6px;
+        position-anchor: --head;
+        position-area: bottom span-right;
+        position-try-fallbacks: flip-block;
+        width: min(anchor-size(width), 440px);
+      }
+      .step {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        margin-bottom: 20px;
+      }
+      .step > .body { flex: 1; min-width: 0; }
+      .num {
+        width: 21px; height: 21px; flex: 0 0 21px;
+        border-radius: 50%;
+        display: grid; place-items: center;
+        font-family: var(--ui);
+        font-size: 10px;
+        border: 1px solid var(--line);
+        color: var(--text-faint);
+        /* Centred on the 30px heading line beside it. */
+        margin-top: 4.5px;
+      }
+      .step.done .num {
+        background: var(--green); border-color: var(--green);
+        color: #00250c; font-weight: 700;
+      }
+      /* What the step's control reports, under its title rather than after its button: the
+         narrow column has no room for a sentence beside a control, and some of these are one. */
+      .status { display: block; margin-top: 1px; color: var(--text-faint); }
+      /* A step's status as a chip, coloured by `data-tone` from setup.js: green is done, amber
+         is left to do, red went wrong, and plain is an optional step left off or something in
+         progress. The words say the same as the colour, so neither has to be read alone.
+         Amber is Apple's dark-mode orange; ui.css has no amber because nothing else needed one. */
+      .chip {
+        --amber: #ff9f0a;
+        display: inline-block; margin-top: 4px;
+        padding: 2px 8px; border-radius: 7px;
+        background: rgba(255, 255, 255, 0.07); color: var(--text-dim);
+      }
+      .chip[data-tone="good"] { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green); }
+      .chip[data-tone="warn"] { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
+      .chip[data-tone="bad"] { background: color-mix(in srgb, var(--error) 16%, transparent); color: var(--error); }
+
+      /* `accent-color` is what makes the native slider use the brand orange rather than the
+         OS blue. `:root` already sets `color-scheme: dark`, so the track needs nothing else. */
+      .pace {
+        display: flex; align-items: center; gap: 12px;
+        margin-top: 12px; font-size: 13.5px;
+      }
+      .pace label { color: var(--text-dim); flex: 0 0 auto; }
+      .pace input[type="range"] { flex: 1; min-width: 0; accent-color: #ff8a1f; }
+      /* Fixed width and tabular figures, so the number does not shuffle the slider sideways as
+         it counts through 1.00 → 1.05 → 1.10. */
+      .pace output {
+        flex: 0 0 52px; text-align: right;
+        font-feature-settings: var(--figures); color: var(--text-dim);
+      }
+
+      /* The sample, and the one button that speaks it, side by side now that the button is an
+         icon: the box keeps nearly the full width, which is what it needed the line of its own
+         for. */
+      .sample { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; }
+      .sample textarea { margin: 0; flex: 1; min-width: 0; }
+
+      /* ── Adding a shared assistant ──────────────────────────────────────────────────────
+         First on the page, as asked on 2026-10-06 – it used to sit under the whole roster,
+         thirty-odd assistants below the fold. One row: paste into the box or pick their file,
+         then add. The preview and the reason for a refusal appear under it.
+
+         The box starts one line tall and drags taller by its corner, as the sample's does, to
+         read what was pasted; the buttons stay level with its first line. */
+      #import-section .drop { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; }
+      #import-text {
+        flex: 1; min-width: 0; height: 30px; min-height: 30px; margin: 0;
+        padding: 5px 11px; line-height: 18px;
+      }
       /* A refusal has to *look* refused. The rest of this page reports every state as plain
          text, which is fine for "checking…" and wrong for "this asks for access to *.co.uk" –
          that one is the security control reporting, and it should not read like a status. */
-      #import-section .status.bad { color: var(--error); }
-      #import-preview { margin: 0; max-height: 210px; overflow: auto; }
-
-      /* Below this the two columns do not both fit, so the rail goes back under the steps.
-         It keeps its own spacing there and stops being sticky – a sticky element in a single
-         column would sit over the content beneath it. */
-      @media (max-width: 1000px) {
-        .columns { grid-template-columns: minmax(0, 1fr); gap: 0; }
-        .rail { position: static; }
-        .rail > section { margin-bottom: 34px; }
+      #import-section .status { margin-top: 6px; }
+      .status.bad { color: var(--error); }
+      /* What the file will do, in a sentence – read by the person deciding, so at reading size. */
+      #import-preview {
+        margin: 8px 0 0;
+        padding: 9px 11px; border-radius: 8px;
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--text-dim);
+        overflow-wrap: anywhere;
       }
 
-      /* ── The roster, in 340px instead of 620 ────────────────────────────────────────────
-         The row is one flex line: avatar, name, a 132px rename field and a select that can
-         reach 190px. That is already snug in the wide column and would squeeze the name out
-         of existence here, so in the rail it wraps into three lines – who it is, what it is
-         called, then what you can change. */
-      .rail .agent {
-        flex-wrap: wrap; row-gap: 7px;
-        /* Each agent is a three-line block here. In the wide column it was one line, so one row
-           ending and the next beginning was obvious; stacked, two agents run into each other
-           with nothing between them. Same rule the voice list already uses. */
-        padding-bottom: 13px;
+      /* ── The roster, three across ───────────────────────────────────────────────────────
+         The voice list's shape, for the same reason: thirty-odd in one column is a scroll
+         rather than a list. **It fills down, not across**, like the voices – read one column,
+         then the next – so `--rows`, set by setup.js, is where each column after the first
+         starts.
+
+         Three across since 2026-10-06, when the setup steps moved into their sheet and left the
+         roster the page's width; two under 1100px and one under 700px, which keeps a column
+         about as wide as it was at two. `--columns` is the count, and setup.js reads it rather
+         than knowing these widths itself.
+
+         An assistant is two lines beside its avatar: the name, which is itself the rename field,
+         and its tools; then the product it drives and its voice. The name used to be shown
+         twice, as a label and again in the field, and "Via browser" under every one of them
+         said the same thing thirty times. */
+      #roster.grid {
+        --columns: 3;
+        position: relative;
+        display: grid;
+        grid-auto-flow: column;
+        grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
+        grid-template-rows: repeat(var(--rows, 1), auto);
+        column-gap: 48px;
+      }
+      @media (max-width: 1100px) { #roster.grid { --columns: 2; } }
+      @media (max-width: 700px) { #roster.grid { --columns: 1; } }
+      /* A rule down the middle of each gap, so the columns read as separate lists – at 26px
+         apart, one column's Delete sat against the next one's avatar like a single row.
+         Absolutely placed, so they take no grid cell, and drawn only between columns with someone
+         in them: a search can leave fewer, so setup.js counts them into `data-columns`. */
+      #roster.grid::before, #roster.grid::after {
+        --column: calc((100% - (var(--columns) - 1) * 48px) / var(--columns));
+        content: ''; position: absolute; top: 0; bottom: 0;
+        width: 1px; background: var(--line);
+      }
+      #roster.grid::before { left: calc(var(--column) + 24px); }
+      #roster.grid::after { left: calc(2 * var(--column) + 72px); }
+      #roster.grid:not([data-columns="2"], [data-columns="3"])::before,
+      #roster.grid:not([data-columns="3"])::after { display: none; }
+      #roster .agent {
+        align-items: flex-start; gap: 10px;
+        padding: 9px 0;
         border-bottom: 1px solid var(--line);
       }
-      .rail .agent:last-child { padding-bottom: 8px; border-bottom: 0; }
-      /* 45px is the avatar plus the row's gap, so this fills the rest of the first line. */
-      .rail .agent .who { flex: 1 1 calc(100% - 45px); min-width: 0; }
-      .rail .agent .rename {
-        flex: 1 1 100%; width: auto; margin-left: 0; text-align: left;
-        border-color: rgba(255, 255, 255, 0.14);
+      #roster .agent.ends-column { border-bottom: 0; }
+      #roster .who { flex: 1; min-width: 0; display: grid; gap: 3px; }
+      #roster .line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+      /* Reads as the name until it is pointed at, and is the field once it is. Left-aligned and
+         pulled back by its own padding, so the name sits on the same edge as the line under it. */
+      #roster .rename {
+        flex: 1 1 auto; min-width: 0; width: auto;
+        margin: 0 0 0 -8px; padding: 3px 8px;
+        font-size: 13.5px; font-weight: 500; text-align: left;
       }
-      .rail .agent .voice-pick { margin-left: 0; max-width: none; }
-      .rail .agent .tools { margin-left: auto; }
+      #roster .tools { flex: 0 0 auto; gap: 3px; }
+      #roster .line > .kind {
+        min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      #roster .voice-pick { margin-left: auto; max-width: 150px; }
+      /* "mock", on the made-up recordings from the panel's debug drawer. */
+      .badge {
+        flex: 0 0 auto;
+        padding: 1px 6px; border-radius: 5px;
+        border: 1px solid rgba(255, 255, 255, 0.18); color: var(--text-faint);
+        font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+      }
+      /* Over a long roster only – setup.js shows it past ten. */
+      #roster-search {
+        width: 200px; height: 28px; padding: 4px 10px;
+        font: inherit; font-size: 12.5px; color: var(--text);
+        background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); border-radius: 8px;
+      }
+      #roster-search::placeholder { color: var(--text-faint); }
+      #roster-search:focus { outline: 1px solid var(--blue); }
+      #roster-none { margin: 10px 0 0; }
+
+      /* ── Arranging and sorting ────────────────────────────────────────────────────────────
+         An assistant moves by its avatar, which still opens the colours on a click; the blue
+         line is where it will land. The site icon is kept out of the pointer's way, or the
+         browser drags the image instead of the assistant. */
+      #roster .avatar { cursor: grab; }
+      #roster .avatar > img { pointer-events: none; }
+      #roster .agent.dragging { opacity: 0.4; }
+      #roster .agent.drop-before { box-shadow: 0 -2px 0 var(--blue); }
+      #roster .agent.drop-after { box-shadow: 0 2px 0 var(--blue); }
+      /* The Sort menu hangs under its button, the palette's way – `display` only while open. */
+      #sort-roster { anchor-name: --sort; }
+      #sort-menu {
+        inset: auto; margin: 6px 0 0;
+        position-anchor: --sort;
+        position-area: bottom span-right;
+        position-try-fallbacks: flip-block;
+        min-width: 200px; padding: 6px;
+        border: 1px solid var(--glass-edge); border-radius: var(--radius-card);
+        background: var(--raised); color: var(--text);
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+      }
+      #sort-menu:popover-open { display: grid; gap: 1px; }
+      #sort-menu .note { margin: 2px 8px 6px; color: var(--text-faint); font-size: 11.5px; }
+      #sort-menu button {
+        padding: 6px 8px; border-radius: 6px; text-align: left;
+        background: transparent; color: var(--text); font-weight: 400;
+      }
+      #sort-menu button:is(:hover, :focus-visible) { background: rgba(255, 255, 255, 0.08); outline: 0; }
 
       /* ── An agent's colour ──────────────────────────────────────────────────────────────
          The avatar is a button now – ui.css's `button` padding would squeeze the letter out of
          a 34px circle, so it goes. Eight swatches a row: 241px.
 
-         Pinned to the top of its row: centred, it slid down whenever See or Share opened
+         Pinned to the top of its row: centred, it slid down whenever a problem line opened
          beneath the name, so the avatar you had just clicked moved out from under the pointer. */
       .agent button.avatar { padding: 0; cursor: pointer; align-self: flex-start; }
       .agent button.avatar:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
@@ -138,48 +467,31 @@
       .swatch.mine { outline: 2px solid var(--text); outline-offset: 2px; cursor: default; }
       .swatch.mine:hover { transform: none; }
       .swatch:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-      .step {
-        display: flex;
-        gap: 13px;
-        align-items: flex-start;
-      }
-      .num {
-        width: 21px; height: 21px; flex: 0 0 21px;
-        border-radius: 50%;
-        display: grid; place-items: center;
-        font-family: var(--ui);
-        font-size: 10px;
-        border: 1px solid var(--line);
-        color: var(--text-faint);
-        margin-top: 2px;
-      }
-      .step.done .num {
-        background: var(--green); border-color: var(--green);
-        color: #00250c; font-weight: 700;
-      }
-      .status { margin-top: 9px; }
-      .row { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
-      /* `accent-color` is what makes the native slider use the brand orange rather than the
-         OS blue. `:root` already sets `color-scheme: dark`, so the track needs nothing else. */
-      .pace {
-        display: flex; align-items: center; gap: 12px;
-        margin-top: 14px; font-size: 13.5px;
-      }
-      .pace label { color: var(--text-dim); flex: 0 0 auto; }
-      .pace input[type="range"] { flex: 1; min-width: 0; accent-color: #ff8a1f; }
-      /* Fixed width and tabular figures, so the number does not shuffle the slider sideways as
-         it counts through 1.00 → 1.05 → 1.10. */
-      .pace output {
-        flex: 0 0 52px; text-align: right;
-        font-feature-settings: var(--figures); color: var(--text-dim);
-      }
 
-      /* The sample, and the one button that speaks it. Full width because it is edited rather
-         than read, and the button under it rather than beside it so the box keeps that width. */
-      .sample { margin-top: 13px; }
-      .sample textarea { margin: 0; }
-      .sample-go { display: flex; gap: 9px; align-items: center; margin-top: 8px; }
-      .sample-go .status { margin-top: 0; }
+      /* ── Share ──────────────────────────────────────────────────────────────────────────
+         The file that shares an assistant, in a sheet over the list under its assistant – the
+         palette's mechanism. Opened inside a tile half the column wide, a
+         recipe dump wrapped every selector, and it pushed one column out of step with the other.
+         Opens to the right of the tile, or to the left when the right would run off the page. */
+      .sheet {
+        inset: auto; margin: 6px 0 0;
+        position-area: bottom span-right;
+        position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
+        width: min(520px, calc(100vw - 32px));
+        max-height: min(70vh, 620px); overflow: auto;
+        padding: 12px; border: 1px solid var(--glass-edge); border-radius: var(--radius-card);
+        background: var(--raised); color: var(--text-dim);
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+      }
+      .sheet .recipe { margin: 0; }
+      /* The title on the left, Save and Copy on the right, and between them the reason if a
+         copy was refused. */
+      .sheet .bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+      .sheet .bar h3 { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text); }
+      .sheet .bar .note { margin-left: auto; color: var(--error); }
+      /* What the file below is for. */
+      .sheet .lede { margin: 0 0 6px; }
+      .sheet .lede .tech { color: var(--text-faint); }
 
       /* ── The voice list ─────────────────────────────────────────────────────────────────
          Two columns and four collapsible groups, because 28 voices in one column is a scroll
@@ -200,10 +512,9 @@
         grid-auto-flow: column;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         grid-template-rows: repeat(var(--rows, 1), auto);
-        column-gap: 26px;
+        column-gap: 18px;
       }
-      /* One column once a half is narrower than a name plus its button. Not tied to the 1000px
-         breakpoint above: that one moves the rail, and this column keeps its width through it.
+      /* One column once a half is narrower than a name plus its button.
 
          The flow goes back to rows here, and `--rows` with it. One column fills top to bottom
          either way, and leaving the column flow in place would keep wrapping at `--rows` into
@@ -291,6 +602,8 @@
       }
       .voice-group[open] > summary { padding-bottom: 4px; }
       .voice-group .voice-grid { padding-bottom: 9px; }
+      #voices-section { margin-top: 14px; }
+      #voices-section h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--text-dim); }
 
       textarea {
         font: inherit; width: 100%; resize: vertical;
@@ -299,6 +612,10 @@
         line-height: 1.5;
       }
       textarea:focus { outline: 1px solid var(--blue); }
+
+      @media (prefers-reduced-motion: reduce) {
+        button.switch, button.switch::before, .tip, button.icon[aria-label]::after { transition: none; }
+      }
     </style>
   </head>
   <body>
@@ -306,224 +623,404 @@
       <!-- A packaged file referenced from an extension page, so no `web_accessible_resources`
            entry: that list is what a *web page* may reach, and this is our own origin. It is
            deliberately not added to one – every entry there is a surface any site can probe. -->
-      <img class="lockup" src="icons/openposse-lockup-dark.png" alt="OpenPosse"
-           width="3040" height="920" />
+      <header class="page-head">
+        <img class="lockup" src="icons/openposse-lockup-dark.png" alt="OpenPosse"
+             width="3040" height="920" />
 
-      <div class="columns">
-        <div class="setup">
-      <!-- At the top of this column rather than under the roster, where a long roster buried it.
-           Holding Chrome's `favicon` permission is this setting (src/favicons.js), so the button
-           asks for it or gives it back, the way step 4 does with site access. -->
-      <div class="row">
-        <button class="secondary" id="grant-icons">Show site icons</button>
-        <span class="status kind bad" id="icons-status" hidden></span>
-      </div>
-      <p class="kind">
-        Uses the icon Chrome already has for each assistant's site, so nothing is downloaded.
-        An assistant keeps its letter until its site has been open in a tab. Chrome words
-        the request as “Read the icons of the websites you visit”.
-      </p>
-      <h1>Set up OpenPosse</h1>
-      <p>
-        Three things, once. Everything after this happens on your machine – speech recognition
-        included.
-      </p>
-
-      <section class="step" id="step-mic">
-        <div class="num">1</div>
-        <div style="flex:1">
-          <h2>Let it hear you</h2>
-          <p>
-            The microphone is granted to OpenPosse itself, not to any website, so this is asked
-            once and never again. It has to be asked on a page like this one – a background
-            worker has nowhere to show the prompt.
-          </p>
-          <div class="row">
-            <button id="grant-mic">Grant microphone access</button>
-            <span class="status tech" id="mic-status">not granted</span>
+        <!-- The setup steps, behind an icon of their own and first of the two, since they are
+             what somebody is sent here for. They were a column beside the roster until
+             2026-10-06. -->
+        <button class="icon" id="setup" popovertarget="setup-sheet" data-icon="list-checks"
+                data-size="16" data-tip-at="end" data-tip-below aria-label="Set up OpenPosse"></button>
+        <div id="setup-sheet" popover="auto" role="group" aria-labelledby="setup-title">
+          <div class="title">
+            <span id="setup-done" data-icon="check" data-size="18" hidden></span>
+            <h1 id="setup-title">Set up OpenPosse</h1>
           </div>
-        </div>
-      </section>
-
-      <section class="step" id="step-model">
-        <div class="num">2</div>
-        <div style="flex:1">
-          <h2>Download the speech model</h2>
           <p>
-            A few tens of megabytes, once. After this, nothing you say is sent anywhere –
-            recognition runs entirely on this machine, and OpenPosse requires it to.
+            Steps 1–3 are needed once. The rest are optional, and you can change them any time.
+            Everything runs on this machine – speech recognition included.
           </p>
-          <div class="row">
-            <button id="install-model">Download</button>
-            <span class="status tech" id="model-status">checking…</span>
-          </div>
-        </div>
-      </section>
 
-      <section class="step" id="step-shortcut">
-        <div class="num">3</div>
-        <div style="flex:1">
-          <h2>Choose how you summon it</h2>
-          <p>
-            Chrome only lets an extension <em>suggest</em> Ctrl+Shift and a digit for a shortcut
-            that works outside the browser, so OpenPosse ships with one of those. Anything else
-            – <span class="tech">⌥V</span>, say – you pick here, and you can tick
-            <strong>Global</strong> so it reaches you in any app rather than only in Chrome.
-          </p>
-          <div class="row">
-            <button class="secondary" id="open-shortcuts">Change shortcut…</button>
-            <span class="status tech" id="shortcut-status">checking…</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="step" id="step-panel">
-        <div class="num">4</div>
-        <div style="flex:1">
-          <h2>Show the panel on any page <span class="kind">– optional</span></h2>
-          <p>
-            The panel appears over whatever page you're on. Chrome normally lends an extension
-            access to the current tab when you press its shortcut – but not when that shortcut
-            is <strong>Global</strong>, which is exactly what makes
-            <span class="tech">⌥V</span> work from other apps. So the two can't both be had
-            without asking you directly.
-          </p>
-          <p>
-            Chrome will word this as <em>“Read and change all your data on all websites”</em>,
-            because that is the only wording it has. What OpenPosse does with it is draw the
-            panel. It still sends nothing anywhere – speech, assistants and answers all stay on
-            this machine – and it does not read pages it hasn't been asked to drive.
-          </p>
-          <p>
-            Skip it and everything still works: the panel appears on your assistants' own pages,
-            and the toolbar icon shows what's happening everywhere else. You can turn it off
-            again here at any time.
-          </p>
-          <div class="row">
-            <button class="secondary" id="grant-panel">Turn on</button>
-            <span class="status tech" id="panel-status">checking…</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- **A numbered step like the four above it, as of 2026-10-04.** Voices used to be a
-           bare `<section>` with a numbered step nested inside it, so the page ran 1, 2, 3, 4,
-           prose, 5 – and the two things on it that are genuinely settings were the two that did
-           not look like part of the sequence. Everything on this page is now one list. -->
-      <section class="step" id="step-voices">
-        <div class="num">5</div>
-        <div style="flex:1">
-          <h2>Voices</h2>
-          <p>
-            Answers are spoken back to you, and a long answer is shortened to one sentence first
-            – the full text stays on screen. Everything here runs on this machine.
-          </p>
-          <div id="engine" class="card">checking…</div>
-
-          <div class="pace">
-            <label for="speed">Pace</label>
-            <input type="range" id="speed" min="0.7" max="1.6" step="0.05" value="1"
-                   aria-describedby="speed-value" />
-            <output class="tech" id="speed-value" for="speed">1.00×</output>
-          </div>
-
-          <!-- **The sample lives here rather than beside the voice list, because three separate
-               things now speak it** – this button, each voice's own, and whatever is being
-               judged about the pace. One box means they are all saying the same words, which is
-               the only way any of them can be compared with another.
-
-               It is also the always-visible half of the page: the voice list below is hidden
-               until Kokoro is installed, and the pace is not. -->
-          <div class="sample">
-            <textarea id="sample" rows="2" spellcheck="false"
-                      aria-label="What the voices say"></textarea>
-            <div class="sample-go">
-              <!-- Live from the first paint, on every machine. It speaks through the worker
-                   rather than from this page, so whichever engine would answer you is the one
-                   that answers here – and the status beside it names which, since that is the
-                   one thing about this section nobody can tell by reading. -->
-              <button class="secondary" id="play-sample">Play sample</button>
-              <span class="status tech" id="sample-status"></span>
+          <section class="step" id="step-mic">
+            <div class="num">1</div>
+            <div class="body">
+              <div class="head">
+                <h2>Let it hear you</h2>
+                <div class="about">
+                  <button class="info" data-icon="info" data-size="15"
+                          aria-label="About the microphone" aria-describedby="about-mic"></button>
+                  <div class="tip" role="tooltip" id="about-mic">
+                    <p>
+                      The microphone is granted to OpenPosse itself, not to any website, so it's
+                      asked once, here, and never again.
+                    </p>
+                  </div>
+                </div>
+                <div class="end">
+                  <button class="icon primary" id="grant-mic" data-icon="mic" data-tip-at="end"
+                          aria-label="Grant microphone access"></button>
+                </div>
+              </div>
+              <span class="status tech chip" id="mic-status">checking…</span>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="step" id="step-weights">
-        <div class="num">6</div>
-        <div style="flex:1">
-          <!-- The size is filled in from `TOTAL_BYTES` rather than written here. It has now
-               moved three times – 89 MB, then 166 MB when the model changed for GPU kernel
-               coverage, then 340 MB at fp32 with all 28 voices – and this comment claimed
-               "twice, to 166" until the third move was noticed. A number typed into copy is a
-               number that goes stale silently, and so is one typed into the note about it. -->
-          <h2>Better voices <span class="kind">– optional, <span id="weights-size">…</span></span></h2>
-          <p>
-            The system voices are your operating system's, and they sound like it. Kokoro is a
-            neural voice model that runs <em>on this machine</em> – nothing you say or hear
-            goes anywhere. It is a one-off download, kept locally afterwards.
-          </p>
-          <p>
-            It needs WebGPU to be fast enough for conversation. Without it OpenPosse keeps
-            using the system voices, which is the status quo rather than a failure.
-          </p>
-          <div class="row">
-            <button class="secondary" id="get-weights">Download</button>
-            <button class="secondary" id="drop-weights" hidden>Remove</button>
-            <span class="status tech" id="weights-status">checking…</span>
-          </div>
-
-          <!-- **Inside this step rather than a seventh of its own**, because the list exists
-               only once the download above has finished – it is what that step produced, not a
-               separate thing to do. A numbered step that appears and disappears would also
-               renumber the page depending on what is installed. -->
-          <div id="voices-section" hidden style="margin-top:18px">
-            <p>
-              Each voice, saying whatever is in the box up in <strong>Voices</strong> – the same
-              words every time, so they can be compared rather than just sampled. The first one
-              takes a moment while the model loads; the rest are immediate.
-            </p>
-            <div id="voice-list"></div>
-          </div>
-        </div>
-      </section>
-        </div>
-
-        <!-- The roster sits here rather than at the foot of the page because it is the one
-             thing on this page you come back for. Recording saves an agent under the vendor's
-             product name and naming it is an edit *here* – the orb cannot ask for typing, since
-             a page is entitled to take its own focus back, and Notion does. A recording can also
-             be stranded by closing the tab mid-wizard. Both end at this list, so it should not
-             be below the setup steps, which are done once and never again. -->
-        <aside class="rail">
-          <section>
-            <h2>Assistants</h2>
-            <div id="roster" class="card">none yet</div>
           </section>
 
-          <!-- Recording an assistant helps one person. This is how it reaches everyone else.
-               Two beats on purpose: the file is read and shown first, then a separate click
-               asks Chrome for access to that one site. A gesture does not survive an await,
-               so the parse cannot happen inside the click that requests permission. -->
-          <section id="import-section">
-            <h2>Add a shared assistant</h2>
-            <p class="kind">
-              Someone else can record an assistant and send you the file. You will be asked for
-              access to that one site before anything is added.
-            </p>
-            <div class="card">
-              <input type="file" id="import-file" accept="application/json,.json">
-              <textarea id="import-text" rows="3" spellcheck="false"
-                        placeholder="…or paste what they sent you"></textarea>
-              <pre class="recipe" id="import-preview" hidden></pre>
-              <div class="row">
-                <button id="import-add" disabled>Add assistant</button>
-                <span class="status tech" id="import-status">nothing to add yet</span>
+          <section class="step" id="step-model">
+            <div class="num">2</div>
+            <div class="body">
+              <div class="head">
+                <h2>Download the speech model</h2>
+                <div class="about">
+                  <button class="info" data-icon="info" data-size="15"
+                          aria-label="About the speech model" aria-describedby="about-model"></button>
+                  <div class="tip" role="tooltip" id="about-model">
+                    <p>
+                      A few tens of megabytes, once. After this, nothing you say is sent anywhere
+                      – recognition runs entirely on this machine, and OpenPosse requires it to.
+                    </p>
+                  </div>
+                </div>
+                <div class="end">
+                  <button class="icon primary" id="install-model" data-icon="download"
+                          data-tip-at="end" aria-label="Download the speech model"></button>
+                </div>
+              </div>
+              <span class="status tech chip" id="model-status">checking…</span>
+            </div>
+          </section>
+
+          <section class="step" id="step-shortcut">
+            <div class="num">3</div>
+            <div class="body">
+              <div class="head">
+                <h2>Choose how you summon it</h2>
+                <div class="about">
+                  <button class="info" data-icon="info" data-size="15"
+                          aria-label="About the shortcut" aria-describedby="about-shortcut"></button>
+                  <div class="tip" role="tooltip" id="about-shortcut">
+                    <p>
+                      Chrome only lets an extension <em>suggest</em> ⌘⇧ and a digit (Ctrl+Shift
+                      on Windows), so OpenPosse comes with one of those. For anything else –
+                      <span class="tech">⌥V</span>, say – the keyboard button opens Chrome's
+                      shortcuts page. Tick <strong>Global</strong> there so it works from any app,
+                      not just Chrome.
+                    </p>
+                  </div>
+                </div>
+                <div class="end">
+                  <button class="icon" id="open-shortcuts" data-icon="keyboard" data-tip-at="end"
+                          aria-label="Change the shortcut"></button>
+                </div>
+              </div>
+              <span class="status tech chip" id="shortcut-status">checking…</span>
+            </div>
+          </section>
+
+          <!-- Hidden 2026-10-06 while the side panel is the surface: the grant only matters to the
+               orb. Kept rather than deleted until testing settles which surface stays. -->
+          <section class="step" id="step-panel" hidden>
+            <div class="num">4</div>
+            <div class="body">
+              <div class="head">
+                <h2 id="panel-title">Show the orb on any page <span class="kind">– optional</span></h2>
+                <div class="about">
+                  <button class="info" data-icon="info" data-size="15"
+                          aria-label="About showing the orb on any page"
+                          aria-describedby="about-panel"></button>
+                  <div class="tip" role="tooltip" id="about-panel">
+                    <p>
+                      The orb appears over whatever page you're on. Chrome normally lets an
+                      extension use the current tab when you press its shortcut, but not when the
+                      shortcut is <strong>Global</strong> – the setting that makes it work from
+                      other apps. So to have both, Chrome has to ask you.
+                    </p>
+                    <p>
+                      Chrome will word this as <em>“Read and change all your data on all
+                      websites”</em>, because that is the only wording it has. What OpenPosse does
+                      with it is draw the orb. It still sends nothing anywhere – speech,
+                      assistants and answers all stay on this machine – and it does not read pages
+                      it hasn't been asked to drive.
+                    </p>
+                    <p>
+                      The side panel doesn't need this – it opens on any page. Skip it and the orb
+                      still appears on your assistants' own pages, and the toolbar icon shows
+                      what's happening everywhere else. You can turn it off here at any time.
+                    </p>
+                  </div>
+                </div>
+                <div class="end">
+                  <button class="switch" id="grant-panel" role="switch" aria-checked="false"
+                          aria-labelledby="panel-title"></button>
+                </div>
+              </div>
+              <span class="status tech chip" id="panel-status">checking…</span>
+            </div>
+          </section>
+
+          <!-- **A numbered step like the four above it, as of 2026-10-04.** Voices used to be a
+               bare `<section>` with a numbered step nested inside it, so the page ran 1, 2, 3, 4,
+               prose, 5 – and the two things on it that are genuinely settings were the two that
+               did not look like part of the sequence. Everything on this page is now one list. -->
+          <section class="step" id="step-voices">
+            <div class="num">4</div>
+            <div class="body">
+              <div class="head">
+                <h2>Voices</h2>
+                <div class="about">
+                  <button class="info" data-icon="info" data-size="15"
+                          aria-label="About voices" aria-describedby="about-voices"></button>
+                  <div class="tip" role="tooltip" id="about-voices">
+                    <p>
+                      Answers are spoken back to you, and a long answer is shortened to one
+                      sentence first – the full text stays on screen. Everything here runs on this
+                      machine.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <!-- Which engine is speaking, as this step's status line. -->
+              <span class="status tech chip" id="engine">checking…</span>
+
+              <div class="pace">
+                <label for="speed">Pace</label>
+                <input type="range" id="speed" min="0.7" max="1.6" step="0.05" value="1"
+                       aria-describedby="speed-value" />
+                <output class="tech" id="speed-value" for="speed">1.00×</output>
+              </div>
+
+              <!-- **The sample lives here rather than beside the voice list, because three
+                   separate things speak it** – this button, each voice's own, and whatever is
+                   being judged about the pace. One box means they are all saying the same words,
+                   which is the only way any of them can be compared with another.
+
+                   It is also the always-visible half of the step: the voice list below is hidden
+                   until Kokoro is installed, and the pace is not. -->
+              <div class="sample">
+                <textarea id="sample" rows="2" spellcheck="false"
+                          aria-label="What the voices say"></textarea>
+                <!-- Live from the first paint, on every machine. It speaks through the worker
+                     rather than from this page, so whichever engine would answer you is the one
+                     that answers here – and the status under it names which, since that is the
+                     one thing about this section nobody can tell by reading. -->
+                <button class="icon" id="play-sample" data-icon="play" data-tip-at="end"
+                        aria-label="Play the sample"></button>
+              </div>
+              <span class="status tech" id="sample-status"></span>
+            </div>
+          </section>
+
+          <section class="step" id="step-weights">
+            <div class="num">5</div>
+            <div class="body">
+              <div class="head">
+                <!-- The size is filled in from `TOTAL_BYTES` rather than written here. It has now
+                     moved three times – 89 MB, then 166 MB when the model changed for GPU kernel
+                     coverage, then 340 MB at fp32 with all 28 voices – and this comment claimed
+                     "twice, to 166" until the third move was noticed. A number typed into copy
+                     is a number that goes stale silently, and so is one typed into the note
+                     about it. -->
+                <h2>Better voices <span class="kind">– optional, <span id="weights-size">…</span></span></h2>
+                <div class="about">
+                  <button class="info" data-icon="info" data-size="15"
+                          aria-label="About better voices" aria-describedby="about-weights"></button>
+                  <div class="tip" role="tooltip" id="about-weights">
+                    <p>
+                      The system voices are your operating system's, and they sound like it.
+                      Kokoro is a neural voice model that runs <em>on this machine</em> – nothing
+                      you say or hear goes anywhere. It is a one-off download, kept locally
+                      afterwards.
+                    </p>
+                    <p>
+                      It needs Chrome's WebGPU, which uses your graphics chip, to be fast enough
+                      to talk with. Without it, OpenPosse keeps using the system voices.
+                    </p>
+                  </div>
+                </div>
+                <div class="end">
+                  <button class="icon primary" id="get-weights" data-icon="download"
+                          data-tip-at="end" aria-label="Download the voices"></button>
+                  <button class="icon bad" id="drop-weights" data-icon="trash" data-tip-at="end"
+                          aria-label="Remove the voices" hidden></button>
+                </div>
+              </div>
+              <span class="status tech chip" id="weights-status">checking…</span>
+
+              <!-- **Inside this step rather than a seventh of its own**, because the list exists
+                   only once the download above has finished – it is what that step produced, not
+                   a separate thing to do. A numbered step that appears and disappears would also
+                   renumber the page depending on what is installed. -->
+              <div id="voices-section" hidden>
+                <div class="head">
+                  <h3>Try each voice</h3>
+                  <div class="about">
+                    <button class="info" data-icon="info" data-size="15"
+                            aria-label="About trying the voices" aria-describedby="about-try"></button>
+                    <div class="tip" role="tooltip" id="about-try">
+                      <p>
+                        Each voice, saying whatever is in the box up in <strong>Voices</strong> –
+                        the same words every time, so they can be compared rather than just
+                        sampled. The first one takes a moment while the model loads; the rest are
+                        immediate.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div id="voice-list"></div>
               </div>
             </div>
           </section>
-        </aside>
-      </div>
+        </div>
+
+        <!-- Development tools, all behind one icon, as the Mac app had them. -->
+        <button class="icon" id="debug" popovertarget="debug-tools" data-icon="bug" data-size="16"
+                data-tip-at="end" data-tip-below aria-label="Debug tools"></button>
+        <div id="debug-tools" popover="auto" role="group" aria-label="Debug tools">
+          <div class="eyebrow">Debug tools</div>
+          <div class="tools">
+            <!-- A scripted turn, for judging the UI and the voice without spending a vendor
+                 query. Here with E14's surface switch beside it: both are scaffolding with an
+                 expiry, deleted when user testing picks a surface. -->
+            <button class="icon" id="demo" data-tip-at="start" data-tip-below></button>
+            <!-- Hidden 2026-10-06 with step 4: the side panel is the surface for now. -->
+            <button class="icon" id="surface" data-tip-at="start" data-tip-below hidden></button>
+            <button class="icon" id="diagnostics" data-icon="stethoscope" data-size="16"
+                    data-tip-at="start" data-tip-below
+                    aria-label="Voice diagnostics – check each layer of the Kokoro voice"></button>
+          </div>
+          <!-- Only while an all-sites grant is in force – see `paintBroadNote`. -->
+          <div class="why" id="broad-note" hidden></div>
+          <label class="knob" for="floor">
+            <span>Follow-up window</span>
+            <input type="range" id="floor" />
+            <output id="floor-value" for="floor"></output>
+          </label>
+          <div class="why">
+            How long a question with no name in it still goes to whoever answered last.
+          </div>
+          <label class="knob" for="grace">
+            <span>Answer settle wait</span>
+            <input type="range" id="grace" />
+            <output id="grace-value" for="grace"></output>
+          </label>
+          <div class="why">
+            How long to wait for the rest of an answer when the assistant hasn't said it's done.
+            Shorter answers sooner; too short can read out a status line instead of the answer.
+          </div>
+          <div class="why">Both go back to their defaults when Chrome restarts.</div>
+          <!-- Sizes come from `mocks.js`, so the buttons are built by the script. -->
+          <div class="knob" role="group" aria-labelledby="mock-name">
+            <span id="mock-name">Mock roster</span>
+            <output id="mock-value"></output>
+            <div class="sizes" id="mock-sizes"></div>
+          </div>
+          <div class="why">
+            Made-up recordings, after your own, to see how a long roster looks. They can't answer,
+            since there is no page behind them, and they stay until you turn them off.
+          </div>
+          <!-- Chrome only has an icon for a site it has loaded, so getting thirty means loading
+               thirty sites. This does it for you, through the same first-visit path as a tab. -->
+          <div class="knob" role="group" aria-labelledby="icons-name">
+            <span id="icons-name">Site icons</span>
+            <output id="icons-value"></output>
+            <div class="sizes">
+              <button class="icon" id="load-icons" data-tip-at="start"
+                      aria-label="Load the icon of every assistant still showing its letter">All</button>
+            </div>
+          </div>
+          <div class="why" id="icons-misses" hidden></div>
+          <div class="why">
+            Opens each of their sites in a minimized window and closes it once the icons are in.
+            These are real page loads, so the sites appear in your history.
+          </div>
+        </div>
+      </header>
+
+      <!-- Recording an assistant helps one person. This is how it reaches everyone else.
+           Two beats on purpose: the file is read and shown first, then a separate click
+           asks Chrome for access to that one site. A gesture does not survive an await,
+           so the parse cannot happen inside the click that requests permission. -->
+      <section id="import-section">
+        <div class="head">
+          <h2>Add a shared assistant</h2>
+          <div class="about">
+            <button class="info" data-icon="info" data-size="15"
+                    aria-label="About adding a shared assistant" aria-describedby="about-import"></button>
+            <div class="tip" role="tooltip" id="about-import">
+              <p>
+                Someone else can record an assistant and send you the file. You will be asked
+                for access to that one site before anything is added.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="drop">
+          <textarea id="import-text" rows="1" spellcheck="false"
+                    aria-label="Shared assistant"
+                    placeholder="Paste or pick a file"></textarea>
+          <!-- A placeholder for getting one straight from GitHub, which comes later. It fetches
+               nothing yet, so it is disabled and its label says so. -->
+          <button class="icon" id="import-github" data-icon="cloud-download" data-tip-at="end"
+                  aria-label="Get one from GitHub – coming soon" disabled></button>
+          <!-- The file input does the reading and is never seen: Chrome's own "Choose File"
+               is a text button that cannot be restyled, so this icon opens it instead. -->
+          <input type="file" id="import-file" accept="application/json,.json" hidden>
+          <button class="icon" id="import-pick" data-icon="folder-open" data-tip-at="end"
+                  aria-label="Pick a file"></button>
+          <button class="icon primary" id="import-add" data-icon="plus" data-tip-at="end"
+                  aria-label="Add this assistant" disabled></button>
+        </div>
+        <p id="import-preview" hidden></p>
+        <span class="status tech" id="import-status">nothing to add yet</span>
+      </section>
+
+      <!-- What you come back for. The roster was below the setup steps, then beside them; it
+           has the page since they moved behind their icon on 2026-10-06, because it is the one
+           thing here that keeps growing. Recording saves an agent under the vendor's product
+           name and naming it is an edit *here* – the orb cannot ask for typing, since a page
+           is entitled to take its own focus back, and Notion does. -->
+      <section id="assistants">
+        <!-- Site icons live with the avatars they change. Holding Chrome's `favicon`
+             permission is the setting (src/favicons.js), so the switch asks for it or gives
+             it back, the way step 4's does with site access. -->
+        <div class="head">
+          <h2>Assistants</h2>
+          <!-- Sorting sets the order once; dragging an avatar moves one after that. -->
+          <button class="icon small" id="sort-roster" popovertarget="sort-menu"
+                  data-icon="arrow-up-down" data-size="14" data-tip-at="start"
+                  aria-label="Sort assistants" hidden></button>
+          <div id="sort-menu" popover="auto" role="group" aria-label="Sort assistants">
+            <p class="note">Sorts the list once. Drag an avatar to move one.</p>
+            <button type="button" data-sort="name">Name</button>
+            <button type="button" data-sort="site">Site</button>
+            <button type="button" data-sort="newest">Newest first</button>
+            <button type="button" data-sort="oldest">Oldest first</button>
+          </div>
+          <input type="search" id="roster-search" placeholder="Find an assistant"
+                 aria-label="Find an assistant" autocomplete="off" spellcheck="false" hidden>
+          <div class="end">
+            <span class="kind" id="icons-label">Site icons</span>
+            <div class="about">
+              <button class="info" data-icon="info" data-size="15"
+                      aria-label="About site icons" aria-describedby="about-icons"></button>
+              <div class="tip" role="tooltip" id="about-icons">
+                <p>
+                  Shows each assistant's site icon instead of its letter, using the icon
+                  Chrome already has, so nothing is downloaded. An assistant keeps its letter
+                  until its site has been open in a tab. Chrome words the request as “Read
+                  the icons of the websites you visit”.
+                </p>
+              </div>
+            </div>
+            <button class="switch" id="grant-icons" role="switch" aria-checked="false"
+                    aria-labelledby="icons-label"></button>
+          </div>
+        </div>
+        <span class="status kind bad" id="icons-status" hidden></span>
+        <span class="status kind bad" id="order-status" hidden></span>
+        <div id="roster" class="card">none yet</div>
+        <p id="roster-none" hidden></p>
+      </section>
     </main>
     <script type="module" src="dist/setup.js"></script>
   </body>

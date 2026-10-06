@@ -15,13 +15,14 @@
 // know. `surfaceNow()` answers from a cache that `hydrate()` fills at worker startup and
 // `chrome.storage.onChanged` keeps current.
 //
-// **The cache can be cold, and the default is chosen for that.** MV3 kills an idle worker in
-// ~30 s, so a shortcut can arrive while `hydrate()` is still in flight. The default is therefore
-// `orb` – the behaviour that exists today – so the worst case of losing that race is that
-// nothing changes, rather than a surface appearing that the user had switched off.
+// **The default is the panel, as of 2026-10-06**, when Settings stopped offering the switch. It
+// was `orb`, chosen for a cold cache: MV3 kills an idle worker in ~30 s, so a shortcut can arrive
+// while `hydrate()` is still in flight, and the orb was then the behaviour that existed. With no
+// switch, a fresh install has nothing stored and no way to reach the panel unless the default is
+// the panel. A stored choice still wins once the cache is warm, which in practice is every press.
 
 export const SURFACES = ['orb', 'panel'];
-const DEFAULT = 'orb';
+const DEFAULT = 'panel';
 const KEY = 'surface';
 
 let current = DEFAULT;

@@ -61,7 +61,7 @@ async function activeAgentName() {
 // ── Roster ─────────────────────────────────────────────────────────────────────────────────
 
 async function render() {
-  const { agents, broken } = await loadRoster();
+  const { arranged: agents, broken } = await loadRoster();
   const active = await activeAgentName();
   const target = el('agents');
   target.textContent = '';
@@ -183,7 +183,7 @@ async function send() {
   const prompt = input.value.trim();
   if (!prompt) return;
 
-  const { agents } = await loadRoster();
+  const { arranged: agents } = await loadRoster();
   const agent = findAgent(agents, input.dataset.agent ?? '') ?? agents[0];
   if (!agent) return;
 
