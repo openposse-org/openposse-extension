@@ -94,6 +94,8 @@
         visibility: hidden; opacity: 0;
         transition: opacity 0.12s ease, visibility 0s linear 0.12s;
       }
+      /* An (i) at the end of a row hangs its card from the right, or it opens under the far end. */
+      .head .end .tip { left: auto; right: 0; }
       .tip::before { content: ''; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
       .tip p { margin: 0 0 8px; }
       .tip p:last-child { margin-bottom: 0; }
@@ -755,7 +757,9 @@
             </div>
           </section>
 
-          <section class="step" id="step-panel">
+          <!-- Hidden 2026-10-06 while the side panel is the surface: the grant only matters to the
+               orb. Kept rather than deleted until testing settles which surface stays. -->
+          <section class="step" id="step-panel" hidden>
             <div class="num">4</div>
             <div class="body">
               <div class="head">
@@ -799,7 +803,7 @@
                prose, 5 – and the two things on it that are genuinely settings were the two that
                did not look like part of the sequence. Everything on this page is now one list. -->
           <section class="step" id="step-voices">
-            <div class="num">5</div>
+            <div class="num">4</div>
             <div class="body">
               <div class="head">
                 <h2>Voices</h2>
@@ -847,7 +851,7 @@
           </section>
 
           <section class="step" id="step-weights">
-            <div class="num">6</div>
+            <div class="num">5</div>
             <div class="body">
               <div class="head">
                 <!-- The size is filled in from `TOTAL_BYTES` rather than written here. It has now
