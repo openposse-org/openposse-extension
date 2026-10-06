@@ -978,7 +978,13 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
       .then((agent) => (agent
         ? putQuestion(agent, request.prompt, 'typed')
         : panel({ phase: 'needs-attention', message: `No agent called ${request.agentName}.` })))
-      .catch(() => {});
+      // As the spoken path's handler, so a failure here does not leave "is thinking…" on screen
+      // with nothing logged. Labelled apart, so the console says which door the turn came in by.
+      .catch((error) => {
+        markDone('failed');
+        panel({ phase: 'needs-attention', message: 'Something went wrong handling that.' });
+        console.error('[openposse] typed turn failed:', error?.message ?? error);
+      });
     respond({ ok: true });
     return true;
   }
