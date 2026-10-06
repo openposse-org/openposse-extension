@@ -125,6 +125,62 @@ const STATUS = {
   idle: (s) => (s.agentName ? { who: s.agentName, tinted: true } : { text: '' }),
 };
 
+/** What the box holds before the first turn: where an answer will go, and how to get one. */
+const ANSWER_PLACEHOLDER = "Say an assistant's name, then your question – the answer shows here.";
+
+// ── Fitting the question and the answer ────────────────────────────────────────────────────
+
+/**
+ * Sizes for what was said, largest first. Two lines fit at the first two and three at the last,
+ * in the height `.transcript` fixes in the stylesheet.
+ */
+const QUESTION_SIZES = [21, 18, 16];
+
+/**
+ * Fits what was said into its slot, stepping the type down before cutting anything.
+ *
+ * Measured rather than predicted from a character count, because both the width and the words
+ * are the user's: the panel can be dragged wider, and nobody's question is a fixed length.
+ */
+function fitQuestion() {
+  const box = el('transcript');
+  box.classList.remove('tail', 'clamped');
+  for (const size of QUESTION_SIZES) {
+    box.style.fontSize = `${size}px`;
+    if (box.scrollHeight <= box.clientHeight) {
+      box.scrollTop = 0;
+      return;
+    }
+  }
+  // Too long even at the smallest size. While somebody is talking, the newest words are the ones
+  // they are checking, so the cut comes off the front; once it has settled, the start reads best.
+  const live = state.phase === 'listening';
+  box.classList.add(live ? 'tail' : 'clamped');
+  box.scrollTop = live ? box.scrollHeight : 0;
+}
+
+/**
+ * Sizes for the answer, with the leading that goes with each. Three lines fit in the box at the
+ * first two and four at the last.
+ */
+const ANSWER_SIZES = [[15.5, 1.47], [14, 1.4], [13, 1.3]];
+
+/** The answer's version: the type steps down to fit, and whatever still does not fit scrolls. */
+function fitAnswer() {
+  const text = el('answer-text');
+  for (const [size, leading] of ANSWER_SIZES) {
+    text.style.fontSize = `${size}px`;
+    text.style.lineHeight = String(leading);
+    if (text.scrollHeight <= text.clientHeight) return;
+  }
+}
+
+// Both depend on the panel's width, which the user can drag.
+window.addEventListener('resize', () => {
+  fitQuestion();
+  fitAnswer();
+});
+
 function renderTurn() {
   // **Recording takes the whole panel**, because it is a different activity rather than a
   // different turn state: there is no transcript, no roster to re-route to, and the person is
@@ -154,6 +210,7 @@ function renderTurn() {
     caret.className = 'caret';
     tr.append(caret);
   }
+  fitQuestion();
 
   const look = (STATUS[state.phase] ?? STATUS.idle)(state);
   const who = el('who');
@@ -174,24 +231,31 @@ function renderTurn() {
   const vendor = look.who ? roster.products[idFor(look.who)] : null;
   const named = look.verb ? `${look.who} ${look.verb}` : [look.who, vendor].filter(Boolean).join(' · ');
   const words = state.message || (look.who ? named : look.text);
-  if (words) who.append(document.createTextNode(words));
+  // Before the first turn there is no status at all, and a blank line in a box reads as broken.
+  who.classList.toggle('placeholder', !words);
+  who.append(document.createTextNode(words || 'No question yet'));
 
   el('deadmic').hidden = state.phase !== 'not-capturing';
 
-  // **Filled in place, never rebuilt.** The box is in the markup and shows from the first status
-  // on, so rebuilding it per patch would replay its entrance with every word somebody says. See
-  // `.bubble` in the stylesheet for why it is one height throughout.
-  el('answer').hidden = !words && !state.answer;
+  // **Filled in place, never rebuilt.** The box is in the markup and always shown, so rebuilding
+  // it per patch would replay its entrance with every word somebody says. See `.bubble` in the
+  // stylesheet for why it is one height throughout.
+  //
+  // The placeholder only while nothing is under way: mid-turn the status line says what is
+  // happening, and an invitation to ask would be asking twice.
   const text = el('answer-text');
-  text.hidden = !state.answer;
-  if (text.textContent !== (state.answer ?? '')) {
-    text.textContent = state.answer ?? '';
+  const shown = state.answer || (state.phase === 'idle' ? ANSWER_PLACEHOLDER : '');
+  text.hidden = !shown;
+  text.classList.toggle('placeholder', !state.answer);
+  if (text.textContent !== shown) {
+    text.textContent = shown;
     // A new answer starts at its first line, wherever the last one was scrolled to.
     text.scrollTop = 0;
   }
   const sub = el('answer-sub');
   sub.hidden = !state.answer || !state.sub;
   sub.textContent = state.sub ?? '';
+  fitAnswer();
 }
 
 /**

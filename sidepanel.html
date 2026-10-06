@@ -73,12 +73,12 @@
          but never less than a row of avatars and most of the next – so when an answer is long it is
          the answer that scrolls, and the roster is still there.
 
-         **Its top 10px fade out**, so avatars scrolling up go under the turn softly instead of
+         **Its top 10px fade out**, so avatars scrolling up go under the divider softly instead of
          being cut in half against it. At rest that strip is padding, so nothing is faded until it
          scrolls. */
       main {
         flex: 1 1 0; min-height: 76px; overflow-y: auto;
-        padding: 10px 14px 20px;
+        padding: 14px 14px 20px;
         mask-image: linear-gradient(transparent, #000 10px);
       }
 
@@ -99,23 +99,26 @@
          on either surface, is the thing you just said being read back – so it is the one piece of
          text that has to carry from across a desk.
 
-         **`min-height` is why there is no `:empty` rule any more.** It reserves two lines, so a
-         one-line utterance growing to two does not shove the roster and the answer down the panel
-         while somebody is still mid-sentence. The cost is a reserved strip on a panel that has
-         not heard anything yet.
+         **Two lines' height, whatever was said**, so the top never changes size between turns or
+         while somebody is mid-sentence. A question too long for two lines at 21px steps down to
+         18px, then to 16px, where three fit – `fitQuestion` in sidepanel.js measures. Past that
+         it is cut: from the front while somebody is still talking, so the words being heard stay
+         in view (`.tail`), and at the end with an ellipsis once it has settled (`.clamped`).
 
          The negative margin lays it over the canvas's lowest 20px, which the sphere never reaches. */
       .transcript {
-        min-height: 66px; margin: -20px 0 0; padding: 0 6px; text-align: center;
+        height: 66px; overflow: hidden; margin: -20px 0 0; padding: 0 6px; text-align: center;
         font-weight: 500; font-size: 21px; line-height: 1.34; letter-spacing: -0.015em;
         text-wrap: pretty; overflow-wrap: anywhere;
       }
+      .transcript.tail { mask-image: linear-gradient(transparent, #000 10px); }
+      .transcript.clamped { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
       /* Dimmer than `--text-dim`, deliberately: this is the tail the recogniser is still
          revising, and it has to read as less settled than ordinary secondary text rather than
          the same as it. */
       .volatile { color: rgba(235, 235, 245, 0.52); }
       .caret {
-        display: inline-block; width: 2px; height: 22px; vertical-align: -3px;
+        display: inline-block; width: 2px; height: 1.05em; vertical-align: -0.14em;
         background: var(--text); opacity: 0.9; margin-left: 2px;
         animation: blink 1.1s steps(2) infinite;
       }
@@ -123,14 +126,14 @@
 
       /* Who the turn is with, heading the answer box in its top-left corner. It was a line of its
          own under the box, behind a divider, so one exchange was read in two places; inside, the
-         status and the answer it is about read as one thing. The divider went with it, and the
-         box's own edge now separates the turn from the roster. **The line keeps its height when
-         empty**, so a status appearing never moves the answer under it. */
+         status and the answer it is about read as one thing. Until there is a status it holds a
+         placeholder, like the answer under it, so the box never reads as empty. */
       .who {
         flex: none; min-height: 18px; margin-bottom: 6px;
         font-size: 13px; line-height: 18px; color: var(--text-dim);
         display: flex; align-items: center; gap: 7px; overflow-wrap: anywhere;
       }
+      .who.placeholder { color: var(--text-faint); }
       /* Wraps, because a long roster otherwise runs off the panel and the whole page scrolls
          sideways. Which way each avatar's label hangs then depends on where it landed – see
          `alignTips` in sidepanel.js. 8px rather than 9 puts eight to a row in a 360px panel, which
@@ -190,17 +193,25 @@
       /* **One height, whatever is in it**: the status line and three lines of answer, which is
          two ordinary sentences at the panel's usual width. So the roster below never moves
          between a short answer, a long one and none yet – an answer lands mid-turn, at the
-         moment somebody may be reaching for an avatar – and a longer one scrolls inside.
+         moment somebody may be reaching for an avatar. A longer one steps its type down to fit
+         more (`fitAnswer` in sidepanel.js), then scrolls inside.
 
-         The box appears with the first status of the panel's first turn and stays from then on,
-         since every phase after that has a status to show. That is the one move the layout makes,
-         at the press that started the turn. It replaces the reserve that used to hold the space
-         from `routing` on: a box that is always this tall has nothing left to reserve.
+         **Always there**, holding a placeholder in both lines until the first turn, so nothing in
+         the top moves at all. It replaces the reserve that used to hold the space from `routing`
+         on: a box that is always this tall has nothing left to reserve.
 
          **Still the give in the top's column.** On a panel too short for all of it, the box
          shrinks below that height rather than pushing the roster off, and the answer scrolls in
-         what is left. */
-      .answer { padding-top: 14px; min-height: 0; display: flex; flex-direction: column; }
+         what is left.
+
+         **The divider under it is an inset hairline at the foot of this column** rather than an
+         element of its own. A half-pixel `inset` shadow is what the hero uses and the better
+         primitive: a 1px div rounds up to a whole device pixel and reads as a drawn line, where
+         this catches the light the way the edge of a raised surface does. */
+      .answer {
+        padding: 14px 0 18px; min-height: 0; display: flex; flex-direction: column;
+        box-shadow: inset 0 -0.5px 0 rgba(255, 255, 255, 0.14);
+      }
       .bubble {
         --answer-lines: 3;
         /* 24px of padding and 24px of status line, then the lines, in the bubble's own `em`. */
@@ -223,6 +234,7 @@
         min-height: 0; overflow-y: auto; overscroll-behavior: contain;
         animation: rise 0.34s cubic-bezier(0.22, 1, 0.36, 1);
       }
+      .bubble .text.placeholder { color: var(--text-faint); }
       @keyframes rise { from { opacity: 0; transform: translateY(5px); } }
       /* Inside the bubble, as drawn: it is a property of the answer, not a note beside it. Under
          the scroller rather than in it, so a note about a long answer – "Shortened" is one – is
@@ -403,10 +415,10 @@
       <!-- The answer under the question it answers, and the roster below both: a long roster
            between the two put five rows of avatars in the middle of one exchange. Who the turn is
            with heads the box, and a note on the answer sits under it. -->
-      <div class="answer" id="answer" hidden>
+      <div class="answer" id="answer">
         <div class="bubble">
           <div class="who" id="who"></div>
-          <div class="text" id="answer-text" hidden></div>
+          <div class="text" id="answer-text"></div>
           <div class="sub" id="answer-sub" hidden></div>
         </div>
       </div>
