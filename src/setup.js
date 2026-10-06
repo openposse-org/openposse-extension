@@ -212,7 +212,16 @@ async function refreshEngine() {
   });
   // Green for Kokoro; the system voices are the working fallback rather than a fault, so neutral.
   setStatus('engine', describeEngine(choice), choice.engine === 'kokoro' ? 'good' : '');
+  // **Done once something on this machine can speak an answer**: Kokoro, or an on-device system
+  // voice. Remote ones sit in the same list and do not count – see the local-only rule in
+  // voices.js. The step had no done state at all until 2026-10-06, so it was never green.
+  markDone('step-voices', choice.engine === 'kokoro'
+    || speechSynthesis.getVoices().some((voice) => voice.localService));
 }
+
+// Chrome fills the system voice list after the page asks for it, so the first check can find
+// it empty; this runs the check again once it is there.
+speechSynthesis.addEventListener('voiceschanged', () => { refreshEngine(); });
 
 // ── The neural voices ──────────────────────────────────────────────────────────────────────
 //
