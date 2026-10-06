@@ -225,6 +225,17 @@ export async function say(text, agentID) {
 }
 
 /**
+ * Loads the voice while a turn that never opens the microphone is still being answered – a typed
+ * question, or the demo. A spoken turn needs no call: the offscreen document warms as it starts
+ * listening. Fire and forget; an answer that lands first just waits out the load, as before.
+ */
+export function warmVoice() {
+  tell('openposse.voice.warm').catch((error) => {
+    console.warn('[openposse] the voice could not be warmed –', error?.message ?? error);
+  });
+}
+
+/**
  * Speaks a sample for Settings, down the same path an answer takes.
  *
  * **Settings used to speak for itself, and that is what this replaces.** It called Kokoro

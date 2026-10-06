@@ -18,6 +18,7 @@ import {
 import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
   isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone, say, previewVoice,
+  warmVoice,
 } from './listening.js';
 import { runDemo, stopDemo } from './demo.js';
 import { needsShortening, spokenForm } from './saying.js';
@@ -953,6 +954,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   }
   if (request?.kind === 'openposse.demo') {
     // Scaffolding, reachable only from the panel's own quiet button. See `demo.js`.
+    warmVoice();
     runDemo(readAloud).then(respond, (error) => {
       console.warn('[openposse] the demo turn failed –', error?.message ?? error);
       respond({ ok: false, reason: error?.message ?? String(error) });
@@ -981,6 +983,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   if (request?.kind === 'openposse.ask') {
     // The typed path, through the same door as the spoken one – so the answer lands on the orb
     // rather than in a popup that closes the moment you look away.
+    warmVoice();
     loadRoster()
       .then(({ agents }) => findAgent(agents, request.agentName))
       .then((agent) => (agent

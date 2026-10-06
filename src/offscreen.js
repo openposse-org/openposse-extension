@@ -275,9 +275,7 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
   startMeter();
 
   // Loads the model while the turn is still happening, so the ~1.7 s never lands on the answer.
-  // Not awaited and not reported: if it fails, the speaking path will say so with a reason, and
-  // a warm-up complaining before anything needs it would be noise.
-  engine().then(({ engine: chosen }) => { if (chosen === 'kokoro') warmKokoro(); });
+  warmVoice();
   send('openposse.listen.started', { biased: Boolean(Phrase) && phrases.length > 0 });
 }
 
@@ -336,6 +334,18 @@ async function engine() {
     hasWebGPU: await hasWebGPU(),
     hasKokoroAssets: await hasKokoroAssets(),
   });
+}
+
+/**
+ * Loads Kokoro before an answer needs it. Asked for by a spoken turn as listening starts, and by
+ * the worker as a typed turn or the demo starts – neither opens the microphone, so neither would
+ * reach the first, and both used to wait out the whole load after the answer had landed.
+ *
+ * Not awaited and not reported: if it fails, the speaking path will say so with a reason, and a
+ * warm-up complaining before anything needs it would be noise.
+ */
+function warmVoice() {
+  engine().then(({ engine: chosen }) => { if (chosen === 'kokoro') warmKokoro(); });
 }
 
 // `speed` arrives with the message rather than being read from storage here, for the same
@@ -467,6 +477,10 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
       // have, and stopping the wrong one is worse than stopping one that was already silent.
       speechSynthesis.cancel();
       cancelKokoro();
+      respond({ ok: true });
+      return true;
+    case 'openposse.voice.warm':
+      warmVoice();
       respond({ ok: true });
       return true;
     case 'openposse.engine.query':
