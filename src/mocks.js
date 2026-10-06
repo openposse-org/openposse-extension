@@ -17,18 +17,23 @@ export const MOCK_SIZES = [10, 20, 30];
  * initials are deliberate: a long roster has them, and the avatars should be judged with them.
  * No vendor here is one somebody has likely recorded for real, so "take me to Notion" still means
  * the real Notion agent while mocks are in.
+ *
+ * **Each domain's home page must stay on that domain**, or Load all in the debug drawer cannot
+ * match the page it loads to the mock and the avatar keeps its letter. zoom.us, freshdesk.com and
+ * greenhouse.io went to zoom.com, freshworks.com and greenhouse.com, so on 2026-10-06 they were
+ * swapped for ClickUp, HubSpot and Box from the recipe library's top-50 list.
  */
 const CAST = [
   ['Maya', 'salesforce.com'], ['Theo', 'zendesk.com'], ['Ines', 'asana.com'],
   ['Bartholomew', 'linear.app'], ['Kofi', 'miro.com'], ['Lena', 'figma.com'],
   ['Data Team', 'slack.com'], ['Omar', 'basecamp.com'], ['Sofia', 'workday.com'],
   ['Ravi', 'intercom.com'], ['Hana', 'airtable.com'], ['Felix', 'coda.io'],
-  ['Zara', 'dropbox.com'], ['Mateo', 'zoom.us'], ['Yuki', 'canva.com'],
+  ['Zara', 'dropbox.com'], ['Mateo', 'clickup.com'], ['Yuki', 'canva.com'],
   ['Nadia', 'gong.io'], ['Arjun', 'glean.com'], ['Clara', 'monday.com'],
-  ['Emeka', 'freshdesk.com'], ['Lucia', 'pipedrive.com'], ['Tomas', 'smartsheet.com'],
+  ['Emeka', 'hubspot.com'], ['Lucia', 'pipedrive.com'], ['Tomas', 'smartsheet.com'],
   ['Aisha', 'webflow.com'], ['Jonas', 'retool.com'], ['Mei', 'sentry.io'],
   ['Diego', 'okta.com'], ['Freya', 'shopify.com'], ['Kenji', 'lattice.com'],
-  ['Leila', 'greenhouse.io'], ['Oskar', 'typeform.com'], ['Amara', 'trello.com'],
+  ['Leila', 'box.com'], ['Oskar', 'typeform.com'], ['Amara', 'trello.com'],
 ];
 
 /** A recipe that passes every check Settings runs, on selectors no page has. */
