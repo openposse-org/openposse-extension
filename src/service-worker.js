@@ -274,9 +274,11 @@ async function putQuestion(agent, prompt, matched) {
   trace('routed', `${agent.name} (${matched}), ${prompt.length} chars`);
   await rememberPrompt(prompt);
   markThinking(agent.name, channelOf(agent));
+  // `sub` too: a typed or re-routed question never passes `startListening`'s reset, so the last
+  // answer's "Shortened" would otherwise sit under this one.
   panel({
     phase: 'thinking', agentName: agent.name, channel: channelOf(agent),
-    transcript: prompt, volatile: '', answer: '', message: '', visible: true,
+    transcript: prompt, volatile: '', answer: '', sub: '', message: '', visible: true,
   }, { create: true });
   announceTurn({ phase: 'thinking', agentName: agent.name, matched });
 

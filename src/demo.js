@@ -44,13 +44,17 @@ import { productLabel } from './routing.js';
  * Turn 3 is the one worth having: **a follow-up with no name**, which is the floor holder doing
  * its job and the only part of routing that is invisible from a transcript. The hero on the
  * landing page uses the same three for the same reason.
+ *
+ * **No turn carries a note under its answer**, though the panel has a line for one. A real turn
+ * writes there only when an answer was shortened or could not be spoken, so a note here – a
+ * source, or "the floor was still held" – would show the panel something no real turn does. The
+ * status line and the lit avatar already say who took a follow-up.
  */
 const SCRIPT = [
   {
     cast: 0,
     ask: 'summarise the Q3 planning page.',
     answer: 'Q3 is three launches. The billing migration has moved to August.',
-    sub: 'From “Q3 planning”',
   },
   {
     cast: 1,
@@ -63,8 +67,6 @@ const SCRIPT = [
     named: false,
     ask: 'and which are still open?',
     answer: 'Eleven are still open. Three are due to close by Friday.',
-    // No note saying the floor was held. A real follow-up never explains itself, and the status
-    // line and the lit avatar already show who took it.
   },
 ];
 
@@ -205,7 +207,6 @@ async function playTurn(step, who, token) {
   if (!alive()) return;
   markDone(null);
   panel({ phase: 'answering', agentName: who.name, answer: step.answer });
-  if (step.sub) panel({ sub: step.sub });
 
   // The real `say`, so the voice this picks is the voice a real answer would get. Awaited, so
   // the next turn does not start talking over this one.
