@@ -88,17 +88,19 @@
 
       .orbwrap { position: relative; display: flex; justify-content: center; }
       /* **The hero's proportion, not its pixel count.** It draws the orb at 320px inside a 520px
-         column, so the rule is 62% of whatever column it is in, capped where the hero caps it.
-         Writing `320px` literally would fill a 360px panel edge to edge, which is a different
-         picture from the one being matched.
+         column, so the rule is 62% of whatever column it is in. Writing `320px` literally would
+         fill a 360px panel edge to edge, which is a different picture from the one being matched.
+         **Capped at its size in a 360px panel**, the width Chrome opens one at: 62% of that
+         panel's 332px column. Widening the panel used to grow it to the hero's 320px, and the
+         size it opens at is the one that looks right.
          Note the sphere fills about half of its canvas – the rest was reserved for a halo that
          is switched off. On flat black that read as a hole; with the wash behind it, it reads as
          the light the sphere is sitting in, which is why the canvas is not simply cropped. */
-      canvas { width: min(320px, 62%); aspect-ratio: 1; display: block; }
+      canvas { width: min(206px, 62%); aspect-ratio: 1; display: block; }
       .orbwrap .dead-mic { position: absolute; bottom: 6px; }
       /* The demo's play button, top right. Laid over the stage rather than given a row of its own,
-         so the top keeps one height; at any panel width it clears the canvas, which is 62% of the
-         column and centred. */
+         so the top keeps one height; at any panel width it clears the canvas, which is at most 62%
+         of the column and centred. */
       .orbwrap .demo { position: absolute; top: 0; right: 0; }
 
       /* 21px/500, which is four points larger than the port guessed at. What the transcript is,
@@ -145,9 +147,10 @@
          `alignTips` in sidepanel.js. 8px rather than 9 puts eight to a row in a 360px panel, which
          9 missed by three pixels. */
       #avatars { display: flex; flex-wrap: wrap; gap: 8px; }
-      /* **Sized to fill the row**, between 34px and the orb's size – `sizeAvatars` sets `--av`. The
-         letter and the site icon keep their proportions to the circle; the rings keep their 4px
-         and 1.5px, because a line weight does not grow with what it surrounds. */
+      /* **Sized to fill the row**, as wide as it is in a 360px panel and no wider, between 34px and
+         the orb's size – `sizeAvatars` sets `--av`. The letter and the site icon keep their
+         proportions to the circle; the rings keep their 4px and 1.5px, because a line weight does
+         not grow with what it surrounds. */
       #avatars .avatar { width: var(--av); height: var(--av); font-size: calc(var(--av) * 14 / 34); }
       #avatars .avatar > img {
         width: calc(var(--av) * 24 / 34); height: calc(var(--av) * 24 / 34);

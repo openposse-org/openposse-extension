@@ -455,17 +455,23 @@ async function drawRoster() {
  * wraps at and never larger than the orb. So a few assistants sit at the orb's size, each one more
  * makes them all smaller, and from eight in a 360px panel they are 34px and wrap as before.
  *
+ * **No bigger than they are in a 360px panel**, the width Chrome opens one at – like the orb. A
+ * wider panel leaves them that size rather than filling it; a narrower one still shrinks them.
+ * Only the sizing is capped: a long roster of 34px avatars still wraps at the panel's full width.
+ *
  * Set on the middle rather than on the row, because the middle's `min-height` – a row of avatars
  * and most of the next – has to grow with them.
  */
 const AVATAR_MIN = 34; // ui.css's circle
 const AVATAR_GAP = 8; // #avatars' gap
+const AVATAR_ROW = 332; // the row in a 360px panel, inside the middle's 14px sides
 
 function sizeAvatars() {
   const row = el('avatars');
   const count = row.children.length;
   const orb = el('orb').getBoundingClientRect().width * 2 * SPHERE_RADIUS;
-  const fill = count ? (row.clientWidth - (count - 1) * AVATAR_GAP) / count : AVATAR_MIN;
+  const width = Math.min(row.clientWidth, AVATAR_ROW);
+  const fill = count ? (width - (count - 1) * AVATAR_GAP) / count : AVATAR_MIN;
   const size = Math.floor(Math.max(AVATAR_MIN, Math.min(orb, fill)));
   el('middle').style.setProperty('--av', `${size}px`);
 }
