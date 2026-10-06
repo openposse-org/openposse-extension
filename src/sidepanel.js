@@ -850,27 +850,65 @@ chrome.storage.onChanged.addListener((changes, area) => {
  * real turn does, and a copy of it here would be a second renderer able to disagree with the one
  * being evaluated.
  *
- * **The button reports that it is running, and this is not polish.** It runs for about a minute
- * and its first visible act is nine hundred milliseconds away, so a button that did nothing
- * visible for a second would be pressed twice – and the second press restarts the script,
- * which looks exactly like the first press having failed.
+ * **A second press pauses, and Stop sits under it while anything is playing.** The button used to
+ * spin and refuse presses, because a second press restarted the script and looked exactly like the
+ * first one having failed. Pause gives that press something useful to do, so the spinner is gone.
+ * Pause holds the voice mid-word; Stop silences it and leaves the panel empty and at rest.
  */
-const DEMO = 'Play a scripted turn – no vendor, no question spent';
+const DEMO_LABELS = {
+  idle: 'Play a scripted turn – no vendor, no question spent',
+  playing: 'Pause the scripted turn',
+  paused: 'Resume the scripted turn',
+};
 
-function showDemo(playing) {
+/** `idle`, `playing` or `paused` – what the button shows, which the worker's run can outlive. */
+let demo = 'idle';
+
+/**
+ * Counts presses of Play and Stop, so a run that has been stopped cannot reset the button when it
+ * finally returns. A stopped run can take seconds to unwind – a voice that was still loading has
+ * to finish loading first – and by then somebody may have pressed Play again.
+ */
+let runs = 0;
+
+function showDemo(next) {
+  demo = next;
   const button = el('demo');
-  button.disabled = playing;
-  button.classList.toggle('busy', playing);
-  setIcon(button, playing ? 'loader-circle' : 'play', playing ? 15 : 12);
-  label(button, playing ? 'Playing the scripted turn…' : DEMO);
+  setIcon(button, demo === 'playing' ? 'pause' : 'play', 12);
+  label(button, DEMO_LABELS[demo]);
+  el('demostop').hidden = demo === 'idle';
+}
+
+/** Pause and Resume, which differ only in the message and the state they lead to. */
+function holdDemo(kind, next, what) {
+  chrome.runtime.sendMessage({ kind })
+    .then((answer) => {
+      if (answer?.ok) showDemo(next);
+      else console.warn(`[openposse] the demo could not be ${what} –`, answer?.reason ?? 'no reason given');
+    })
+    .catch((error) => console.warn(`[openposse] the demo could not be ${what} –`, error?.message ?? error));
 }
 
 el('demo').addEventListener('click', () => {
-  if (el('demo').disabled) return;
-  showDemo(true);
+  if (demo === 'playing') { holdDemo('openposse.demo.pause', 'paused', 'paused'); return; }
+  if (demo === 'paused') { holdDemo('openposse.demo.resume', 'playing', 'resumed'); return; }
+  runs += 1;
+  const run = runs;
+  showDemo('playing');
   chrome.runtime.sendMessage({ kind: 'openposse.demo' })
     .catch((error) => console.warn('[openposse] the demo could not start –', error?.message ?? error))
-    .finally(() => showDemo(false));
+    .finally(() => { if (run === runs) showDemo('idle'); });
+});
+
+el('demostop').addEventListener('click', () => {
+  // Idle at once, rather than when the stopped run returns: see `runs`.
+  runs += 1;
+  showDemo('idle');
+  chrome.runtime.sendMessage({ kind: 'openposse.demo.stop' })
+    .then((answer) => {
+      if (!answer?.ok) console.warn('[openposse] the demo could not be stopped –', answer?.reason ?? 'no reason given');
+    })
+    .catch((error) => console.warn('[openposse] the demo could not be stopped –', error?.message ?? error));
 });
 
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
@@ -913,15 +951,17 @@ chrome.runtime
   .catch(() => showListening({ listening: false }));
 
 // The controls whose icon never changes get it once, here. The rest – Listen, the toggles and the
-// demo while it plays – set theirs wherever their state changes, starting with the calls below.
+// demo's play/pause – set theirs wherever their state changes, starting with the calls below.
 setIcon(el('type'), 'keyboard', 17);
 setIcon(el('record'), 'circle', 11);
 setIcon(el('settings'), 'settings', 17);
 setIcon(el('send'), 'send-horizontal', 16);
 setIcon(el('grant'), 'key-round', 16);
+setIcon(el('demostop'), 'square', 11);
+label(el('demostop'), 'Stop the scripted turn');
 showListening({ listening: false });
 setAsk(false);
-showDemo(false);
+showDemo('idle');
 
 renderTurn();
 loadRosterData();

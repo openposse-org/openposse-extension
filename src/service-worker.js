@@ -20,7 +20,9 @@ import {
   isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone, say, previewVoice,
   warmVoice,
 } from './listening.js';
-import { runDemo, stopDemo } from './demo.js';
+import {
+  runDemo, stopDemo, pauseDemo, resumeDemo, endDemo,
+} from './demo.js';
 import { needsShortening, spokenForm } from './saying.js';
 import { summarise } from './summariser.js';
 import {
@@ -957,6 +959,21 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
     warmVoice();
     runDemo(readAloud).then(respond, (error) => {
       console.warn('[openposse] the demo turn failed –', error?.message ?? error);
+      respond({ ok: false, reason: error?.message ?? String(error) });
+    });
+    return true;
+  }
+  if (request?.kind === 'openposse.demo.pause') {
+    respond(pauseDemo());
+    return true;
+  }
+  if (request?.kind === 'openposse.demo.resume') {
+    respond(resumeDemo());
+    return true;
+  }
+  if (request?.kind === 'openposse.demo.stop') {
+    endDemo().then(() => respond({ ok: true }), (error) => {
+      console.warn('[openposse] the demo could not be stopped –', error?.message ?? error);
       respond({ ok: false, reason: error?.message ?? String(error) });
     });
     return true;

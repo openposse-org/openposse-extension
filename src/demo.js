@@ -33,7 +33,9 @@
 
 import { panel, panelLevel, hidePanel } from './panel.js';
 import { beginTurn, trace } from './trace.js';
-import { markThinking, markDone, VOLATILE_TAIL } from './listening.js';
+import {
+  markThinking, markDone, VOLATILE_TAIL, hush, pauseVoice, resumeVoice,
+} from './listening.js';
 import { channelOf, pickChannel } from './channels.js';
 import { loadRoster, recipeFor } from './storage.js';
 import { productLabel } from './routing.js';
@@ -121,20 +123,107 @@ const TIMING = {
 /**
  * Which generation of the demo is current.
  *
- * **A second press restarts rather than overlapping**, and anything that starts a real turn
- * stops this one. Without that, two scripts push conflicting patches at the same surface and
- * the result is a panel flickering between two transcripts – which looks like a rendering bug
- * in the thing being evaluated, and is the worst possible failure for a tool whose whole job is
- * to make the rendering judgeable.
+ * **A new run stops the old one rather than overlapping it**, and so does anything that starts a
+ * real turn. A second press of the button pauses now, so a restart only comes from a panel
+ * reopened mid-demo, which shows Play. Without this, two scripts push conflicting patches at the
+ * same surface and the result is a panel flickering between two transcripts – which looks like a
+ * rendering bug in the thing being evaluated, and is the worst possible failure for a tool whose
+ * whole job is to make the rendering judgeable.
  */
 let generation = 0;
+
+/** The generation that is playing, or null between runs. Pause and Resume act on nothing else. */
+let live = null;
+
+/** Whether the script is held: its clock, its synthetic microphone and the voice. */
+let paused = false;
+
+/**
+ * The wait the script is in, so a pause can stop its clock and a resume restart it with what was
+ * left. One is enough, because the script is sequential and never in two waits at once.
+ */
+let pending = null;
+
+function wait(ms) {
+  return new Promise((resolve) => {
+    pending = { resolve, left: ms, since: 0, timer: null };
+    if (!paused) run(pending);
+  });
+}
+
+function run(w) {
+  w.since = Date.now();
+  w.timer = setTimeout(() => {
+    if (pending === w) pending = null;
+    w.resolve();
+  }, w.left);
+}
 
 /** Ends any demo in flight. Called by the real listen toggle, so a turn always wins. */
 export function stopDemo() {
   generation += 1;
+  paused = false;
+  // A paused script is parked in a wait with no timer, and would never wake to see it had been
+  // stopped. Resolving the wait lets it reach its next `alive()` check and leave.
+  if (pending) {
+    const w = pending;
+    pending = null;
+    clearTimeout(w.timer);
+    w.resolve();
+  }
 }
 
-const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+/**
+ * The panel's Pause: holds the script's clock, its synthetic microphone and the voice, mid-word.
+ *
+ * Answers rather than throws when nothing is playing, because the button can outlive the run it
+ * was showing – one a real turn ended, say.
+ */
+export function pauseDemo() {
+  if (live !== generation) return { ok: false, reason: 'no demo is playing' };
+  if (!paused) {
+    paused = true;
+    if (pending?.timer) {
+      clearTimeout(pending.timer);
+      pending.timer = null;
+      pending.left = Math.max(0, pending.left - (Date.now() - pending.since));
+    }
+    panelLevel(0);
+    pauseVoice();
+  }
+  return { ok: true };
+}
+
+export function resumeDemo() {
+  if (live !== generation) return { ok: false, reason: 'no demo is playing' };
+  if (paused) {
+    paused = false;
+    if (pending && !pending.timer) run(pending);
+    resumeVoice();
+  }
+  return { ok: true };
+}
+
+/**
+ * The panel's Stop: ends the run, silences the voice and leaves the panel empty and at rest.
+ *
+ * **Cleared, where a run that finishes is left on its last turn.** A stop can land before an agent
+ * is picked, and the status line would then read "No question yet" beside a half-typed question.
+ */
+export async function endDemo() {
+  stopDemo();
+  try {
+    await hush();
+  } catch (error) {
+    console.warn('[openposse] the demo could not be silenced –', error?.message ?? error);
+  }
+  panelLevel(0);
+  await panel({
+    phase: 'idle',
+    transcript: '', volatile: '', answer: '', sub: '', message: '',
+    agentName: null, channel: null, warming: false,
+  });
+}
 
 /**
  * The cast, preferring real agents and filling the gaps.
@@ -176,6 +265,7 @@ function speakingInto(token) {
   let t = 0;
   const timer = setInterval(() => {
     if (generation !== token) { clearInterval(timer); return; }
+    if (paused) return;
     t += 1;
     // Syllables rather than a sine: a voice is bursts with gaps, and a smooth swell reads as a
     // tone being held. The floor keeps it off zero, which is a silent room rather than speech.
@@ -207,6 +297,9 @@ async function playTurn(step, who, token, readAloud) {
     transcript: '', volatile: '', answer: '', sub: '', message: '',
     agentName: null, channel: null,
   }, { create: true });
+  // Before the first wait, because a run stopped here would otherwise take the wait a newer run
+  // is pausing on.
+  if (!alive()) return;
 
   const quiet = speakingInto(token);
   await wait(TIMING.beforeTyping);
@@ -237,8 +330,11 @@ async function playTurn(step, who, token, readAloud) {
     // floor stays where it was, as it does for every scripted turn, and there is no answer,
     // because a real one gives none.
     await hidePanel();
+    if (!alive()) return;
     const tab = await chrome.tabs.create({ url: step.show });
     await chrome.windows.update(tab.windowId, { focused: true });
+    // Stop's resting panel must not be overwritten by a switch that was already under way.
+    if (!alive()) return;
     panel({ phase: 'idle', agentName: who.name, channel: who.channel });
     markDone(null);
     return;
@@ -265,14 +361,17 @@ async function playTurn(step, who, token, readAloud) {
  * Runs the whole script.
  *
  * Returns once it is finished or interrupted, so the caller can report which. Nothing is thrown
- * on interruption: being cut off by a real turn is the intended behaviour, not a failure.
+ * on interruption: being cut off by a real turn or by Stop is the intended behaviour, not a
+ * failure.
  *
  * `readAloud` is the worker's own, passed in because it lives in the file that imports this one,
  * so importing it back would be a cycle. Added 2026-10-06, when turn 4 made an answer long enough
  * to be shortened.
  */
 export async function runDemo(readAloud) {
-  const token = ++generation;
+  stopDemo();                     // and releases an old run that was paused, which would not wake
+  const token = generation;
+  live = token;
   const who = await cast();
   // The recorder's own keep-alive, for the same reason: MV3 kills an idle worker in ~30 s and
   // this script runs for about a minute with nothing but timers in it. Without this the demo
@@ -294,5 +393,6 @@ export async function runDemo(readAloud) {
   } finally {
     clearInterval(keepAlive);
     markDone(null);
+    if (live === token) live = null;
   }
 }

@@ -42,12 +42,20 @@ const BOX = 24;
  * arrow rather than a play control. Filling it with the same colour as the stroke gives the solid
  * rounded triangle the slot actually wants, which is how Lucide's own docs suggest handling it.
  * `square` and `circle` are filled for the same reason, as Stop and Record: outlined, they read
- * as a frame and a ring.
+ * as a frame and a ring. `pause` too, because two outlined bars at that size read as `||` in a
+ * thin font rather than as a control.
  */
 const NODES = {
   play: {
     filled: true,
     nodes: [['path', { d: 'M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z' }]],
+  },
+  pause: {
+    filled: true,
+    nodes: [
+      ['rect', { x: '14', y: '3', width: '5', height: '18', rx: '1' }],
+      ['rect', { x: '5', y: '3', width: '5', height: '18', rx: '1' }],
+    ],
   },
   'chevron-right': { nodes: [['path', { d: 'm9 18 6-6-6-6' }]] },
   'loader-circle': { nodes: [['path', { d: 'M21 12a9 9 0 1 1-6.219-8.56' }]] },

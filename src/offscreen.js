@@ -21,7 +21,10 @@
 import { assignVoices, localVoices } from './voices.js';
 import { chooseEngine, hasWebGPU, assignKokoroVoices, KOKORO_VOICES } from './tts.js';
 import { weightsStatus } from './weights.js';
-import { speak as speakWithKokoro, cancel as cancelKokoro, warm as warmKokoro } from './kokoro.js';
+import {
+  speak as speakWithKokoro, cancel as cancelKokoro, warm as warmKokoro,
+  pause as pauseKokoro, resume as resumeKokoro,
+} from './kokoro.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const Phrase = globalThis.SpeechRecognitionPhrase;
@@ -367,6 +370,9 @@ function warmVoice() {
 async function speak({ text, agentID, roster = [], speed = 1, wanted = null, preview = false }) {
   if (!text) return;
   speechSynthesis.cancel();                 // never two agents at once
+  // `cancel` leaves a paused synthesizer paused, by the spec, so an answer queued after the demo
+  // was paused would wait, silent, for a resume that is never coming.
+  speechSynthesis.resume();
   cancelKokoro();
 
   // E6's fork. `chooseEngine` routes to Kokoro when WebGPU *and* the weights are both present,
@@ -476,7 +482,20 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
       // Both engines, unconditionally. Which one is speaking depends on state this does not
       // have, and stopping the wrong one is worse than stopping one that was already silent.
       speechSynthesis.cancel();
+      speechSynthesis.resume();                 // see `speak` – a cancel keeps a pause
       cancelKokoro();
+      respond({ ok: true });
+      return true;
+    case 'openposse.voice.pause':
+      // The demo's Pause. Both engines for the same reason as `hush`, and Kokoro's holds even if
+      // the model is still loading.
+      speechSynthesis.pause();
+      pauseKokoro();
+      respond({ ok: true });
+      return true;
+    case 'openposse.voice.resume':
+      speechSynthesis.resume();
+      resumeKokoro();
       respond({ ok: true });
       return true;
     case 'openposse.voice.warm':

@@ -235,6 +235,19 @@ export function warmVoice() {
   });
 }
 
+/** Holds whatever is being read out, mid-word. The demo's Pause; a real turn has none. */
+export function pauseVoice() {
+  tell('openposse.voice.pause').catch((error) => {
+    console.warn('[openposse] the voice could not be paused –', error?.message ?? error);
+  });
+}
+
+export function resumeVoice() {
+  tell('openposse.voice.resume').catch((error) => {
+    console.warn('[openposse] the voice could not be resumed –', error?.message ?? error);
+  });
+}
+
 /**
  * Speaks a sample for Settings, down the same path an answer takes.
  *
