@@ -23,7 +23,15 @@ const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const LANGS = { langs: ['en-US'], processLocally: true };
 
 const el = (id) => document.getElementById(id);
-const setStatus = (id, text) => { el(id).textContent = text; };
+/**
+ * A step's status, and how it should look: `good` is done, `warn` is something left to do, `bad`
+ * is something that went wrong, and nothing is neutral – an optional step left off, or progress.
+ * The words carry the same meaning as the colour, for anyone who cannot tell green from amber.
+ */
+const setStatus = (id, text, tone = '') => {
+  el(id).textContent = text;
+  el(id).dataset.tone = tone;
+};
 const markDone = (section, done) => el(section).classList.toggle('done', done);
 /** The words of an icon button: its hover label, and what a screen reader says for it. */
 const label = (button, text) => button.setAttribute('aria-label', text);
@@ -50,11 +58,12 @@ async function isBlocked() {
 async function refreshMic() {
   const granted = await micGranted();
   if (granted) {
-    setStatus('mic-status', 'granted');
+    setStatus('mic-status', 'granted', 'good');
   } else {
-    setStatus('mic-status', await isBlocked()
+    const blocked = await isBlocked();
+    setStatus('mic-status', blocked
       ? 'blocked by Chrome – allow it in this extension’s site settings'
-      : 'not granted');
+      : 'not granted', blocked ? 'bad' : 'warn');
   }
   markDone('step-mic', granted);
   el('grant-mic').disabled = granted;
@@ -75,7 +84,7 @@ el('grant-mic').addEventListener('click', async () => {
     await refreshMic();
   } catch (error) {
     await setMicGranted(false);
-    setStatus('mic-status', `${error.name} – ${error.message}`);
+    setStatus('mic-status', `${error.name} – ${error.message}`, 'bad');
   }
 });
 
@@ -83,20 +92,21 @@ el('grant-mic').addEventListener('click', async () => {
 
 async function refreshModel() {
   if (!SR?.available) {
-    setStatus('model-status', 'this browser has no on-device speech recognition');
+    setStatus('model-status', 'this browser has no on-device speech recognition', 'bad');
     el('install-model').disabled = true;
     return false;
   }
   const state = await SR.available(LANGS);
   const ready = state === 'available';
-  setStatus('model-status', ready ? 'ready' : state);
+  setStatus('model-status', ready ? 'ready' : state, ready ? 'good' : 'warn');
   markDone('step-model', ready);
   el('install-model').disabled = ready || state === 'unavailable';
 
   if (state === 'unavailable') {
     // Worth separating from "not downloaded yet". This is usually a field trial being off
     // rather than anything the user did, and no amount of clicking Download will fix it.
-    setStatus('model-status', 'unavailable – on-device recognition is switched off in this Chrome');
+    setStatus('model-status', 'unavailable – on-device recognition is switched off in this Chrome',
+      'bad');
   }
   return ready;
 }
@@ -106,7 +116,7 @@ el('install-model').addEventListener('click', async () => {
   try {
     await SR.install(LANGS);
   } catch (error) {
-    setStatus('model-status', `failed: ${error.message}`);
+    setStatus('model-status', `failed: ${error.message}`, 'bad');
     return;
   }
   await refreshModel();
@@ -126,7 +136,7 @@ async function refreshShortcut() {
   const summon = (await chrome.commands.getAll()).find((c) => c.name === 'summon');
   // Deliberately not claiming it is global. Nothing in the API reports that, and saying "press
   // it anywhere" about a Chrome-only binding would be a promise the product cannot keep.
-  setStatus('shortcut-status', summon?.shortcut || 'none assigned');
+  setStatus('shortcut-status', summon?.shortcut || 'none assigned', summon?.shortcut ? 'good' : 'warn');
   markDone('step-shortcut', Boolean(summon?.shortcut));
 }
 
@@ -154,9 +164,10 @@ const ALL_SITES = { origins: ['https://*/*'] };
 
 async function refreshPanelAccess() {
   const granted = await chrome.permissions.contains(ALL_SITES);
+  // Off is not a problem to fix – the step is optional – so it is neutral rather than amber.
   setStatus('panel-status', granted
     ? 'on – the panel appears on any page'
-    : "off – the panel appears on assistants' pages only");
+    : "off – the panel appears on assistants' pages only", granted ? 'good' : '');
   markDone('step-panel', granted);
   el('grant-panel').setAttribute('aria-checked', String(granted));
   return granted;
@@ -199,7 +210,8 @@ async function refreshEngine() {
     hasWebGPU: await hasWebGPU(),
     hasKokoroAssets: (await weightsStatus()).state === 'ready',
   });
-  el('engine').textContent = describeEngine(choice);
+  // Green for Kokoro; the system voices are the working fallback rather than a fault, so neutral.
+  setStatus('engine', describeEngine(choice), choice.engine === 'kokoro' ? 'good' : '');
 }
 
 // ── The neural voices ──────────────────────────────────────────────────────────────────────
@@ -232,13 +244,16 @@ async function refreshWeights() {
   // Says what is on disk, and nothing about whether it is being used – the engine line above
   // owns that, and this claiming "used whenever WebGPU is available" directly contradicted it
   // while the engine was still unbuilt. One fact, one place.
+  // Not downloaded is neutral: the step is optional. Interrupted is amber – something started
+  // and did not finish.
   setStatus('weights-status', done
     ? `installed – ${want} files, verified`
     : extending
       ? `${want - have} more voices available · ${mb(missingBytes)}`
       : state === 'partial'
         ? `${have} of ${want} files – interrupted`
-        : `not downloaded · ${mb(TOTAL_BYTES)}`);
+        : `not downloaded · ${mb(TOTAL_BYTES)}`,
+  done ? 'good' : state === 'partial' && !extending ? 'warn' : '');
   markDone('step-weights', done);
   return state;
 }
@@ -249,7 +264,7 @@ el('get-weights').addEventListener('click', async () => {
   // without both origins every file fails with a message that says nothing useful.
   const allowed = await ensureAccess();
   if (!allowed) {
-    setStatus('weights-status', 'needs access to huggingface.co to download – not granted');
+    setStatus('weights-status', 'needs access to huggingface.co to download – not granted', 'warn');
     return;
   }
 
@@ -267,7 +282,7 @@ el('get-weights').addEventListener('click', async () => {
     // A button that does nothing is the worst outcome available, so nothing gets to throw
     // past here silently – the page says what happened and the console says it precisely.
     console.error('[openposse] weights download threw –', error?.message ?? error);
-    setStatus('weights-status', `could not start: ${error?.message ?? error}`);
+    setStatus('weights-status', `could not start: ${error?.message ?? error}`, 'bad');
     el('get-weights').disabled = false;
     return;
   }
@@ -284,7 +299,7 @@ el('get-weights').addEventListener('click', async () => {
     const reasons = [...new Set(result.failed.map((f) => f.reason))];
     setStatus('weights-status', mismatched.length
       ? `refused: ${mismatched.map((f) => f.id).join(', ')} did not match the expected contents`
-      : `${result.failed.length} of ${result.failed.length} failed – ${reasons.join(' · ')}`);
+      : `${result.failed.length} of ${result.failed.length} failed – ${reasons.join(' · ')}`, 'bad');
     el('drop-weights').hidden = false;
     return;
   }
@@ -697,38 +712,44 @@ el('grant-icons').addEventListener('click', async () => {
 
 // ── Roster ─────────────────────────────────────────────────────────────────────────────────
 
+/** Past this many, a search box appears over the roster. */
+const SEARCH_FROM = 11;
+
+/** Which redraw is the latest – see `refreshRoster`. */
+let rosterDrawn = 0;
+
 async function refreshRoster() {
+  // **Only the latest redraw reaches the screen, and it arrives whole.** The list now redraws
+  // itself on every roster change in storage as well as after this page's own edits – so a
+  // rename asks twice, once itself and once through the change it causes – and each pass awaits
+  // storage before it draws. Clearing first and appending as rows were made let two passes
+  // interleave into one list twice as long; swapping the finished list in at the end, and only
+  // from the newest pass, means an older read can never land on top of a newer one.
+  const drawing = ++rosterDrawn;
   const { agents, broken, problem } = await loadRoster();
   const target = el('roster');
-  target.textContent = '';
+  const search = el('roster-search');
 
-  if (problem) {
-    target.className = 'card bad';
-    target.textContent = problem;
+  if (problem || agents.length === 0) {
+    if (drawing !== rosterDrawn) return;
+    target.className = problem ? 'card bad' : 'card';
+    target.textContent = problem ?? 'none yet – record one from the toolbar button';
+    search.hidden = true;
+    search.value = '';
+    el('roster-none').hidden = true;
     return;
   }
-
-  if (agents.length === 0) {
-    target.className = 'card';
-    target.textContent = 'none yet – record one from the toolbar button';
-    return;
-  }
-  // Two across, filling down – see `#roster.grid` in setup.html. This is where the second column
-  // starts, set here because CSS has no way to count its own children.
-  target.className = 'grid';
-  const rows = Math.ceil(agents.length / 2);
-  target.style.setProperty('--rows', String(rows));
 
   const patterns = Object.fromEntries(await Promise.all(
     agents.map(async (agent) => [agent.id, (await recipeFor(agent))?.domainPattern])));
   const icons = await iconPages(patterns);
+  if (drawing !== rosterDrawn) return;
 
+  const built = [];
   for (const [index, agent] of agents.entries()) {
     const row = document.createElement('div');
     // Everyone is shown lit here: this is a list of what exists, not of who is speaking.
     row.className = 'agent active';
-    // The bottom of each column drops its rule, as the voice list's do.
-    row.classList.toggle('ends-column', index === rows - 1 || index === agents.length - 1);
     row.style.setProperty('--channel', channelOf(agent));
     // What See's and Share's sheets hang from – one name per row, like the palette's.
     row.style.setProperty('anchor-name', `--tile-${index}`);
@@ -810,6 +831,17 @@ async function refreshRoster() {
     kind.textContent = isBroken
       ? 'needs re-recording – its recipe is missing'
       : productLabel(patterns[agent.id]) || patterns[agent.id] || '';
+
+    // A made-up recording from the panel's debug drawer says so, and nothing else about it is
+    // different: it is drawn exactly as a real one would be, which is what it is for.
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = 'mock';
+    badge.hidden = !agent.mock;
+
+    // What the search box matches: the name, the product, and "mock" for the mocks.
+    row.dataset.find = [agent.name, kind.textContent, agent.mock ? 'mock' : '']
+      .join(' ').toLowerCase();
 
     // ── Renaming lives here, and that is deliberate ────────────────────────────────────
     //
@@ -973,13 +1005,44 @@ async function refreshRoster() {
       return sheet;
     };
 
+    /**
+     * The strip along a sheet's top: whatever `start` holds, then Copy at the far end. A copy the
+     * clipboard refused says why, in the strip – one that silently did nothing would be found out
+     * later, somewhere else, as an empty paste.
+     */
+    const toolbar = (text, what, ...start) => {
+      const note = document.createElement('span');
+      note.className = 'tech note';
+      const copy = tool('copy', `Copy ${what}`);
+      // Labels open downwards in this strip: it is the top of a sheet that scrolls, which would
+      // clip a label drawn above it.
+      copy.dataset.tipBelow = '';
+      copy.addEventListener('click', async () => {
+        note.textContent = '';
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch (error) {
+          note.textContent = `not copied – ${error?.message ?? error}`;
+          return;
+        }
+        glyph(copy, 'check', 14);
+        label(copy, 'Copied');
+        setTimeout(() => { glyph(copy, 'copy', 14); label(copy, `Copy ${what}`); }, 1500);
+      });
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      bar.append(...start, note, copy);
+      return bar;
+    };
+
     // **See** – the recipe as the runtime will read it, not a reconstruction of it.
     const see = tool('eye', `See what ${agent.name} recorded`);
     const seeing = sheetFor(see, (sheet, recipe) => {
+      const text = describeRecipe(recipe);
       const details = document.createElement('pre');
       details.className = 'recipe';
-      details.textContent = describeRecipe(recipe);
-      sheet.append(details);
+      details.textContent = text;
+      sheet.append(toolbar(text, 'what it recorded'), details);
     });
 
     // **Share** – shown before it is saved, because the JSON *is* the review surface.
@@ -997,9 +1060,10 @@ async function refreshRoster() {
 
       const file = filenameFor(agent.name);
       const save = tool('download', `Save ${file}`);
-      // Its label opens rightwards: the button sits at the sheet's left edge, and the sheet
-      // scrolls, so a label running left would be clipped by it.
+      // Its label opens rightwards and downwards: the button sits in the sheet's top-left corner,
+      // and the sheet scrolls, so a label running left or up would be clipped by it.
       save.dataset.tipAt = 'start';
+      save.dataset.tipBelow = '';
       save.addEventListener('click', () => {
         // A blob URL from an extension page needs no `downloads` permission, and revoking it
         // after the click keeps the object out of memory for the life of the page.
@@ -1013,11 +1077,9 @@ async function refreshRoster() {
       const filename = document.createElement('span');
       filename.className = 'tech';
       filename.textContent = file;
-      const saving = document.createElement('div');
-      saving.className = 'save';
-      saving.append(save, filename);
 
-      sheet.append(bundle, saving);
+      // Save at the top now, beside Copy, rather than under a file that can run past the fold.
+      sheet.append(toolbar(text, 'the file', save, filename), bundle);
     });
 
     // **Re-record** – same wizard, keeping this agent's name and voice.
@@ -1071,15 +1133,71 @@ async function refreshRoster() {
     named.append(rename, tools);
     const about = document.createElement('div');
     about.className = 'line';
-    about.append(kind, voice);
+    about.append(kind, badge, voice);
     const who = document.createElement('div');
     who.className = 'who';
     who.append(named, about, problemLine);
 
     row.append(avatar, who, palette, seeing, sharing);
-    target.append(row);
+    built.push(row);
   }
+
+  target.className = 'grid';
+  target.replaceChildren(...built);
+  // Only worth its space once the list is long; hidden, it must not go on filtering.
+  search.hidden = agents.length < SEARCH_FROM;
+  if (search.hidden) search.value = '';
+  filterRoster();
 }
+
+/**
+ * Shows the assistants the search box matches, and lays the two columns out over what is shown.
+ *
+ * The roster fills down, so the split point is a count – and it has to be the count of what is
+ * on screen. Kept at the whole roster's half, five matches out of thirty would all sit in the
+ * left column with an empty one beside them.
+ */
+function filterRoster() {
+  const target = el('roster');
+  if (!target.classList.contains('grid')) return;
+  const typed = el('roster-search').value.trim();
+  const wanted = typed.toLowerCase();
+
+  const rows = [...target.children];
+  for (const row of rows) row.hidden = Boolean(wanted) && !row.dataset.find.includes(wanted);
+  const shown = rows.filter((row) => !row.hidden);
+
+  const half = Math.ceil(shown.length / 2);
+  target.style.setProperty('--rows', String(Math.max(half, 1)));
+  // The bottom of each column drops its rule, as the voice list's do.
+  shown.forEach((row, i) => row.classList.toggle('ends-column', i === half - 1 || i === shown.length - 1));
+
+  const none = el('roster-none');
+  none.hidden = shown.length > 0;
+  none.textContent = shown.length ? '' : `No assistant matches “${typed}”.`;
+}
+
+el('roster-search').addEventListener('input', filterRoster);
+
+// **The list keeps itself current.** A recording finishing, the panel's mock roster, a colour or a
+// voice changed in another window – each lands in storage, and this page used to show none of it
+// until it was reloaded. `iconSites` is in the set because a site icon learned elsewhere is a
+// change to how the list looks.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  const keys = Object.keys(changes);
+  if (!keys.some((key) => key === 'agents' || key === 'iconSites' || key.startsWith('recipe:'))) return;
+
+  // Not under somebody's typing. A redraw replaces every field in the list, so one arriving
+  // while a name or a voice is being changed would take the field out from under them; it waits
+  // until they leave it instead.
+  const roster = el('roster');
+  if (roster.contains(document.activeElement) && document.activeElement.matches('input, select')) {
+    roster.addEventListener('focusout', () => refreshRoster(), { once: true });
+    return;
+  }
+  refreshRoster();
+});
 
 /**
  * A recipe as something a person can read.
@@ -1247,6 +1365,16 @@ for (const [name, refresh] of Object.entries({
     console.error(`[openposse] setup: ${name} could not be read –`, error?.message ?? error);
   }
 }
+
+// **Folded once the three steps the product needs are done** – the microphone, the speech
+// model and a shortcut. Steps 4 and 6 are optional and step 5 is settings rather than a task, so
+// none of them holds the column open. Decided here, once, from what the checks above found:
+// folding it under somebody who has just finished a step would take it away while they read.
+const complete = ['step-mic', 'step-model', 'step-shortcut']
+  .every((id) => el(id).classList.contains('done'));
+el('setup-steps').open = !complete;
+el('setup-done').hidden = !complete;
+el('setup-title').textContent = complete ? 'Setup complete' : 'Set up OpenPosse';
 
 // Shortcuts are changed on another tab, so this page is stale the moment they leave it. Chrome
 // has no event for a rebinding – re-reading on focus is the only way the status can be true

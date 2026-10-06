@@ -155,6 +155,9 @@
       button.icon[aria-label]:is(:hover, :focus-visible)::after { opacity: 1; transition-delay: 0.15s; }
       button.icon[data-tip-at="start"]::after { left: 0; transform: none; }
       button.icon[data-tip-at="end"]::after { left: auto; right: 0; transform: none; }
+      /* Below instead, for a control at the top of a sheet that scrolls, which would clip a
+         label drawn above it. */
+      button.icon[data-tip-below]::after { bottom: auto; top: calc(100% + 8px); }
 
       /* ── Switches ───────────────────────────────────────────────────────────────────────
          For the two settings that are on or off. A button rather than a checkbox because both
@@ -180,7 +183,7 @@
       button.switch:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
       /* ── Setup ──────────────────────────────────────────────────────────────────────────── */
-      .setup > p { margin-top: 4px; }
+      #setup-steps > p { margin-top: 4px; }
       .step {
         display: flex;
         gap: 12px;
@@ -206,6 +209,37 @@
       /* What the step's control reports, under its title rather than after its button: the
          narrow column has no room for a sentence beside a control, and some of these are one. */
       .status { display: block; margin-top: 1px; color: var(--text-faint); }
+      /* A step's status as a chip, coloured by `data-tone` from setup.js: green is done, amber
+         is left to do, red went wrong, and plain is an optional step left off or something in
+         progress. The words say the same as the colour, so neither has to be read alone.
+         Amber is Apple's dark-mode orange; ui.css has no amber because nothing else needed one. */
+      .chip {
+        --amber: #ff9f0a;
+        display: inline-block; margin-top: 4px;
+        padding: 2px 8px; border-radius: 7px;
+        background: rgba(255, 255, 255, 0.07); color: var(--text-dim);
+      }
+      .chip[data-tone="good"] { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green); }
+      .chip[data-tone="warn"] { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
+      .chip[data-tone="bad"] { background: color-mix(in srgb, var(--error) 16%, transparent); color: var(--error); }
+
+      /* ── Setup, folded once it is done ──────────────────────────────────────────────────
+         Steps 1–3 are the ones the product cannot work without. Once they are done the column
+         folds to its title line – the steps are done once, and the roster beside them is what
+         this page is opened for. A `<details>`, like the voice groups, so it opens with a click
+         or a key and no state of ours. setup.js decides at load whether it starts folded and
+         never folds it under somebody afterwards. */
+      #setup-steps > summary {
+        display: flex; align-items: center; gap: 8px;
+        margin-bottom: 4px;
+        cursor: pointer; list-style: none;
+      }
+      #setup-steps > summary::-webkit-details-marker { display: none; }
+      #setup-steps > summary h1 { margin: 0; }
+      #setup-done { display: grid; color: var(--green); }
+      #setup-steps > summary .chev { display: grid; color: var(--text-faint); transition: transform 0.18s ease; }
+      #setup-steps > summary:hover .chev { color: var(--text); }
+      #setup-steps[open] > summary .chev { transform: rotate(90deg); }
       /* `accent-color` is what makes the native slider use the brand orange rather than the
          OS blue. `:root` already sets `color-scheme: dark`, so the track needs nothing else. */
       .pace {
@@ -287,6 +321,22 @@
         min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       }
       #roster .voice-pick { margin-left: auto; max-width: 150px; }
+      /* "mock", on the made-up recordings from the panel's debug drawer. */
+      .badge {
+        flex: 0 0 auto;
+        padding: 1px 6px; border-radius: 5px;
+        border: 1px solid rgba(255, 255, 255, 0.18); color: var(--text-faint);
+        font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+      }
+      /* Over a long roster only – setup.js shows it past ten. */
+      #roster-search {
+        width: 200px; height: 28px; padding: 4px 10px;
+        font: inherit; font-size: 12.5px; color: var(--text);
+        background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); border-radius: 8px;
+      }
+      #roster-search::placeholder { color: var(--text-faint); }
+      #roster-search:focus { outline: 1px solid var(--blue); }
+      #roster-none { margin: 10px 0 0; }
       /* One column once a half is narrower than an assistant's two lines. */
       @media (max-width: 700px) {
         #roster.grid {
@@ -353,7 +403,10 @@
         box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
       }
       .sheet .recipe { margin: 0; }
-      .sheet .save { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+      /* Save and the filename on the left, Copy on the right, and between them the reason if a
+         copy was refused. */
+      .sheet .bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+      .sheet .bar .note { margin-left: auto; color: var(--error); }
 
       /* ── The voice list ─────────────────────────────────────────────────────────────────
          Two columns and four collapsible groups, because 28 voices in one column is a scroll
@@ -537,6 +590,8 @@
                  it back, the way step 4's does with site access. -->
             <div class="head">
               <h2>Assistants</h2>
+              <input type="search" id="roster-search" placeholder="Find an assistant"
+                     aria-label="Find an assistant" autocomplete="off" spellcheck="false" hidden>
               <div class="end">
                 <span class="kind" id="icons-label">Site icons</span>
                 <div class="about">
@@ -557,11 +612,17 @@
             </div>
             <span class="status kind bad" id="icons-status" hidden></span>
             <div id="roster" class="card">none yet</div>
+            <p id="roster-none" hidden></p>
           </section>
         </div>
 
         <aside class="setup">
-          <h1>Set up OpenPosse</h1>
+          <details id="setup-steps" open>
+          <summary>
+            <span id="setup-done" data-icon="check" data-size="18" hidden></span>
+            <h1 id="setup-title">Set up OpenPosse</h1>
+            <span class="chev" data-icon="chevron-right" data-size="14"></span>
+          </summary>
           <p>
             Three things, once. Everything after this happens on your machine – speech recognition
             included.
@@ -588,7 +649,7 @@
                           aria-label="Grant microphone access"></button>
                 </div>
               </div>
-              <span class="status tech" id="mic-status">not granted</span>
+              <span class="status tech chip" id="mic-status">checking…</span>
             </div>
           </section>
 
@@ -612,7 +673,7 @@
                           data-tip-at="end" aria-label="Download the speech model"></button>
                 </div>
               </div>
-              <span class="status tech" id="model-status">checking…</span>
+              <span class="status tech chip" id="model-status">checking…</span>
             </div>
           </section>
 
@@ -639,7 +700,7 @@
                           aria-label="Change the shortcut"></button>
                 </div>
               </div>
-              <span class="status tech" id="shortcut-status">checking…</span>
+              <span class="status tech chip" id="shortcut-status">checking…</span>
             </div>
           </section>
 
@@ -679,7 +740,7 @@
                           aria-labelledby="panel-title"></button>
                 </div>
               </div>
-              <span class="status tech" id="panel-status">checking…</span>
+              <span class="status tech chip" id="panel-status">checking…</span>
             </div>
           </section>
 
@@ -705,7 +766,7 @@
                 </div>
               </div>
               <!-- Which engine is speaking, as this step's status line. -->
-              <span class="status" id="engine">checking…</span>
+              <span class="status tech chip" id="engine">checking…</span>
 
               <div class="pace">
                 <label for="speed">Pace</label>
@@ -770,7 +831,7 @@
                           aria-label="Remove the voices" hidden></button>
                 </div>
               </div>
-              <span class="status tech" id="weights-status">checking…</span>
+              <span class="status tech chip" id="weights-status">checking…</span>
 
               <!-- **Inside this step rather than a seventh of its own**, because the list exists
                    only once the download above has finished – it is what that step produced, not
@@ -796,6 +857,7 @@
               </div>
             </div>
           </section>
+          </details>
         </aside>
       </div>
     </main>
