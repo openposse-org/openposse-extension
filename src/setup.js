@@ -1505,8 +1505,9 @@ el('import-add').addEventListener('click', async () => {
 // Behind the bug icon by the logo – moved from the panel's dock on 2026-10-06, so the panel
 // keeps only what a turn needs. Of what the Mac app's menu and sliders carried, only the
 // follow-up window is still a guess this extension makes; the answer settle wait is here because
-// it is the other clock a turn still waits on. The rest is this extension's own scaffolding: the
-// demo, E14's surface switch, the voice diagnostics, the mock roster and the site-icon loader.
+// it is the other clock a turn still waits on. The rest is this extension's own scaffolding:
+// E14's surface switch, the voice diagnostics, the mock roster and the site-icon loader. The demo
+// went back to the panel the same day, top right over the orb, because that is where it plays.
 //
 // The panel's site line did not come with them. It described the tab in front of the panel, and
 // this page has no such tab; the panel's key button still appears whenever there is access to
@@ -1609,33 +1610,6 @@ el('surface').addEventListener('click', async () => {
   const { surface } = await chrome.storage.local.get('surface');
   await setSurface(surface === 'orb' ? 'panel' : 'orb');
   await paintSurface();
-});
-
-/**
- * Replays a turn with no vendor in it, so a surface can be judged without spending a real
- * question. The script lives in the worker – see `demo.js` – and plays wherever a real turn
- * would show: the side panel, or the orb on the tab in front.
- *
- * **The button reports that it is running, and this is not polish.** It runs for about a minute
- * and its first visible act is nine hundred milliseconds away, so a button that did nothing
- * visible for a second would be pressed twice – and the second press restarts the script.
- */
-const DEMO = 'Play a scripted turn – no vendor, no question spent';
-
-function showDemo(playing) {
-  const button = el('demo');
-  button.disabled = playing;
-  button.classList.toggle('busy', playing);
-  glyph(button, playing ? 'loader-circle' : 'play', playing ? 15 : 12);
-  label(button, playing ? 'Playing the scripted turn…' : DEMO);
-}
-
-el('demo').addEventListener('click', () => {
-  if (el('demo').disabled) return;
-  showDemo(true);
-  chrome.runtime.sendMessage({ kind: 'openposse.demo' })
-    .catch((error) => console.warn('[openposse] the demo could not start –', error?.message ?? error))
-    .finally(() => showDemo(false));
 });
 
 // Kokoro's layer-by-layer check, `spike.js`, in a tab of its own.
@@ -1798,8 +1772,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.surface) paintSurface();
   if (changes.agents) paintMocks();
 });
-
-showDemo(false);
 
 // ── Setup's sheet ──────────────────────────────────────────────────────────────────────────
 //

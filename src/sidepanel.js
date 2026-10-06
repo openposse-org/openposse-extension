@@ -801,6 +801,40 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.micGranted) checkMic();
 });
 
+// ── The demo ───────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Replays a turn with no vendor in it, so this surface and the voice can be judged without
+ * spending a real question. Back here from Settings on 2026-10-06, top right over the orb,
+ * because this is where it plays.
+ *
+ * The script lives in the worker – see `demo.js` – because it drives the same `panel()` channel a
+ * real turn does, and a copy of it here would be a second renderer able to disagree with the one
+ * being evaluated.
+ *
+ * **The button reports that it is running, and this is not polish.** It runs for about a minute
+ * and its first visible act is nine hundred milliseconds away, so a button that did nothing
+ * visible for a second would be pressed twice – and the second press restarts the script,
+ * which looks exactly like the first press having failed.
+ */
+const DEMO = 'Play a scripted turn – no vendor, no question spent';
+
+function showDemo(playing) {
+  const button = el('demo');
+  button.disabled = playing;
+  button.classList.toggle('busy', playing);
+  setIcon(button, playing ? 'loader-circle' : 'play', playing ? 15 : 12);
+  label(button, playing ? 'Playing the scripted turn…' : DEMO);
+}
+
+el('demo').addEventListener('click', () => {
+  if (el('demo').disabled) return;
+  showDemo(true);
+  chrome.runtime.sendMessage({ kind: 'openposse.demo' })
+    .catch((error) => console.warn('[openposse] the demo could not start –', error?.message ?? error))
+    .finally(() => showDemo(false));
+});
+
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
 
 // **An unbound command is a state, not an absence.** Chrome drops a user-assigned shortcut when
@@ -840,8 +874,8 @@ chrome.runtime
   })
   .catch(() => showListening({ listening: false }));
 
-// The controls whose icon never changes get it once, here. The rest – Listen and the toggles –
-// set theirs wherever their state changes, starting with the calls below.
+// The controls whose icon never changes get it once, here. The rest – Listen, the toggles and the
+// demo while it plays – set theirs wherever their state changes, starting with the calls below.
 setIcon(el('type'), 'keyboard', 17);
 setIcon(el('record'), 'circle', 11);
 setIcon(el('settings'), 'settings', 17);
@@ -849,6 +883,7 @@ setIcon(el('send'), 'send-horizontal', 16);
 setIcon(el('grant'), 'key-round', 16);
 showListening({ listening: false });
 setAsk(false);
+showDemo(false);
 
 renderTurn();
 loadRosterData();
