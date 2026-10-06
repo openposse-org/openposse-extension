@@ -199,7 +199,7 @@ async function rosterWithProducts() {
 async function goToAgent(nav) {
   if (nav.problem) {
     markDone(nav.problem);
-    announceTurn({ phase: 'problem', message: 'Show you what? Ask an assistant something first.' });
+    panel({ phase: 'needs-attention', message: 'Show you what? Ask an assistant something first.' });
     return;
   }
 
@@ -214,7 +214,7 @@ async function goToAgent(nav) {
     markDone('tab-not-found');
     // `agent.product` is the lowercase one, for matching what was said. This is shown.
     const vendor = productLabel(recipe?.domainPattern) || agent.name;
-    announceTurn({ phase: 'problem', message: `No ${vendor} tab is open.` });
+    panel({ phase: 'needs-attention', message: `No ${vendor} tab is open.` });
     return;
   }
 
@@ -225,8 +225,12 @@ async function goToAgent(nav) {
   // Being shown an agent's tab is as much a reason to expect a follow-up as being answered by
   // it, so the floor moves here too – "show me Notion", then "what changed last week".
   await holdFloor(agent.name);
+  // The side panel has to be told separately, because the hide above means nothing to it:
+  // `visible` is the orb's alone. Until 2026-10-06 nothing told it, and it went on saying
+  // "Working out who that's for…" until the next turn. Left at rest on the agent, its name in
+  // its colour, the same as the minute after an answer. The hidden orb stays hidden.
+  panel({ phase: 'idle', agentName: agent.name, channel: channelOf(agent) });
   markDone(null);
-  announceTurn({ phase: 'navigated', agentName: agent.name });
 }
 
 async function handleUtterance(text) {
@@ -245,12 +249,6 @@ async function handleUtterance(text) {
     markDone(decision.problem);
     panel({
       phase: 'needs-attention',
-      message: decision.problem === 'name-only'
-        ? `${decision.agent.name}?`
-        : ROUTING_COPY[decision.problem] ?? 'Something went wrong.',
-    });
-    announceTurn({
-      phase: 'problem',
       // `name-only` is answered by the agent's own name with a question mark – the spoken
       // equivalent of looking up. It is the one "failure" that is really just a pause.
       message: decision.problem === 'name-only'
@@ -274,11 +272,12 @@ async function putQuestion(agent, prompt, matched) {
   trace('routed', `${agent.name} (${matched}), ${prompt.length} chars`);
   await rememberPrompt(prompt);
   markThinking(agent.name, channelOf(agent));
+  // `sub` too: a typed or re-routed question never passes `startListening`'s reset, so the last
+  // answer's "Shortened" would otherwise sit under this one.
   panel({
     phase: 'thinking', agentName: agent.name, channel: channelOf(agent),
-    transcript: prompt, volatile: '', answer: '', message: '', visible: true,
+    transcript: prompt, volatile: '', answer: '', sub: '', message: '', visible: true,
   }, { create: true });
-  announceTurn({ phase: 'thinking', agentName: agent.name, matched });
 
   trace('asking the vendor');
   const result = await ask(agent.name, prompt);
@@ -299,17 +298,11 @@ async function putQuestion(agent, prompt, matched) {
     markDone(null);
     const answer = result.payload?.text ?? '';
     panel({ phase: 'answering', agentName: agent.name, answer });
-    announceTurn({ phase: 'answered', agentName: agent.name, text: answer });
     await readAloud(answer, agent);
   } else {
     markDone(result.payload?.code ?? 'failed');
     panel({
       phase: 'needs-attention',
-      agentName: agent.name,
-      message: result.payload?.message ?? `${agent.name} could not answer.`,
-    });
-    announceTurn({
-      phase: 'problem',
       agentName: agent.name,
       message: result.payload?.message ?? `${agent.name} could not answer.`,
     });
@@ -342,18 +335,13 @@ async function readAloud(answer, agent) {
   await say(text, agent.id);
 }
 
-/** Tells any open surface where the turn has got to. Nothing is stored and nothing is logged. */
-function announceTurn(detail) {
-  chrome.runtime.sendMessage({ kind: 'openposse.turn', ...detail }).catch(() => { /* nothing open */ });
-}
-
 // Wrapped, because nothing awaits this. An unhandled rejection in a service worker is silent,
 // and the visible symptom would be a badge stuck on an agent who is not thinking about
 // anything – the turn simply stopping, with no way to tell it from a slow vendor.
 setTurnHandler((text) => {
   handleUtterance(text).catch((error) => {
     markDone('failed');
-    announceTurn({ phase: 'problem', message: 'Something went wrong handling that.' });
+    panel({ phase: 'needs-attention', message: 'Something went wrong handling that.' });
     console.error('[openposse] turn failed:', error?.message ?? error);
   });
 });
@@ -957,7 +945,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   }
   if (request?.kind === 'openposse.demo') {
     // Scaffolding, reachable only from the panel's own quiet button. See `demo.js`.
-    runDemo().then(respond, (error) => {
+    runDemo(readAloud).then(respond, (error) => {
       console.warn('[openposse] the demo turn failed –', error?.message ?? error);
       respond({ ok: false, reason: error?.message ?? String(error) });
     });
@@ -989,8 +977,14 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
       .then(({ agents }) => findAgent(agents, request.agentName))
       .then((agent) => (agent
         ? putQuestion(agent, request.prompt, 'typed')
-        : announceTurn({ phase: 'problem', message: `No agent called ${request.agentName}.` })))
-      .catch(() => {});
+        : panel({ phase: 'needs-attention', message: `No agent called ${request.agentName}.` })))
+      // As the spoken path's handler, so a failure here does not leave "is thinking…" on screen
+      // with nothing logged. Labelled apart, so the console says which door the turn came in by.
+      .catch((error) => {
+        markDone('failed');
+        panel({ phase: 'needs-attention', message: 'Something went wrong handling that.' });
+        console.error('[openposse] typed turn failed:', error?.message ?? error);
+      });
     respond({ ok: true });
     return true;
   }

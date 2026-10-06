@@ -115,17 +115,6 @@ function tick() {
  *
  * Plain words are for where there is no agent to name, or where something needs saying.
  */
-/**
- * The phases where an answer is on its way, so the panel holds a space open for it.
- *
- * **Not simply "a turn is running".** `listening` is deliberately out: nothing is about to land
- * while somebody is still talking, and on a panel that has never answered the reserve would be a
- * gap between the roster and the controls rather than space at the end of anything. Holding it
- * from `routing` means the one move the layout makes is at the moment the person stopped speaking
- * – not at the moment the bubble appears, which is when a hand is most likely on its way to Stop.
- */
-const AWAITING = new Set(['routing', 'thinking', 'answering']);
-
 const STATUS = {
   listening: () => ({ text: 'Listening' }),
   routing: () => ({ text: "Working out who that's for…", pulse: true }),
@@ -135,6 +124,62 @@ const STATUS = {
   'not-capturing': () => ({ text: 'No input', bad: true }),
   idle: (s) => (s.agentName ? { who: s.agentName, tinted: true } : { text: '' }),
 };
+
+/** What the box holds before the first turn: where an answer will go, and how to get one. */
+const ANSWER_PLACEHOLDER = "Say an assistant's name, then your question – the answer shows here.";
+
+// ── Fitting the question and the answer ────────────────────────────────────────────────────
+
+/**
+ * Sizes for what was said, largest first. Two lines fit at the first two and three at the last,
+ * in the height `.transcript` fixes in the stylesheet.
+ */
+const QUESTION_SIZES = [21, 18, 16];
+
+/**
+ * Fits what was said into its slot, stepping the type down before cutting anything.
+ *
+ * Measured rather than predicted from a character count, because both the width and the words
+ * are the user's: the panel can be dragged wider, and nobody's question is a fixed length.
+ */
+function fitQuestion() {
+  const box = el('transcript');
+  box.classList.remove('tail', 'clamped');
+  for (const size of QUESTION_SIZES) {
+    box.style.fontSize = `${size}px`;
+    if (box.scrollHeight <= box.clientHeight) {
+      box.scrollTop = 0;
+      return;
+    }
+  }
+  // Too long even at the smallest size. While somebody is talking, the newest words are the ones
+  // they are checking, so the cut comes off the front; once it has settled, the start reads best.
+  const live = state.phase === 'listening';
+  box.classList.add(live ? 'tail' : 'clamped');
+  box.scrollTop = live ? box.scrollHeight : 0;
+}
+
+/**
+ * Sizes for the answer, with the leading that goes with each. Three lines fit in the box at the
+ * first two and four at the last.
+ */
+const ANSWER_SIZES = [[15.5, 1.47], [14, 1.4], [13, 1.3]];
+
+/** The answer's version: the type steps down to fit, and whatever still does not fit scrolls. */
+function fitAnswer() {
+  const text = el('answer-text');
+  for (const [size, leading] of ANSWER_SIZES) {
+    text.style.fontSize = `${size}px`;
+    text.style.lineHeight = String(leading);
+    if (text.scrollHeight <= text.clientHeight) return;
+  }
+}
+
+// Both depend on the panel's width, which the user can drag.
+window.addEventListener('resize', () => {
+  fitQuestion();
+  fitAnswer();
+});
 
 function renderTurn() {
   // **Recording takes the whole panel**, because it is a different activity rather than a
@@ -165,6 +210,7 @@ function renderTurn() {
     caret.className = 'caret';
     tr.append(caret);
   }
+  fitQuestion();
 
   const look = (STATUS[state.phase] ?? STATUS.idle)(state);
   const who = el('who');
@@ -185,27 +231,31 @@ function renderTurn() {
   const vendor = look.who ? roster.products[idFor(look.who)] : null;
   const named = look.verb ? `${look.who} ${look.verb}` : [look.who, vendor].filter(Boolean).join(' · ');
   const words = state.message || (look.who ? named : look.text);
-  if (words) who.append(document.createTextNode(words));
+  // Before the first turn there is no status at all, and a blank line in a box reads as broken.
+  who.classList.toggle('placeholder', !words);
+  who.append(document.createTextNode(words || 'No question yet'));
 
   el('deadmic').hidden = state.phase !== 'not-capturing';
 
-  // See `AWAITING` above, and the `.awaiting` rule in the stylesheet.
-  el('top').classList.toggle('awaiting', AWAITING.has(state.phase));
-
-  const answer = el('answer');
-  answer.textContent = '';
-  if (state.answer) {
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble';
-    bubble.append(document.createTextNode(state.answer));
-    if (state.sub) {
-      const sub = document.createElement('div');
-      sub.className = 'sub';
-      sub.textContent = state.sub;
-      bubble.append(sub);
-    }
-    answer.append(bubble);
+  // **Filled in place, never rebuilt.** The box is in the markup and always shown, so rebuilding
+  // it per patch would replay its entrance with every word somebody says. See `.bubble` in the
+  // stylesheet for why it is one height throughout.
+  //
+  // The placeholder only while nothing is under way: mid-turn the status line says what is
+  // happening, and an invitation to ask would be asking twice.
+  const text = el('answer-text');
+  const shown = state.answer || (state.phase === 'idle' ? ANSWER_PLACEHOLDER : '');
+  text.hidden = !shown;
+  text.classList.toggle('placeholder', !state.answer);
+  if (text.textContent !== shown) {
+    text.textContent = shown;
+    // A new answer starts at its first line, wherever the last one was scrolled to.
+    text.scrollTop = 0;
   }
+  const sub = el('answer-sub');
+  sub.hidden = !state.answer || !state.sub;
+  sub.textContent = state.sub ?? '';
+  fitAnswer();
 }
 
 /**
@@ -394,9 +444,44 @@ async function drawRoster() {
 
     target.append(av);
   }
+  sizeAvatars();
   alignTips();
 
   if (agents.length > 0 && !findAgent(agents, aimedAt ?? '')) aim(active ?? agents[0].name);
+}
+
+/**
+ * How big the avatars are, in four steps by how many there are. Up to 4 sit four to a row, up to
+ * 10 five, up to 20 six, and beyond that eight – the 34px a long roster has always been. Each step
+ * is the size that fills a row with that many, so in a 360px panel they are 77, 60, 48 and 34px.
+ * Steps by request, 2026-10-06: a size for every count reached the smallest by eight assistants.
+ *
+ * **No bigger than they are in a 360px panel**, the width Chrome opens one at – like the orb. A
+ * wider panel leaves them that size rather than filling it; a narrower one still shrinks them.
+ * Only the sizing is capped: a long roster of 34px avatars still wraps at the panel's full width.
+ *
+ * Set on the middle rather than on the row, because the middle's `min-height` – a row of avatars
+ * and most of the next – has to grow with them.
+ */
+const AVATAR_MIN = 34; // ui.css's circle
+const AVATAR_GAP = 8; // #avatars' gap
+const AVATAR_ROW = 332; // the row in a 360px panel, inside the middle's 14px sides
+/** Up to `upTo` assistants sit `perRow` to a row. */
+const AVATAR_STEPS = [
+  { upTo: 4, perRow: 4 },
+  { upTo: 10, perRow: 5 },
+  { upTo: 20, perRow: 6 },
+  { upTo: Infinity, perRow: 8 },
+];
+
+function sizeAvatars() {
+  const row = el('avatars');
+  const count = row.children.length;
+  const { perRow } = AVATAR_STEPS.find((step) => count <= step.upTo);
+  const width = Math.min(row.clientWidth, AVATAR_ROW);
+  const fill = count ? (width - (perRow - 1) * AVATAR_GAP) / perRow : AVATAR_MIN;
+  const size = Math.floor(Math.max(AVATAR_MIN, fill));
+  el('middle').style.setProperty('--av', `${size}px`);
 }
 
 /**
@@ -420,7 +505,7 @@ function alignTips() {
 }
 
 // The panel's width is the user's, and dragging it re-wraps the row.
-window.addEventListener('resize', alignTips);
+window.addEventListener('resize', () => { sizeAvatars(); alignTips(); });
 
 /**
  * Whether a label in the scrolling middle hangs below its control instead of above.
@@ -751,6 +836,40 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.micGranted) checkMic();
 });
 
+// ── The demo ───────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Replays a turn with no vendor in it, so this surface and the voice can be judged without
+ * spending a real question. Back here from Settings on 2026-10-06, top right over the orb,
+ * because this is where it plays.
+ *
+ * The script lives in the worker – see `demo.js` – because it drives the same `panel()` channel a
+ * real turn does, and a copy of it here would be a second renderer able to disagree with the one
+ * being evaluated.
+ *
+ * **The button reports that it is running, and this is not polish.** It runs for about a minute
+ * and its first visible act is nine hundred milliseconds away, so a button that did nothing
+ * visible for a second would be pressed twice – and the second press restarts the script,
+ * which looks exactly like the first press having failed.
+ */
+const DEMO = 'Play a scripted turn – no vendor, no question spent';
+
+function showDemo(playing) {
+  const button = el('demo');
+  button.disabled = playing;
+  button.classList.toggle('busy', playing);
+  setIcon(button, playing ? 'loader-circle' : 'play', playing ? 15 : 12);
+  label(button, playing ? 'Playing the scripted turn…' : DEMO);
+}
+
+el('demo').addEventListener('click', () => {
+  if (el('demo').disabled) return;
+  showDemo(true);
+  chrome.runtime.sendMessage({ kind: 'openposse.demo' })
+    .catch((error) => console.warn('[openposse] the demo could not start –', error?.message ?? error))
+    .finally(() => showDemo(false));
+});
+
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
 
 // **An unbound command is a state, not an absence.** Chrome drops a user-assigned shortcut when
@@ -790,8 +909,8 @@ chrome.runtime
   })
   .catch(() => showListening({ listening: false }));
 
-// The controls whose icon never changes get it once, here. The rest – Listen and the toggles –
-// set theirs wherever their state changes, starting with the calls below.
+// The controls whose icon never changes get it once, here. The rest – Listen, the toggles and the
+// demo while it plays – set theirs wherever their state changes, starting with the calls below.
 setIcon(el('type'), 'keyboard', 17);
 setIcon(el('record'), 'circle', 11);
 setIcon(el('settings'), 'settings', 17);
@@ -799,6 +918,7 @@ setIcon(el('send'), 'send-horizontal', 16);
 setIcon(el('grant'), 'key-round', 16);
 showListening({ listening: false });
 setAsk(false);
+showDemo(false);
 
 renderTurn();
 loadRosterData();

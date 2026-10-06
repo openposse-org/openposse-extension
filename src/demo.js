@@ -31,26 +31,38 @@
 // feature – a "show me what a turn looks like" for the empty roster, which is a real first-run
 // gap – and not as a dev tool somebody forgot to take out.
 
-import { panel, panelLevel } from './panel.js';
+import { panel, panelLevel, hidePanel } from './panel.js';
 import { beginTurn, trace } from './trace.js';
-import { say, markThinking, markDone, VOLATILE_TAIL } from './listening.js';
+import { markThinking, markDone, VOLATILE_TAIL } from './listening.js';
 import { channelOf, pickChannel } from './channels.js';
 import { loadRoster, recipeFor } from './storage.js';
 import { productLabel } from './routing.js';
 
 /**
- * The script. Three turns, chosen to cover what a single turn cannot.
+ * The script. Five turns, chosen to cover what a single turn cannot.
  *
  * Turn 3 is the one worth having: **a follow-up with no name**, which is the floor holder doing
  * its job and the only part of routing that is invisible from a transcript. The hero on the
- * landing page uses the same three for the same reason.
+ * landing page uses the first three for the same reason.
+ *
+ * Turn 4 is for judging overflow, added 2026-10-06: a question too long for its slot even at the
+ * smallest size, so it is cut, and an answer several times the box's height, so it scrolls.
+ *
+ * Turn 5 is a "show me", added the same day: the one turn that leaves the panel. It opens a
+ * notion.com tab of its own where a real one finds the agent's tab, so it works with no vendor tab
+ * open. After the switch it writes to the panel exactly what `goToAgent` does: the agent, at rest.
+ *
+ * **The script writes no note under an answer**, though the panel has a line for one. A real turn
+ * writes there only when an answer was shortened or could not be spoken, so a note here – a
+ * source, or "the floor was still held" – would show the panel something no real turn does. The
+ * status line and the lit avatar already say who took a follow-up. Turn 4 does get one, from the
+ * real turn's `readAloud`, because its answer is long enough to be shortened.
  */
 const SCRIPT = [
   {
     cast: 0,
     ask: 'summarise the Q3 planning page.',
     answer: 'Q3 is three launches. The billing migration has moved to August.',
-    sub: 'From “Q3 planning”',
   },
   {
     cast: 1,
@@ -63,7 +75,30 @@ const SCRIPT = [
     named: false,
     ask: 'and which are still open?',
     answer: 'Eleven are still open. Three are due to close by Friday.',
-    sub: 'No name needed – the floor was still held.',
+  },
+  {
+    cast: 0,
+    ask: 'going back to the Q3 planning page, can you walk me through what moving the billing '
+      + 'migration to August means for the other two launches, who owns each of them now, and '
+      + 'whether the page says anything about what happens if August slips as well?',
+    answer: 'Moving billing to August pushes both other launches back by about two weeks, because '
+      + 'each of them needs the new invoice service first. The partner portal moves from mid-July '
+      + 'to the end of July, and the mobile app release from the first week of August to the '
+      + 'third. The owners are the same: Dana leads the billing migration, Marcus the partner '
+      + 'portal and Leila the mobile release, with Sam covering for Leila in the last two weeks of '
+      + 'July. If August slips as well, the page names three risks. The September price change '
+      + 'cannot go live on the old billing system, so it would move to October. Annual renewals '
+      + 'start on the first of September, and finance would have to invoice them by hand. And the '
+      + 'partner portal would launch without self-serve invoices, which would need a follow-up '
+      + 'release. The page proposes a go or no-go decision on the fifteenth of July, to leave '
+      + 'time to plan for any of those.',
+  },
+  {
+    cast: 0,
+    // No name, so the floor decides whose tab, as it does for a real "show me". Turn 4 left it here.
+    named: false,
+    ask: 'show me',
+    show: 'https://notion.com/',
   },
 ];
 
@@ -104,7 +139,7 @@ const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 /**
  * The cast, preferring real agents and filling the gaps.
  *
- * A one-agent roster still gets all three turns – the hand-off in turn 2 just goes to a stand-in,
+ * A one-agent roster still gets every turn – the hand-off in turn 2 just goes to a stand-in,
  * which is better than dropping the turn that demonstrates the floor.
  */
 async function cast() {
@@ -151,7 +186,7 @@ function speakingInto(token) {
 }
 
 /** One turn of the script, from the shortcut to the answer being read out. */
-async function playTurn(step, who, token) {
+async function playTurn(step, who, token, readAloud) {
   const alive = () => generation === token;
   const utterance = step.named === false ? step.ask : `${who.name}, ${step.ask}`;
 
@@ -162,7 +197,8 @@ async function playTurn(step, who, token) {
   // console that these milliseconds came from a script rather than from a vendor, which matters
   // precisely when the console is being read to answer "is the voice slower than it was".
   beginTurn('demo');
-  trace('scripted turn', `${who.name}${who.id ? '' : ' (stand-in)'} · ${step.answer.length} chars to speak`);
+  const what = step.show ? 'a tab switch' : `${step.answer.length} chars to speak`;
+  trace('scripted turn', `${who.name}${who.id ? '' : ' (stand-in)'} · ${what}`);
 
   // Exactly `startListening`'s opening patch, including `create` – so the orb gets injected on
   // this path too and the demo is a test of both surfaces rather than only the one in front.
@@ -194,6 +230,20 @@ async function playTurn(step, who, token) {
 
   await wait(TIMING.routing);
   if (!alive()) return;
+
+  if (step.show) {
+    // `goToAgent`'s steps in its order: the orb hidden first, then the tab made active, then its
+    // window raised, then the panel left at rest on the agent. Only the destination differs. The
+    // floor stays where it was, as it does for every scripted turn, and there is no answer,
+    // because a real one gives none.
+    await hidePanel();
+    const tab = await chrome.tabs.create({ url: step.show });
+    await chrome.windows.update(tab.windowId, { focused: true });
+    panel({ phase: 'idle', agentName: who.name, channel: who.channel });
+    markDone(null);
+    return;
+  }
+
   markThinking(who.name, who.channel);
   panel({
     phase: 'thinking', agentName: who.name, channel: who.channel,
@@ -204,11 +254,11 @@ async function playTurn(step, who, token) {
   if (!alive()) return;
   markDone(null);
   panel({ phase: 'answering', agentName: who.name, answer: step.answer });
-  if (step.sub) panel({ sub: step.sub });
 
-  // The real `say`, so the voice this picks is the voice a real answer would get. Awaited, so
-  // the next turn does not start talking over this one.
-  await say(step.answer, who.id);
+  // The real turn's `readAloud`, so a long answer is shortened and noted as a real one is, and the
+  // voice this picks is the voice a real answer would get. Awaited, so the next turn does not
+  // start talking over this one.
+  await readAloud(step.answer, who);
 }
 
 /**
@@ -216,8 +266,12 @@ async function playTurn(step, who, token) {
  *
  * Returns once it is finished or interrupted, so the caller can report which. Nothing is thrown
  * on interruption: being cut off by a real turn is the intended behaviour, not a failure.
+ *
+ * `readAloud` is the worker's own, passed in because it lives in the file that imports this one,
+ * so importing it back would be a cycle. Added 2026-10-06, when turn 4 made an answer long enough
+ * to be shortened.
  */
-export async function runDemo() {
+export async function runDemo(readAloud) {
   const token = ++generation;
   const who = await cast();
   // The recorder's own keep-alive, for the same reason: MV3 kills an idle worker in ~30 s and
@@ -229,13 +283,13 @@ export async function runDemo() {
   try {
     for (const step of SCRIPT) {
       if (generation !== token) return { ok: false, reason: 'interrupted' };
-      await playTurn(step, who[step.cast], token);
+      await playTurn(step, who[step.cast], token, readAloud);
       if (generation !== token) return { ok: false, reason: 'interrupted' };
       await wait(TIMING.betweenTurns);
     }
     if (generation !== token) return { ok: false, reason: 'interrupted' };
-    // Left on the last answer rather than cleared. A panel keeps its last answer between turns
-    // by design, so clearing here would end the demo in a state the product never shows.
+    // Left where the last turn ended rather than cleared. A panel keeps its last answer between
+    // turns by design, so clearing here would end the demo in a state the product never shows.
     return { ok: true };
   } finally {
     clearInterval(keepAlive);
