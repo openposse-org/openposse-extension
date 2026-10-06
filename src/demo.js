@@ -31,7 +31,7 @@
 // feature – a "show me what a turn looks like" for the empty roster, which is a real first-run
 // gap – and not as a dev tool somebody forgot to take out.
 
-import { panel, panelLevel } from './panel.js';
+import { panel, panelLevel, hidePanel } from './panel.js';
 import { beginTurn, trace } from './trace.js';
 import { markThinking, markDone, VOLATILE_TAIL } from './listening.js';
 import { channelOf, pickChannel } from './channels.js';
@@ -39,7 +39,7 @@ import { loadRoster, recipeFor } from './storage.js';
 import { productLabel } from './routing.js';
 
 /**
- * The script. Four turns, chosen to cover what a single turn cannot.
+ * The script. Five turns, chosen to cover what a single turn cannot.
  *
  * Turn 3 is the one worth having: **a follow-up with no name**, which is the floor holder doing
  * its job and the only part of routing that is invisible from a transcript. The hero on the
@@ -47,6 +47,11 @@ import { productLabel } from './routing.js';
  *
  * Turn 4 is for judging overflow, added 2026-10-06: a question too long for its slot even at the
  * smallest size, so it is cut, and an answer several times the box's height, so it scrolls.
+ *
+ * Turn 5 is a "show me", added the same day: the one turn that leaves the panel. It opens a
+ * notion.com tab of its own where a real one finds the agent's tab, so it works with no vendor tab
+ * open. After the switch it writes to the panel exactly what `goToAgent` does, which today is
+ * nothing.
  *
  * **The script writes no note under an answer**, though the panel has a line for one. A real turn
  * writes there only when an answer was shortened or could not be spoken, so a note here – a
@@ -88,6 +93,13 @@ const SCRIPT = [
       + 'partner portal would launch without self-serve invoices, which would need a follow-up '
       + 'release. The page proposes a go or no-go decision on the fifteenth of July, to leave '
       + 'time to plan for any of those.',
+  },
+  {
+    cast: 0,
+    // No name, so the floor decides whose tab, as it does for a real "show me". Turn 4 left it here.
+    named: false,
+    ask: 'show me',
+    show: 'https://notion.com/',
   },
 ];
 
@@ -186,7 +198,8 @@ async function playTurn(step, who, token, readAloud) {
   // console that these milliseconds came from a script rather than from a vendor, which matters
   // precisely when the console is being read to answer "is the voice slower than it was".
   beginTurn('demo');
-  trace('scripted turn', `${who.name}${who.id ? '' : ' (stand-in)'} · ${step.answer.length} chars to speak`);
+  const what = step.show ? 'a tab switch' : `${step.answer.length} chars to speak`;
+  trace('scripted turn', `${who.name}${who.id ? '' : ' (stand-in)'} · ${what}`);
 
   // Exactly `startListening`'s opening patch, including `create` – so the orb gets injected on
   // this path too and the demo is a test of both surfaces rather than only the one in front.
@@ -218,6 +231,18 @@ async function playTurn(step, who, token, readAloud) {
 
   await wait(TIMING.routing);
   if (!alive()) return;
+
+  if (step.show) {
+    // `goToAgent`'s steps in its order: the orb hidden first, then the tab made active, then its
+    // window raised. Only the destination differs. The floor stays where it was, as it does for
+    // every scripted turn, and there is no answer, because a real one gives none.
+    await hidePanel();
+    const tab = await chrome.tabs.create({ url: step.show });
+    await chrome.windows.update(tab.windowId, { focused: true });
+    markDone(null);
+    return;
+  }
+
   markThinking(who.name, who.channel);
   panel({
     phase: 'thinking', agentName: who.name, channel: who.channel,
@@ -262,8 +287,8 @@ export async function runDemo(readAloud) {
       await wait(TIMING.betweenTurns);
     }
     if (generation !== token) return { ok: false, reason: 'interrupted' };
-    // Left on the last answer rather than cleared. A panel keeps its last answer between turns
-    // by design, so clearing here would end the demo in a state the product never shows.
+    // Left where the last turn ended rather than cleared. A panel keeps its last answer between
+    // turns by design, so clearing here would end the demo in a state the product never shows.
     return { ok: true };
   } finally {
     clearInterval(keepAlive);
