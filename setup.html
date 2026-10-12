@@ -28,12 +28,15 @@
          `width`/`height` attributes carry the intrinsic ratio so the page does not reflow as
          it decodes; the CSS below is what actually sizes it. */
       .lockup {
-        display: block;
-        width: 100%; max-width: 420px; height: auto;
-        /* Centred on the page rather than on either column. It is the one thing here that
-           belongs to the whole page instead of to a column, and `main` is the full width, so
-           hanging it off one edge made it read as a heading for whatever sat under it. */
-        margin: 0 auto 32px;
+        display: block; flex: 0 1 auto; min-width: 0;
+        /* At the left end of the logo's row since 2026-10-13, so it is cut to the wordmark and
+           hat: the artwork centres them on a 3040×920 plate, and the plate's empty margin would
+           leave the wordmark floating a quarter of the way in. The cut keeps 10px of the plate
+           around them at full size, and 198px is the width they had on the whole plate at 420. */
+        object-view-box: inset(26.74% 26.22% 23.91% 26.58%);
+        aspect-ratio: 1435 / 454;
+        width: 198px; max-width: 100%; height: auto;
+        margin: 0 auto 0 0;
       }
       /* The same lockup with a near-black wordmark on white, which is the light stage. It is
        * design/assets/openposse-lockup-light.png with its #f6f4f1 (and the hat band, which is that
@@ -47,15 +50,30 @@
          followed the same day, so the roster has the page's width. Setup comes first: it is the
          one somebody is sent here for. `display` is left to the UA, so a closed sheet stays
          hidden – see `.palette`. */
-      .page-head { position: relative; }
-      /* Centred, and narrowed before it reaches the controls on either side. */
-      .page-head .lockup { max-width: min(420px, 100% - 300px); }
-      /* Light or dark, and the panel's orb as a sphere or a waveform, at the near end of the
-         logo's row – how the extension looks, across from the two tools for setting it up. */
-      .page-head .appearance { position: absolute; top: 0; left: 0; display: flex; gap: 8px; }
-      #setup { position: absolute; top: 0; right: 38px; anchor-name: --setup; }
-      #debug { position: absolute; top: 0; right: 0; anchor-name: --debug; }
-      :is(#setup, #debug):not([aria-expanded="true"], :hover, .primary) { border-color: transparent; }
+      /* The logo at the left; setup, debug, the two appearance switches and GitHub at the right,
+         in that order. The two sheets are popovers, so they never take a place in the row. */
+      .page-head {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+        margin-bottom: 28px;
+      }
+      /* Light or dark, and the panel's orb as a sphere or a waveform – how the extension looks,
+         after the two tools for setting it up. */
+      .page-head .appearance { display: flex; gap: 8px; }
+      #setup { anchor-name: --setup; }
+      #debug { anchor-name: --debug; }
+      :is(#setup, #debug, #github):not([aria-expanded="true"], :hover, .primary) { border-color: transparent; }
+
+      /* ── What it is, and what the name means ─────────────────────────────────────────────
+         Side by side under the logo's row, one under the other on a narrow window. */
+      .intro {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 18px 48px; margin-bottom: 34px;
+      }
+      .intro section { margin: 0; }
+      .intro h2 { font-size: 17px; letter-spacing: -0.01em; margin-bottom: 6px; }
+      .intro .say { margin-left: 6px; font-size: 13px; font-weight: 400; color: var(--text-faint); }
+      .intro p { max-width: 62ch; line-height: 1.55; }
+      .intro p:last-child { margin-bottom: 0; }
       /* A debug value is in force – a changed timing, or mock recordings in the roster. On the
          icon, because the sheet being shut is exactly when either would otherwise be invisible. */
       #debug.overridden::before {
@@ -636,13 +654,6 @@
         <img class="lockup" src="icons/openposse-lockup-dark.png" alt="OpenPosse"
              width="3040" height="920" />
 
-        <!-- Light or dark (T does the same), and the orb's shape in the panel. Built by
-             appearance.js. -->
-        <div class="appearance">
-          <div id="theme"></div>
-          <div id="orb-style"></div>
-        </div>
-
         <!-- The setup steps, behind an icon of their own and first of the two, since they are
              what somebody is sent here for. They were a column beside the roster until
              2026-10-06. -->
@@ -946,7 +957,44 @@
             These are real page loads, so the sites appear in your history.
           </div>
         </div>
+
+        <!-- Light or dark (T does the same), and the orb's shape in the panel. Built by
+             appearance.js. -->
+        <div class="appearance">
+          <div id="theme"></div>
+          <div id="orb-style"></div>
+        </div>
+
+        <!-- Opens the project's GitHub page. The URL is `GITHUB_URL` in setup.js. -->
+        <button class="icon" id="github" data-icon="github" data-size="16"
+                data-tip-at="end" data-tip-below aria-label="OpenPosse on GitHub"></button>
       </header>
+
+      <div class="intro">
+        <section id="byline">
+          <h2>AI for the rest of us</h2>
+          <p>
+            Talk to the assistants you already use, like Notion AI, by name and out loud, and hear
+            the answer. Nothing to configure, no terminal, no jargon.
+          </p>
+          <p>
+            Your voice never leaves this computer: speech is recognised and spoken here, and a
+            question goes only to the assistant you asked.
+          </p>
+        </section>
+        <section id="posse">
+          <h2>posse<span class="say">/ˈpɒsi/ · noun</span></h2>
+          <p>
+            A group of people gathered for a shared purpose. From the Latin
+            <i lang="la">posse comitatus</i>, “the power of the county”: the people a sheriff could
+            summon for help, like the riders of a Western.
+          </p>
+          <p>
+            Here, the posse is your assistants. You give each one a name, and saying the name
+            summons it. The hat on the logo is a nod to the sheriff.
+          </p>
+        </section>
+      </div>
 
       <!-- Recording an assistant helps one person. This is how it reaches everyone else.
            Two beats on purpose: the file is read and shown first, then a separate click

@@ -1786,12 +1786,14 @@ el('setup-sheet').addEventListener('toggle', (event) => {
 // ── Appearance ─────────────────────────────────────────────────────────────────────────────
 //
 // Light or dark, and the panel's orb as a sphere or a waveform. The panel follows both live: the
-// theme through `localStorage` (see theme.js), the shape through `chrome.storage`.
-mountThemeToggle(el('theme'));
+// theme through `localStorage` (see theme.js), the shape through `chrome.storage`. Both sit at
+// the right end of the logo's row, so their labels hang from the right.
+mountThemeToggle(el('theme'), { tipAt: 'end' });
 
 async function paintOrbStyle() {
   // Pressed once the setting is stored, so the switch never shows a shape the panel is not using.
   const show = segmented(el('orb-style'), {
+    tipAt: 'end',
     label: 'Orb in the panel',
     options: [
       { value: 'sphere', icon: 'orbit', label: 'Orb in the panel: sphere' },
@@ -1803,6 +1805,17 @@ async function paintOrbStyle() {
       .catch((error) => console.error('[openposse] setup: orb style not saved –', error?.message ?? error)),
   });
 }
+
+// ── GitHub ─────────────────────────────────────────────────────────────────────────────────
+//
+// A placeholder until the repository exists: it opens github.com itself. Change the one URL.
+const GITHUB_URL = 'https://github.com';
+
+el('github').addEventListener('click', () => {
+  chrome.tabs.create({ url: GITHUB_URL }).catch((error) => {
+    console.error('[openposse] setup: GitHub did not open –', error?.message ?? error);
+  });
+});
 
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
 

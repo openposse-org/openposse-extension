@@ -9,8 +9,9 @@ import { bindThemeKey, currentTheme, setTheme, watchTheme } from './theme.js';
  * function that presses whichever option matches a value, for changes made somewhere else.
  *
  * Each button's `aria-label` is also its hover label, through each page's own tooltip rule.
+ * `tipAt` is which edge that label hangs from: 'start' near a left edge, 'end' near a right one.
  */
-export function segmented(host, { label, options, value, onPick }) {
+export function segmented(host, { label, options, value, onPick, tipAt = 'start' }) {
   host.classList.add('segmented');
   host.setAttribute('role', 'group');
   host.setAttribute('aria-label', label);
@@ -19,7 +20,7 @@ export function segmented(host, { label, options, value, onPick }) {
     button.type = 'button';
     button.className = 'seg';
     button.dataset.value = option.value;
-    button.dataset.tipAt = 'start';
+    button.dataset.tipAt = tipAt;
     button.dataset.tipBelow = '';
     button.setAttribute('aria-label', option.label);
     button.append(icon(option.icon, { size: 15 }));
@@ -37,8 +38,9 @@ export function segmented(host, { label, options, value, onPick }) {
 }
 
 /** The light/dark switch, kept in step with the T key, the other page and the system. */
-export function mountThemeToggle(host) {
+export function mountThemeToggle(host, { tipAt } = {}) {
   const show = segmented(host, {
+    tipAt,
     label: 'Theme',
     options: [
       { value: 'dark', icon: 'moon', label: 'Dark (T)' },
