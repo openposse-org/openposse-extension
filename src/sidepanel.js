@@ -26,11 +26,14 @@
 // source. It assumes no width and no side – Chrome does not persist the panel's width, offers no
 // API to set it, reopens at roughly 360px, and lets the user put it left or right.
 
-import { loadRoster, findAgent, micGranted, recipeFor } from './storage.js';
+import {
+  loadRoster, findAgent, micGranted, recipeFor, orbStyle, orbStyleOf, ORB_STYLE_KEY,
+} from './storage.js';
 import { channelOf, initialFor } from './channels.js';
 import { FLOOR_OVERRIDE_KEY, floorWindow, productLabel } from './routing.js';
 import { patternForHost, matchPattern } from './domain.js';
-import { drawSphere, modeFor } from './sphere.js';
+import { drawSphere, drawWave, modeFor } from './sphere.js';
+import { mountThemeToggle } from './appearance.js';
 import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
 
@@ -89,16 +92,25 @@ let eased = 0;
 
 let t = 0;
 
+/** The sphere or the waveform, from Settings. Both take the same arguments – see sphere.js. */
+let draw = drawSphere;
+
+function showOrbStyle(style) {
+  draw = style === 'wave' ? drawWave : drawSphere;
+  el('orb').parentElement.classList.toggle('wave', style === 'wave');
+}
+
 function tick() {
   t += 1;
   // Eased here rather than smoothed harder at the source: the meter already carries the design's
   // 80 ms attack and 250 ms release, and this only bridges 20 Hz of messages to 60 Hz of frames.
   if (level !== null) eased += (level - eased) * 0.25;
-  drawSphere(el('orb'), {
+  draw(el('orb'), {
     t,
     mode: modeFor(state.phase),
     tint: state.channel ?? 'none',
     level: level === null ? null : eased,
+    light: document.documentElement.dataset.theme === 'light',
   });
   requestAnimationFrame(tick);
 }
@@ -837,6 +849,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     loadRosterData();
   }
   if (changes.micGranted) checkMic();
+  if (changes[ORB_STYLE_KEY]) showOrbStyle(orbStyleOf(changes[ORB_STYLE_KEY].newValue));
 });
 
 // ── The demo ───────────────────────────────────────────────────────────────────────────────
@@ -962,6 +975,11 @@ label(el('demostop'), 'Stop the scripted turn');
 showListening({ listening: false });
 setAsk(false);
 showDemo('idle');
+
+mountThemeToggle(el('theme'));
+orbStyle()
+  .then(showOrbStyle)
+  .catch((error) => console.warn('[panel] could not read the orb style, drawing the sphere:', error?.message ?? error));
 
 renderTurn();
 loadRosterData();

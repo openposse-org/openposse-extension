@@ -92,6 +92,24 @@ export async function setVoiceSpeed(value) {
   return speed;
 }
 
+/**
+ * How the panel draws its orb: the sphere, or a waveform across the panel. Both are the same
+ * instrument (`sphere.js`), so this is a matter of taste and nothing else depends on it. Anything
+ * unrecognised reads as the sphere, which is what everyone had before the setting existed.
+ */
+export const ORB_STYLE_KEY = 'orbStyle';
+
+export const orbStyleOf = (value) => (value === 'wave' ? 'wave' : 'sphere');
+
+export async function orbStyle() {
+  const stored = await chrome.storage.local.get(ORB_STYLE_KEY);
+  return orbStyleOf(stored[ORB_STYLE_KEY]);
+}
+
+export async function setOrbStyle(style) {
+  await chrome.storage.local.set({ [ORB_STYLE_KEY]: orbStyleOf(style) });
+}
+
 /** A v4-ish id. Only has to be unique within one browser profile. */
 export function newID() {
   return crypto.randomUUID().toUpperCase();

@@ -7,7 +7,9 @@
 
 import {
   loadRoster, recipeFor, setMicGranted, micGranted, voiceSpeed, setVoiceSpeed, clampSpeed,
+  orbStyle, setOrbStyle,
 } from './storage.js';
+import { mountThemeToggle, segmented } from './appearance.js';
 import { channelOf, colourName, initialFor, PALETTE } from './channels.js';
 import { sortedIDs } from './order.js';
 import { pack, unpack, toFile, filenameFor, summarise } from './share.js';
@@ -1781,6 +1783,27 @@ el('setup-sheet').addEventListener('toggle', (event) => {
   el('setup').setAttribute('aria-expanded', String(event.newState === 'open'));
 });
 
+// ── Appearance ─────────────────────────────────────────────────────────────────────────────
+//
+// Light or dark, and the panel's orb as a sphere or a waveform. The panel follows both live: the
+// theme through `localStorage` (see theme.js), the shape through `chrome.storage`.
+mountThemeToggle(el('theme'));
+
+async function paintOrbStyle() {
+  // Pressed once the setting is stored, so the switch never shows a shape the panel is not using.
+  const show = segmented(el('orb-style'), {
+    label: 'Orb in the panel',
+    options: [
+      { value: 'sphere', icon: 'orbit', label: 'Orb in the panel: sphere' },
+      { value: 'wave', icon: 'audio-waveform', label: 'Orb in the panel: waveform' },
+    ],
+    value: await orbStyle(),
+    onPick: (style) => setOrbStyle(style)
+      .then(() => show(style))
+      .catch((error) => console.error('[openposse] setup: orb style not saved –', error?.message ?? error)),
+  });
+}
+
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
 
 // Each section independently, and loudly when one fails.
@@ -1802,6 +1825,7 @@ for (const [name, refresh] of Object.entries({
   voices: refreshVoices,
   roster: refreshRoster,
   'site icons': refreshIcons,
+  'orb style': paintOrbStyle,
   'surface switch': paintSurface,
   'debug timings': paintKnobs,
   'mock roster': paintMocks,

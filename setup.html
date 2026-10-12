@@ -3,6 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <title>OpenPosse – setup</title>
+    <!-- Blocking, before the stylesheet, so the first frame is already light or dark. -->
+    <script src="dist/theme-boot.js"></script>
     <link rel="stylesheet" href="ui.css" />
     <style>
       body { padding: 36px 40px 60px; }
@@ -15,8 +17,8 @@
 
          The *dark* file is the one for a dark page: white wordmark on the orb's own #141417.
          (`-light.png` is the same lockup with a near-black wordmark, for a white background.)
-         That background is baked in and opaque, so this reads as a plate on the slightly
-         lighter `--stage` rather than sitting flush.
+         That background is baked in and opaque, and `--stage` is the same #141417, so it sits
+         flush.
 
          **No `border-radius`.** The artwork rounds its own corners – 53px of transparency at
          3040 wide, so 7.3px at the 420 it is shown at – which means a CSS radius here does not
@@ -33,6 +35,8 @@
            hanging it off one edge made it read as a heading for whatever sat under it. */
         margin: 0 auto 32px;
       }
+      /* The same lockup with a near-black wordmark on its own #f6f4f1, which is the light stage. */
+      :root[data-theme="light"] .lockup { content: url("icons/openposse-lockup-light.png"); }
 
       /* ── Setup and debug tools ───────────────────────────────────────────────────────────
          Two icons at the far end of the logo's row, quieter than the page's other buttons, each
@@ -42,8 +46,11 @@
          one somebody is sent here for. `display` is left to the UA, so a closed sheet stays
          hidden – see `.palette`. */
       .page-head { position: relative; }
-      /* Centred, and narrowed before it reaches the icons. */
-      .page-head .lockup { max-width: min(420px, 100% - 160px); }
+      /* Centred, and narrowed before it reaches the controls on either side. */
+      .page-head .lockup { max-width: min(420px, 100% - 300px); }
+      /* Light or dark, and the panel's orb as a sphere or a waveform, at the near end of the
+         logo's row – how the extension looks, across from the two tools for setting it up. */
+      .page-head .appearance { position: absolute; top: 0; left: 0; display: flex; gap: 8px; }
       #setup { position: absolute; top: 0; right: 38px; anchor-name: --setup; }
       #debug { position: absolute; top: 0; right: 0; anchor-name: --debug; }
       :is(#setup, #debug):not([aria-expanded="true"], :hover, .primary) { border-color: transparent; }
@@ -60,7 +67,7 @@
         max-height: calc(100vh - 110px); overflow-y: auto;
         border: 1px solid var(--glass-edge); border-radius: var(--radius-card);
         background: var(--raised); color: var(--text);
-        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 14px 36px var(--shadow);
       }
       #debug-tools { position-anchor: --debug; width: min(340px, 100vw - 32px); padding: 14px 16px 16px; }
       #debug-tools .eyebrow {
@@ -122,7 +129,7 @@
         padding: 10px 12px;
         border: 1px solid var(--glass-edge); border-radius: var(--radius-card);
         background: var(--raised);
-        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 14px 36px var(--shadow);
         font-size: 12px; font-weight: 400; line-height: 1.5;
         visibility: hidden; opacity: 0;
         transition: opacity 0.12s ease, visibility 0s linear 0.12s;
@@ -147,16 +154,16 @@
         display: grid; place-items: center;
         border-radius: 8px;
         background: transparent; color: var(--text-dim);
-        border: 1px solid rgba(255, 255, 255, 0.14);
+        border: 1px solid rgb(var(--ink) / 0.14);
         font-weight: 400;
       }
       button.icon:hover:not(:disabled) {
-        color: var(--text); background: rgba(255, 255, 255, 0.06);
-        border-color: rgba(255, 255, 255, 0.3);
+        color: var(--text); background: rgb(var(--ink) / 0.06);
+        border-color: rgb(var(--ink) / 0.3);
       }
       button.icon:is([aria-expanded="true"], [aria-pressed="true"]) {
-        color: var(--text); background: rgba(255, 255, 255, 0.1);
-        border-color: rgba(255, 255, 255, 0.34);
+        color: var(--text); background: rgb(var(--ink) / 0.1);
+        border-color: rgb(var(--ink) / 0.34);
       }
       button.icon:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
       /* The thing to do next, when there is one. Done, it reads like the rest: the step's
@@ -165,7 +172,7 @@
       button.icon.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 86%, #fff); }
       button.icon:disabled {
         opacity: 1; color: var(--text-faint);
-        border-color: rgba(255, 255, 255, 0.08);
+        border-color: rgb(var(--ink) / 0.08);
       }
       button.icon.bad:hover:not(:disabled), button.icon.armed { color: var(--error); border-color: var(--error); }
       button.icon.small { width: 26px; height: 26px; border-radius: 7px; }
@@ -174,25 +181,25 @@
       /* The label, on hover and on keyboard focus – the panel's own, so the two surfaces answer a
          hover the same way. Not `title`: Chrome waits about a second to show one and draws it in
          the OS's small type. `data-tip-at="end"` pins it to the right edge for controls near
-         one, where a centred label would run off the column. */
-      button.icon[aria-label]::after {
+         one, where a centred label would run off the column. The appearance switches share it. */
+      button:is(.icon, .seg)[aria-label]::after {
         content: attr(aria-label);
         position: absolute; bottom: calc(100% + 8px); left: 50%; z-index: 5;
         transform: translateX(-50%);
         width: max-content; max-width: 240px;
         padding: 5px 9px; border-radius: 7px;
         background: var(--raised); color: var(--text);
-        box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14), 0 6px 18px rgba(0, 0, 0, 0.5);
+        box-shadow: inset 0 0 0 0.5px rgb(var(--ink) / 0.14), 0 6px 18px var(--shadow);
         font-size: 11.5px; font-weight: 500; line-height: 1.35; text-align: left;
         pointer-events: none; opacity: 0;
         transition: opacity 0.12s ease;
       }
-      button.icon[aria-label]:is(:hover, :focus-visible)::after { opacity: 1; transition-delay: 0.15s; }
-      button.icon[data-tip-at="start"]::after { left: 0; transform: none; }
-      button.icon[data-tip-at="end"]::after { left: auto; right: 0; transform: none; }
+      button:is(.icon, .seg)[aria-label]:is(:hover, :focus-visible)::after { opacity: 1; transition-delay: 0.15s; }
+      button:is(.icon, .seg)[data-tip-at="start"]::after { left: 0; transform: none; }
+      button:is(.icon, .seg)[data-tip-at="end"]::after { left: auto; right: 0; transform: none; }
       /* Below instead, for a control at the top of a sheet that scrolls, which would clip a
          label drawn above it. */
-      button.icon[data-tip-below]::after { bottom: auto; top: calc(100% + 8px); }
+      button:is(.icon, .seg)[data-tip-below]::after { bottom: auto; top: calc(100% + 8px); }
 
       /* ── Switches ───────────────────────────────────────────────────────────────────────
          For the two settings that are on or off. A button rather than a checkbox because both
@@ -270,7 +277,7 @@
         --amber: #ff9f0a;
         display: inline-block; margin-top: 4px;
         padding: 2px 8px; border-radius: 7px;
-        background: rgba(255, 255, 255, 0.07); color: var(--text-dim);
+        background: rgb(var(--ink) / 0.07); color: var(--text-dim);
       }
       .chip[data-tone="good"] { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green); }
       .chip[data-tone="warn"] { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
@@ -318,7 +325,7 @@
       #import-preview {
         margin: 8px 0 0;
         padding: 9px 11px; border-radius: 8px;
-        background: rgba(255, 255, 255, 0.05);
+        background: rgb(var(--ink) / 0.05);
         color: var(--text-dim);
         overflow-wrap: anywhere;
       }
@@ -386,14 +393,14 @@
       .badge {
         flex: 0 0 auto;
         padding: 1px 6px; border-radius: 5px;
-        border: 1px solid rgba(255, 255, 255, 0.18); color: var(--text-faint);
+        border: 1px solid rgb(var(--ink) / 0.18); color: var(--text-faint);
         font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
       }
       /* Over a long roster only – setup.js shows it past ten. */
       #roster-search {
         width: 200px; height: 28px; padding: 4px 10px;
         font: inherit; font-size: 12.5px; color: var(--text);
-        background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); border-radius: 8px;
+        background: var(--well); border: 1px solid var(--line); border-radius: 8px;
       }
       #roster-search::placeholder { color: var(--text-faint); }
       #roster-search:focus { outline: 1px solid var(--blue); }
@@ -418,7 +425,7 @@
         min-width: 200px; padding: 6px;
         border: 1px solid var(--glass-edge); border-radius: var(--radius-card);
         background: var(--raised); color: var(--text);
-        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 14px 36px var(--shadow);
       }
       #sort-menu:popover-open { display: grid; gap: 1px; }
       #sort-menu .note { margin: 2px 8px 6px; color: var(--text-faint); font-size: 11.5px; }
@@ -426,7 +433,7 @@
         padding: 6px 8px; border-radius: 6px; text-align: left;
         background: transparent; color: var(--text); font-weight: 400;
       }
-      #sort-menu button:is(:hover, :focus-visible) { background: rgba(255, 255, 255, 0.08); outline: 0; }
+      #sort-menu button:is(:hover, :focus-visible) { background: rgb(var(--ink) / 0.08); outline: 0; }
 
       /* ── An agent's colour ──────────────────────────────────────────────────────────────
          The avatar is a button now – ui.css's `button` padding would squeeze the letter out of
@@ -450,7 +457,7 @@
         position-try-fallbacks: flip-block;
         padding: 12px; border: 1px solid var(--glass-edge); border-radius: var(--radius-card);
         background: var(--raised); color: var(--text);
-        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 14px 36px var(--shadow);
       }
       .palette:popover-open { display: grid; grid-template-columns: repeat(8, 24px); gap: 7px; }
       /* The initial is whoever already has the colour. White with a shadow rather than a colour
@@ -481,7 +488,7 @@
         max-height: min(70vh, 620px); overflow: auto;
         padding: 12px; border: 1px solid var(--glass-edge); border-radius: var(--radius-card);
         background: var(--raised); color: var(--text-dim);
-        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 14px 36px var(--shadow);
       }
       .sheet .recipe { margin: 0; }
       /* The title on the left, Save and Copy on the right, and between them the reason if a
@@ -554,7 +561,7 @@
         background: transparent; border: 0; border-radius: 8px;
         color: var(--text);
       }
-      .voice .play:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); }
+      .voice .play:hover:not(:disabled) { background: rgb(var(--ink) / 0.06); }
       .voice .play:disabled { opacity: 1; cursor: default; }
       .voice .play .name { font-size: 13.5px; font-weight: 500; min-width: 0; }
 
@@ -565,10 +572,10 @@
         display: grid; place-items: center;
         border-radius: 50%;
         color: var(--text-faint);
-        border: 1px solid rgba(255, 255, 255, 0.16);
+        border: 1px solid rgb(var(--ink) / 0.16);
       }
-      .voice .play:hover:not(:disabled) .glyph { color: var(--text); border-color: rgba(255, 255, 255, 0.34); }
-      .voice .play.busy .glyph { color: var(--text); border-color: rgba(255, 255, 255, 0.34); }
+      .voice .play:hover:not(:disabled) .glyph { color: var(--text); border-color: rgb(var(--ink) / 0.34); }
+      .voice .play.busy .glyph { color: var(--text); border-color: rgb(var(--ink) / 0.34); }
       .voice .play.busy .glyph svg { animation: spin 0.8s linear infinite; }
       @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -607,7 +614,7 @@
 
       textarea {
         font: inherit; width: 100%; resize: vertical;
-        color: var(--text); background: rgba(0, 0, 0, 0.3);
+        color: var(--text); background: var(--well);
         border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
         line-height: 1.5;
       }
@@ -626,6 +633,13 @@
       <header class="page-head">
         <img class="lockup" src="icons/openposse-lockup-dark.png" alt="OpenPosse"
              width="3040" height="920" />
+
+        <!-- Light or dark (T does the same), and the orb's shape in the panel. Built by
+             appearance.js. -->
+        <div class="appearance">
+          <div id="theme"></div>
+          <div id="orb-style"></div>
+        </div>
 
         <!-- The setup steps, behind an icon of their own and first of the two, since they are
              what somebody is sent here for. They were a column beside the roster until

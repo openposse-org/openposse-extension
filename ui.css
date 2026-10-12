@@ -52,13 +52,25 @@
   --figures: "ss02", "tnum";
 }
 
+/* **#141417 is the orb's own base**, and the dark lockup has it baked in, so the logo now sits
+ * flush on Settings rather than as a plate on a lighter grey.
+ *
+ * `--ink` is the colour every hairline, wash and hover fill is a fraction of, written as
+ * `rgb(var(--ink) / 0.14)`. White here and near-black in light mode, so one rule draws a faint
+ * line on either. `--ink-dim` is the slightly blue white the secondary text is made of. */
 :root {
   color-scheme: dark;
 
-  --stage: #1c1c1e;
+  --stage: #141417;
   --raised: #2c2c2e;
+  --ink: 255 255 255;
+  --ink-dim: 235 235 245;
   --line: rgba(255, 255, 255, 0.1);
   --glass-edge: rgba(255, 255, 255, 0.12);
+  /* Sunk into the page: text fields, and the cards that hold a list. */
+  --well: rgba(0, 0, 0, 0.3);
+  --sunk: rgba(0, 0, 0, 0.2);
+  --shadow: rgba(0, 0, 0, 0.5);
 
   --text: #ffffff;
   --text-dim: rgba(235, 235, 245, 0.6);
@@ -76,6 +88,56 @@
   --radius-card: 9px;
   --radius-control: 7px;
 }
+
+/* Light, for the side panel and Settings only: theme.js sets `data-theme` on those two pages and
+ * nowhere else, so the popup and the in-page orb stay dark whatever the system says.
+ *
+ * **#f6f4f1 is the light lockup's own background**, baked into the file the way #141417 is into
+ * the dark one, so the logo sits flush in both. The colours are Apple's light-mode system
+ * colours, as the dark ones are its dark-mode ones. */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --stage: #f6f4f1;
+  --raised: #ffffff;
+  --ink: 28 27 26;
+  --ink-dim: 28 27 26;
+  --line: rgba(28, 27, 26, 0.1);
+  --glass-edge: rgba(28, 27, 26, 0.1);
+  --well: #ffffff;
+  --sunk: rgba(28, 27, 26, 0.025);
+  --shadow: rgba(28, 27, 26, 0.14);
+
+  --text: #1c1b1a;
+  --text-dim: rgba(28, 27, 26, 0.62);
+  --text-faint: rgba(28, 27, 26, 0.4);
+
+  --blue: #007aff;
+  --green: #34c759;
+  --indigo: #5856d6;
+  --teal: #30b0c7;
+  --pink: #ff2d55;
+  --error: #ff3b30;
+}
+
+/* The light/dark switch, and the orb's shape in Settings – see appearance.js. A pill holding a
+ * row of icon buttons, the pressed one filled, as linear.app draws its theme switch. */
+.segmented {
+  display: inline-flex; gap: 2px; padding: 2px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgb(var(--ink) / 0.12);
+}
+.segmented .seg {
+  position: relative;
+  width: 30px; height: 26px; padding: 0;
+  display: grid; place-items: center;
+  border-radius: 8px;
+  background: transparent; color: var(--text-faint);
+  font-weight: 400;
+}
+.segmented .seg:hover { color: var(--text-dim); }
+.segmented .seg[aria-pressed="true"] { background: rgb(var(--ink) / 0.1); color: var(--text); }
+.segmented .seg:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 
 * { box-sizing: border-box; }
 
@@ -137,7 +199,7 @@ input[type="text"] {
   font: inherit;
   width: 100%;
   color: var(--text);
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--well);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 11px;
@@ -163,6 +225,10 @@ input[type="text"]::placeholder { color: var(--text-faint); }
     inset 0 0.5px 0 rgba(255, 255, 255, 0.45),
     inset 0 0 0 0.5px rgba(255, 255, 255, 0.18);
 }
+
+/* On a light page the translucent fill reads as a pastel and the white letter fades into it, so
+ * light mode fills the circle with the channel itself, a touch deeper. */
+:root[data-theme="light"] .avatar { background: color-mix(in srgb, var(--channel) 88%, #000); }
 
 /* A site icon in place of the initial, when that is switched on under Assistants in Settings. On a
  * white disc because favicons are drawn for a light tab strip – a dark glyph straight on the tinted
@@ -211,12 +277,12 @@ input[type="text"]::placeholder { color: var(--text-faint); }
   border-radius: 7px;
   text-align: right;
 }
-.agent .rename:hover { border-color: rgba(255, 255, 255, 0.14); }
+.agent .rename:hover { border-color: rgb(var(--ink) / 0.14); }
 .agent .rename:focus {
   outline: none;
   text-align: left;
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.34);
+  background: rgb(var(--ink) / 0.07);
+  border-color: rgb(var(--ink) / 0.34);
 }
 
 /* The voice is always visible, unlike the buttons below: it is a property of the agent that
@@ -228,11 +294,11 @@ input[type="text"]::placeholder { color: var(--text-faint); }
   font-size: 11.5px;
   color: var(--text-faint);
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgb(var(--ink) / 0.14);
   border-radius: 7px;
   max-width: 190px;
 }
-.agent .voice-pick:hover { color: var(--text); border-color: rgba(255, 255, 255, 0.3); }
+.agent .voice-pick:hover { color: var(--text); border-color: rgb(var(--ink) / 0.3); }
 .agent .rename { margin-left: auto; }
 .agent .voice-pick ~ .tools { margin-left: 0; }
 .agent .voice-pick { margin-left: 8px; }
@@ -254,14 +320,14 @@ input[type="text"]::placeholder { color: var(--text-faint); }
 .agent .ghost {
   background: transparent;
   color: var(--text-faint);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgb(var(--ink) / 0.14);
   border-radius: 7px;
   padding: 4px 9px;
   font: inherit;
   font-size: 11.5px;
   cursor: pointer;
 }
-.agent .ghost:hover { color: var(--text); border-color: rgba(255, 255, 255, 0.3); }
+.agent .ghost:hover { color: var(--text); border-color: rgb(var(--ink) / 0.3); }
 .agent .ghost.bad:hover { color: var(--error); border-color: var(--error); }
 .agent .ghost:disabled { opacity: 0.4; cursor: default; }
 
@@ -269,7 +335,7 @@ input[type="text"]::placeholder { color: var(--text-faint); }
   margin: 7px 0 2px;
   padding: 9px 11px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgb(var(--ink) / 0.05);
   font: 11px/1.6 var(--ui);
   /* This one dumps CSS selectors, so it is the slot where losing the monospace face would
      actually cost something: `[data-testid="Il1"]` is unreadable in a face where I, l and 1 are
@@ -285,7 +351,7 @@ input[type="text"]::placeholder { color: var(--text-faint); }
 .card {
   padding: 11px 13px;
   border-radius: 11px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--sunk);
   border: 1px solid var(--line);
 }
 .card.bad {
