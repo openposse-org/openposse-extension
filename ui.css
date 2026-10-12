@@ -92,13 +92,13 @@
 /* Light, for the side panel and Settings only: theme.js sets `data-theme` on those two pages and
  * nowhere else, so the popup and the in-page orb stay dark whatever the system says.
  *
- * **#f6f4f1 is the light lockup's own background**, baked into the file the way #141417 is into
- * the dark one, so the logo sits flush in both. The colours are Apple's light-mode system
+ * The stage is white, on trial since 2026-10-13. It was #f6f4f1, the light lockup's own baked
+ * background, so on white the logo shows its edge. The colours are Apple's light-mode system
  * colours, as the dark ones are its dark-mode ones. */
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --stage: #f6f4f1;
+  --stage: #ffffff;
   --raised: #ffffff;
   --ink: 28 27 26;
   --ink-dim: 28 27 26;
