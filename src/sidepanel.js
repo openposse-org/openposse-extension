@@ -431,7 +431,7 @@ async function drawRoster() {
     av.style.setProperty('--channel', channelOf(agent));
 
     const face = document.createElement('span');
-    face.className = 'avatar face';
+    face.className = `avatar face${agent.mock ? ' mock' : ''}`;
     face.textContent = initialFor(agent.name);
     putIcon(face, roster.icons[agent.id]);
     av.append(face);
@@ -440,7 +440,7 @@ async function drawRoster() {
     // the only thing carrying it for an agent who is not currently the subject of the status line.
     label(av, broken.includes(agent.id) ? `${agent.name} needs re-recording`
       : reroutes ? `Put the same question to ${agent.name}`
-        : [`Ask ${agent.name}`, vendor].filter(Boolean).join(' · '));
+        : [`Ask ${agent.name}`, vendor, agent.mock && 'mock recording'].filter(Boolean).join(' · '));
 
     av.addEventListener('click', () => {
       if (reroutes) {

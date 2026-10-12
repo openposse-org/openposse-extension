@@ -781,7 +781,7 @@ async function refreshRoster() {
     // choice made knowingly rather than a clash found later on the panel – allowed, because it
     // is the person's call, but never by accident.
     const avatar = document.createElement('button');
-    avatar.className = 'avatar';
+    avatar.className = `avatar${agent.mock ? ' mock' : ''}`;
     avatar.textContent = initialFor(agent.name);
     putIcon(avatar, icons[agent.id]);
     avatar.setAttribute('aria-expanded', 'false');

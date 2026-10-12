@@ -242,6 +242,23 @@ input[type="text"]::placeholder { color: var(--text-faint); }
   object-fit: contain;
 }
 
+/* A mock recording, from the debug drawer's Mock roster, carries the debug icon's orange dot.
+ * Both come from one fact, an agent stored with `mock: true`, so an avatar has the dot exactly
+ * while the debug icon has one for mocks. Set on the circle's edge at one o'clock-and-a-half
+ * (14.6% in from the top and right of the box) so it stays there at every avatar size. */
+.avatar.mock { position: relative; }
+.avatar.mock::before {
+  content: '';
+  position: absolute;
+  top: calc(14.6% - 3.5px);
+  right: calc(14.6% - 3.5px);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff7a18;
+  box-shadow: 0 0 0 2px var(--stage);
+}
+
 /* Only the agent holding the floor is lit. Everyone else is dimmed — the same treatment the
  * panel uses, so "who is active" reads identically on both surfaces. */
 .agent.active .avatar {
