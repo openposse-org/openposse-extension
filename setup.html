@@ -39,9 +39,13 @@
            around them at full size, and 198px is the width they had on the whole plate at 420. */
         object-view-box: inset(26.74% 26.22% 23.91% 26.58%);
         aspect-ratio: 1435 / 454;
-        width: 198px; max-width: 100%; height: auto;
+        width: var(--logo); max-width: 100%; height: auto;
         margin: 0 auto 0 0;
+        transition: width 180ms ease;
       }
+      /* Smaller once the header is holding at the top, so the logo has room around it the way
+         the 30px icons do, rather than filling the bar's height. */
+      .page-head.stuck .lockup { width: var(--logo-stuck); }
       /* The same lockup with a near-black wordmark on white, which is the light stage. It is
        * design/assets/openposse-lockup-light.png with its #f6f4f1 (and the hat band, which is that
        * background showing through) turned white. */
@@ -62,11 +66,17 @@
          element rather than `clip-path` on a box-shadow, because a clip would cut off the
          tooltips that hang below the header's icons. The padding is taken back out of the
          margins, so at rest it sits where it always did. */
+      /* The bar loses the logo's lost height when it shrinks, and a sticky header is in the
+         page's flow, so everything under it would jump up. The bottom margin takes that height
+         back over the same transition, so the page holds still. */
       .page-head {
+        --logo: 198px; --logo-stuck: 120px;
         display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
         position: sticky; top: 0; z-index: 30;
         padding-block: 10px; margin: -10px 0 18px;
+        transition: margin-bottom 180ms ease;
       }
+      .page-head.stuck { margin-bottom: calc(18px + (var(--logo) - var(--logo-stuck)) * 454 / 1435); }
       .page-head::before {
         content: ''; position: absolute; z-index: -1; inset: 0 calc(50% - 50vw);
         background: var(--stage);
@@ -739,7 +749,8 @@
       textarea:focus { outline: 1px solid var(--blue); }
 
       @media (prefers-reduced-motion: reduce) {
-        button.switch, button.switch::before, .tip, button.icon[aria-label]::after { transition: none; }
+        button.switch, button.switch::before, .tip, button.icon[aria-label]::after,
+        .page-head, .page-head::before, .lockup { transition: none; }
       }
     </style>
   </head>
