@@ -1,10 +1,12 @@
 // Turning "Ivan tell me a joke" into an agent and a question.
 //
 // Layers 1 and 2 of the plan's three. Layer 1 – biasing the recogniser with `phrases` – happens
-// before this file sees anything, in `listening.js`. Layer 3 – the Prompt API deciding with a
-// constrained schema – is E7, and is an *enhancement*: Gemini Nano needs 22 GB of disk and a
-// 4 GB GPU, so most machines will never run it and this file is what they get. It has to be
-// good enough on its own.
+// before this file sees anything, in `listening.js`. Layer 2 is this file: the name by spelling,
+// then by sound. Layer 3 was to be E7 – an on-device model choosing with a constrained schema –
+// and was **not built, by decision (2026-10-13)**: Gemini Nano is blocked by enterprise policy
+// on most of the machines this is for, a model of our own would be a second download the size
+// of Kokoro, and what layer 3 was for – a name heard wrong – is what matching by sound catches.
+// Revisit only if real routing failures turn up that no matcher could fix.
 //
 // Pure functions, no `chrome.*`, so it runs under `node --test`. That is the point: routing is
 // the one part of the voice loop whose failures are entirely about strings, and strings can be
@@ -145,8 +147,106 @@ function tolerance(name) {
   return 2;
 }
 
+const VOWELS = /[aeiou]/;
+const FRONT_VOWELS = /[iey]/;
+
+/**
+ * Roughly how a word sounds, as a key on which "Andy", "Andie" and "Andi" agree.
+ *
+ * A trimmed Metaphone: silent letters dropped, consonants that sound alike merged (c/k/q, s/z,
+ * v/f, "ph" as F, "sh" and "tio" as X, "th" as 0), vowels dropped except a leading one, which
+ * becomes A – so "Ivan" and "Evan" both read AFN. English spelling rules only, which is what the
+ * recogniser writes in; a word with letters outside a–z after accents are stripped has no key,
+ * and so is matched by spelling alone.
+ */
+function wordKey(raw) {
+  let w = raw.normalize('NFD').replace(/\p{M}/gu, '').replace(/'/g, '');
+  if (!/^[a-z]+$/.test(w)) return null;
+  if (/^(kn|gn|pn|wr|ae)/.test(w)) w = w.slice(1);
+  else if (w.startsWith('x')) w = `s${w.slice(1)}`;
+  else if (w.startsWith('wh')) w = `w${w.slice(2)}`;
+
+  let key = '';
+  for (let i = 0; i < w.length; i += 1) {
+    const c = w[i];
+    const prev = w[i - 1] ?? '';
+    const next = w[i + 1] ?? '';
+    const after = w[i + 2] ?? '';
+    if (c === prev && c !== 'c') continue;                 // a doubled letter sounds once
+    if (VOWELS.test(c)) {
+      if (i === 0) key += 'A';
+      continue;
+    }
+    switch (c) {
+      case 'b': if (!(prev === 'm' && !next)) key += 'B'; break;           // "lamb"
+      case 'c':
+        if (prev === 's' && next === 'h') key += 'K';                      // "school"
+        else if (next === 'h' || (next === 'i' && after === 'a')) key += 'X';
+        else if (FRONT_VOWELS.test(next)) key += 'S';
+        else key += 'K';
+        break;
+      case 'd': key += next === 'g' && FRONT_VOWELS.test(after) ? 'J' : 'T'; break;
+      case 'g':
+        if (next === 'h' && !VOWELS.test(after)) break;                    // "night", "hugh"
+        if (next === 'n' && !after) break;                                 // "sign"
+        key += FRONT_VOWELS.test(next) ? 'J' : 'K';
+        break;
+      case 'h':
+        if (/[cgpst]/.test(prev)) break;                                   // spoken by the pair
+        if (VOWELS.test(prev) && !VOWELS.test(next)) break;                // "john"
+        key += 'H';
+        break;
+      case 'k': if (prev !== 'c') key += 'K'; break;
+      case 'p': key += next === 'h' ? 'F' : 'P'; break;
+      case 'q': key += 'K'; break;
+      case 's': key += next === 'h' || (next === 'i' && /[ao]/.test(after)) ? 'X' : 'S'; break;
+      case 't':
+        if (next === 'i' && /[ao]/.test(after)) key += 'X';
+        else if (next === 'h') key += '0';
+        else if (!(next === 'c' && after === 'h')) key += 'T';             // "watch"
+        break;
+      case 'v': key += 'F'; break;
+      case 'w': case 'y': if (VOWELS.test(next)) key += c.toUpperCase(); break;
+      case 'x': key += 'KS'; break;
+      case 'z': key += 'S'; break;
+      default: key += c.toUpperCase();                                     // f j l m n r
+    }
+  }
+  return key;
+}
+
+/** The sound key of a whole fragment, word by word, or null if any word has none. */
+export function soundKey(text) {
+  const words = normalise(text).split(' ').filter(Boolean);
+  if (words.length === 0) return null;
+  const keys = words.map(wordKey);
+  return keys.includes(null) ? null : keys.join(' ');
+}
+
+/**
+ * Whether a fragment sounds like a name, under two guards that keep this a catch rather than a
+ * lottery.
+ *
+ * **Word for word.** "I've an" sounds like "Ivan" run together – and is how a great many
+ * sentences begin. Comparing only fragments with as many words as the name gives that up, along
+ * with "eye van", and is worth it: a wrong agent reaches a vendor, a missed one asks again.
+ *
+ * **Three sounds at least.** A key of one or two – "Kai" is K, "Ava" is AF – is shared by too
+ * many ordinary words to be evidence of anything.
+ */
+function soundsAlike(fragment, name) {
+  if (fragment.split(' ').length !== name.split(' ').length) return false;
+  const heard = soundKey(fragment);
+  return heard !== null && heard.replace(/ /g, '').length >= 3 && heard === soundKey(name);
+}
+
 /**
  * The best roster match for a spoken fragment, or null.
+ *
+ * By spelling – within `tolerance` – or by sound, which catches what spelling cannot:
+ * "Andie" is two letters from "Andy", "Preeya" two from "Priya", and both sound the same. A
+ * match by sound carries its spelling distance, so a closer spelling still wins and two
+ * equally distant candidates are still refused.
  *
  * **Ambiguity is a refusal, not a coin toss.** If two agents are equally close – "Andy" and
  * "Sandy" both one letter from "andi" – there is no evidence to choose between them, and
@@ -155,14 +255,21 @@ function tolerance(name) {
 export function bestMatch(fragment, agents) {
   if (!fragment) return null;
 
-  // An ordinary English word may match a name exactly, never approximately. See COMMON_WORDS.
+  // An ordinary English word may match a name exactly, never approximately – by spelling or by
+  // sound: "even" sounds exactly like "Ivan". See COMMON_WORDS.
   const exactOnly = COMMON_WORDS.has(fragment);
 
   const scored = agents
-    .map((agent) => ({ agent, distance: editDistance(fragment, normalise(agent.name)) }))
-    .filter(({ agent, distance }) => (exactOnly
-      ? distance === 0
-      : distance <= tolerance(normalise(agent.name))))
+    .map((agent) => {
+      const name = normalise(agent.name);
+      return { agent, name, distance: editDistance(fragment, name) };
+    })
+    .filter(({ name, distance }) => {
+      if (distance === 0) return true;
+      if (exactOnly) return false;
+      return distance <= tolerance(name) || soundsAlike(fragment, name);
+    })
+    .map(({ agent, distance }) => ({ agent, distance }))
     .sort((a, b) => a.distance - b.distance);
 
   if (scored.length === 0) return null;
