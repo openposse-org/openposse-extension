@@ -152,8 +152,8 @@
       :root[data-theme="light"] .promises li { color: var(--amber); }
 
       /* ── The footer ───────────────────────────────────────────────────────────────────────
-         Fixed to the bottom of the window: the version at the window's left, then at its right
-         the links an open-source project is usually asked for, the socials, and Go Pro last. The
+         Fixed to the bottom of the window: at its left the version and the links an open-source
+         project is usually asked for, at its right the socials and Go Pro. The
          addresses are filled in by setup.js from a few URLs, so the repository's can change in
          one place when it exists. The full window's width, inside the page's 40px gutters. */
       .page-foot {
@@ -167,7 +167,7 @@
       }
       .page-foot .version { font-weight: 500; color: var(--text); font-feature-settings: var(--figures); }
       .page-foot .version span { margin-left: 5px; font-weight: 400; color: var(--text-faint); }
-      .page-foot nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-left: auto; }
+      .page-foot nav { display: flex; flex-wrap: wrap; gap: 6px 18px; }
       .page-foot a {
         display: inline-flex; align-items: center; gap: 6px;
         color: inherit; text-decoration: none; border-radius: 4px;
@@ -175,10 +175,11 @@
       .page-foot a:hover { color: var(--text); }
       .page-foot a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
       .page-foot a span { display: inline-flex; opacity: 0.8; }
-      /* The socials and then the paid plans, each set off by a hairline. Go Pro is a plain
+      /* The links follow the version, set off by a hairline; the socials and then the paid
+         plans are pushed to the right end, each with a hairline of its own. Go Pro is a plain
          question and the landing's amber answer. */
-      .page-foot :is(.socials, .pro) { padding-left: 14px; box-shadow: inset 1px 0 0 var(--line); }
-      .page-foot .socials { display: flex; gap: 2px; }
+      .page-foot :is(nav, .socials, .pro) { padding-left: 14px; box-shadow: inset 1px 0 0 var(--line); }
+      .page-foot .socials { display: flex; gap: 2px; margin-left: auto; }
       .page-foot .pro { display: inline-flex; align-items: center; gap: 8px; }
       .page-foot .pro a { color: var(--amber); font-weight: 500; }
       .page-foot .pro a:hover { color: var(--amber-hover); }
