@@ -24,7 +24,6 @@ import {
   runDemo, stopDemo, pauseDemo, resumeDemo, endDemo,
 } from './demo.js';
 import { needsShortening, spokenForm } from './saying.js';
-import { summarise } from './summariser.js';
 import {
   route, navigationTarget, productName, productLabel, floorWindow, FLOOR_OVERRIDE_KEY,
 } from './routing.js';
@@ -319,22 +318,16 @@ async function putQuestion(agent, prompt, matched) {
  * different things, and conflating them is how a voice assistant becomes a screen reader –
  * which was the observation that started this whole architecture.
  *
- * Summarising is attempted but never waited on hopefully: `summarise` returns null on every
- * machine that fails Gemini Nano's hardware gate, which is a great many of them, and
- * `spokenForm` treats that as the ordinary case with a first-sentence fallback that says where
- * the rest is.
+ * A long answer is spoken as its first sentence and a pointer to the screen – see `spokenForm`.
  */
 async function readAloud(answer, agent) {
   if (!answer) return;
   // The answer is on screen seconds before a word of it can be heard – a cold Kokoro load and the
-  // first sentence's synthesis – and "is speaking" over that silence reads as broken. Set before
-  // the summariser rather than just before `say`, so a long answer never shows it either. The
-  // voice clears it at its first sound: `audible` in `listening.js`.
+  // first sentence's synthesis – and "is speaking" over that silence reads as broken. The voice
+  // clears it at its first sound: `audible` in `listening.js`.
   panel({ warming: true });
-  const long = needsShortening(answer);
-  const summary = long ? await summarise(answer) : null;
-  if (long) trace('shortened', summary ? 'by the summariser' : 'first sentence (no summariser)');
-  const { text, shortened } = spokenForm(answer, summary);
+  if (needsShortening(answer)) trace('shortened', 'first sentence');
+  const { text, shortened } = spokenForm(answer);
   if (!text) {
     panel({ warming: false });
     return;
