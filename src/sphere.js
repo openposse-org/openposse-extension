@@ -1,4 +1,5 @@
 // The orb itself: 520 points on a Fibonacci sphere, a rim stroked three times, and nothing else.
+// Or, chosen in Settings since 2026-10-13, the same instrument as layered strands – `drawWave`.
 //
 // Ported verbatim from `design/README.md`'s `draw()`/`points()`/`lut()` rather than re-derived.
 // The two non-obvious parts are commented where they are, and are worth keeping: the halo's
@@ -104,17 +105,15 @@ function toward(cv, key, target, rate) {
 }
 
 /**
- * One frame.
+ * Sizes the canvas to its box and clears it, or returns null for a canvas with no size yet.
  *
- * @param cv     the canvas. Sized from its own bounding box, so CSS owns the dimensions.
- * @param t      a frame counter, incremented by the caller. Drives every oscillation here.
- * @param mode   `speak` | `agent` | `think` | `dead` | `rest`.
- * @param tint   the agent's channel colour as `#rrggbb`, or anything unparseable for none.
- * @param level  0–1 from a real meter, or **null when there is no meter at all**.
+ * **Additive on a dark page, painted over on a light one.** `lighter` is what makes the dots and
+ * the rim bloom where they overlap, the way light adds up on a screen. On a light page the same
+ * blend runs every colour toward white, which is the page, so the shape fades into it.
  */
-export function drawSphere(cv, { t, mode, tint, level = null }) {
+function prepare(cv, light) {
   const r = cv.getBoundingClientRect();
-  if (!r.width || !r.height) return;
+  if (!r.width || !r.height) return null;
   const cx = cv.__cx || (cv.__cx = cv.getContext('2d'));
   const d = Math.min(2, window.devicePixelRatio || 1);
   if (cv.width !== Math.round(r.width * d) || cv.height !== Math.round(r.height * d)) {
@@ -122,10 +121,17 @@ export function drawSphere(cv, { t, mode, tint, level = null }) {
     cv.height = Math.round(r.height * d);
   }
   cx.setTransform(d, 0, 0, d, 0, 0);
-  const w = r.width, h = r.height, ox = w / 2, oy = h / 2;
-  cx.clearRect(0, 0, w, h);
-  cx.globalCompositeOperation = 'lighter';
+  cx.clearRect(0, 0, r.width, r.height);
+  cx.globalCompositeOperation = light ? 'source-over' : 'lighter';
+  return { cx, w: r.width, h: r.height, d };
+}
 
+/**
+ * How big, how bright and how tinted this frame is. **Shared by the sphere and the waveform**, so
+ * the two shapes are one instrument drawn two ways: the same microphone, the same voice, the same
+ * easing between states.
+ */
+function motion(cv, { t, mode, tint, level }) {
   const hasLevel = typeof level === 'number';
   const shown = hasLevel ? level : 0;
 
@@ -174,8 +180,27 @@ export function drawSphere(cv, { t, mode, tint, level = null }) {
   const grey = mode === 'dead';
   const mix = toward(cv, '__mix', grey || hexArr(tint) ? 1 : 0, grey ? 0.12 : 0.05);
 
+  return { amp, lum, L: lut(grey ? '#8E8E93' : tint, mix) };
+}
+
+/**
+ * One frame.
+ *
+ * @param cv     the canvas. Sized from its own bounding box, so CSS owns the dimensions.
+ * @param t      a frame counter, incremented by the caller. Drives every oscillation here.
+ * @param mode   `speak` | `agent` | `think` | `dead` | `rest`.
+ * @param tint   the agent's channel colour as `#rrggbb`, or anything unparseable for none.
+ * @param level  0–1 from a real meter, or **null when there is no meter at all**.
+ * @param light  whether the page behind is light – see `prepare`.
+ */
+export function drawSphere(cv, { t, mode, tint, level = null, light = false }) {
+  const frame = prepare(cv, light);
+  if (!frame) return;
+  const { cx, w, h, d } = frame;
+  const ox = w / 2, oy = h / 2;
+  const { amp, lum, L } = motion(cv, { t, mode, tint, level });
+
   const R = Math.min(w, h) * 0.232 * (0.93 + 0.13 * amp);
-  const L = lut(grey ? '#8E8E93' : tint, mix);
 
   // Diffuse halo – **off by request, 2026-09-26.**
   //
@@ -256,6 +281,86 @@ export function drawSphere(cv, { t, mode, tint, level = null }) {
   ring(R * 0.22, 0.34, R * 0.30);
   ring(R * 0.11, 0.5, R * 0.10);
   ring(R * 0.035, 0.92, 0);
+}
+
+/**
+ * The strands of the waveform: how many times each crosses the line, how fast it travels, how
+ * tall it is against the others, and where it starts. Uneven on purpose – strands at even
+ * multiples line up into one braid every few seconds, and these never quite do.
+ */
+const STRANDS = [
+  { waves: 1.5, speed: 0.052, height: 1, phase: 0 },
+  { waves: 2.2, speed: -0.038, height: 0.74, phase: 1.9 },
+  { waves: 3.1, speed: 0.063, height: 0.52, phase: 3.7 },
+  { waves: 1.1, speed: -0.029, height: 0.6, phase: 5.2 },
+];
+
+/**
+ * The same instrument as `drawSphere`, drawn as layered strands across the canvas.
+ *
+ * Height is the sphere's radius by another name: `motion` hands both the same eased amplitude, so
+ * while listening it is the microphone and while answering it is the agent's voice, and a dead
+ * microphone lies flat rather than drawing a healthy wave. Each strand is pinned to the line at
+ * both ends and swells in the middle, so the wave reads as one sound rather than a cropped
+ * stretch of an endless one.
+ *
+ * Same parameters as `drawSphere`, so a caller switches shape by switching function.
+ */
+export function drawWave(cv, { t, mode, tint, level = null, light = false }) {
+  const frame = prepare(cv, light);
+  if (!frame) return;
+  const { cx, w, h } = frame;
+  const { amp, lum, L } = motion(cv, { t, mode, tint, level });
+
+  const mid = h / 2;
+  const edge = w * 0.04;
+  const span = w - edge * 2;
+  // The tallest a strand gets at full voice, from the line to its crest. `amp` runs to about 1.05,
+  // so a loud syllable reaches most of the way to the canvas's edge without touching it.
+  const reach = h * 0.4;
+  const step = 2;
+
+  // The palette across the line rather than around a rim, drifting at the rim's own pace.
+  const paint = () => {
+    const g = cx.createLinearGradient(edge, 0, w - edge, 0);
+    for (let i = 0; i <= 12; i += 1) {
+      const c = L.raw[Math.round((i / 12) * 71 + t * 0.12) % 72];
+      g.addColorStop(i / 12, `rgb(${c.map(Math.round).join(',')})`);
+    }
+    return g;
+  };
+
+  const strand = ({ waves, speed, height, phase }) => {
+    cx.beginPath();
+    for (let x = 0; x <= span; x += step) {
+      const u = x / span;
+      const pinned = Math.sin(Math.PI * u) ** 2;
+      const y = mid + reach * amp * height * pinned * Math.sin(u * waves * 6.2832 + t * speed + phase);
+      if (x === 0) cx.moveTo(edge + x, y);
+      else cx.lineTo(edge + x, y);
+    }
+  };
+
+  // Two passes per strand, as the rim takes three: a wide blurred one for the glow and a fine
+  // crisp one on top, so the strands bloom rather than reading as drawn lines.
+  const stroke = ({ height }, width, alpha, blur) => {
+    cx.save();
+    if (blur && cx.filter !== undefined) cx.filter = `blur(${blur}px)`;
+    cx.globalAlpha = Math.min(1, alpha * (0.45 + 0.55 * height) * lum);
+    cx.lineWidth = width;
+    cx.lineCap = 'round';
+    cx.lineJoin = 'round';
+    cx.strokeStyle = paint();
+    cx.stroke();
+    cx.restore();
+  };
+
+  const scale = Math.max(1, h / 128);
+  for (const s of STRANDS) {
+    strand(s);
+    stroke(s, 5 * scale, 0.32, 4 * scale);
+    stroke(s, 1.6 * scale, 0.9, 0);
+  }
 }
 
 /** The design's six states, mapped from the loop's own vocabulary. Shared because it is a table. */

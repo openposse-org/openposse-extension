@@ -7,7 +7,9 @@
 
 import {
   loadRoster, recipeFor, setMicGranted, micGranted, voiceSpeed, setVoiceSpeed, clampSpeed,
+  orbStyle, setOrbStyle, avatarsByCount, setAvatarsByCount,
 } from './storage.js';
+import { mountThemeToggle, segmented } from './appearance.js';
 import { channelOf, colourName, initialFor, PALETTE } from './channels.js';
 import { sortedIDs } from './order.js';
 import { pack, unpack, toFile, filenameFor, summarise } from './share.js';
@@ -172,7 +174,7 @@ async function refreshPanelAccess() {
   // Off is not a problem to fix – the step is optional – so it is neutral rather than amber.
   setStatus('panel-status', granted
     ? 'on – the orb appears on any page'
-    : "off – the orb appears on assistants' pages only", granted ? 'good' : '');
+    : "off – the orb appears on AI assistants' pages only", granted ? 'good' : '');
   markDone('step-panel', granted);
   el('grant-panel').setAttribute('aria-checked', String(granted));
   return granted;
@@ -779,7 +781,7 @@ async function refreshRoster() {
     // choice made knowingly rather than a clash found later on the panel – allowed, because it
     // is the person's call, but never by accident.
     const avatar = document.createElement('button');
-    avatar.className = 'avatar';
+    avatar.className = `avatar${agent.mock ? ' mock' : ''}`;
     avatar.textContent = initialFor(agent.name);
     putIcon(avatar, icons[agent.id]);
     avatar.setAttribute('aria-expanded', 'false');
@@ -1106,7 +1108,7 @@ async function refreshRoster() {
       // Save at the top, beside Copy, rather than under a file that can run past the fold.
       sheet.append(
         toolbar(text, 'the file', title, save),
-        lede(filename, ' – send it to someone to add under Add a shared assistant.'),
+        lede(filename, ' – send it to someone to add under Add a shared AI assistant.'),
         block(text),
       );
     });
@@ -1213,7 +1215,7 @@ function filterRoster() {
 
   const none = el('roster-none');
   none.hidden = shown.length > 0;
-  none.textContent = shown.length ? '' : `No assistant matches “${typed}”.`;
+  none.textContent = shown.length ? '' : `No AI assistant matches “${typed}”.`;
 }
 
 el('roster-search').addEventListener('input', filterRoster);
@@ -1659,7 +1661,7 @@ for (const size of [0, ...MOCK_SIZES]) {
   button.dataset.size = String(size);
   button.dataset.tipAt = 'start';
   button.textContent = size ? String(size) : 'Off';
-  label(button, size ? `Fill the roster to ${size} assistants` : 'No mock recordings');
+  label(button, size ? `Fill the roster to ${size} AI assistants` : 'No mock recordings');
   button.addEventListener('click', async () => {
     const result = await chrome.runtime.sendMessage({ kind: 'openposse.agent.mocks', size })
       .catch((error) => ({ ok: false, reason: error?.message ?? String(error) }));
@@ -1679,7 +1681,7 @@ async function paintMocks() {
     const size = Number(button.dataset.size);
     button.setAttribute('aria-pressed', String(size ? mockCount > 0 && agents.length === size : mockCount === 0));
   }
-  el('mock-value').textContent = mockCount ? `${agents.length} assistants, ${mockCount} made up` : 'off';
+  el('mock-value').textContent = mockCount ? `${agents.length} AI assistants, ${mockCount} made up` : 'off';
   paintDebugToggle();
 }
 
@@ -1714,7 +1716,7 @@ el('load-icons').addEventListener('click', async () => {
     if (pattern && !before.icons[agent.id]) sites.set(pattern, `https://${pattern.replace(/^\*\./, '')}/`);
   }
   if (!sites.size) {
-    value.textContent = 'every assistant has one';
+    value.textContent = 'every AI assistant has one';
     return;
   }
 
@@ -1781,6 +1783,56 @@ el('setup-sheet').addEventListener('toggle', (event) => {
   el('setup').setAttribute('aria-expanded', String(event.newState === 'open'));
 });
 
+// ── Appearance ─────────────────────────────────────────────────────────────────────────────
+//
+// Light or dark, and the panel's orb as a sphere or a waveform. The panel follows both live: the
+// theme through `localStorage` (see theme.js), the shape through `chrome.storage`. Both sit at
+// the right end of the logo's row, so their labels hang from the right.
+mountThemeToggle(el('theme'), { tipAt: 'end' });
+
+async function paintOrbStyle() {
+  // Pressed once the setting is stored, so the switch never shows a shape the panel is not using.
+  const show = segmented(el('orb-style'), {
+    tipAt: 'end',
+    label: 'Orb in the panel',
+    options: [
+      { value: 'sphere', icon: 'orbit', label: 'Orb in the panel: sphere' },
+      { value: 'wave', icon: 'audio-waveform', label: 'Orb in the panel: waveform' },
+    ],
+    value: await orbStyle(),
+    onPick: (style) => setOrbStyle(style)
+      .then(() => show(style))
+      .catch((error) => console.error('[openposse] setup: orb style not saved –', error?.message ?? error)),
+  });
+}
+
+// ── Size by number ─────────────────────────────────────────────────────────────────────────
+//
+// Whether the panel's avatars grow when there are few. Off by default; the panel follows the
+// switch live (see `sizeAvatars` in sidepanel.js).
+async function paintAvatarSizing() {
+  const button = el('avatar-sizing');
+  const show = (on) => button.setAttribute('aria-checked', String(on));
+  show(await avatarsByCount());
+  button.addEventListener('click', () => {
+    const on = button.getAttribute('aria-checked') !== 'true';
+    setAvatarsByCount(on)
+      .then(() => show(on))
+      .catch((error) => console.error('[openposse] setup: Size by number not saved –', error?.message ?? error));
+  });
+}
+
+// ── GitHub ─────────────────────────────────────────────────────────────────────────────────
+//
+// A placeholder until the repository exists: it opens github.com itself. Change the one URL.
+const GITHUB_URL = 'https://github.com';
+
+el('github').addEventListener('click', () => {
+  chrome.tabs.create({ url: GITHUB_URL }).catch((error) => {
+    console.error('[openposse] setup: GitHub did not open –', error?.message ?? error);
+  });
+});
+
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
 
 // Each section independently, and loudly when one fails.
@@ -1802,6 +1854,8 @@ for (const [name, refresh] of Object.entries({
   voices: refreshVoices,
   roster: refreshRoster,
   'site icons': refreshIcons,
+  'orb style': paintOrbStyle,
+  'size by number': paintAvatarSizing,
   'surface switch': paintSurface,
   'debug timings': paintKnobs,
   'mock roster': paintMocks,

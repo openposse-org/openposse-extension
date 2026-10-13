@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/service-worker.js src/setup.js src/popup.js src/sidepanel.js src/offscreen.js src/spike.js --bundle --format=esm --outdir=dist && esbuild src/content.js --bundle --format=iife --outfile=dist/content.js && esbuild src/orb.js --bundle --format=iife --outfile=dist/orb.js && esbuild tools/capture.js --bundle --format=iife --outfile=dist/capture.js",
+    "build": "esbuild src/service-worker.js src/setup.js src/popup.js src/sidepanel.js src/offscreen.js src/spike.js --bundle --format=esm --outdir=dist && esbuild src/content.js --bundle --format=iife --outfile=dist/content.js && esbuild src/orb.js --bundle --format=iife --outfile=dist/orb.js && esbuild src/theme-boot.js --bundle --format=iife --outfile=dist/theme-boot.js && esbuild tools/capture.js --bundle --format=iife --outfile=dist/capture.js",
     "watch": "npm run build -- --watch",
     "lint": "eslint src tools",
     "test": "eslint src tools && node --test tools/*.test.mjs"

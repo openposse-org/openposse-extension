@@ -92,6 +92,42 @@ export async function setVoiceSpeed(value) {
   return speed;
 }
 
+/**
+ * How the panel draws its orb: the sphere, or a waveform across the panel. Both are the same
+ * instrument (`sphere.js`), so this is a matter of taste and nothing else depends on it. Anything
+ * unrecognised reads as the sphere, which is what everyone had before the setting existed.
+ */
+export const ORB_STYLE_KEY = 'orbStyle';
+
+export const orbStyleOf = (value) => (value === 'wave' ? 'wave' : 'sphere');
+
+export async function orbStyle() {
+  const stored = await chrome.storage.local.get(ORB_STYLE_KEY);
+  return orbStyleOf(stored[ORB_STYLE_KEY]);
+}
+
+export async function setOrbStyle(style) {
+  await chrome.storage.local.set({ [ORB_STYLE_KEY]: orbStyleOf(style) });
+}
+
+/**
+ * Whether the panel's avatars grow when there are few of them (four steps, see `sizeAvatars` in
+ * sidepanel.js) or stay the 34px circle however many there are. Off unless switched on in
+ * Settings, since 2026-10-13; only `true` turns it on.
+ */
+export const AVATAR_SIZING_KEY = 'avatarsByCount';
+
+export const avatarsByCountOf = (value) => value === true;
+
+export async function avatarsByCount() {
+  const stored = await chrome.storage.local.get(AVATAR_SIZING_KEY);
+  return avatarsByCountOf(stored[AVATAR_SIZING_KEY]);
+}
+
+export async function setAvatarsByCount(on) {
+  await chrome.storage.local.set({ [AVATAR_SIZING_KEY]: avatarsByCountOf(on) });
+}
+
 /** A v4-ish id. Only has to be unique within one browser profile. */
 export function newID() {
   return crypto.randomUUID().toUpperCase();
@@ -123,7 +159,7 @@ export async function loadRoster() {
   } catch {
     // Unreadable storage must not stop the extension starting. An empty roster with an
     // explanation is recoverable; throwing on every service-worker wake is not.
-    return { agents: [], arranged: [], broken: [], problem: "Your saved assistants couldn't be read." };
+    return { agents: [], arranged: [], broken: [], problem: "Your saved AI assistants couldn't be read." };
   }
 
   const keys = agents.map((a) => recipeKey(a.recipeID)).filter(Boolean);
@@ -143,7 +179,7 @@ export async function loadRoster() {
  */
 export async function setRosterOrder(ids) {
   if (!Array.isArray(ids) || !ids.every((id) => typeof id === 'string')) {
-    return { ok: false, reason: 'the new order was not a list of assistants' };
+    return { ok: false, reason: 'the new order was not a list of AI assistants' };
   }
   const { agents, problem } = await loadRoster();
   // An unreadable roster would make every id look dead, and saving that would forget the order.

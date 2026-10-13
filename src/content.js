@@ -197,7 +197,7 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
     return failure(
       ERROR.timeout,
       recipe.openMethod === 'click'
-        ? 'the assistant did not open when its button was clicked'
+        ? 'the AI assistant did not open when its button was clicked'
         // **The old text here told the user to rely on the Mac app**, which is parked – it
         // said "needs the app to post a real event", describing a retry path that no longer
         // exists and cannot be reached. A message naming a fix that is unavailable is worse
@@ -207,8 +207,8 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
         // script, and there is nothing this extension can do about that. Notion is one of
         // them, and it also offers a button – so the fix is a re-recording that opens it by
         // clicking, which is exactly what the message now says.
-        : 'this assistant ignores keyboard shortcuts it did not get from a person. '
-          + 'Re-record it from Settings and open the assistant by clicking its button '
+        : 'this AI assistant ignores keyboard shortcuts it did not get from a person. '
+          + 'Re-record it from Settings and open the AI assistant by clicking its button '
           + 'instead of using the shortcut.',
       { openedBy: null }
     );
@@ -525,9 +525,9 @@ async function invokeViaShortcut({ recipe }) {
     // fallback: the `CGEventPost` retry belonged to the Mac app, which is parked, and nothing
     // in a browser can post a trusted event. So the honest remedy is a different recording.
     return failure(ERROR.timeout, recipe.openMethod === 'click'
-      ? 'the assistant did not open when its button was clicked'
-      : 'this assistant ignores keyboard shortcuts it did not get from a person – '
-        + 'record it again, opening the assistant by clicking its button');
+      ? 'the AI assistant did not open when its button was clicked'
+      : 'this AI assistant ignores keyboard shortcuts it did not get from a person – '
+        + 'record it again, opening the AI assistant by clicking its button');
   }
   return { ok: true, openedBy };
 }

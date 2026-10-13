@@ -26,11 +26,15 @@
 // source. It assumes no width and no side – Chrome does not persist the panel's width, offers no
 // API to set it, reopens at roughly 360px, and lets the user put it left or right.
 
-import { loadRoster, findAgent, micGranted, recipeFor } from './storage.js';
+import {
+  loadRoster, findAgent, micGranted, recipeFor, orbStyle, orbStyleOf, ORB_STYLE_KEY,
+  avatarsByCount, avatarsByCountOf, AVATAR_SIZING_KEY,
+} from './storage.js';
 import { channelOf, initialFor } from './channels.js';
 import { FLOOR_OVERRIDE_KEY, floorWindow, productLabel } from './routing.js';
 import { patternForHost, matchPattern } from './domain.js';
-import { drawSphere, modeFor } from './sphere.js';
+import { drawSphere, drawWave, modeFor } from './sphere.js';
+import { bindThemeKey, watchTheme } from './theme.js';
 import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
 
@@ -89,16 +93,25 @@ let eased = 0;
 
 let t = 0;
 
+/** The sphere or the waveform, from Settings. Both take the same arguments – see sphere.js. */
+let draw = drawSphere;
+
+function showOrbStyle(style) {
+  draw = style === 'wave' ? drawWave : drawSphere;
+  el('orb').parentElement.classList.toggle('wave', style === 'wave');
+}
+
 function tick() {
   t += 1;
   // Eased here rather than smoothed harder at the source: the meter already carries the design's
   // 80 ms attack and 250 ms release, and this only bridges 20 Hz of messages to 60 Hz of frames.
   if (level !== null) eased += (level - eased) * 0.25;
-  drawSphere(el('orb'), {
+  draw(el('orb'), {
     t,
     mode: modeFor(state.phase),
     tint: state.channel ?? 'none',
     level: level === null ? null : eased,
+    light: document.documentElement.dataset.theme === 'light',
   });
   requestAnimationFrame(tick);
 }
@@ -129,7 +142,7 @@ const STATUS = {
 };
 
 /** What the box holds before the first turn: where an answer will go, and how to get one. */
-const ANSWER_PLACEHOLDER = "Say an assistant's name, then your question – the answer shows here.";
+const ANSWER_PLACEHOLDER = "Say an AI assistant's name, then your question – the answer shows here.";
 
 // ── Fitting the question and the answer ────────────────────────────────────────────────────
 
@@ -376,7 +389,7 @@ async function drawRoster() {
   empty.classList.toggle('problem', Boolean(problem));
   if (agents.length === 0) {
     empty.textContent = problem
-      ?? 'No assistants yet. Open a page with an AI assistant on it, then record it.';
+      ?? 'No AI assistants yet. Open a page with an AI assistant on it, then record it.';
   }
 
   const target = el('avatars');
@@ -419,7 +432,7 @@ async function drawRoster() {
     av.style.setProperty('--channel', channelOf(agent));
 
     const face = document.createElement('span');
-    face.className = 'avatar face';
+    face.className = `avatar face${agent.mock ? ' mock' : ''}`;
     face.textContent = initialFor(agent.name);
     putIcon(face, roster.icons[agent.id]);
     av.append(face);
@@ -428,7 +441,7 @@ async function drawRoster() {
     // the only thing carrying it for an agent who is not currently the subject of the status line.
     label(av, broken.includes(agent.id) ? `${agent.name} needs re-recording`
       : reroutes ? `Put the same question to ${agent.name}`
-        : [`Ask ${agent.name}`, vendor].filter(Boolean).join(' · '));
+        : [`Ask ${agent.name}`, vendor, agent.mock && 'mock recording'].filter(Boolean).join(' · '));
 
     av.addEventListener('click', () => {
       if (reroutes) {
@@ -454,6 +467,9 @@ async function drawRoster() {
 }
 
 /**
+ * **Only when Settings › Size by number is on** (off by default since 2026-10-13): otherwise every
+ * avatar is the 34px circle, however many there are.
+ *
  * How big the avatars are, in four steps by how many there are. Up to 4 sit four to a row, up to
  * 10 five, up to 20 six, and beyond that eight – the 34px a long roster has always been. Each step
  * is the size that fills a row with that many, so in a 360px panel they are 77, 60, 48 and 34px.
@@ -476,13 +492,15 @@ const AVATAR_STEPS = [
   { upTo: 20, perRow: 6 },
   { upTo: Infinity, perRow: 8 },
 ];
+/** Settings › Size by number. Read at startup and kept current from `storage.onChanged`. */
+let byCount = false;
 
 function sizeAvatars() {
   const row = el('avatars');
   const count = row.children.length;
   const { perRow } = AVATAR_STEPS.find((step) => count <= step.upTo);
   const width = Math.min(row.clientWidth, AVATAR_ROW);
-  const fill = count ? (width - (perRow - 1) * AVATAR_GAP) / perRow : AVATAR_MIN;
+  const fill = byCount && count ? (width - (perRow - 1) * AVATAR_GAP) / perRow : AVATAR_MIN;
   const size = Math.floor(Math.max(AVATAR_MIN, fill));
   el('middle').style.setProperty('--av', `${size}px`);
 }
@@ -686,7 +704,7 @@ async function paintSite() {
   el('dock-note').hidden = true;
 
   el('record').disabled = !site.pattern;
-  label(el('record'), site.pattern ? `Record the assistant on ${site.host}` : site.why);
+  label(el('record'), site.pattern ? `Record the AI assistant on ${site.host}` : site.why);
 }
 
 /**
@@ -837,6 +855,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
     loadRosterData();
   }
   if (changes.micGranted) checkMic();
+  if (changes[ORB_STYLE_KEY]) showOrbStyle(orbStyleOf(changes[ORB_STYLE_KEY].newValue));
+  if (changes[AVATAR_SIZING_KEY]) {
+    byCount = avatarsByCountOf(changes[AVATAR_SIZING_KEY].newValue);
+    sizeAvatars();
+    alignTips();
+  }
 });
 
 // ── The demo ───────────────────────────────────────────────────────────────────────────────
@@ -962,6 +986,17 @@ label(el('demostop'), 'Stop the scripted turn');
 showListening({ listening: false });
 setAsk(false);
 showDemo('idle');
+
+// Light or dark has its switch in Settings; here there is only T, outside the typed box. The panel
+// follows a change made either way, or the system's until someone chooses, while it is open.
+watchTheme(() => {});
+bindThemeKey();
+orbStyle()
+  .then(showOrbStyle)
+  .catch((error) => console.warn('[panel] could not read the orb style, drawing the sphere:', error?.message ?? error));
+avatarsByCount()
+  .then((on) => { byCount = on; sizeAvatars(); alignTips(); })
+  .catch((error) => console.warn('[panel] could not read Size by number, keeping avatars at 34px:', error?.message ?? error));
 
 renderTurn();
 loadRosterData();

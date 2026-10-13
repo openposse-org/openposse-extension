@@ -3,6 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <title>OpenPosse</title>
+    <!-- Blocking, before the stylesheet, so the first frame is already light or dark. -->
+    <script src="dist/theme-boot.js"></script>
     <link rel="stylesheet" href="ui.css" />
     <style>
       /* ── E14's panel, rebuilt to the mockup of 2026-10-01 ──────────────────────────────
@@ -25,35 +27,14 @@
        * thing in it Chrome does not show is the shortcut, which moves into the panel's body.
        */
 
-      /* The ambient wash, which is doing most of the work the glass used to.
-       *
-       * **The colour ramp is the landing hero's, not a second guess at it.** Orange at the core,
-       * falling through `rgba(228,73,122,.05)` to nothing on `#0B0A0C` – the same ramp the hero
-       * puts behind its logo, so the site and the extension are lit by one light. The first
-       * version used orange twice and read flatter for it: magenta is what makes the falloff
-       * look like distance rather than like the gradient running out.
-       *
-       * The *geometry* is re-derived rather than ported. The hero's ellipse sits at `74% 50%`
-       * because its orb is in the right column of a two-column header; here the orb is centred
-       * near the top of a column that reopens at ~360px. Two layers, because the hero's single
-       * ellipse leaves the bottom of a tall narrow panel dead.
-       *
-       * Fixed rather than scrolling, so a long answer slides over the light rather than dragging
-       * it. It is **not** tinted by the agent's channel – the orb is, and a green sphere on a
-       * green field loses the sphere.
+      /* **Flat `--stage`, light or dark, by request on 2026-10-13.** There was an orange wash
+       * behind the orb on #0B0A0C, the landing hero's ramp; the panel is now plain #141417 like
+       * Settings, or the light stage.
        *
        * Exactly the window's height, in three bands: the turn fixed at the top – orb, question,
        * answer and status – the controls fixed at the foot, and the roster between them as the
        * only part that scrolls. Each band carries its own padding. */
-      body {
-        display: flex; flex-direction: column; height: 100vh;
-        background:
-          radial-gradient(86% 42% at 50% 20%,
-            rgba(255, 122, 24, 0.17), rgba(228, 73, 122, 0.05) 55%, transparent 75%),
-          radial-gradient(130% 72% at 50% 30%, rgba(255, 122, 24, 0.06), transparent 78%),
-          #0b0a0c;
-        background-attachment: fixed;
-      }
+      body { display: flex; flex-direction: column; height: 100vh; }
 
       /* The turn stays in view however far the roster has scrolled: the orb, what was said, the
          answer and who it is with. A column whose one give is the answer – see `.answer` – so a long
@@ -94,9 +75,12 @@
          panel's 332px column. Widening the panel used to grow it to the hero's 320px, and the
          size it opens at is the one that looks right.
          Note the sphere fills about half of its canvas – the rest was reserved for a halo that
-         is switched off. On flat black that read as a hole; with the wash behind it, it reads as
-         the light the sphere is sitting in, which is why the canvas is not simply cropped. */
+         is switched off. */
       canvas { width: min(206px, 62%); aspect-ratio: 1; display: block; }
+      /* The waveform, chosen in Settings, runs the column's width at the sphere's height, so
+         switching shape never moves anything below it. Its strands are pinned flat at both ends,
+         which is where the demo's buttons sit. */
+      .orbwrap.wave canvas { width: 100%; aspect-ratio: 100 / 62; max-height: 206px; }
       .orbwrap .dead-mic { position: absolute; bottom: 6px; }
       /* The demo's play button, top right. Laid over the stage rather than given a row of its own,
          so the top keeps one height; at any panel width it clears the canvas, which is at most 62%
@@ -125,7 +109,7 @@
       /* Dimmer than `--text-dim`, deliberately: this is the tail the recogniser is still
          revising, and it has to read as less settled than ordinary secondary text rather than
          the same as it. */
-      .volatile { color: rgba(235, 235, 245, 0.52); }
+      .volatile { color: rgb(var(--ink-dim) / 0.52); }
       .caret {
         display: inline-block; width: 2px; height: 1.05em; vertical-align: -0.14em;
         background: var(--text); opacity: 0.9; margin-left: 2px;
@@ -148,8 +132,8 @@
          `alignTips` in sidepanel.js. 8px rather than 9 puts eight to a row in a 360px panel, which
          9 missed by three pixels. */
       #avatars { display: flex; flex-wrap: wrap; gap: 8px; }
-      /* **Sized in steps by how many there are**, each filling a row as wide as it is in a 360px
-         panel – `sizeAvatars` sets `--av`. The letter and the site icon keep their proportions to
+      /* **Sized in steps by how many there are**, when Settings › Size by number is on (34px
+         otherwise), each filling a row as wide as it is in a 360px panel – `sizeAvatars` sets `--av`. The letter and the site icon keep their proportions to
          the circle; the rings keep their 4px and 1.5px, because a line weight does not grow with
          what it surrounds. */
       #avatars .avatar { width: var(--av); height: var(--av); font-size: calc(var(--av) * 14 / 34); }
@@ -205,7 +189,7 @@
           0 0 0 1.5px var(--channel),
           0 0 14px color-mix(in srgb, var(--channel) 55%, transparent);
       }
-      .av.aimed:not(.lit) .face::after { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.35); }
+      .av.aimed:not(.lit) .face::after { box-shadow: 0 0 0 1.5px rgb(var(--ink) / 0.35); }
       .av.broken .face::after { box-shadow: 0 0 0 1.5px var(--error); }
 
       /* **One height, whatever is in it**: the status line and three lines of answer, which is
@@ -228,7 +212,7 @@
          this catches the light the way the edge of a raised surface does. */
       .answer {
         padding: 14px 0 18px; min-height: 0; display: flex; flex-direction: column;
-        box-shadow: inset 0 -0.5px 0 rgba(255, 255, 255, 0.14);
+        box-shadow: inset 0 -0.5px 0 rgb(var(--ink) / 0.14);
       }
       .bubble {
         --answer-lines: 3;
@@ -237,12 +221,13 @@
         display: flex; flex-direction: column; overflow: hidden;
         border-radius: 16px; padding: 12px 15px;
         font-size: 15.5px; line-height: 1.47;
-        background: rgba(255, 255, 255, 0.075);
+        background: rgb(var(--ink) / 0.075);
         /* Two insets, not one. The hairline alone drew an outlined box; the top highlight is
-           what tips it into reading as a raised surface catching the wash behind it. */
+           what tips it into reading as a raised surface catching the light. The highlight stays
+           white in both themes, because it is light, not ink. */
         box-shadow:
           inset 0 0.5px 0 rgba(255, 255, 255, 0.22),
-          inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+          inset 0 0 0 0.5px rgb(var(--ink) / 0.1);
         animation: rise 0.34s cubic-bezier(0.22, 1, 0.36, 1);
       }
       /* The only part of the box that scrolls. A scroller is also exempt from a flex item's
@@ -257,7 +242,7 @@
       /* Inside the bubble, as drawn: it is a property of the answer, not a note beside it. Under
          the scroller rather than in it, so a note about a long answer – "Shortened" is one – is
          never scrolled out of sight by that answer. */
-      .sub { flex: none; font-size: 12.5px; color: rgba(235, 235, 245, 0.55); margin-top: 4px; }
+      .sub { flex: none; font-size: 12.5px; color: rgb(var(--ink-dim) / 0.55); margin-top: 4px; }
 
       /* ── The coaching card, during a recording ─────────────────────────────────────────── */
 
@@ -281,7 +266,7 @@
       .coach .row .detail {
         font-size: 11px; line-height: 1.4;
         font-feature-settings: var(--figures);
-        color: rgba(255, 255, 255, 0.75); flex: 1 1 auto;
+        color: rgb(var(--ink) / 0.75); flex: 1 1 auto;
         overflow-wrap: anywhere;
       }
       .coach .row .detail.none { color: var(--text-faint); font-feature-settings: normal; }
@@ -314,22 +299,22 @@
         width: 34px; height: 34px; flex: 0 0 34px; padding: 0;
         display: grid; place-items: center;
         border-radius: 50%;
-        background: rgba(255, 255, 255, 0.07); color: var(--text);
-        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24);
+        background: rgb(var(--ink) / 0.07); color: var(--text);
+        box-shadow: inset 0 0 0 1px rgb(var(--ink) / 0.24);
         transition: color 0.15s ease, background-color 0.15s ease;
       }
       button.icon:hover:not(:disabled), button.icon:is([aria-expanded="true"], [aria-pressed="true"]) {
-        color: var(--text); background: rgba(255, 255, 255, 0.15);
+        color: var(--text); background: rgb(var(--ink) / 0.15);
       }
       button.icon:is([aria-expanded="true"], [aria-pressed="true"]) {
-        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42);
+        box-shadow: inset 0 0 0 1px rgb(var(--ink) / 0.42);
       }
       button.icon:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
       /* Dimmed by colour, not by ui.css's `opacity`, which would fade the label with the icon –
          and on Record the label is where the reason it is disabled is written. */
       button.icon:disabled {
         opacity: 1; color: var(--text-faint); background: transparent;
-        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+        box-shadow: inset 0 0 0 1px rgb(var(--ink) / 0.1);
       }
 
       /* The label, on hover and on keyboard focus. Not `title`: Chrome waits about a second to
@@ -338,7 +323,7 @@
          `data-tip-at` pins it to one edge for the controls near the panel's sides, where a
          centred label would run off a 320px column.
 
-         The avatars share it, so every circle in the panel answers a hover the same way. */
+         The avatars share it, so every control in the panel answers a hover the same way. */
       button:is(.icon, .av)[aria-label]::after {
         content: attr(aria-label);
         position: absolute; bottom: calc(100% + 8px); left: 50%; z-index: 5;
@@ -346,7 +331,7 @@
         width: max-content; max-width: 220px;
         padding: 5px 9px; border-radius: 7px;
         background: var(--raised); color: var(--text);
-        box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14), 0 6px 18px rgba(0, 0, 0, 0.5);
+        box-shadow: inset 0 0 0 0.5px rgb(var(--ink) / 0.14), 0 6px 18px var(--shadow);
         font-size: 11.5px; font-weight: 500; line-height: 1.35; text-align: left;
         pointer-events: none; opacity: 0;
         transition: opacity 0.12s ease;
@@ -383,10 +368,10 @@
       button.icon.mic:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 86%, #fff); }
       /* While listening it is Stop, which is a different act, so it stops looking like Listen. */
       button.icon.mic.listening {
-        background: rgba(255, 255, 255, 0.08); color: var(--text);
-        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+        background: rgb(var(--ink) / 0.08); color: var(--text);
+        box-shadow: inset 0 0 0 1px rgb(var(--ink) / 0.28);
       }
-      button.icon.mic.listening:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); }
+      button.icon.mic.listening:hover:not(:disabled) { background: rgb(var(--ink) / 0.14); }
 
       /* The shortcut, which is the one thing Chrome's own panel header does not show. Under the
          microphone, because it is the other way to press it. */
@@ -403,7 +388,7 @@
          padding – the text box and an error line can both grow it. */
       .dock {
         flex: none; padding: 10px 14px 12px;
-        box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.14);
+        box-shadow: inset 0 0.5px 0 rgb(var(--ink) / 0.14);
       }
       /* What went wrong with the last Grant or Record, beside the buttons that were pressed. */
       .dock .note {
@@ -457,7 +442,7 @@
 
       <section id="desk">
         <div id="empty" hidden>
-          No assistants yet. Open a page with an AI assistant on it, then record it.
+          No AI assistants yet. Open a page with an AI assistant on it, then record it.
         </div>
 
       </section>
@@ -472,7 +457,7 @@
            a toggle because most turns are spoken, and an open empty field reads as the place to
            start. -->
       <div class="ask" id="ask" hidden>
-        <input type="text" id="prompt" placeholder="Ask an assistant…" />
+        <input type="text" id="prompt" placeholder="Ask an AI assistant…" />
         <button class="icon" id="send" data-tip-at="end"></button>
       </div>
 

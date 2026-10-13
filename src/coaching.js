@@ -120,9 +120,9 @@ export function instruction(state, draft) {
 
   switch (state.step) {
     case 'await-open':
-      return says('open') ?? 'Open the assistant the way you normally do.';
+      return says('open') ?? 'Open the AI assistant the way you normally do.';
     case 'already-open':
-      return 'The assistant is already open. Close it first – the shortcut usually toggles, so '
+      return 'The AI assistant is already open. Close it first – the shortcut usually toggles, so '
         + 'pressing it now would shut it and we’d record the wrong thing.';
     case 'opened':
       return says('input') ?? says('submit') ?? says('reply')
