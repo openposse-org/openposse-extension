@@ -1,0 +1,33 @@
+# Keeps the pinned actions and the npm packages current: one grouped pull request a month for
+# each, which CI then runs on.
+#
+# A new version is only proposed once it is 14 days old, so a malicious release has time to be
+# found and pulled before it reaches a pull request here. Security updates are not delayed.
+#
+# The commit prefix makes each bump a conventional commit, which release-please reads.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 14
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: chore(deps)
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 14
+    groups:
+      npm:
+        patterns: ['*']
+    commit-message:
+      prefix: chore(deps)
