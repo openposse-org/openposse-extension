@@ -70,7 +70,7 @@
          page's flow, so everything under it would jump up. The bottom margin takes that height
          back over the same transition, so the page holds still. */
       .page-head {
-        --logo: 198px; --logo-stuck: 120px;
+        --logo: 198px; --logo-stuck: calc(30px * 1435 / 454); /* 30px tall, the icons' height */
         display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
         position: sticky; top: 0; z-index: 30;
         padding-block: 10px; margin: -10px 0 18px;
