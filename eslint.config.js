@@ -35,6 +35,10 @@ export default [
         setInterval: 'readonly',
         clearInterval: 'readonly',
         MutationObserver: 'readonly',
+        // Settings' fixed footer and sticky header: the footer's height for the page's bottom
+        // padding, and whether the header is holding at the top.
+        ResizeObserver: 'readonly',
+        IntersectionObserver: 'readonly',
         // The orb's frame loop. It runs inside a vendor's page, so it has to stop when the
         // panel is hidden rather than burning 60fps on somebody else's tab — which is what
         // `cancelAnimationFrame` is doing there.

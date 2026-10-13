@@ -1822,16 +1822,51 @@ async function paintAvatarSizing() {
   });
 }
 
-// ── GitHub ─────────────────────────────────────────────────────────────────────────────────
+// ── GitHub, and the footer's links ─────────────────────────────────────────────────────────
 //
-// A placeholder until the repository exists: it opens github.com itself. Change the one URL.
+// A placeholder until the repository exists: it opens github.com itself. Change the one URL,
+// and the header's icon and every repository link in the footer follow.
 const GITHUB_URL = 'https://github.com';
+const WEBSITE_URL = 'https://openposse.org';
+
+/** Where each footer link goes, by its `data-link`. */
+const FOOTER_LINKS = {
+  website: WEBSITE_URL,
+  source: GITHUB_URL,
+  issues: `${GITHUB_URL}/issues`,
+  discussions: `${GITHUB_URL}/discussions`,
+  releases: `${GITHUB_URL}/releases`,
+  contributing: `${GITHUB_URL}/blob/main/CONTRIBUTING.md`,
+  privacy: `${WEBSITE_URL}/privacy`,
+};
 
 el('github').addEventListener('click', () => {
   chrome.tabs.create({ url: GITHUB_URL }).catch((error) => {
     console.error('[openposse] setup: GitHub did not open –', error?.message ?? error);
   });
 });
+
+for (const link of document.querySelectorAll('.page-foot [data-link]')) {
+  const url = FOOTER_LINKS[link.dataset.link];
+  if (url) link.href = url;
+  else console.warn('[openposse] setup: no address for footer link', link.dataset.link);
+}
+el('version').textContent = chrome.runtime.getManifest().version;
+
+// The footer's height, for the page's bottom padding: its links wrap in a narrow window.
+const footer = document.querySelector('.page-foot');
+new ResizeObserver(() => {
+  document.body.style.setProperty('--foot', `${footer.offsetHeight}px`);
+}).observe(footer);
+
+// The header's hairline, once it is holding at the top rather than sitting where it was.
+// A sticky element reports nothing about being stuck, so the observer watches the window less
+// its top pixel: a header holding at `top: 0` is then never wholly inside it.
+const head = document.querySelector('.page-head');
+new IntersectionObserver(
+  ([entry]) => head.classList.toggle('stuck', entry.intersectionRatio < 1),
+  { threshold: 1, rootMargin: '-1px 0px 0px 0px' },
+).observe(head);
 
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
 

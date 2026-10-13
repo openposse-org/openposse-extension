@@ -266,6 +266,49 @@ const NODES = {
       ['path', { d: 'M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1' }],
     ],
   },
+  // Settings' footer: the project's own links.
+  globe: {
+    nodes: [
+      ['circle', { cx: '12', cy: '12', r: '10' }],
+      ['path', { d: 'M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20' }],
+      ['path', { d: 'M2 12h20' }],
+    ],
+  },
+  'circle-alert': {
+    nodes: [
+      ['circle', { cx: '12', cy: '12', r: '10' }],
+      ['line', { x1: '12', x2: '12', y1: '8', y2: '12' }],
+      ['line', { x1: '12', x2: '12.01', y1: '16', y2: '16' }],
+    ],
+  },
+  'messages-square': {
+    nodes: [
+      ['path', { d: 'M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z' }],
+      ['path', { d: 'M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1' }],
+    ],
+  },
+  sparkles: {
+    nodes: [
+      ['path', { d: 'M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z' }],
+      ['path', { d: 'M20 2v4' }],
+      ['path', { d: 'M22 4h-4' }],
+      ['circle', { cx: '4', cy: '20', r: '2' }],
+    ],
+  },
+  'git-pull-request': {
+    nodes: [
+      ['circle', { cx: '18', cy: '18', r: '3' }],
+      ['circle', { cx: '6', cy: '6', r: '3' }],
+      ['path', { d: 'M13 6h3a2 2 0 0 1 2 2v7' }],
+      ['line', { x1: '6', x2: '6', y1: '9', y2: '21' }],
+    ],
+  },
+  'shield-check': {
+    nodes: [
+      ['path', { d: 'M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z' }],
+      ['path', { d: 'm9 12 2 2 4-4' }],
+    ],
+  },
   // GitHub's own mark, the octocat in a disc, from Simple Icons (CC0). Lucide has no brand icons
   // now, and its old outline GitHub was not the mark people recognise. Filled with no stroke: the
   // shared outline stroke would thicken it.

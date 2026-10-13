@@ -7,7 +7,11 @@
     <script src="dist/theme-boot.js"></script>
     <link rel="stylesheet" href="ui.css" />
     <style>
-      body { padding: 36px 40px 60px; }
+      /* The bottom padding clears the fixed footer, whose height setup.js writes to `--foot`
+         because its links wrap onto a second line in a narrow window. `overflow-x: clip` keeps
+         the header's full-width ground from adding a sideways scroll, and unlike `hidden` it does
+         not make the body a scroll container, which would stop the header sticking. */
+      body { padding: 36px 40px calc(var(--foot, 44px) + 40px); overflow-x: clip; }
       main { max-width: 1080px; margin: 0 auto; }
       section { margin-bottom: 30px; }
 
@@ -52,10 +56,24 @@
          hidden – see `.palette`. */
       /* The logo at the left; setup, debug, the two appearance switches and GitHub at the right,
          in that order. The two sheets are popovers, so they never take a place in the row. */
+      /* It stays at the top of the window as the page scrolls. Its ground runs the window's full
+         width, so nothing shows beside it in the gutters as it slides under, and a hairline
+         appears once it is actually holding (`.stuck`, from setup.js). The ground is a pseudo-
+         element rather than `clip-path` on a box-shadow, because a clip would cut off the
+         tooltips that hang below the header's icons. The padding is taken back out of the
+         margins, so at rest it sits where it always did. */
       .page-head {
         display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-        margin-bottom: 28px;
+        position: sticky; top: 0; z-index: 30;
+        padding-block: 10px; margin: -10px 0 18px;
       }
+      .page-head::before {
+        content: ''; position: absolute; z-index: -1; inset: 0 calc(50% - 50vw);
+        background: var(--stage);
+        box-shadow: 0 1px 0 transparent;
+        transition: box-shadow 160ms ease;
+      }
+      .page-head.stuck::before { box-shadow: 0 1px 0 var(--line), 0 10px 24px -18px var(--shadow); }
       /* Light or dark, and the panel's orb as a sphere or a waveform – how the extension looks,
          after the two tools for setting it up. */
       .page-head .appearance { display: flex; gap: 8px; }
@@ -120,6 +138,30 @@
       }
       .promises li span { display: inline-flex; color: var(--amber); }
       :root[data-theme="light"] .promises li { color: var(--amber); }
+
+      /* ── The footer ───────────────────────────────────────────────────────────────────────
+         Fixed to the bottom of the window: the version, then the links an open-source project
+         is usually asked for. Their addresses are filled in by setup.js from two URLs, so the
+         repository's can change in one place when it exists. Same width and gutters as `main`. */
+      .page-foot {
+        position: fixed; inset: auto 0 0; z-index: 30;
+        background: var(--stage); box-shadow: 0 -1px 0 var(--line);
+        font-size: 12.5px; color: var(--text-dim);
+      }
+      .page-foot .inner {
+        max-width: 1080px; margin: 0 auto; padding: 10px 40px;
+        display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px;
+      }
+      .page-foot .version { font-weight: 500; color: var(--text); font-feature-settings: var(--figures); }
+      .page-foot .version span { margin-left: 5px; font-weight: 400; color: var(--text-faint); }
+      .page-foot nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-left: auto; }
+      .page-foot a {
+        display: inline-flex; align-items: center; gap: 6px;
+        color: inherit; text-decoration: none; border-radius: 4px;
+      }
+      .page-foot a:hover { color: var(--text); }
+      .page-foot a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+      .page-foot a span { display: inline-flex; opacity: 0.8; }
       /* A debug value is in force – a changed timing, or mock recordings in the roster. On the
          icon, because the sheet being shut is exactly when either would otherwise be invisible. */
       #debug.overridden::before {
@@ -1154,6 +1196,20 @@
         <p id="roster-none" hidden></p>
       </section>
     </main>
+    <footer class="page-foot">
+      <div class="inner">
+        <span class="version">OpenPosse<span id="version"></span></span>
+        <nav aria-label="OpenPosse project">
+          <a data-link="website" target="_blank" rel="noopener"><span data-icon="globe" data-size="13" aria-hidden="true"></span>Website</a>
+          <a data-link="source" target="_blank" rel="noopener"><span data-icon="github" data-size="13" aria-hidden="true"></span>Source code</a>
+          <a data-link="issues" target="_blank" rel="noopener"><span data-icon="circle-alert" data-size="13" aria-hidden="true"></span>Report a problem</a>
+          <a data-link="discussions" target="_blank" rel="noopener"><span data-icon="messages-square" data-size="13" aria-hidden="true"></span>Discussions</a>
+          <a data-link="releases" target="_blank" rel="noopener"><span data-icon="sparkles" data-size="13" aria-hidden="true"></span>What's new</a>
+          <a data-link="contributing" target="_blank" rel="noopener"><span data-icon="git-pull-request" data-size="13" aria-hidden="true"></span>Contributing</a>
+          <a data-link="privacy" target="_blank" rel="noopener"><span data-icon="shield-check" data-size="13" aria-hidden="true"></span>Privacy</a>
+        </nav>
+      </div>
+    </footer>
     <script type="module" src="dist/setup.js"></script>
   </body>
 </html>
