@@ -5,11 +5,11 @@
 // aloud is not a voice assistant, it is a screen reader with extra steps, and waiting for it to
 // finish is worse than having read the thing yourself.
 //
-// So: short answers are spoken whole, long ones are spoken as one useful sentence while the
-// full text stays on screen. Chrome's on-device `Summarizer` does the shortening — no cloud, no
-// fallback to one, same guarantee as the speech recogniser. When it is unavailable, which is
-// common given the hardware gate, the first sentence plus a pointer to the screen is a
-// deliberately dumb fallback that is still honest: it never claims to have summarised anything.
+// So: short answers are spoken whole, long ones as their first sentence plus a pointer to the
+// screen, where the full text stays. Deliberately simple, and honest about it: it never claims
+// to have summarised anything. Chrome's on-device `Summarizer` did the shortening until
+// 2026-10-13 and was removed – it runs on Gemini Nano, which enterprise policy blocks on most of
+// the machines this is for, so the first sentence was what nearly everyone heard anyway.
 //
 // The decisions are pure and live here; the speaking is in the offscreen document.
 
@@ -28,7 +28,7 @@ export function needsShortening(text) {
 }
 
 /**
- * The first sentence, for when there is no summariser.
+ * The first sentence, which is what a long answer is spoken as.
  *
  * Deliberately conservative about what ends a sentence. `.` is ambiguous — it ends sentences,
  * but it also sits inside `3.5`, `e.g.`, `Dr.` and `notion.so` — so a naive split truncates an
@@ -77,23 +77,18 @@ export function firstSentence(text) {
 }
 
 /**
- * What to speak, given an answer and whatever the summariser managed.
+ * What to speak, given an answer.
  *
- * **Never claims more than it did.** A real summary is spoken on its own, because it is a
- * whole thought. The fallback is a truncation, and a truncation read aloud with no warning
- * sounds like the assistant stopped mid-answer — so it says where the rest is. That sentence
- * is the difference between a limitation and a bug.
+ * **Never claims more than it did.** A long answer is cut to its first sentence, and a cut read
+ * aloud with no warning sounds like the assistant stopped mid-answer — so it says where the rest
+ * is. That sentence is the difference between a limitation and a bug.
  *
- * @param answer   the full text, which stays on screen either way
- * @param summary  what `Summarizer` returned, or null when it was unavailable or failed
+ * @param answer  the full text, which stays on screen either way
  */
-export function spokenForm(answer, summary = null) {
+export function spokenForm(answer) {
   const full = String(answer ?? '').trim();
   if (!full) return { text: '', shortened: false };
   if (!needsShortening(full)) return { text: full, shortened: false };
-
-  const short = String(summary ?? '').trim();
-  if (short && short.length < full.length) return { text: short, shortened: true };
 
   const opening = firstSentence(full);
   // Only worth saying when there is meaningfully more to see. A two-sentence answer whose

@@ -19,13 +19,6 @@ test('short answers are spoken whole', () => {
   assert.deepEqual(spokenForm(answer), { text: answer, shortened: false });
 });
 
-test('a long answer is shortened', () => {
-  const answer = long(20);
-  assert.ok(answer.length > SPEAK_WHOLE_BELOW);
-  assert.equal(spokenForm(answer, 'Most of them are in Finance.').text, 'Most of them are in Finance.');
-  assert.equal(spokenForm(answer, 'Most of them are in Finance.').shortened, true);
-});
-
 test('one very long sentence still counts as long', () => {
   // The reason the threshold is characters and not sentences: a single 600-character sentence
   // is exactly as tiring to listen to as four short ones, and counting sentences lets it past.
@@ -34,19 +27,12 @@ test('one very long sentence still counts as long', () => {
   assert.equal(needsShortening(answer), true);
 });
 
-test('a summariser that returns something longer is ignored', () => {
-  // Defensive, but the API is a model and a model can do anything. Speaking a "summary" longer
-  // than the answer would be the worst of both.
-  const answer = long(20);
-  const result = spokenForm(answer, `${answer} And more besides.`);
-  assert.notEqual(result.text, `${answer} And more besides.`);
-});
-
-test('without a summariser it says where the rest is', () => {
+test('a long answer is spoken as its first sentence, and says where the rest is', () => {
   // A truncation read aloud with no warning sounds like the assistant stopped mid-answer. That
   // sentence is the difference between a limitation and a bug.
   const answer = `Fourteen applications are end of life. ${long(15)}`;
-  const { text, shortened } = spokenForm(answer, null);
+  assert.ok(answer.length > SPEAK_WHOLE_BELOW);
+  const { text, shortened } = spokenForm(answer);
   assert.equal(text, 'Fourteen applications are end of life. The rest is on screen.');
   assert.equal(shortened, true);
 });
@@ -55,7 +41,7 @@ test('it does not promise more when there is barely more', () => {
   // A long answer that is almost entirely its first sentence does not need to be announced as
   // incomplete — saying "the rest is on screen" about eight remaining words is noise.
   const answer = `${'A single long opening sentence that runs on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on'}. Short tail.`;
-  const { text } = spokenForm(answer, null);
+  const { text } = spokenForm(answer);
   assert.ok(!text.includes('The rest is on screen'), text);
 });
 
