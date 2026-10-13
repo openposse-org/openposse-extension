@@ -27,7 +27,7 @@ import {
 import { tell } from './tell.js';
 import { graceWindow } from './grace.js';
 
-/** Wire error codes this script can originate. Mirrors `docs/protocol.md`. */
+/** Error codes this script can originate, unchanged from the Mac app's wire protocol. */
 const ERROR = {
   elementNotFound: 'ELEMENT_NOT_FOUND',
   timeout: 'TIMEOUT',

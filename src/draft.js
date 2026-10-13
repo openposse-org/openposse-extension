@@ -27,7 +27,7 @@ const usable = (selector) => typeof selector?.css === 'string' && selector.css.t
 /**
  * Whether the recorded answer location names **one reply** rather than the whole transcript.
  *
- * The counts exist because of a mistake in `docs/recording-flow.md` step 5, which said to
+ * The counts exist because of a mistake in the Mac app's recording design, which said to
  * record "the container that received new child nodes". That container is one element and
  * stays one element forever, while the runtime waits for the match *count* to grow.
  */

@@ -1,7 +1,7 @@
 // Watching a user set up an assistant, once.
 //
 // This is the mechanism that makes "support a new SaaS assistant" a user action rather than an
-// engineering task (`docs/recording-flow.md`). It arms three listeners scoped to one tab, emits
+// engineering task. It arms three listeners scoped to one tab, emits
 // a `RecordingEvent` per capture, and disarms itself.
 //
 // ── PRIVACY: this file listens to every keystroke on the page, so read this before editing ──

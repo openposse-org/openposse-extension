@@ -97,7 +97,7 @@ function replyTo(id) {
  *
  * `onPartial` receives text as it streams. Speech can start on the first chunk rather than the
  * finished answer, which is the whole latency argument for driving a page instead of calling
- * an API – see `docs/protocol.md`.
+ * an API.
  */
 export async function ask(agentName, prompt, { onPartial } = {}) {
   const { agents } = await loadRoster();
@@ -890,7 +890,7 @@ async function dispatchIntent(request) {
     await ensureContentScript(tab.id);
 
     // **Rebuilt field by field, not forwarded**, so a field added to the payload above stops here
-    // unless it is named here too. `tools/grace.test.mjs` checks this line against what
+    // unless it is named here too. `test/grace.test.mjs` checks this line against what
     // `askAssistant` reads, because the failure is silent: the default simply applies.
     const message = {
       intent: payload.intent, recipe, prompt: payload.prompt, graceMs: payload.graceMs, id,
