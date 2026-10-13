@@ -1836,12 +1836,11 @@ const SOCIAL_URLS = {
 
 /** Where each footer link goes, by its `data-link`. */
 const FOOTER_LINKS = {
+  pro: 'https://openposse.com',
   feedback: `${WEBSITE_URL}/feedback`,
   issues: `${GITHUB_URL}/issues`,
-  discussions: `${GITHUB_URL}/discussions`,
   releases: `${GITHUB_URL}/releases`,
-  contributing: `${GITHUB_URL}/blob/main/CONTRIBUTING.md`,
-  privacy: `${WEBSITE_URL}/privacy`,
+  sponsor: 'https://github.com/sponsors',
   licence: `${GITHUB_URL}/blob/main/LICENSE`,
 };
 

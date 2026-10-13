@@ -100,17 +100,17 @@
          orange wash under an orange hairline – and the posse is its banner, the full sunset
          ramp with near-black ink, so the name is the louder of the two. The ramp is the same in
          both themes, which is why its ink is a fixed colour rather than a token. `--amber` is
-         the landing's link and label colour, and its darker light-mode twin. */
+         the landing's link and label colour, and its darker light-mode twin – on `body`, since
+         the footer's Go Pro uses it too. */
+      body { --amber: #ffae3a; --amber-hover: #ffd36b; }
+      :root[data-theme="light"] body { --amber: #b4480c; --amber-hover: #8f3609; }
       .intro {
         --sunset: linear-gradient(160deg, #ffd36b 0%, #ffae3a 26%, #ff8a1f 52%, #ff6b1f 76%, #e4497a 100%);
-        --amber: #ffae3a;
-        --amber-hover: #ffd36b;
         /* Two columns at most, so the pill row spanning `1 / -1` cannot hold open a third,
            empty one – which is what a plain 280px minimum did on a wide window. */
         display: grid; grid-template-columns: repeat(auto-fit, minmax(max(280px, 40%), 1fr));
         gap: 14px; margin-bottom: 34px;
       }
-      :root[data-theme="light"] .intro { --amber: #b4480c; --amber-hover: #8f3609; }
       .intro section { margin: 0; border-radius: 22px; padding: 26px 28px 24px; }
       .intro h2 { font-size: 17px; letter-spacing: -0.01em; margin-bottom: 6px; text-wrap: balance; }
       .intro p { max-width: 62ch; line-height: 1.55; }
@@ -175,6 +175,11 @@
       .page-foot a:hover { color: var(--text); }
       .page-foot a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
       .page-foot a span { display: inline-flex; opacity: 0.8; }
+      /* The paid plans, beside the version: a plain question and the landing's amber answer. */
+      .page-foot .pro { display: inline-flex; align-items: center; gap: 8px; }
+      .page-foot .pro a { color: var(--amber); font-weight: 500; }
+      .page-foot .pro a:hover { color: var(--amber-hover); }
+      .page-foot .pro a span { opacity: 1; }
       /* Set off from the links by a hairline, at the far end of the row. */
       .page-foot .socials {
         display: flex; gap: 2px; padding-left: 14px;
@@ -1221,13 +1226,14 @@
     <footer class="page-foot">
       <div class="inner">
         <span class="version">OpenPosse<span id="version"></span></span>
+        <span class="pro">Want more support?
+          <a data-link="pro" target="_blank" rel="noopener"><span data-icon="rocket" data-size="13" aria-hidden="true"></span>Go Pro</a>
+        </span>
         <nav aria-label="OpenPosse project">
           <a data-link="feedback" target="_blank" rel="noopener"><span data-icon="message-square-heart" data-size="13" aria-hidden="true"></span>Feedback</a>
           <a data-link="issues" target="_blank" rel="noopener"><span data-icon="circle-alert" data-size="13" aria-hidden="true"></span>Report a problem</a>
-          <a data-link="discussions" target="_blank" rel="noopener"><span data-icon="messages-square" data-size="13" aria-hidden="true"></span>Discussions</a>
           <a data-link="releases" target="_blank" rel="noopener"><span data-icon="sparkles" data-size="13" aria-hidden="true"></span>What's new</a>
-          <a data-link="contributing" target="_blank" rel="noopener"><span data-icon="git-pull-request" data-size="13" aria-hidden="true"></span>Contributing</a>
-          <a data-link="privacy" target="_blank" rel="noopener"><span data-icon="shield-check" data-size="13" aria-hidden="true"></span>Privacy</a>
+          <a data-link="sponsor" target="_blank" rel="noopener"><span data-icon="heart" data-size="13" aria-hidden="true"></span>Sponsor</a>
           <a data-link="licence" target="_blank" rel="noopener"><span data-icon="scale" data-size="13" aria-hidden="true"></span>Licence</a>
         </nav>
         <!-- Socials: buttons rather than links, so they get the page's own hover labels. -->
