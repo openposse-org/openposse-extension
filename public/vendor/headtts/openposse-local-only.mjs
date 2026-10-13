@@ -7,7 +7,7 @@
 // The problem it solves: two different layers want to fetch the same files. transformers.js
 // pulls the model through `from_pretrained`, and HeadTTS's worker pulls each voice from
 // `voiceURL`. Both are hardcoded to HuggingFace URLs, and both would go to the network at the
-// exact moment somebody is waiting for an answer — which `CLAUDE.md` forbids in as many words:
+// exact moment somebody is waiting for an answer – which the local-only rule forbids in as many words:
 // *"Nothing fetched while a turn is in flight."*
 //
 // Pointing their options at local paths would have worked and would have been worse. It leaves

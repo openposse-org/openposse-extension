@@ -1,6 +1,6 @@
 // The weights manifest and the verification that makes the amended rule true.
 //
-// `CLAUDE.md` now permits a download that is user-started, pinned and **verified**. The first
+// The local-only rule now permits a download that is user-started, pinned and **verified**. The first
 // two are visible in the UI; the third is only true if the code actually refuses a file that
 // does not match — and the interesting case is not a corrupted download, it is a hash constant
 // that was never filled in. A `null` that reads as a passed check would convert "verified" into

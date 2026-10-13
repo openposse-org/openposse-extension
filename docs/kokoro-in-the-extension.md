@@ -112,9 +112,9 @@ local-first read-aloud extension doing very nearly our job — ships ONNX Runtim
 `ort-wasm-simd-threaded.jsep.{mjs,wasm}` inside the package and downloads the ~80 MB model from
 HuggingFace on first use.
 
-**That is exactly what `CLAUDE.md` forbids:** *"No third-party model downloads at runtime. Apple
-Intelligence's own OS-managed model download is fine."* And `extension/CLAUDE.md` names the case
-directly — SODA and Gemini Nano are fine because the *browser* manages them; *"Fetching weights
+**That is exactly what the project's local-only rule forbade when this was written:** *"No
+third-party model downloads at runtime. Apple Intelligence's own OS-managed model download is
+fine."* And the extension's own rules named the case directly – SODA and Gemini Nano are fine because the *browser* manages them; *"Fetching weights
 from HuggingFace is not, which is why Kokoro would be bundled rather than fetched."*
 
 The tension is worth stating rather than resolving by preference, because the rule's own
@@ -154,7 +154,7 @@ For the weights, the honest options in order of my preference:
    history and a slower install.
 2. **Ship it as a user-initiated download in setup, hash-pinned, sitting beside the SODA
    button.** Keeps the repo small and the install fast, and is what the reference implementation
-   does — but it needs `CLAUDE.md` amended deliberately rather than quietly, because it is
+   does – but it needs the local-only rule amended deliberately rather than quietly, because it is
    currently forbidden in as many words.
 3. **Do neither yet.** The gate is built and falls back correctly; system voices work. E6 is the
    only milestone whose absence costs quality rather than capability.

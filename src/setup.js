@@ -1630,8 +1630,8 @@ el('diagnostics').addEventListener('click', () => {
 // Whether a granted origin is a wildcard over every host.
 //
 // Line comments, deliberately: writing that pattern out inside a slash-star block ends the
-// comment at its own star-slash and the rest parses as code – the backtick-in-a-template trap
-// in extension/CLAUDE.md, a sequence inside a comment that terminates its container.
+// comment at its own star-slash and the rest parses as code – the same trap as a backtick in
+// `orb.js`'s CSS template, a sequence inside a comment that terminates its container.
 const isBroad = (origin) => origin === '<all_urls>' || /^(\*|https?):\/\/\*\//.test(origin);
 
 /**

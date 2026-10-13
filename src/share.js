@@ -121,8 +121,8 @@ export function filenameFor(name) {
 /**
  * Reads a shared recipe, or says what is wrong with it in sentences.
  *
- * **Lenient about what it does not recognise, strict about what it must trust.** Per
- * `extension/CLAUDE.md`, the two sides version independently, so an unknown field is a routine
+ * **Lenient about what it does not recognise, strict about what it must trust.** Sharer and
+ * recipient may run different builds, so an unknown field is a routine
  * condition and is carried through untouched; a newer `version` is accepted with a note rather
  * than refused, because refusing would make every future addition a breaking change. Only a
  * missing load-bearing field, or a domain that could not have been derived, is fatal.

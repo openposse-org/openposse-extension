@@ -66,7 +66,7 @@ let session = null;
  * minutes long with no traffic of ours, which is exactly the condition MV3 kills a worker in,
  * and its DevTools detaches with it.
  *
- * **Event kinds, selectors and counts only – never page text.** `CLAUDE.md` puts it as "log
+ * **Event kinds, selectors and counts only – never page text.** The project's rule is "log
  * event types and error codes only", and a recorder is the one place that rule is easy to
  * break: the thing being captured is somebody's own question to their own assistant.
  */

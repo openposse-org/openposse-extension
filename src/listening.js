@@ -80,7 +80,7 @@ let thinking = null;
  * Set while an answer that ends by asking "would you like to see it?" is being read out.
  *
  * The microphone opens for the reply when the voice has *finished*, never during: there is no
- * echo cancellation (see the top-level CLAUDE.md), so a microphone open mid-sentence would hear
+ * echo cancellation, so a microphone open mid-sentence would hear
  * the agent asking and take that as the reply.
  */
 let awaitingReply = false;

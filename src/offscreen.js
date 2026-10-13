@@ -121,7 +121,7 @@ function stopMeter() {
 // and anything happening, and it is the only one of the three that is about them.
 //
 // **Whether it fires at all is itself the finding.** Apple's `SpeechDetector` emits nothing in
-// practice – measured, recorded in the root CLAUDE.md, and the reason M1 had to endpoint on the
+// practice – measured on macOS 26.6 for the Mac app, and the reason M1 had to endpoint on the
 // absence of transcription instead. A `null` here is the same answer from a different vendor,
 // and E4's orb needs it either way: "the speaker stopped" is what moves it from listening to
 // thinking, and without the event that transition has to be inferred all over again.

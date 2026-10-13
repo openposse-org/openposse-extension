@@ -9,7 +9,7 @@
 // **Everything here filters on `localService`.** Chrome on macOS lists Apple's 41 local English
 // voices *and* three remote Google ones in the same array, and the remote ones send text to a
 // server to be spoken. Taking `voices[0]`, or matching a name without checking, is one of the
-// three documented ways to break this product's founding promise – see `extension/CLAUDE.md`.
+// easiest ways to break this product's founding promise, that nothing leaves the device.
 //
 // Pure functions over plain objects, so the whole of this runs under `node --test` with no
 // browser and no speech engine. `SpeechSynthesisVoice` is read-only and shaped like its own

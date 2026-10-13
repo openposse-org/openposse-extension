@@ -2,8 +2,8 @@
 //
 // The loop had exactly three log lines — listening, ended, and whatever failed — so "there is a
 // lag between Notion answering and the panel" could not be answered without guessing at which
-// of six steps it was. Guessing at timings is how this project got `10.5 s`, `3.181 s` and
-// `59 ms` into its root `CLAUDE.md` as bugs found only by reading a clock.
+// of six steps it was. Guessing at timings is how this project once missed three bugs that only
+// a clock found: a `10.5 s`, a `3.181 s` and a `59 ms`, each a passing test at the wrong speed.
 //
 // Every line carries milliseconds since the turn began, so the gaps are the point rather than
 // the events. A step that takes 8 seconds is visible as a gap even when nothing about it is
