@@ -86,7 +86,16 @@
       .page-head.stuck::before { box-shadow: 0 1px 0 var(--line), 0 10px 24px -18px var(--shadow); }
       /* Light or dark, and the panel's orb as a sphere or a waveform – how the extension looks,
          after the two tools for setting it up. */
-      .page-head .appearance { display: flex; gap: 8px; }
+      /* A hairline either side of the pair, so the row reads as three groups: setting up, how it
+         looks, and where to find the project. Text-height rather than the icons' 30px, like the
+         footer's. */
+      .page-head .appearance { display: flex; gap: 8px; position: relative; padding-inline: 8px; }
+      .page-head .appearance::before, .page-head .appearance::after {
+        content: ''; position: absolute; top: calc(50% - 9px);
+        width: 1px; height: 18px; background: var(--line);
+      }
+      .page-head .appearance::before { left: 0; }
+      .page-head .appearance::after { right: 0; }
       #setup { anchor-name: --setup; }
       #debug { anchor-name: --debug; }
       :is(#setup, #debug, #website, #github, .socials .icon):not([aria-expanded="true"], :hover, .primary) {
