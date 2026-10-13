@@ -480,9 +480,13 @@ Then load it:
 
 ```bash
 npm test               # eslint + node --test
+npm run test:e2e       # the extension in a real browser, against a fake vendor (Playwright)
 npm run watch          # rebuild dist/ on change; reload the extension to pick it up
 npm run package        # the Chrome Web Store zip: no manifest key, no developer tools
 ```
+
+What the tests cover, and the checklist for what only a person can check, are in
+[docs/testing.md](docs/testing.md).
 
 ### The shortcut
 
@@ -512,7 +516,7 @@ src/                     Plain JS, bundled with esbuild, no framework; the pages
 public/                  Copied into the extension as-is: icons, dictionaries, and vendor/
                          (HeadTTS, transformers.js, Inter – with NOTICE.md)
 recipes/                 Recorded assistants, as shareable recipe files
-test/                    node --test suites
+test/                    node --test suites; e2e/ browser tests and fixtures/, a fake vendor
 tools/                   The build script, and a capture helper for DevTools
 docs/                    The Assistant hooks RFC, research notes
 spikes/                  The E0 spike that proved speech works in an offscreen document
