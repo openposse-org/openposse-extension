@@ -245,6 +245,27 @@ const NODES = {
       ['path', { d: 'M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2' }],
     ],
   },
+  // The three promises under Settings' intro: on-device, private, in the flow.
+  laptop: {
+    nodes: [
+      ['path', { d: 'M18 5a2 2 0 0 1 2 2v8.526a2 2 0 0 0 .212.897l1.068 2.127a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45l1.068-2.127A2 2 0 0 0 4 15.526V7a2 2 0 0 1 2-2z' }],
+      ['path', { d: 'M20.054 15.987H3.946' }],
+    ],
+  },
+  lock: {
+    nodes: [
+      ['rect', { width: '18', height: '11', x: '3', y: '11', rx: '2', ry: '2' }],
+      ['path', { d: 'M7 11V7a5 5 0 0 1 10 0v4' }],
+    ],
+  },
+  // From tag 0.469.0: `waves` is no longer on Lucide's main branch.
+  waves: {
+    nodes: [
+      ['path', { d: 'M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1' }],
+      ['path', { d: 'M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1' }],
+      ['path', { d: 'M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1' }],
+    ],
+  },
   // GitHub's own mark, the octocat in a disc, from Simple Icons (CC0). Lucide has no brand icons
   // now, and its old outline GitHub was not the mark people recognise. Filled with no stroke: the
   // shared outline stroke would thicken it.

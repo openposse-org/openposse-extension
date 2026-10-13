@@ -102,6 +102,22 @@
         margin-left: 6px; font-size: 13px; font-weight: 400; color: rgba(20, 20, 23, 0.62);
       }
       #posse p { color: rgba(20, 20, 23, 0.8); }
+
+      /* The landing hero's "Runs entirely on your device" pill, one per promise, across the
+         whole row under both cards. Its pale amber text needs the dark stage, so light mode
+         takes the darker amber. */
+      .promises {
+        grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px;
+        margin: 4px 0 0; padding: 0; list-style: none;
+      }
+      .promises li {
+        display: inline-flex; align-items: center; gap: 7px;
+        border-radius: 999px; padding: 6px 14px 6px 11px;
+        background: rgba(255, 138, 31, 0.1); box-shadow: inset 0 0 0 1px rgba(255, 138, 31, 0.38);
+        font-size: 13px; font-weight: 500; color: #ffd9a8;
+      }
+      .promises li span { display: inline-flex; color: var(--amber); }
+      :root[data-theme="light"] .promises li { color: var(--amber); }
       /* A debug value is in force – a changed timing, or mock recordings in the roster. On the
          icon, because the sheet being shut is exactly when either would otherwise be invisible. */
       #debug.overridden::before {
@@ -1028,6 +1044,11 @@
             summons it. The hat on the logo is a nod to the sheriff.
           </p>
         </section>
+        <ul class="promises">
+          <li><span data-icon="laptop" data-size="14" aria-hidden="true"></span>Always on-device</li>
+          <li><span data-icon="lock" data-size="14" aria-hidden="true"></span>Private by design</li>
+          <li><span data-icon="waves" data-size="14" aria-hidden="true"></span>Stay in the flow</li>
+        </ul>
       </div>
 
       <!-- Recording an assistant helps one person. This is how it reaches everyone else.
