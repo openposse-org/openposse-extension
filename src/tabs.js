@@ -7,7 +7,7 @@
 //
 // So this file returns a tab that exists or nothing, and asking and showing both come through
 // it – which also means "show me" lands on the tab the question was asked in, by construction
-// rather than by two copies of the same rule agreeing. `tools/tabs.test.mjs` fails if any file
+// rather than by two copies of the same rule agreeing. `test/tabs.test.mjs` fails if any file
 // on a turn's path creates a tab or a window.
 
 import { matchPattern } from './domain.js';

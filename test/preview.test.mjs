@@ -4,7 +4,7 @@
 // back out as `openposse.spoke`. Nothing on that path validates a field name: an extra key in
 // the message is ignored, and a missing one lands on a default. So renaming `wanted` on one
 // side gives a preview that plays the wrong voice and reports success, which is the exact shape
-// `extension/CLAUDE.md` keeps banning.
+// this project keeps banning.
 //
 // **The contract is read out of `offscreen.js` rather than copied here**, because a copy is one
 // more thing to update and the failure it is guarding against is precisely somebody updating one

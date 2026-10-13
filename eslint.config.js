@@ -13,7 +13,7 @@
 // does not exist should not reach a browser.
 export default [
   {
-    files: ['src/**/*.js', 'tools/**/*.js', 'tools/**/*.mjs'],
+    files: ['src/**/*.js', 'tools/**/*.js', 'tools/**/*.mjs', 'test/**/*.mjs'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',
@@ -102,6 +102,9 @@ export default [
         Boolean: 'readonly',
         Error: 'readonly',
         process: 'readonly',
+        // Not a browser global: `tools/build.mjs` replaces it with true or false at build time,
+        // and Settings shows its debug drawer only when it is true.
+        DEV_TOOLS: 'readonly',
       },
     },
     rules: {

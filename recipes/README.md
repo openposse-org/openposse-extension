@@ -1,8 +1,7 @@
 # Recipes
 
-Each file is one vendor's recorded selectors, matching `Recipe` in
-`Sources/OpenPosseShared/Recipe.swift`. **Every value here was captured from a live page with
-`extension/tools/capture.js` — nothing is guessed**, which is the rule that keeps selector
+Each file is one vendor's recorded selectors, matching the `Recipe` shape the Mac app defined.
+**Every value here was captured from a live page with `tools/capture.js` – nothing is guessed**, which is the rule that keeps selector
 literals out of extension source. M3 replaces this directory with the recorder's output.
 
 ## Andy — LeanIX EA Assistant *(recipe removed 2026-10-01)*
@@ -70,8 +69,8 @@ Three probe runs on 2026-09-06, against a live workspace:
 The answer arrives in **one or two mutations**, roughly 7–8 seconds after submission, rather
 than token by token. The remaining ~0.9s is our own quiet period closing the turn.
 
-**Consequence: speech cannot start early for this vendor.** `docs/protocol.md` requires TTS to
-begin on the first coherent chunk, and that is still right — it is the whole latency argument
+**Consequence: speech cannot start early for this vendor.** The design has speech begin on the
+first coherent chunk, and that is still right — it is the whole latency argument
 for driving a browser instead of calling an API. It simply does not pay off here, because
 there is no partial answer to speak. The user waits for the generation either way.
 

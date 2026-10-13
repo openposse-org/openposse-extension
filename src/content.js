@@ -2,8 +2,7 @@
 //
 // It is driven entirely by the recipe the service worker hands it. There are no vendor
 // selectors in this file, and there must never be: selectors come from recordings, so a
-// literal `[data-testid=…]` here would mean the recorder is missing a capture step
-// (`extension/CLAUDE.md`).
+// literal `[data-testid=…]` here would mean the recorder is missing a capture step.
 //
 // It also exposes no generic primitives. `click(selector)` and `type(selector, text)` would
 // be a much larger security surface and would fail silently in the wrong place; the intents
@@ -27,7 +26,7 @@ import {
 import { tell } from './tell.js';
 import { graceWindow } from './grace.js';
 
-/** Wire error codes this script can originate. Mirrors `docs/protocol.md`. */
+/** Error codes this script can originate, unchanged from the Mac app's wire protocol. */
 const ERROR = {
   elementNotFound: 'ELEMENT_NOT_FOUND',
   timeout: 'TIMEOUT',

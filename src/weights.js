@@ -1,9 +1,9 @@
 // Kokoro's weights: what they are, where they come from, and how we know they are what we
 // asked for.
 //
-// **This file is the whole of the amended rule made real.** `CLAUDE.md` permits a model to be
-// downloaded from setup, when the user asks, from a pinned URL, verified against a hash baked
-// into the build. Every one of those clauses is a line of code here, and the verification is
+// **This file is the whole of the amended rule made real.** The local-only rule, as amended on
+// 2026-09-26, permits a model to be downloaded from setup, when the user asks, from a pinned
+// URL, verified against a hash baked into the build. Every one of those clauses is a line of code here, and the verification is
 // the one that turns a promise into a property: a model is code in every sense that counts, and
 // one that arrives unverified is arbitrary code from a third party.
 //

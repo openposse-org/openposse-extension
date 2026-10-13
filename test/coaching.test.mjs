@@ -120,7 +120,7 @@ test('a finished recipe carries plain CSS strings, not selector objects', () => 
 });
 
 test('an answer container that did not gain a match is the transcript, not a reply', () => {
-  // `docs/recording-flow.md` step 5 said to record "the container that received new child
+  // The Mac app's recording design said to record "the container that received new child
   // nodes". That container is one element and stays one element, while the runtime waits for
   // the match count to grow.
   let draft = complete();

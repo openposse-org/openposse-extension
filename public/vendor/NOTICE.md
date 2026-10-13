@@ -3,7 +3,8 @@
 Everything here is committed rather than fetched, because Manifest V3 forbids remotely hosted
 **code** and extensions have been rejected from the Chrome Web Store for exactly that — a
 bundled library reaching for its own runtime at load time. The model *weights* are a separate
-matter and are downloaded from setup; see `src/weights.js` and the amended rule in `CLAUDE.md`.
+matter and are downloaded from setup; see `src/weights.js`, which pins each file's URL and
+SHA-256 and refuses any file that does not match.
 
 Verified 2026-09-27 by reading what actually gets linked, not the badge on the package. That
 distinction is this project's standing rule and it has already caught one real problem:

@@ -108,7 +108,7 @@ Apple ships a [LoRA adapter training toolkit](https://developer.apple.com/apple-
 ### The blocker that is not technical
 
 **Training on recorded user data contradicts the product's central promise.** Collecting
-transcripts to train on is precisely what `CLAUDE.md` forbids — "never log transcripts, page
+transcripts to train on is precisely what the project's rules forbid – "never log transcripts, page
 content, or vendor responses… this is a product promise, not a preference." Per-user local
 training is closed off separately by the 32 GB requirement and the Python toolchain.
 

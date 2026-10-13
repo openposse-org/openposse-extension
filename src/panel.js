@@ -78,7 +78,7 @@ async function injectInto(tabId) {
   try {
     // Idempotent by a guard inside `orb.js`, so re-injecting after a navigation rebuilds the
     // panel and re-injecting into a live one does nothing.
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['dist/orb.js'] });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['orb.js'] });
     panelTabId = tab.id;
     // **Success is logged too, which is unusual here and is the point.** Everything else in this
     // file reports only failure, so "the orb went in" and "the orb is still deciding" looked the

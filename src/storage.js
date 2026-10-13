@@ -389,4 +389,4 @@ export async function setMockRoster(size) {
 // Importing a roster from the parked Mac app lived here until 2026-09-30. It came out with the
 // setup step that was its only caller: V1 is the whole product, the Swift side never shipped, so
 // there is nobody holding an `~/Library/Application Support/OpenPosse` to bring across. Recover
-// it from git if V2 ever needs it – the shape it decoded is recorded in `docs/protocol.md`.
+// it from this file's history if V2 ever needs it; the Mac app's repository documents the shape.

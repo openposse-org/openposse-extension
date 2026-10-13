@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="design/assets/openposse-lockup-dark.png" alt="OpenPosse" width="420">
+<img src="public/icons/openposse-lockup-dark.png" alt="OpenPosse" width="420">
 
 **Talk to the AI assistants you already use.**
 It listens, works out who you meant, and asks them – without anything leaving your machine.
@@ -46,7 +46,7 @@ OpenPosse how you use it. Nobody writes a selector.
 signed into, and "show me" switches to that same tab. It never opens a vendor's site for you: not
 to ask a question, and not to show you an answer. A fresh tab would be the assistant with none of
 your conversation in it, possibly not signed in at all. If no tab is open, OpenPosse says so and
-stops. `extension/tools/tabs.test.mjs` fails if code outside the Settings page creates a tab or a
+stops. `test/tabs.test.mjs` fails if code outside the Settings page creates a tab or a
 window.
 
 ---
@@ -466,21 +466,22 @@ Requires Chrome 139+ (for local speech recognition) on macOS 13+, Windows 10/11,
 Node 20+ to build.
 
 ```bash
-git clone <this repo> && cd openposse/extension
+git clone https://github.com/openposse-org/openposse-extension.git && cd openposse-extension
 npm install
-npm run build          # esbuild → dist/
+npm run build          # a complete extension in dist/
 ```
 
 Then load it:
 
 1. Open `chrome://extensions`, turn on **Developer mode**
-2. **Load unpacked** → select the `extension/` folder
+2. **Load unpacked** → select the `dist/` folder
 3. The options page opens: grant the microphone, download the speech model, pick a shortcut
 4. Open an assistant's tab, click the OpenPosse icon, **Record this tab**
 
 ```bash
-npm test               # eslint + node --test  (118 tests)
-npm run watch          # rebuild on change
+npm test               # eslint + node --test
+npm run watch          # rebuild dist/ on change; reload the extension to pick it up
+npm run package        # the Chrome Web Store zip: no manifest key, no developer tools
 ```
 
 ### The shortcut
@@ -498,22 +499,24 @@ the screenshot toolbar and never reached Chrome.)*
 ## Repo layout
 
 ```
-extension/               The product
-  src/                   Plain JS, bundled with esbuild, no framework
-    service-worker.js      routing, dispatch, the recording wizard
-    offscreen.js           mic, SpeechRecognition, speechSynthesis
-    content.js             drives the vendor's page
-    orb.js                 the overlay, six turn states
-    recorder.js            captures a recipe
-    selector.js  dom.js    two-sample selectors, entropy rejection
-    routing.js  domain.js  pure, tested under node --test
-    kokoro.js  tts.js      the voice and the gate in front of it
-    weights.js             pinned URLs, SHA-256, download and verify
-  vendor/                HeadTTS, transformers.js, Inter – with NOTICE.md
-  tools/                 node --test suites
-design/                  The design record, the mark, screenshots
-docs/                    Architecture, decisions, protocol, recording flow
-Sources/  App/  Tests/   The parked macOS app (see below)
+src/                     Plain JS, bundled with esbuild, no framework; the pages and manifest
+  service-worker.js        routing, dispatch, the recording wizard
+  offscreen.js             mic, SpeechRecognition, speechSynthesis
+  content.js               drives the vendor's page
+  orb.js                   the overlay, six turn states
+  recorder.js              captures a recipe
+  selector.js  dom.js      two-sample selectors, entropy rejection
+  routing.js  domain.js    pure, tested under node --test
+  kokoro.js  tts.js        the voice and the gate in front of it
+  weights.js               pinned URLs, SHA-256, download and verify
+public/                  Copied into the extension as-is: icons, dictionaries, and vendor/
+                         (HeadTTS, transformers.js, Inter – with NOTICE.md)
+recipes/                 Recorded assistants, as shareable recipe files
+test/                    node --test suites
+tools/                   The build script, and a capture helper for DevTools
+docs/                    The Assistant hooks RFC, research notes
+spikes/                  The E0 spike that proved speech works in an offscreen document
+dist/                    Build output: the extension Chrome loads (not committed)
 ```
 
 **Plain JS on purpose.** No framework. The extension should stay small enough to read in one sitting.
@@ -524,18 +527,15 @@ Sources/  App/  Tests/   The parked macOS app (see below)
 
 OpenPosse began as a native macOS app: a non-activating summon panel, a native messaging host, a
 Unix domain socket, a TCC-keyed Accessibility grant and this same extension as a thin relay. It
-works, and it is **parked, not deleted** – `Sources/`, `App/` and `Tests/` still build and pass
-(`swift test`, 204 tests / 30 suites).
+works, and it is **parked, not deleted**: it lives in a separate repository, where it still builds
+and passes its tests.
 
 It was parked because four things converged: Chrome shipped local speech, a local LLM and a local
 summariser; and every capability the app had turned out to exist in the extension – on **four
 operating systems**, with one click to install instead of a notarized app plus Accessibility grants.
 The thing that looked like a sacrifice was a platform expansion.
 
-V2 gets it back if "from any app, not just Chrome" turns out to matter. `docs/decisions.md` has the
-reasoning; `CLAUDE.md` has the traps, several of which are genuinely nasty (an `NSPanel` that becomes
-the *key* window steals key focus while `frontmostApplication` still reads Chrome, so the obvious
-guard passes in exactly the failure case).
+V2 gets it back if "from any app, not just Chrome" turns out to matter.
 
 ---
 
@@ -554,7 +554,7 @@ than shrank.
 ## Licence
 
 [Apache-2.0](LICENSE). Bundled components and their licences are listed in [NOTICE](NOTICE) and
-[extension/vendor/NOTICE.md](extension/vendor/NOTICE.md).
+[public/vendor/NOTICE.md](public/vendor/NOTICE.md).
 
 Kokoro-82M and its voices are Apache-2.0. HeadTTS is MIT. Inter is SIL OFL 1.1. The eSpeak NG
 dependency common to other Kokoro ports is deliberately absent – see

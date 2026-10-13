@@ -1,4 +1,4 @@
-// Tests for the generated-id heuristic. Run with `npm test` in `extension/`.
+// Tests for the generated-id heuristic. Run with `npm test`.
 //
 // Plain `node --test`, no framework: this is one pure function, and the DOM-touching parts of
 // `selector.js` are exercised by the recorder against real pages. What needs pinning here is
