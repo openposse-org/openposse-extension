@@ -12,6 +12,7 @@
     "test": "eslint src tools test && node --test test/*.test.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "esbuild": "^0.25.0",
     "eslint": "^10.10.0"
   }
