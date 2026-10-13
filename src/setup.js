@@ -174,7 +174,7 @@ async function refreshPanelAccess() {
   // Off is not a problem to fix – the step is optional – so it is neutral rather than amber.
   setStatus('panel-status', granted
     ? 'on – the orb appears on any page'
-    : "off – the orb appears on assistants' pages only", granted ? 'good' : '');
+    : "off – the orb appears on AI assistants' pages only", granted ? 'good' : '');
   markDone('step-panel', granted);
   el('grant-panel').setAttribute('aria-checked', String(granted));
   return granted;
@@ -1108,7 +1108,7 @@ async function refreshRoster() {
       // Save at the top, beside Copy, rather than under a file that can run past the fold.
       sheet.append(
         toolbar(text, 'the file', title, save),
-        lede(filename, ' – send it to someone to add under Add a shared assistant.'),
+        lede(filename, ' – send it to someone to add under Add a shared AI assistant.'),
         block(text),
       );
     });
@@ -1215,7 +1215,7 @@ function filterRoster() {
 
   const none = el('roster-none');
   none.hidden = shown.length > 0;
-  none.textContent = shown.length ? '' : `No assistant matches “${typed}”.`;
+  none.textContent = shown.length ? '' : `No AI assistant matches “${typed}”.`;
 }
 
 el('roster-search').addEventListener('input', filterRoster);
@@ -1661,7 +1661,7 @@ for (const size of [0, ...MOCK_SIZES]) {
   button.dataset.size = String(size);
   button.dataset.tipAt = 'start';
   button.textContent = size ? String(size) : 'Off';
-  label(button, size ? `Fill the roster to ${size} assistants` : 'No mock recordings');
+  label(button, size ? `Fill the roster to ${size} AI assistants` : 'No mock recordings');
   button.addEventListener('click', async () => {
     const result = await chrome.runtime.sendMessage({ kind: 'openposse.agent.mocks', size })
       .catch((error) => ({ ok: false, reason: error?.message ?? String(error) }));
@@ -1681,7 +1681,7 @@ async function paintMocks() {
     const size = Number(button.dataset.size);
     button.setAttribute('aria-pressed', String(size ? mockCount > 0 && agents.length === size : mockCount === 0));
   }
-  el('mock-value').textContent = mockCount ? `${agents.length} assistants, ${mockCount} made up` : 'off';
+  el('mock-value').textContent = mockCount ? `${agents.length} AI assistants, ${mockCount} made up` : 'off';
   paintDebugToggle();
 }
 
@@ -1716,7 +1716,7 @@ el('load-icons').addEventListener('click', async () => {
     if (pattern && !before.icons[agent.id]) sites.set(pattern, `https://${pattern.replace(/^\*\./, '')}/`);
   }
   if (!sites.size) {
-    value.textContent = 'every assistant has one';
+    value.textContent = 'every AI assistant has one';
     return;
   }
 

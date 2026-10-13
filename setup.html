@@ -769,12 +769,12 @@
                       Chrome will word this as <em>“Read and change all your data on all
                       websites”</em>, because that is the only wording it has. What OpenPosse does
                       with it is draw the orb. It still sends nothing anywhere – speech,
-                      assistants and answers all stay on this machine – and it does not read pages
+                      AI assistants and answers all stay on this machine – and it does not read pages
                       it hasn't been asked to drive.
                     </p>
                     <p>
                       The side panel doesn't need this – it opens on any page. Skip it and the orb
-                      still appears on your assistants' own pages, and the toolbar icon shows
+                      still appears on your AI assistants' own pages, and the toolbar icon shows
                       what's happening everywhere else. You can turn it off here at any time.
                     </p>
                   </div>
@@ -930,7 +930,7 @@
             <output id="grace-value" for="grace"></output>
           </label>
           <div class="why">
-            How long to wait for the rest of an answer when the assistant hasn't said it's done.
+            How long to wait for the rest of an answer when the AI assistant hasn't said it's done.
             Shorter answers sooner; too short can read out a status line instead of the answer.
           </div>
           <div class="why">Both go back to their defaults when Chrome restarts.</div>
@@ -951,7 +951,7 @@
             <output id="icons-value"></output>
             <div class="sizes">
               <button class="icon" id="load-icons" data-tip-at="start"
-                      aria-label="Load the icon of every assistant still showing its letter">All</button>
+                      aria-label="Load the icon of every AI assistant still showing its letter">All</button>
             </div>
           </div>
           <div class="why" id="icons-misses" hidden></div>
@@ -977,12 +977,12 @@
         <section id="byline">
           <h2>AI for the rest of us</h2>
           <p>
-            Talk to the assistants you already use, like Notion AI, by name and out loud, and hear
-            the answer. Nothing to configure, no terminal, no jargon.
+            Talk to the AI assistants you already use, like Notion AI, by name and out loud, and
+            hear the answer. Nothing to configure, no terminal, no jargon.
           </p>
           <p>
             Your voice never leaves this computer: speech is recognised and spoken here, and a
-            question goes only to the assistant you asked.
+            question goes only to the AI assistant you asked.
           </p>
           <p>
             For more details, visit the website:
@@ -997,7 +997,7 @@
             summon for help, like the riders of a Western.
           </p>
           <p>
-            Here, the posse is your assistants. You give each one a name, and saying the name
+            Here, the posse is your AI assistants. You give each one a name, and saying the name
             summons it. The hat on the logo is a nod to the sheriff.
           </p>
         </section>
@@ -1009,13 +1009,13 @@
            so the parse cannot happen inside the click that requests permission. -->
       <section id="import-section">
         <div class="head">
-          <h2>Add a shared assistant</h2>
+          <h2>Add a shared AI assistant</h2>
           <div class="about">
             <button class="info" data-icon="info" data-size="15"
-                    aria-label="About adding a shared assistant" aria-describedby="about-import"></button>
+                    aria-label="About adding a shared AI assistant" aria-describedby="about-import"></button>
             <div class="tip" role="tooltip" id="about-import">
               <p>
-                Someone else can record an assistant and send you the file. You will be asked
+                Someone else can record an AI assistant and send you the file. You will be asked
                 for access to that one site before anything is added.
               </p>
             </div>
@@ -1023,7 +1023,7 @@
         </div>
         <div class="drop">
           <textarea id="import-text" rows="1" spellcheck="false"
-                    aria-label="Shared assistant"
+                    aria-label="Shared AI assistant"
                     placeholder="Paste or pick a file"></textarea>
           <!-- A placeholder for getting one straight from GitHub, which comes later. It fetches
                nothing yet, so it is disabled and its label says so. -->
@@ -1035,7 +1035,7 @@
           <button class="icon" id="import-pick" data-icon="folder-open" data-tip-at="end"
                   aria-label="Pick a file"></button>
           <button class="icon primary" id="import-add" data-icon="plus" data-tip-at="end"
-                  aria-label="Add this assistant" disabled></button>
+                  aria-label="Add this AI assistant" disabled></button>
         </div>
         <p id="import-preview" hidden></p>
         <span class="status tech" id="import-status">nothing to add yet</span>
@@ -1051,20 +1051,20 @@
              permission is the setting (src/favicons.js), so the switch asks for it or gives
              it back, the way step 4's does with site access. -->
         <div class="head">
-          <h2>Assistants</h2>
+          <h2>AI assistants</h2>
           <!-- Sorting sets the order once; dragging an avatar moves one after that. -->
           <button class="icon small" id="sort-roster" popovertarget="sort-menu"
                   data-icon="arrow-up-down" data-size="14" data-tip-at="start"
-                  aria-label="Sort assistants" hidden></button>
-          <div id="sort-menu" popover="auto" role="group" aria-label="Sort assistants">
+                  aria-label="Sort AI assistants" hidden></button>
+          <div id="sort-menu" popover="auto" role="group" aria-label="Sort AI assistants">
             <p class="note">Sorts the list once. Drag an avatar to move one.</p>
             <button type="button" data-sort="name">Name</button>
             <button type="button" data-sort="site">Site</button>
             <button type="button" data-sort="newest">Newest first</button>
             <button type="button" data-sort="oldest">Oldest first</button>
           </div>
-          <input type="search" id="roster-search" placeholder="Find an assistant"
-                 aria-label="Find an assistant" autocomplete="off" spellcheck="false" hidden>
+          <input type="search" id="roster-search" placeholder="Find an AI assistant"
+                 aria-label="Find an AI assistant" autocomplete="off" spellcheck="false" hidden>
           <div class="end">
             <span class="kind" id="icons-label">Site icons</span>
             <div class="about">
@@ -1072,8 +1072,8 @@
                       aria-label="About site icons" aria-describedby="about-icons"></button>
               <div class="tip" role="tooltip" id="about-icons">
                 <p>
-                  Shows each assistant's site icon instead of its letter, using the icon
-                  Chrome already has, so nothing is downloaded. An assistant keeps its letter
+                  Shows each AI assistant's site icon instead of its letter, using the icon
+                  Chrome already has, so nothing is downloaded. An AI assistant keeps its letter
                   until its site has been open in a tab. Chrome words the request as “Read
                   the icons of the websites you visit”.
                 </p>

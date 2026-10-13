@@ -141,7 +141,7 @@ const STATUS = {
 };
 
 /** What the box holds before the first turn: where an answer will go, and how to get one. */
-const ANSWER_PLACEHOLDER = "Say an assistant's name, then your question – the answer shows here.";
+const ANSWER_PLACEHOLDER = "Say an AI assistant's name, then your question – the answer shows here.";
 
 // ── Fitting the question and the answer ────────────────────────────────────────────────────
 
@@ -388,7 +388,7 @@ async function drawRoster() {
   empty.classList.toggle('problem', Boolean(problem));
   if (agents.length === 0) {
     empty.textContent = problem
-      ?? 'No assistants yet. Open a page with an AI assistant on it, then record it.';
+      ?? 'No AI assistants yet. Open a page with an AI assistant on it, then record it.';
   }
 
   const target = el('avatars');
@@ -698,7 +698,7 @@ async function paintSite() {
   el('dock-note').hidden = true;
 
   el('record').disabled = !site.pattern;
-  label(el('record'), site.pattern ? `Record the assistant on ${site.host}` : site.why);
+  label(el('record'), site.pattern ? `Record the AI assistant on ${site.host}` : site.why);
 }
 
 /**
