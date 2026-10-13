@@ -34,7 +34,38 @@ export function leafName(identifier) {
 
 /** `en-GB` → `en`. Matching the full tag first keeps an accent when the machine has one. */
 function language(tag) {
-  return String(tag ?? '').split('-')[0].toLowerCase();
+  return String(tag ?? '').split(/[-_]/)[0].toLowerCase();
+}
+
+/**
+ * The system voices offered on a Mac, by name – the user's choice of 2026-10-13.
+ *
+ * macOS lists forty-odd local English voices, many of them variants of one another or novelty
+ * voices. Four distinct ones, two American, one British and one Irish, are enough to tell a
+ * roster apart, and a short list is one somebody can actually compare. Matched by name, because
+ * an enhanced download of a voice carries a different identifier from the compact one.
+ *
+ * Windows and Linux have none of these names, so there every local English voice is offered
+ * until they have a list of their own.
+ */
+export const PREFERRED_SYSTEM_VOICES = ['Samantha', 'Fred', 'Daniel', 'Moira'];
+
+/** `Eddy (English (UK))` → `Eddy`, `Samantha (Enhanced)` → `Samantha`. */
+export function baseName(name) {
+  return String(name ?? '').replace(/\s*\(.*\)\s*$/, '').trim();
+}
+
+/**
+ * The system voices an assistant may be given and Settings lists: local, English, and only the
+ * preferred ones where this machine has any of them. A machine with no local English voice at
+ * all keeps every local voice it has, so its assistants still speak.
+ */
+export function offeredVoices(voices) {
+  const local = localVoices(voices);
+  const english = local.filter((v) => language(v.lang) === 'en');
+  const preferred = english.filter((v) => PREFERRED_SYSTEM_VOICES.includes(baseName(v.name)));
+  if (preferred.length > 0) return preferred;
+  return english.length > 0 ? english : local;
 }
 
 /**
