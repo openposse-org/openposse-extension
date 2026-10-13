@@ -13,14 +13,33 @@
 //   node tools/build.mjs --watch    the same, rebuilt on every change.
 //   node tools/build.mjs --store    what goes to the Chrome Web Store: no `key`, which the store
 //                                   refuses outright, and none of the developer-only files.
+//   node tools/build.mjs --e2e      for the browser tests: a development build in `dist-e2e/`
+//                                   whose manifest grants the test vendor's made-up site. Never
+//                                   loaded by hand and never shipped; see `E2E_SITE`.
 
 import * as esbuild from 'esbuild';
 import { watch } from 'node:fs';
 import { cp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 
-const OUT = 'dist';
 const store = process.argv.includes('--store');
+const e2e = process.argv.includes('--e2e');
 const watching = process.argv.includes('--watch');
+const OUT = e2e ? 'dist-e2e' : 'dist';
+
+/**
+ * The site the browser tests' fake vendor is served at, granted in the e2e build's manifest.
+ *
+ * A real build is granted a site by the person clicking Allow in Chrome's own dialog, which
+ * automation cannot reach. Granting it in the manifest stands in for that click. The service
+ * worker does not register the vendor script for a site the manifest lists (`staticOrigins`);
+ * a turn injects it when it needs it, which is the path the tests drive.
+ */
+const E2E_SITE = 'https://*.fixture.test/*';
+
+if (store && e2e) {
+  console.error('[build] failed: --store and --e2e are different builds; pick one');
+  process.exit(1);
+}
 
 /** Module pages and the service worker. */
 const MODULES = {
@@ -68,6 +87,7 @@ async function copyStatic() {
     throw new Error(`manifest.json says ${manifest.version} but package.json says ${version}`);
   }
   if (store) delete manifest.key;
+  if (e2e) manifest.host_permissions = [E2E_SITE];
   await writeFile(`${OUT}/manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
@@ -89,7 +109,7 @@ async function main() {
 
   if (!watching) {
     await Promise.all(options.map((option) => esbuild.build(option)));
-    console.log(`[build] ${OUT}/ ready (${store ? 'store' : 'development'} build)`);
+    console.log(`[build] ${OUT}/ ready (${store ? 'store' : e2e ? 'browser-test' : 'development'} build)`);
     return;
   }
 

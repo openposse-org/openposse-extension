@@ -869,7 +869,9 @@ async function dispatchIntent(request) {
   if (!tab) {
     reply('error', {
       code: ERROR.tabNotFound,
-      message: `no open tab matching ${recipe.domainPattern}`,
+      // The panel shows this as it is, so it is the same sentence "show me" uses rather than
+      // the match pattern, which no person asking a question should have to read.
+      message: `No ${productLabel(recipe.domainPattern) || 'matching'} tab is open.`,
     });
     return;
   }

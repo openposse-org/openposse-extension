@@ -1,0 +1,74 @@
+<!doctype html>
+<!-- A fake vendor with a built-in AI assistant, for the browser tests in test/e2e/.
+
+     Served by Playwright at https://fixture.test, never from disk, so it behaves like any site
+     the user has granted. It has what the vendor script drives on a real one, in the shapes that
+     have mattered: the assistant starts closed and opens from a button that never closes it,
+     the composer is a textarea, Send is replaced by Stop while an answer is written, and the
+     answer arrives a word at a time. Questions and answers carry different `data-testid`s, so a
+     reply selector names answers only. Every answer is longer than the 40 characters the
+     vendor script needs before it treats a row as an answer. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Fixture CRM</title>
+  <style>
+    body { font: 15px system-ui, sans-serif; margin: 24px; }
+    #assistant { margin-top: 16px; max-width: 480px; }
+    #assistant[hidden] { display: none; }
+    #log > div { margin: 8px 0; }
+    [data-testid="question"] { font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>Fixture CRM</h1>
+  <button data-testid="open-assistant">Ask the assistant</button>
+
+  <section id="assistant" hidden>
+    <div id="log"></div>
+    <textarea data-testid="composer" rows="2"></textarea>
+    <button data-testid="send">Send</button>
+    <button data-testid="stop" hidden>Stop</button>
+  </section>
+
+  <script>
+    const assistant = document.getElementById('assistant');
+    const composer = document.querySelector('[data-testid="composer"]');
+    const send = document.querySelector('[data-testid="send"]');
+    const stop = document.querySelector('[data-testid="stop"]');
+
+    // Opens, and never closes: a turn may click it while the assistant is already open.
+    document.querySelector('[data-testid="open-assistant"]').addEventListener('click', () => {
+      assistant.hidden = false;
+    });
+
+    const ANSWER = 'The pipeline total is 4.2 million dollars across 38 open deals this quarter.';
+
+    send.addEventListener('click', () => {
+      const question = composer.value.trim();
+      if (!question) return;
+      composer.value = '';
+
+      const asked = document.createElement('div');
+      asked.dataset.testid = 'question';
+      asked.textContent = question;
+      const answer = document.createElement('div');
+      answer.dataset.testid = 'answer';
+      document.getElementById('log').append(asked, answer);
+
+      send.hidden = true;
+      stop.hidden = false;
+      const words = ANSWER.split(' ');
+      let next = 0;
+      const timer = setInterval(() => {
+        answer.textContent += (next ? ' ' : '') + words[next];
+        next += 1;
+        if (next < words.length) return;
+        clearInterval(timer);
+        stop.hidden = true;
+        send.hidden = false;
+      }, 40);
+    });
+  </script>
+</body>
+</html>
