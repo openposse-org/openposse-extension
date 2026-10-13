@@ -1803,13 +1803,20 @@ const FEEDBACK_REASONS = {
   'no-backend': "Not sent – there's nowhere to send feedback yet. What you wrote is still here.",
 };
 
-el('feedback-sheet').addEventListener('toggle', (event) => {
-  el('feedback').setAttribute('aria-expanded', String(event.newState === 'open'));
-});
-
 const feedbackForm = el('feedback-form');
 const feedbackStatus = el('feedback-status');
 const feedbackSend = el('feedback-send');
+
+// Closing forgets the last outcome, so the next opening starts without yesterday's "Sent". It
+// keeps an unsent draft: a click outside closes this too, and that is too easy a way to lose
+// a long message. A sent one is cleared by the send itself, below.
+el('feedback-sheet').addEventListener('toggle', (event) => {
+  el('feedback').setAttribute('aria-expanded', String(event.newState === 'open'));
+  if (event.newState === 'closed') {
+    feedbackStatus.textContent = '';
+    feedbackStatus.classList.remove('bad');
+  }
+});
 
 feedbackForm.addEventListener('input', () => {
   feedbackSend.disabled = !el('feedback-message').value.trim();
@@ -1843,7 +1850,9 @@ feedbackForm.addEventListener('submit', async (event) => {
     result = { ok: false, reason: error?.message ?? String(error) };
   }
   if (result.ok) {
+    // Ready for the next one, with the address kept – it is the same person.
     feedbackForm.reset();
+    email.value = entry.email ?? '';
     feedbackStatus.textContent = 'Sent. Thank you.';
     return;
   }
