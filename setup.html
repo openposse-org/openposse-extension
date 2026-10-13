@@ -74,6 +74,9 @@
       .intro .say { margin-left: 6px; font-size: 13px; font-weight: 400; color: var(--text-faint); }
       .intro p { max-width: 62ch; line-height: 1.55; }
       .intro p:last-child { margin-bottom: 0; }
+      .intro a { color: var(--blue); text-decoration: none; }
+      .intro a:hover { text-decoration: underline; }
+      .intro a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 3px; }
       /* A debug value is in force – a changed timing, or mock recordings in the roster. On the
          icon, because the sheet being shut is exactly when either would otherwise be invisible. */
       #debug.overridden::before {
@@ -980,6 +983,10 @@
           <p>
             Your voice never leaves this computer: speech is recognised and spoken here, and a
             question goes only to the assistant you asked.
+          </p>
+          <p>
+            For more details, visit the website:
+            <a href="https://openposse.org" target="_blank" rel="noopener">openposse.org</a>
           </p>
         </section>
         <section id="posse">
