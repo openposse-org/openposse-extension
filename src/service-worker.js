@@ -30,6 +30,7 @@ import {
 } from './routing.js';
 import { GRACE_OVERRIDE_KEY } from './grace.js';
 import { matchPattern } from './domain.js';
+import { vendorTab } from './tabs.js';
 import { unpack } from './share.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
 import {
@@ -208,10 +209,8 @@ async function goToAgent(nav) {
 
   const agent = nav.agent;
   const recipe = await recipeFor(agent);
-  const tabs = recipe?.domainPattern
-    ? await chrome.tabs.query({ url: matchPattern(recipe.domainPattern) })
-    : [];
-  const tab = tabs.find((t) => t.active) ?? tabs[0];
+  // An open tab or nothing: "show me" switches to what you have and never opens the site.
+  const tab = await vendorTab(recipe?.domainPattern);
 
   if (!tab) {
     markDone('tab-not-found');
@@ -844,8 +843,7 @@ async function dispatchIntent(request) {
     return;
   }
 
-  const tabs = await chrome.tabs.query({ url: matchPattern(recipe.domainPattern) });
-  const tab = tabs.find((t) => t.active) ?? tabs[0];
+  const tab = await vendorTab(recipe.domainPattern);
   if (!tab) {
     reply('error', {
       code: ERROR.tabNotFound,

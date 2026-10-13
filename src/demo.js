@@ -39,6 +39,7 @@ import {
 import { channelOf, pickChannel } from './channels.js';
 import { loadRoster, recipeFor } from './storage.js';
 import { productLabel } from './routing.js';
+import { vendorTab } from './tabs.js';
 
 /**
  * The script. Five turns, chosen to cover what a single turn cannot.
@@ -100,7 +101,7 @@ const SCRIPT = [
     // No name, so the floor decides whose tab, as it does for a real "show me". Turn 4 left it here.
     named: false,
     ask: 'show me',
-    show: 'https://notion.com/',
+    show: true,
   },
 ];
 
@@ -233,12 +234,17 @@ export async function endDemo() {
  */
 async function cast() {
   const { agents } = await loadRoster().catch(() => ({ agents: [] }));
-  const real = await Promise.all(agents.slice(0, 2).map(async (agent) => ({
-    id: agent.id,
-    name: agent.name,
-    product: productLabel((await recipeFor(agent))?.domainPattern) || null,
-    channel: channelOf(agent),
-  })));
+  const real = await Promise.all(agents.slice(0, 2).map(async (agent) => {
+    const pattern = (await recipeFor(agent))?.domainPattern ?? null;
+    return {
+      id: agent.id,
+      name: agent.name,
+      product: productLabel(pattern) || null,
+      // For "show me", which looks for this agent's open tab the way a real turn does.
+      pattern,
+      channel: channelOf(agent),
+    };
+  }));
   const pair = [real[0] ?? STAND_INS[0], real[1] ?? STAND_INS[1]];
 
   // A stand-in takes the colour a new agent would get next to whoever is already in the cast.
@@ -325,13 +331,24 @@ async function playTurn(step, who, token, readAloud) {
   if (!alive()) return;
 
   if (step.show) {
-    // `goToAgent`'s steps in its order: the orb hidden first, then the tab made active, then its
-    // window raised, then the panel left at rest on the agent. Only the destination differs. The
-    // floor stays where it was, as it does for every scripted turn, and there is no answer,
-    // because a real one gives none.
+    // `goToAgent`'s steps in its order: the agent's open tab found, the orb hidden, the tab made
+    // active, its window raised, then the panel left at rest on the agent. The floor stays where
+    // it was, as it does for every scripted turn, and there is no answer, because a real one
+    // gives none.
+    //
+    // **An open tab or nothing, as for real.** This used to open notion.com in a new tab, which
+    // demonstrated the one thing "show me" must never do. A stand-in has no site, so it always
+    // lands on the message, which is what a real turn says with no tab open.
+    const tab = await vendorTab(who.pattern);
+    if (!alive()) return;
+    if (!tab) {
+      markDone('tab-not-found');
+      panel({ phase: 'needs-attention', message: `No ${who.product ?? 'assistant'} tab is open.` });
+      return;
+    }
     await hidePanel();
     if (!alive()) return;
-    const tab = await chrome.tabs.create({ url: step.show });
+    await chrome.tabs.update(tab.id, { active: true });
     await chrome.windows.update(tab.windowId, { focused: true });
     // Stop's resting panel must not be overwritten by a switch that was already under way.
     if (!alive()) return;
