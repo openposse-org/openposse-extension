@@ -33,7 +33,7 @@ import { channelOf, initialFor } from './channels.js';
 import { FLOOR_OVERRIDE_KEY, floorWindow, productLabel } from './routing.js';
 import { patternForHost, matchPattern } from './domain.js';
 import { drawSphere, drawWave, modeFor } from './sphere.js';
-import { mountThemeToggle } from './appearance.js';
+import { watchTheme } from './theme.js';
 import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
 
@@ -976,7 +976,9 @@ showListening({ listening: false });
 setAsk(false);
 showDemo('idle');
 
-mountThemeToggle(el('theme'));
+// Light or dark is chosen in Settings; the panel has no switch of its own. It still follows a
+// change made there, or the system's until someone chooses, while it is open.
+watchTheme(() => {});
 orbStyle()
   .then(showOrbStyle)
   .catch((error) => console.warn('[panel] could not read the orb style, drawing the sphere:', error?.message ?? error));
