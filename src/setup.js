@@ -295,11 +295,18 @@ el('get-weights').addEventListener('click', async () => {
   el('get-weights').disabled = true;
   setStatus('weights-status', 'starting…');
 
+  // Progress arrives per chunk of the file being fetched, so the line is only rewritten when
+  // what it says changes – a whole percent or a whole megabyte.
+  let shown = '';
   let result;
   try {
     result = await downloadWeights({
-      onProgress: ({ bytes, totalBytes, done, total }) => {
-        setStatus('weights-status', `${mb(bytes)} of ${mb(totalBytes)} · file ${done} of ${total}`);
+      onProgress: ({ bytes, totalBytes }) => {
+        const percent = Math.min(100, Math.floor((bytes / totalBytes) * 100));
+        const line = `${percent}% · ${Math.round(bytes / 1e6)} of ${mb(totalBytes)}`;
+        if (line === shown) return;
+        shown = line;
+        setStatus('weights-status', line);
       },
     });
   } catch (error) {

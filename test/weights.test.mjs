@@ -234,6 +234,41 @@ test('progress accounts for every file exactly once', async () => {
   assert.equal(store.size, ALL.length);
 });
 
+test('a file reports progress while it arrives, not only when it ends', async () => {
+  // The model is 326 MB of the 340, and reading it whole left the status on "starting…" for
+  // minutes – indistinguishable from a stall. Run with the length announced correctly, not at
+  // all, and too short, since the buffer is sized from it and has to grow when it is wrong.
+  const chunks = [new Uint8Array([1, 2]), new Uint8Array([3, 4, 5])];
+  const buffer = new Uint8Array([1, 2, 3, 4, 5]).buffer;
+  const streamed = (length) => {
+    let next = 0;
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: (name) => (name === 'content-length' ? length : null) },
+      body: {
+        getReader: () => ({
+          read: async () => (next < chunks.length
+            ? { done: false, value: chunks[next++] }
+            : { done: true, value: undefined }),
+        }),
+      },
+    };
+  };
+
+  for (const length of ['5', null, '3']) {
+    fakeCaches();
+    const seen = [];
+    const result = await withServedBytes(buffer, () => downloadWeights({
+      fetchImpl: async () => streamed(length),
+      onProgress: (p) => seen.push(p),
+    }));
+    assert.equal(result.ok, true, `the joined bytes match the hash (length ${length})`);
+    assert.deepEqual(seen.filter((p) => p.done === 0).map((p) => p.bytes), [2, 5],
+      `the first file reported each chunk as it came (length ${length})`);
+  }
+});
+
 test("a broken progress handler is not reported as a download failure", async () => {
   // It is the caller's code, not ours, and putting it inside the try made a broken status line
   // look like a network problem. On the already-stored path it was not caught at all — an
