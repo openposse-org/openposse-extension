@@ -309,6 +309,38 @@ const NODES = {
       ['path', { d: 'm9 12 2 2 4-4' }],
     ],
   },
+  'message-square-heart': {
+    nodes: [
+      ['path', { d: 'M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z' }],
+      ['path', { d: 'M7.5 9.5c0 .687.265 1.383.697 1.844l3.009 3.264a1.14 1.14 0 0 0 .407.314 1 1 0 0 0 .783-.004 1.14 1.14 0 0 0 .398-.31l3.008-3.264A2.77 2.77 0 0 0 16.5 9.5 2.5 2.5 0 0 0 12 8a2.5 2.5 0 0 0-4.5 1.5' }],
+    ],
+  },
+  scale: {
+    nodes: [
+      ['path', { d: 'M12 3v18' }],
+      ['path', { d: 'm19 8 3 8a5 5 0 0 1-6 0zV7' }],
+      ['path', { d: 'M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1' }],
+      ['path', { d: 'm5 8 3 8a5 5 0 0 1-6 0zV7' }],
+      ['path', { d: 'M7 21h10' }],
+    ],
+  },
+  // The footer's socials. X's mark is Simple Icons' (CC0), filled with no stroke like GitHub's.
+  // Simple Icons dropped LinkedIn's at LinkedIn's request, so that one is Lucide 0.469.0's
+  // outline (ISC) filled, which draws the same solid "in" and so matches the other two marks.
+  x: {
+    filled: true,
+    nodes: [
+      ['path', { stroke: 'none', d: 'M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z' }],
+    ],
+  },
+  linkedin: {
+    filled: true,
+    nodes: [
+      ['path', { d: 'M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z' }],
+      ['rect', { width: '4', height: '12', x: '2', y: '9' }],
+      ['circle', { cx: '4', cy: '4', r: '2' }],
+    ],
+  },
   // GitHub's own mark, the octocat in a disc, from Simple Icons (CC0). Lucide has no brand icons
   // now, and its old outline GitHub was not the mark people recognise. Filled with no stroke: the
   // shared outline stroke would thicken it.

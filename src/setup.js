@@ -1825,26 +1825,40 @@ async function paintAvatarSizing() {
 // ── GitHub, and the footer's links ─────────────────────────────────────────────────────────
 //
 // A placeholder until the repository exists: it opens github.com itself. Change the one URL,
-// and the header's icon and every repository link in the footer follow.
+// and the header's icon and every repository link in the footer follow. The website's pages
+// and both social accounts are placeholders too.
 const GITHUB_URL = 'https://github.com';
 const WEBSITE_URL = 'https://openposse.org';
+const SOCIAL_URLS = {
+  x: 'https://x.com',
+  linkedin: 'https://www.linkedin.com',
+};
 
 /** Where each footer link goes, by its `data-link`. */
 const FOOTER_LINKS = {
-  website: WEBSITE_URL,
-  source: GITHUB_URL,
+  feedback: `${WEBSITE_URL}/feedback`,
   issues: `${GITHUB_URL}/issues`,
   discussions: `${GITHUB_URL}/discussions`,
   releases: `${GITHUB_URL}/releases`,
   contributing: `${GITHUB_URL}/blob/main/CONTRIBUTING.md`,
   privacy: `${WEBSITE_URL}/privacy`,
+  licence: `${GITHUB_URL}/blob/main/LICENSE`,
 };
 
-el('github').addEventListener('click', () => {
-  chrome.tabs.create({ url: GITHUB_URL }).catch((error) => {
-    console.error('[openposse] setup: GitHub did not open –', error?.message ?? error);
+/** Opens `url` in a new tab, naming `what` if Chrome refuses. */
+function openTab(url, what) {
+  chrome.tabs.create({ url }).catch((error) => {
+    console.error(`[openposse] setup: ${what} did not open –`, error?.message ?? error);
   });
-});
+}
+
+el('website').addEventListener('click', () => openTab(WEBSITE_URL, 'the website'));
+el('github').addEventListener('click', () => openTab(GITHUB_URL, 'GitHub'));
+for (const button of document.querySelectorAll('[data-social]')) {
+  const url = SOCIAL_URLS[button.dataset.social];
+  if (url) button.addEventListener('click', () => openTab(url, button.dataset.social));
+  else console.warn('[openposse] setup: no address for social', button.dataset.social);
+}
 
 for (const link of document.querySelectorAll('.page-foot [data-link]')) {
   const url = FOOTER_LINKS[link.dataset.link];

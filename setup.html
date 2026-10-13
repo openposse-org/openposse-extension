@@ -79,7 +79,9 @@
       .page-head .appearance { display: flex; gap: 8px; }
       #setup { anchor-name: --setup; }
       #debug { anchor-name: --debug; }
-      :is(#setup, #debug, #github):not([aria-expanded="true"], :hover, .primary) { border-color: transparent; }
+      :is(#setup, #debug, #website, #github, .socials .icon):not([aria-expanded="true"], :hover, .primary) {
+        border-color: transparent;
+      }
 
       /* ── What it is, and what the name means ─────────────────────────────────────────────
          Side by side under the logo's row, one under the other on a narrow window.
@@ -140,9 +142,10 @@
       :root[data-theme="light"] .promises li { color: var(--amber); }
 
       /* ── The footer ───────────────────────────────────────────────────────────────────────
-         Fixed to the bottom of the window: the version, then the links an open-source project
-         is usually asked for. Their addresses are filled in by setup.js from two URLs, so the
-         repository's can change in one place when it exists. Same width and gutters as `main`. */
+         Fixed to the bottom of the window: the version, the links an open-source project is
+         usually asked for, then the socials. The addresses are filled in by setup.js from a few
+         URLs, so the repository's can change in one place when it exists. Same width and
+         gutters as `main`. */
       .page-foot {
         position: fixed; inset: auto 0 0; z-index: 30;
         background: var(--stage); box-shadow: 0 -1px 0 var(--line);
@@ -162,6 +165,11 @@
       .page-foot a:hover { color: var(--text); }
       .page-foot a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
       .page-foot a span { display: inline-flex; opacity: 0.8; }
+      /* Set off from the links by a hairline, at the far end of the row. */
+      .page-foot .socials {
+        display: flex; gap: 2px; padding-left: 14px;
+        box-shadow: inset 1px 0 0 var(--line);
+      }
       /* A debug value is in force – a changed timing, or mock recordings in the roster. On the
          icon, because the sheet being shut is exactly when either would otherwise be invisible. */
       #debug.overridden::before {
@@ -1055,7 +1063,10 @@
           <div id="theme"></div>
         </div>
 
-        <!-- Opens the project's GitHub page. The URL is `GITHUB_URL` in setup.js. -->
+        <!-- The website, then the project's GitHub page. The URLs are `WEBSITE_URL` and
+             `GITHUB_URL` in setup.js. -->
+        <button class="icon" id="website" data-icon="globe" data-size="16"
+                data-tip-at="end" data-tip-below aria-label="The OpenPosse website"></button>
         <button class="icon" id="github" data-icon="github" data-size="16"
                 data-tip-at="end" data-tip-below aria-label="OpenPosse on GitHub"></button>
       </header>
@@ -1200,14 +1211,21 @@
       <div class="inner">
         <span class="version">OpenPosse<span id="version"></span></span>
         <nav aria-label="OpenPosse project">
-          <a data-link="website" target="_blank" rel="noopener"><span data-icon="globe" data-size="13" aria-hidden="true"></span>Website</a>
-          <a data-link="source" target="_blank" rel="noopener"><span data-icon="github" data-size="13" aria-hidden="true"></span>Source code</a>
+          <a data-link="feedback" target="_blank" rel="noopener"><span data-icon="message-square-heart" data-size="13" aria-hidden="true"></span>Feedback</a>
           <a data-link="issues" target="_blank" rel="noopener"><span data-icon="circle-alert" data-size="13" aria-hidden="true"></span>Report a problem</a>
           <a data-link="discussions" target="_blank" rel="noopener"><span data-icon="messages-square" data-size="13" aria-hidden="true"></span>Discussions</a>
           <a data-link="releases" target="_blank" rel="noopener"><span data-icon="sparkles" data-size="13" aria-hidden="true"></span>What's new</a>
           <a data-link="contributing" target="_blank" rel="noopener"><span data-icon="git-pull-request" data-size="13" aria-hidden="true"></span>Contributing</a>
           <a data-link="privacy" target="_blank" rel="noopener"><span data-icon="shield-check" data-size="13" aria-hidden="true"></span>Privacy</a>
+          <a data-link="licence" target="_blank" rel="noopener"><span data-icon="scale" data-size="13" aria-hidden="true"></span>Licence</a>
         </nav>
+        <!-- Socials: buttons rather than links, so they get the page's own hover labels. -->
+        <div class="socials" aria-label="OpenPosse on social media" role="group">
+          <button class="icon" data-social="x" data-icon="x" data-size="14"
+                  aria-label="OpenPosse on X"></button>
+          <button class="icon" data-social="linkedin" data-icon="linkedin" data-size="14"
+                  data-tip-at="end" aria-label="OpenPosse on LinkedIn"></button>
+        </div>
       </div>
     </footer>
     <script type="module" src="dist/setup.js"></script>
