@@ -1515,6 +1515,12 @@ el('import-add').addEventListener('click', async () => {
 // this page has no such tab; the panel's key button still appears whenever there is access to
 // grant. Its all-sites note did come, because that is about the browser rather than any tab.
 
+// The drawer is for developing OpenPosse, not for using it, so a store build hides its button:
+// the timing knobs, the mock roster, voice diagnostics and "Load icons" all live behind it.
+// `DEV_TOOLS` is set by `tools/build.mjs`. The drawer stays in the page, unreachable, because
+// the wiring below expects it to exist.
+el('debug').hidden = !DEV_TOOLS;
+
 el('debug-tools').addEventListener('toggle', (event) => {
   el('debug').setAttribute('aria-expanded', String(event.newState === 'open'));
 });

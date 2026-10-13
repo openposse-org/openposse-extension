@@ -51,7 +51,8 @@ const shipped = (entries) =>
 
 /** The pages, the stylesheet, `public/` and the manifest – everything esbuild does not write. */
 async function copyStatic() {
-  await cp('public', OUT, { recursive: true });
+  // Finder litters folders with `.DS_Store`; none of it belongs in a package.
+  await cp('public', OUT, { recursive: true, filter: (path) => !path.endsWith('.DS_Store') });
 
   for (const file of await readdir('src')) {
     if (/\.(html|css)$/.test(file) && !(store && DEV_ONLY.has(file))) {
@@ -73,7 +74,14 @@ async function copyStatic() {
 const options = [
   { entryPoints: shipped(MODULES), format: 'esm' },
   { entryPoints: shipped(SCRIPTS), format: 'iife' },
-].map((entry) => ({ ...entry, bundle: true, outdir: OUT, logLevel: 'warning' }));
+].map((entry) => ({
+  ...entry,
+  bundle: true,
+  outdir: OUT,
+  logLevel: 'warning',
+  // Settings' debug drawer is shown in development builds only. See `setup.js`.
+  define: { DEV_TOOLS: String(!store) },
+}));
 
 async function main() {
   await rm(OUT, { recursive: true, force: true });

@@ -7,6 +7,7 @@
     "build": "node tools/build.mjs",
     "watch": "node tools/build.mjs --watch",
     "build:store": "node tools/build.mjs --store",
+    "package": "npm run build:store && cd dist && zip -qr ../openposse-$npm_package_version.zip .",
     "lint": "eslint src tools test",
     "test": "eslint src tools test && node --test test/*.test.mjs"
   },

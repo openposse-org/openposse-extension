@@ -1,8 +1,10 @@
 .DS_Store
 node_modules/
 
-# Build output: the extension Chrome loads, written by `npm run build`.
+# Build output: the extension Chrome loads, written by `npm run build`, and the store zip
+# `npm run package` makes from it.
 dist/
+openposse-*.zip
 
 # Extension signing key. The *public* half lives in src/manifest.json and is what pins the
 # extension ID, so the ID stays reproducible without this file. The private half is only
