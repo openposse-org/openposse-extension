@@ -6,6 +6,11 @@ node_modules/
 dist/
 openposse-*.zip
 
+# The browser tests' own build (`npm run build:e2e`) and what Playwright writes about a run.
+dist-e2e/
+test-results/
+playwright-report/
+
 # Extension signing key. The *public* half lives in src/manifest.json and is what pins the
 # extension ID, so the ID stays reproducible without this file. The private half is only
 # needed to pack a .crx and must never be committed.

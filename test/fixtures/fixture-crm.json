@@ -1,0 +1,19 @@
+{
+  "format": "openposse.recipe",
+  "version": 1,
+  "name": "Acme",
+  "recipe": {
+    "domainPattern": "*.fixture.test",
+    "openMethod": "click",
+    "shortcut": null,
+    "openSelector": "button[data-testid=\"open-assistant\"]",
+    "inputSelector": "textarea[data-testid=\"composer\"]",
+    "submitMethod": "click",
+    "submitSelector": "button[data-testid=\"send\"]",
+    "responseContainerSelector": "div[data-testid=\"answer\"]",
+    "busySelector": "button[data-testid=\"stop\"]",
+    "triggerMethod": "dom",
+    "quietPeriodMs": 600,
+    "responseTimeoutMs": 15000
+  }
+}
