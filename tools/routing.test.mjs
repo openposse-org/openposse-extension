@@ -9,8 +9,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  route, bestMatch, normalise, editDistance, soundKey, navigationTarget, productName, productLabel,
-  floorWindow, FLOOR_MS, FLOOR_RANGE,
+  route, bestMatch, normalise, editDistance, soundKey, navigationTarget, replyToOffer, productName,
+  productLabel, floorWindow, FLOOR_MS, FLOOR_RANGE,
 } from '../src/routing.js';
 
 const ROSTER = [
@@ -261,6 +261,48 @@ test('asking a question is never navigation', () => {
   // The ordinary case, stated so a future prefix cannot quietly capture it.
   assert.equal(navigationTarget('Ivan tell me a joke', NAV_ROSTER), null);
   assert.equal(navigationTarget('and what about last quarter', NAV_ROSTER), null);
+});
+
+// ── The reply to "would you like to see it?" ──────────────────────────────────────────────
+
+const offered = (said) => replyToOffer(said, NAV_ROSTER, { floorHolder: NAV_ROSTER[0] });
+
+test('a yes on its own goes to whoever offered', () => {
+  for (const said of ['Yes.', 'yeah', 'Yep!', 'sure', 'OK', 'okay', 'Yes please.', 'please',
+    'Yeah, sure.', 'Go ahead.', 'yes thanks']) {
+    assert.equal(offered(said)?.accept?.agent?.name, 'Ivan', said);
+  }
+});
+
+test('a yes followed by navigation goes where the navigation says', () => {
+  assert.equal(offered('Yes, show me.')?.accept?.agent?.name, 'Ivan');
+  assert.equal(offered('yes take me there')?.accept?.agent?.name, 'Ivan');
+  assert.equal(offered('Sure, take me to Notion.')?.accept?.agent?.name, 'Ivan');
+  // Naming the other vendor is a choice, and it wins over the one that offered.
+  assert.equal(offered('yes, take me to LeanIX')?.accept?.agent?.name, 'Andy');
+});
+
+test('no, in its common forms, declines', () => {
+  for (const said of ['No.', 'nope', 'No thanks.', 'no thank you', 'Not now.', "I'm good.",
+    "That's fine, thanks.", 'never mind']) {
+    assert.deepEqual(offered(said), { decline: true }, said);
+  }
+});
+
+test('anything else is left for the ordinary path', () => {
+  // These need nothing here: navigation already handles them, and a follow-up question is a
+  // perfectly good reply to an offer.
+  assert.equal(offered('show me'), null);
+  assert.equal(offered('take me to Ivan'), null);
+  assert.equal(offered('and what about last quarter'), null);
+  // The exhaustion rule again: a yes that carries a question is the question.
+  assert.equal(offered('yes and what about last quarter'), null);
+  assert.equal(offered('yesterday'), null);
+  assert.equal(offered(''), null);
+});
+
+test('a yes with nobody holding the floor asks what', () => {
+  assert.equal(replyToOffer('yes', NAV_ROSTER).accept.problem, 'nothing-to-show');
 });
 
 test('the floor window takes a debug override only when it is a usable number', () => {

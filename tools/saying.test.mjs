@@ -37,6 +37,17 @@ test('a long answer is spoken as its first sentence, and says where the rest is'
   assert.equal(shortened, true);
 });
 
+test('a spoken turn is offered the rest, and only a shortened answer asks', () => {
+  const answer = `Fourteen applications are end of life. ${long(15)}`;
+  assert.deepEqual(spokenForm(answer, { offer: true }), {
+    text: 'Fourteen applications are end of life. The rest is on screen. Would you like to see it?',
+    shortened: true,
+  });
+  // A short answer was spoken whole, so there is no rest to offer.
+  const short = 'Fourteen of your 131 applications are marked end of life.';
+  assert.deepEqual(spokenForm(short, { offer: true }), { text: short, shortened: false });
+});
+
 test('it does not promise more when there is barely more', () => {
   // A long answer that is almost entirely its first sentence does not need to be announced as
   // incomplete — saying "the rest is on screen" about eight remaining words is noise.

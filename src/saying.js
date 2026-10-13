@@ -6,7 +6,7 @@
 // finish is worse than having read the thing yourself.
 //
 // So: short answers are spoken whole, long ones as their first sentence plus a pointer to the
-// screen, where the full text stays. Deliberately simple, and honest about it: it never claims
+// screen, where the full text stays – and, on a spoken turn, an offer to take you there. Deliberately simple, and honest about it: it never claims
 // to have summarised anything. Chrome's on-device `Summarizer` did the shortening until
 // 2026-10-13 and was removed – it runs on Gemini Nano, which enterprise policy blocks on most of
 // the machines this is for, so the first sentence was what nearly everyone heard anyway.
@@ -76,6 +76,9 @@ export function firstSentence(text) {
   return s;
 }
 
+const POINTER = 'The rest is on screen.';
+const OFFER = 'Would you like to see it?';
+
 /**
  * What to speak, given an answer.
  *
@@ -83,9 +86,14 @@ export function firstSentence(text) {
  * aloud with no warning sounds like the assistant stopped mid-answer — so it says where the rest
  * is. That sentence is the difference between a limitation and a bug.
  *
+ * **The offer is a real question**, so it is only asked when something will hear the answer: a
+ * spoken turn, after which the microphone opens once for the reply. A typed question gets the
+ * pointer without the question, because nobody is listening for a yes.
+ *
  * @param answer  the full text, which stays on screen either way
+ * @param offer   end a shortened answer by asking whether to show the rest
  */
-export function spokenForm(answer) {
+export function spokenForm(answer, { offer = false } = {}) {
   const full = String(answer ?? '').trim();
   if (!full) return { text: '', shortened: false };
   if (!needsShortening(full)) return { text: full, shortened: false };
@@ -94,7 +102,7 @@ export function spokenForm(answer) {
   // Only worth saying when there is meaningfully more to see. A two-sentence answer whose
   // first sentence is nearly all of it does not need to be told it is incomplete.
   if (opening && opening.length < full.length * 0.8) {
-    return { text: `${opening} The rest is on screen.`, shortened: true };
+    return { text: `${opening} ${POINTER}${offer ? ` ${OFFER}` : ''}`, shortened: true };
   }
   return { text: full, shortened: false };
 }

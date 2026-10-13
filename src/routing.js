@@ -406,6 +406,59 @@ export function navigationTarget(utterance, agents, { floorHolder = null } = {})
   return null;
 }
 
+// ── The reply to "would you like to see it?" ──────────────────────────────────────────────
+//
+// A long answer on a spoken turn ends by offering to show the rest, and the microphone opens
+// once for the reply. "Show me" and "take me to Notion" need nothing here – they are navigation
+// already. What is new is a bare yes or no, which only mean something because a question was
+// just asked. Anywhere else, "yes" is a follow-up for whoever holds the floor.
+
+/** Words that accept on their own, and that may open a longer reply – "yes, show me". */
+const ACCEPTS = [
+  'yes please', 'yes', 'yeah', 'yep', 'yup', 'sure', 'okay', 'ok', 'please',
+  'go on', 'go ahead', 'do it', 'definitely', 'absolutely', 'of course',
+];
+
+/** Replies that turn the offer down. The whole utterance has to be one of these. */
+const DECLINES = new Set([
+  'no', 'nope', 'nah', 'not now', 'not really', 'no need', 'maybe later', 'later',
+  'never mind', 'nevermind', "that's fine", "that's ok", "that's okay", "i'm good", "i'm ok",
+  "i'm fine", 'all good',
+]);
+
+/** Said after either, and meaning nothing for which one it was. */
+const COURTESY = /\s+(please|thanks|thank you)$/;
+
+/**
+ * Reads a reply to the offer.
+ *
+ * **Accepting follows the same exhaustion rule as navigation.** After the yes, either nothing is
+ * left or what is left has to be navigation – "yes, take me to Notion". "Yes, and what about Q3"
+ * is a question that happens to start with yes, and it returns null so it is asked as one.
+ *
+ * @returns `{ accept }` holding what `navigationTarget` would give, `{ decline: true }`, or null
+ *   when the reply is neither and should be handled as an ordinary utterance
+ */
+export function replyToOffer(utterance, agents, { floorHolder = null } = {}) {
+  let text = normalise(utterance).replace(COURTESY, '');
+  if (!text) return null;
+  if (DECLINES.has(text)) return { decline: true };
+
+  // Repeatedly, because people stack them: "yeah sure", "ok yes please".
+  let accepted = false;
+  for (;;) {
+    const word = ACCEPTS.find((w) => text === w || text.startsWith(`${w} `));
+    if (!word) break;
+    text = text.slice(word.length).trim();
+    accepted = true;
+  }
+  if (!accepted) return null;
+
+  if (!text) return { accept: floorHolder ? { agent: floorHolder } : { problem: 'nothing-to-show' } };
+  const nav = navigationTarget(text, agents, { floorHolder });
+  return nav ? { accept: nav } : null;
+}
+
 /**
  * Decides who an utterance is for.
  *
