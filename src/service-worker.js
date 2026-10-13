@@ -164,8 +164,8 @@ async function holdFloor(name) {
  */
 const ROUTING_COPY = {
   'heard-nothing': "Didn't catch that.",
-  'no-agents': 'No assistants yet – record one first.',
-  'unknown-agent': "Didn't catch who you meant. Start with an assistant's name.",
+  'no-agents': 'No AI assistants yet – record one first.',
+  'unknown-agent': "Didn't catch who you meant. Start with an AI assistant's name.",
 };
 
 /**
@@ -202,7 +202,7 @@ async function rosterWithProducts() {
 async function goToAgent(nav) {
   if (nav.problem) {
     markDone(nav.problem);
-    panel({ phase: 'needs-attention', message: 'Show you what? Ask an assistant something first.' });
+    panel({ phase: 'needs-attention', message: 'Show you what? Ask an AI assistant something first.' });
     return;
   }
 
@@ -1329,7 +1329,7 @@ async function dryRun() {
         coach: {
           label: 'SETTING UP · DIDN’T WORK',
           instruction: 'We recorded it, but driving it ourselves didn’t work. That usually means '
-            + 'this assistant ignores clicks it didn’t get from a person. Nothing has been saved.',
+            + 'this AI assistant ignores clicks it didn’t get from a person. Nothing has been saved.',
           captures: captures(wizard.draft),
           naming: false,
           bad: true,
@@ -1352,7 +1352,7 @@ async function dryRun() {
       coach: {
         label: 'SETTING UP · DIDN’T WORK',
         instruction: 'We read the same answer twice, so we wouldn’t be able to tell one reply '
-          + 'from the next. This assistant may not be one we can drive yet.',
+          + 'from the next. This AI assistant may not be one we can drive yet.',
         captures: captures(wizard.draft),
         naming: false,
         bad: true,
@@ -1409,8 +1409,8 @@ async function save() {
   // plenty of assistants accept a synthetic shortcut. It is the honest statement of what was
   // and was not proven.
   const caution = wizard.draft.openMethod === 'shortcut'
-    ? ` It opens with a shortcut, and some assistants ignore key presses that came from a `
-      + `script. If ${name} doesn’t answer, re-record it from Settings and open the assistant `
+    ? ` It opens with a shortcut, and some AI assistants ignore key presses that came from a `
+      + `script. If ${name} doesn’t answer, re-record it from Settings and open the AI assistant `
       + `by clicking instead.`
     : '';
 

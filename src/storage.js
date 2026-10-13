@@ -141,7 +141,7 @@ export async function loadRoster() {
   } catch {
     // Unreadable storage must not stop the extension starting. An empty roster with an
     // explanation is recoverable; throwing on every service-worker wake is not.
-    return { agents: [], arranged: [], broken: [], problem: "Your saved assistants couldn't be read." };
+    return { agents: [], arranged: [], broken: [], problem: "Your saved AI assistants couldn't be read." };
   }
 
   const keys = agents.map((a) => recipeKey(a.recipeID)).filter(Boolean);
@@ -161,7 +161,7 @@ export async function loadRoster() {
  */
 export async function setRosterOrder(ids) {
   if (!Array.isArray(ids) || !ids.every((id) => typeof id === 'string')) {
-    return { ok: false, reason: 'the new order was not a list of assistants' };
+    return { ok: false, reason: 'the new order was not a list of AI assistants' };
   }
   const { agents, problem } = await loadRoster();
   // An unreadable roster would make every id look dead, and saving that would forget the order.

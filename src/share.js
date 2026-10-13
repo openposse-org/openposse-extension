@@ -137,11 +137,11 @@ export function unpack(text) {
   try {
     parsed = JSON.parse(String(text ?? ''));
   } catch {
-    return { ok: false, problems: ["That doesn't look like a shared assistant file."] };
+    return { ok: false, problems: ["That doesn't look like a shared AI assistant file."] };
   }
 
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return { ok: false, problems: ["That doesn't look like a shared assistant file."] };
+    return { ok: false, problems: ["That doesn't look like a shared AI assistant file."] };
   }
   if (parsed.format !== FORMAT) {
     return { ok: false, problems: ['This file was made by something else, not OpenPosse.'] };
@@ -159,13 +159,13 @@ export function unpack(text) {
 
   const recipe = parsed.recipe;
   if (!recipe || typeof recipe !== 'object' || Array.isArray(recipe)) {
-    return { ok: false, problems: ['This file has no assistant in it.'] };
+    return { ok: false, problems: ['This file has no AI assistant in it.'] };
   }
 
   // The site first, because it is the one that decides what gets granted and the one worth
   // naming when it fails.
   if (!isText(recipe.domainPattern)) {
-    problems.push("This file doesn't say which site the assistant lives on.");
+    problems.push("This file doesn't say which site the AI assistant lives on.");
   } else if (!patternIsDerivable(recipe.domainPattern)) {
     problems.push(`This asks for access to ${recipe.domainPattern}, which is wider than a `
       + 'single site. It has not been added.');
@@ -180,7 +180,7 @@ export function unpack(text) {
   if (!opensSomehow(recipe)) {
     problems.push(recipe.openMethod === 'click'
       ? 'This says it opens by clicking, but not what to click.'
-      : "This doesn't say how to open the assistant.");
+      : "This doesn't say how to open the AI assistant.");
   }
 
   if (recipe.submitMethod === 'click' && !isText(recipe.submitSelector)) {
@@ -254,7 +254,7 @@ export function summarise(name, recipe) {
   const opener = labelIn(recipe.openSelector);
   // The same branch `content.js` takes: a click when it says click, the shortcut otherwise.
   const open = recipe.openMethod === 'click'
-    ? (opener ? `clicks ${quoted(opener)}` : `opens ${product}’s assistant`)
+    ? (opener ? `clicks ${quoted(opener)}` : `opens ${product}’s AI assistant`)
     : (keys ? `presses ${keys}` : null);
 
   const box = labelIn(recipe.inputSelector);

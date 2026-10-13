@@ -153,7 +153,7 @@ export function problems(draft) {
     //
     // So the preference is stated, with the reason, and a shortcut is still accepted for the
     // vendors that have no button.
-    add('open', 'We didn’t see the assistant open. Open it by clicking its button if it has '
+    add('open', 'We didn’t see the AI assistant open. Open it by clicking its button if it has '
       + 'one – we can’t always press a keyboard shortcut on your behalf.');
   } else if (draft.openMethod === 'shortcut' && !draft.shortcut) {
     add('open-keys', 'We saw a shortcut but couldn’t read the keys. Try pressing it again.');
@@ -163,7 +163,7 @@ export function problems(draft) {
   }
 
   if (!usable(draft.input)) {
-    add('input', 'We didn’t see where you type. Click in the assistant’s message box.');
+    add('input', 'We didn’t see where you type. Click in the AI assistant’s message box.');
   }
 
   if (!draft.submitMethod) {
@@ -182,7 +182,7 @@ export function problems(draft) {
   } else if (draft.noCommonReplySelector) {
     add('replies-share-nothing',
       'We saw two answers but couldn’t find anything they have in common, so we wouldn’t be '
-      + 'able to find the next one. This assistant may not be one we can drive yet.');
+      + 'able to find the next one. This AI assistant may not be one we can drive yet.');
   } else if (draft.repliesSeen > 0) {
     // **Deliberately not an apology or an error.** From the user's side nothing has gone wrong
     // – they asked a question and got an answer. Asking for a second is the price of telling
@@ -198,7 +198,7 @@ export function problems(draft) {
     add('quiet-period', 'The reply timing looks wrong. Let’s record the answer again.');
   }
   if (draft.responseTimeoutMs < MIN_RESPONSE_TIMEOUT_MS) {
-    add('response-timeout', 'This assistant needs longer to answer than we’ve allowed.');
+    add('response-timeout', 'This AI assistant needs longer to answer than we’ve allowed.');
   }
 
   return found;

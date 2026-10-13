@@ -208,7 +208,7 @@ test('a shortcut, Enter and no busy signal are said as they are', () => {
 test('a step recorded without words is said in plain ones, not as its selector', () => {
   // The fixture opens by `data-testid` and types into `contenteditable`: neither is words.
   assert.equal(summarise('Ivan', notion()),
-    'On notion.so, Ivan opens Notion’s assistant, types your question, clicks send, '
+    'On notion.so, Ivan opens Notion’s AI assistant, types your question, clicks send, '
     + 'and reads the answer once Notion shows it has finished.');
 });
 
