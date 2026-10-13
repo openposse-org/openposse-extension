@@ -1783,6 +1783,76 @@ el('setup-sheet').addEventListener('toggle', (event) => {
   el('setup').setAttribute('aria-expanded', String(event.newState === 'open'));
 });
 
+// ── Feedback ───────────────────────────────────────────────────────────────────────────────
+//
+// The form behind the speech-bubble icon, ahead of setup's. It has no backend yet, so
+// `sendFeedback` is the one place a real one goes; everything around it already handles both
+// outcomes. Nothing here logs what anyone wrote – the kind of feedback at most.
+
+/**
+ * Sends one piece of feedback. Resolves `{ ok: true }` once it has been accepted, or
+ * `{ ok: false, reason }`. The reason reaches the person, so a new one wants a sentence in
+ * `FEEDBACK_REASONS`; until then the code itself is shown rather than nothing.
+ */
+async function sendFeedback(entry) {
+  console.info('[openposse] setup: feedback not sent – no backend yet; kind:', entry.kind ?? 'none');
+  return { ok: false, reason: 'no-backend' };
+}
+
+const FEEDBACK_REASONS = {
+  'no-backend': "Not sent – there's nowhere to send feedback yet. What you wrote is still here.",
+};
+
+el('feedback-sheet').addEventListener('toggle', (event) => {
+  el('feedback').setAttribute('aria-expanded', String(event.newState === 'open'));
+});
+
+const feedbackForm = el('feedback-form');
+const feedbackStatus = el('feedback-status');
+const feedbackSend = el('feedback-send');
+
+feedbackForm.addEventListener('input', () => {
+  feedbackSend.disabled = !el('feedback-message').value.trim();
+  feedbackStatus.textContent = '';
+  feedbackStatus.classList.remove('bad');
+});
+
+feedbackForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const email = el('feedback-email');
+  if (!email.checkValidity()) {
+    feedbackStatus.textContent = "That email address doesn't look complete.";
+    feedbackStatus.classList.add('bad');
+    return;
+  }
+  const entry = {
+    kind: feedbackForm.querySelector('input[name="kind"]:checked')?.value ?? null,
+    message: el('feedback-message').value.trim(),
+    email: email.value.trim() || null,
+    version: chrome.runtime.getManifest().version,
+  };
+  if (!entry.message) return;
+
+  feedbackSend.disabled = true;
+  feedbackStatus.classList.remove('bad');
+  feedbackStatus.textContent = 'Sending…';
+  let result;
+  try {
+    result = await sendFeedback(entry);
+  } catch (error) {
+    result = { ok: false, reason: error?.message ?? String(error) };
+  }
+  if (result.ok) {
+    feedbackForm.reset();
+    feedbackStatus.textContent = 'Sent. Thank you.';
+    return;
+  }
+  // Kept as typed, so a failed send costs nothing but the retry.
+  feedbackStatus.textContent = FEEDBACK_REASONS[result.reason] ?? `Not sent – ${result.reason}.`;
+  feedbackStatus.classList.add('bad');
+  feedbackSend.disabled = false;
+});
+
 // ── Appearance ─────────────────────────────────────────────────────────────────────────────
 //
 // Light or dark, and the panel's orb as a sphere or a waveform. The panel follows both live: the
@@ -1837,7 +1907,6 @@ const SOCIAL_URLS = {
 /** Where each footer link goes, by its `data-link`. */
 const FOOTER_LINKS = {
   pro: 'https://openposse.com',
-  feedback: `${WEBSITE_URL}/feedback`,
   issues: `${GITHUB_URL}/issues`,
   releases: `${GITHUB_URL}/releases`,
   sponsor: 'https://github.com/sponsors',
