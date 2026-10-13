@@ -11,6 +11,7 @@
     "build:e2e": "node tools/build.mjs --e2e",
     "test:e2e": "npm run build:e2e && playwright test",
     "package": "npm run build:store && cd dist && zip -qr ../openposse-$npm_package_version.zip .",
+    "package:beta": "node tools/build.mjs --beta && rm -f openposse-beta.zip && cd dist && zip -qr ../openposse-beta.zip .",
     "lint": "eslint src tools test",
     "test": "eslint src tools test && node --test test/*.test.mjs"
   },

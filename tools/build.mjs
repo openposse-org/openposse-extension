@@ -13,6 +13,9 @@
 //   node tools/build.mjs --watch    the same, rebuilt on every change.
 //   node tools/build.mjs --store    what goes to the Chrome Web Store: no `key`, which the store
 //                                   refuses outright, and none of the developer-only files.
+//   node tools/build.mjs --beta     the store build, named "OpenPosse Beta" and numbered with
+//                                   `BETA_BUILD` as a fourth part, for the beta item. See
+//                                   `tools/beta.mjs` and docs/releasing.md.
 //   node tools/build.mjs --e2e      for the browser tests: a development build in `dist-e2e/`
 //                                   whose manifest grants the test vendor's made-up site. Never
 //                                   loaded by hand and never shipped; see `E2E_SITE`.
@@ -20,8 +23,11 @@
 import * as esbuild from 'esbuild';
 import { watch } from 'node:fs';
 import { cp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { betaManifest } from './beta.mjs';
 
-const store = process.argv.includes('--store');
+const beta = process.argv.includes('--beta');
+// A beta is a store build under another name, so everything a store build leaves out, it does too.
+const store = process.argv.includes('--store') || beta;
 const e2e = process.argv.includes('--e2e');
 const watching = process.argv.includes('--watch');
 const OUT = e2e ? 'dist-e2e' : 'dist';
@@ -37,7 +43,7 @@ const OUT = e2e ? 'dist-e2e' : 'dist';
 const E2E_SITE = 'https://*.fixture.test/*';
 
 if (store && e2e) {
-  console.error('[build] failed: --store and --e2e are different builds; pick one');
+  console.error(`[build] failed: --${beta ? 'beta' : 'store'} and --e2e are different builds; pick one`);
   process.exit(1);
 }
 
@@ -79,7 +85,7 @@ async function copyStatic() {
     }
   }
 
-  const manifest = JSON.parse(await readFile('src/manifest.json', 'utf8'));
+  let manifest = JSON.parse(await readFile('src/manifest.json', 'utf8'));
   const { version } = JSON.parse(await readFile('package.json', 'utf8'));
   // Two version numbers that can disagree eventually will. The manifest's is the one Chrome and
   // the store read; release tooling bumps both, and this stops a hand edit getting past one.
@@ -87,6 +93,7 @@ async function copyStatic() {
     throw new Error(`manifest.json says ${manifest.version} but package.json says ${version}`);
   }
   if (store) delete manifest.key;
+  if (beta) manifest = betaManifest(manifest, process.env.BETA_BUILD);
   if (e2e) manifest.host_permissions = [E2E_SITE];
   await writeFile(`${OUT}/manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
 }
@@ -109,7 +116,8 @@ async function main() {
 
   if (!watching) {
     await Promise.all(options.map((option) => esbuild.build(option)));
-    console.log(`[build] ${OUT}/ ready (${store ? 'store' : e2e ? 'browser-test' : 'development'} build)`);
+    const kind = beta ? 'beta' : store ? 'store' : e2e ? 'browser-test' : 'development';
+    console.log(`[build] ${OUT}/ ready (${kind} build)`);
     return;
   }
 
