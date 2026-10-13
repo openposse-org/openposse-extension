@@ -2,6 +2,7 @@
   "name": "openposse-extension",
   "version": "0.3.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "build": "node tools/build.mjs",
