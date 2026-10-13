@@ -75,7 +75,9 @@
         --sunset: linear-gradient(160deg, #ffd36b 0%, #ffae3a 26%, #ff8a1f 52%, #ff6b1f 76%, #e4497a 100%);
         --amber: #ffae3a;
         --amber-hover: #ffd36b;
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        /* Two columns at most, so the pill row spanning `1 / -1` cannot hold open a third,
+           empty one – which is what a plain 280px minimum did on a wide window. */
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(max(280px, 40%), 1fr));
         gap: 14px; margin-bottom: 34px;
       }
       :root[data-theme="light"] .intro { --amber: #b4480c; --amber-hover: #8f3609; }
@@ -1045,8 +1047,8 @@
           </p>
         </section>
         <ul class="promises">
-          <li><span data-icon="laptop" data-size="14" aria-hidden="true"></span>Always on-device</li>
           <li><span data-icon="lock" data-size="14" aria-hidden="true"></span>Private by design</li>
+          <li><span data-icon="laptop" data-size="14" aria-hidden="true"></span>Always on-device</li>
           <li><span data-icon="waves" data-size="14" aria-hidden="true"></span>Stay in the flow</li>
         </ul>
       </div>
