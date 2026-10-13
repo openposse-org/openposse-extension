@@ -124,6 +124,8 @@
       }
       .head h1, .head h2 { margin: 0; }
       .head .end { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+      /* Two switches in one heading: a little more room before the second one's name. */
+      .head .end .switch + .kind { margin-left: 10px; }
       /* "– optional", "Site icons": said beside a heading, quieter than it. */
       .head .kind { color: var(--text-dim); font-weight: 400; }
 
@@ -1066,6 +1068,21 @@
           <input type="search" id="roster-search" placeholder="Find an AI assistant"
                  aria-label="Find an AI assistant" autocomplete="off" spellcheck="false" hidden>
           <div class="end">
+            <!-- Off by default: the panel's avatars stay one size however many there are. -->
+            <span class="kind" id="sizing-label">Size by number</span>
+            <div class="about">
+              <button class="info" data-icon="info" data-size="15"
+                      aria-label="About sizing by number" aria-describedby="about-sizing"></button>
+              <div class="tip" role="tooltip" id="about-sizing">
+                <p>
+                  In the panel, a short list of AI assistants gets bigger avatars: up to 4 fill a
+                  row, up to 10 sit five to a row, up to 20 six. Off, every avatar is the same
+                  size however many there are.
+                </p>
+              </div>
+            </div>
+            <button class="switch" id="avatar-sizing" role="switch" aria-checked="false"
+                    aria-labelledby="sizing-label"></button>
             <span class="kind" id="icons-label">Site icons</span>
             <div class="about">
               <button class="info" data-icon="info" data-size="15"

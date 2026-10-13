@@ -7,7 +7,7 @@
 
 import {
   loadRoster, recipeFor, setMicGranted, micGranted, voiceSpeed, setVoiceSpeed, clampSpeed,
-  orbStyle, setOrbStyle,
+  orbStyle, setOrbStyle, avatarsByCount, setAvatarsByCount,
 } from './storage.js';
 import { mountThemeToggle, segmented } from './appearance.js';
 import { channelOf, colourName, initialFor, PALETTE } from './channels.js';
@@ -1806,6 +1806,22 @@ async function paintOrbStyle() {
   });
 }
 
+// ── Size by number ─────────────────────────────────────────────────────────────────────────
+//
+// Whether the panel's avatars grow when there are few. Off by default; the panel follows the
+// switch live (see `sizeAvatars` in sidepanel.js).
+async function paintAvatarSizing() {
+  const button = el('avatar-sizing');
+  const show = (on) => button.setAttribute('aria-checked', String(on));
+  show(await avatarsByCount());
+  button.addEventListener('click', () => {
+    const on = button.getAttribute('aria-checked') !== 'true';
+    setAvatarsByCount(on)
+      .then(() => show(on))
+      .catch((error) => console.error('[openposse] setup: Size by number not saved –', error?.message ?? error));
+  });
+}
+
 // ── GitHub ─────────────────────────────────────────────────────────────────────────────────
 //
 // A placeholder until the repository exists: it opens github.com itself. Change the one URL.
@@ -1839,6 +1855,7 @@ for (const [name, refresh] of Object.entries({
   roster: refreshRoster,
   'site icons': refreshIcons,
   'orb style': paintOrbStyle,
+  'size by number': paintAvatarSizing,
   'surface switch': paintSurface,
   'debug timings': paintKnobs,
   'mock roster': paintMocks,

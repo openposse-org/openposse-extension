@@ -28,6 +28,7 @@
 
 import {
   loadRoster, findAgent, micGranted, recipeFor, orbStyle, orbStyleOf, ORB_STYLE_KEY,
+  avatarsByCount, avatarsByCountOf, AVATAR_SIZING_KEY,
 } from './storage.js';
 import { channelOf, initialFor } from './channels.js';
 import { FLOOR_OVERRIDE_KEY, floorWindow, productLabel } from './routing.js';
@@ -466,6 +467,9 @@ async function drawRoster() {
 }
 
 /**
+ * **Only when Settings › Size by number is on** (off by default since 2026-10-13): otherwise every
+ * avatar is the 34px circle, however many there are.
+ *
  * How big the avatars are, in four steps by how many there are. Up to 4 sit four to a row, up to
  * 10 five, up to 20 six, and beyond that eight – the 34px a long roster has always been. Each step
  * is the size that fills a row with that many, so in a 360px panel they are 77, 60, 48 and 34px.
@@ -488,13 +492,15 @@ const AVATAR_STEPS = [
   { upTo: 20, perRow: 6 },
   { upTo: Infinity, perRow: 8 },
 ];
+/** Settings › Size by number. Read at startup and kept current from `storage.onChanged`. */
+let byCount = false;
 
 function sizeAvatars() {
   const row = el('avatars');
   const count = row.children.length;
   const { perRow } = AVATAR_STEPS.find((step) => count <= step.upTo);
   const width = Math.min(row.clientWidth, AVATAR_ROW);
-  const fill = count ? (width - (perRow - 1) * AVATAR_GAP) / perRow : AVATAR_MIN;
+  const fill = byCount && count ? (width - (perRow - 1) * AVATAR_GAP) / perRow : AVATAR_MIN;
   const size = Math.floor(Math.max(AVATAR_MIN, fill));
   el('middle').style.setProperty('--av', `${size}px`);
 }
@@ -850,6 +856,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
   if (changes.micGranted) checkMic();
   if (changes[ORB_STYLE_KEY]) showOrbStyle(orbStyleOf(changes[ORB_STYLE_KEY].newValue));
+  if (changes[AVATAR_SIZING_KEY]) {
+    byCount = avatarsByCountOf(changes[AVATAR_SIZING_KEY].newValue);
+    sizeAvatars();
+    alignTips();
+  }
 });
 
 // ── The demo ───────────────────────────────────────────────────────────────────────────────
@@ -983,6 +994,9 @@ bindThemeKey();
 orbStyle()
   .then(showOrbStyle)
   .catch((error) => console.warn('[panel] could not read the orb style, drawing the sphere:', error?.message ?? error));
+avatarsByCount()
+  .then((on) => { byCount = on; sizeAvatars(); alignTips(); })
+  .catch((error) => console.warn('[panel] could not read Size by number, keeping avatars at 34px:', error?.message ?? error));
 
 renderTurn();
 loadRosterData();

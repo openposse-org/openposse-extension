@@ -110,6 +110,24 @@ export async function setOrbStyle(style) {
   await chrome.storage.local.set({ [ORB_STYLE_KEY]: orbStyleOf(style) });
 }
 
+/**
+ * Whether the panel's avatars grow when there are few of them (four steps, see `sizeAvatars` in
+ * sidepanel.js) or stay the 34px circle however many there are. Off unless switched on in
+ * Settings, since 2026-10-13; only `true` turns it on.
+ */
+export const AVATAR_SIZING_KEY = 'avatarsByCount';
+
+export const avatarsByCountOf = (value) => value === true;
+
+export async function avatarsByCount() {
+  const stored = await chrome.storage.local.get(AVATAR_SIZING_KEY);
+  return avatarsByCountOf(stored[AVATAR_SIZING_KEY]);
+}
+
+export async function setAvatarsByCount(on) {
+  await chrome.storage.local.set({ [AVATAR_SIZING_KEY]: avatarsByCountOf(on) });
+}
+
 /** A v4-ish id. Only has to be unique within one browser profile. */
 export function newID() {
   return crypto.randomUUID().toUpperCase();
