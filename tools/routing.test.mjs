@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  route, bestMatch, normalise, editDistance, navigationTarget, productName, productLabel,
+  route, bestMatch, normalise, editDistance, soundKey, navigationTarget, productName, productLabel,
   floorWindow, FLOOR_MS, FLOOR_RANGE,
 } from '../src/routing.js';
 
@@ -118,6 +118,48 @@ test('short names tolerate nothing, because one letter is most of them', () => {
   const roster = [{ id: '1', name: 'Al' }];
   assert.equal(bestMatch('al', roster).agent.name, 'Al');
   assert.equal(bestMatch('el', roster), null);
+});
+
+test('a name spelt the way it sounds reaches the right agent', () => {
+  // Each of these is outside spelling tolerance – two letters off a four- or five-letter name,
+  // or one off a three-letter one – and is exactly what a recogniser writes for a name it does
+  // not know.
+  const andie = route('Andie what is on my calendar', ROSTER);
+  assert.equal(andie.agent.name, 'Andy');
+  assert.equal(andie.prompt, 'what is on my calendar');
+  assert.equal(andie.matched, 'fuzzy');
+  assert.equal(route('Preeya summarise the doc', ROSTER).agent.name, 'Priya');
+  assert.equal(bestMatch('macks', [{ id: '1', name: 'Max' }]).agent.name, 'Max');
+});
+
+test('an ordinary English word never matches a name by sound either', () => {
+  // "even" sounds exactly like "Ivan". The common-word guard is what stops "even so, the
+  // numbers look off" reaching Ivan, and it has to cover sound as well as spelling.
+  assert.equal(soundKey('even'), soundKey('Ivan'));
+  assert.equal(bestMatch('even', ROSTER), null);
+  assert.equal(route('even so the numbers look off', ROSTER).problem, 'unknown-agent');
+});
+
+test('matching by sound never runs words together', () => {
+  // "I've an" run together sounds like "Ivan", and is how a great many sentences begin.
+  assert.equal(route("I've an idea for the roadmap", ROSTER).problem, 'unknown-agent');
+  assert.equal(route('eye van tell me a joke', ROSTER).problem, 'unknown-agent');
+});
+
+test('a sound key too short to mean anything is not trusted', () => {
+  // "Kai" is K and "key" is K; "Ava" and "Ivy" are both AF. Too many words share those.
+  assert.equal(bestMatch('key', [{ id: '1', name: 'Kai' }]), null);
+  assert.equal(bestMatch('ivy', [{ id: '1', name: 'Ava' }]), null);
+});
+
+test('sound keys agree where the ear does and give up outside English spelling', () => {
+  assert.equal(soundKey('Andy'), 'ANT');
+  assert.equal(soundKey('Andie'), soundKey('Andy'));
+  assert.equal(soundKey('Evan'), soundKey('Ivan'));
+  assert.equal(soundKey('Priya'), soundKey('Preeya'));
+  assert.equal(soundKey('José'), soundKey('Jose'));
+  assert.equal(soundKey('Иван'), null);
+  assert.notEqual(soundKey('Dana'), soundKey('Lana'));
 });
 
 test('a multi-word name beats a shorter agent sharing its first word', () => {
