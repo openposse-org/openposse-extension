@@ -34,14 +34,20 @@ and reads it back to you in that assistant's voice.
 category; the market leader states plainly that it will not click Send for you. Clicking Send is
 the half OpenPosse is built around.
 
-### Two promises that shape every design decision
+### Three promises that shape every design decision
 
-**Nothing leaves the device.** Speech recognition, routing, summarising and speech synthesis all
-run locally. A turn is a microphone, a page, and an answer, with nothing else in it. There is no
+**Nothing leaves the device.** Speech recognition, routing and speech synthesis all run locally. A turn is a microphone, a page, and an answer, with nothing else in it. There is no
 account, no API key and no server.
 
 **No JSON, no terminal, no jargon.** Adding a new assistant is a four-step wizard where you show
 OpenPosse how you use it. Nobody writes a selector.
+
+**It only uses tabs you already have open.** OpenPosse drives the assistant in the tab you are
+signed into, and "show me" switches to that same tab. It never opens a vendor's site for you: not
+to ask a question, and not to show you an answer. A fresh tab would be the assistant with none of
+your conversation in it, possibly not signed in at all. If no tab is open, OpenPosse says so and
+stops. `extension/tools/tabs.test.mjs` fails if code outside the Settings page creates a tab or a
+window.
 
 ---
 
@@ -100,7 +106,17 @@ So an automatic tab switch buys nothing and costs a context switch. Navigation i
 |---|---|
 | `show me`, `open it`, `take me there` | Raises the floor holder's tab |
 | `take me to Notion`, `switch to Notion` | Raises that assistant's tab, by product name |
+| `yes` to "Would you like to see it?" | Raises the tab of the assistant that just answered |
 | `show me the Q3 numbers` | **Stays a question.** Not navigation |
+
+Every row switches to a tab that is already open, and the same one a question would be asked in.
+None of them opens one: with no Notion tab open, "take me to Notion" answers "No Notion tab is
+open."
+
+A long answer is spoken as its first sentence and "The rest is on screen. Would you like to see
+it?" On a spoken turn the microphone then opens once for the reply: yes goes to the tab, no closes
+the offer, and silence lets it lapse. A typed question is not asked, because someone who typed may
+not be able to talk.
 
 That last row is the whole reason this needs care. An utterance is navigation only when the intent
 phrase plus an optional vendor name consumes *the entire utterance*. Anything left over is a

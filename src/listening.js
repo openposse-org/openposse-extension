@@ -76,6 +76,26 @@ export function setTurnHandler(handler) { turnHandler = handler; }
 /** True from the moment an utterance is handed on until whatever it started finishes. */
 let thinking = null;
 
+/**
+ * Set while an answer that ends by asking "would you like to see it?" is being read out.
+ *
+ * The microphone opens for the reply when the voice has *finished*, never during: there is no
+ * echo cancellation (see the top-level CLAUDE.md), so a microphone open mid-sentence would hear
+ * the agent asking and take that as the reply.
+ */
+let awaitingReply = false;
+
+/** True while the microphone is open for that reply rather than for a turn of its own. */
+let replying = false;
+
+/** What was asked, kept while the reply clears it from the panel, so silence can put it back. */
+let asked = null;
+
+/** Opens the microphone once for a reply, as soon as what is being said has been said. */
+export function listenAfterSpeaking() {
+  awaitingReply = true;
+}
+
 export function currentTurn() {
   return { turn, failure };
 }
@@ -154,7 +174,19 @@ async function phrasesForRoster() {
   return agents.map((agent) => ({ phrase: agent.name, boost }));
 }
 
-export async function startListening() {
+/**
+ * Opens the microphone for a turn, or with `reply` for the answer to an offer.
+ *
+ * **A reply keeps the answer on screen**, because the answer is what the question was about.
+ * Only the line for what is being said is cleared, so the caret is not drawn after the question
+ * that was just answered.
+ */
+export async function startListening({ reply = false } = {}) {
+  // Any turn settles a pending offer: one started by hand supersedes it, and the reply is this.
+  awaitingReply = false;
+  replying = reply;
+  asked = reply ? (turn?.isFinal ? turn.text : null) : null;
+
   // Asked before the recogniser is, because the recogniser's answer to an ungranted microphone
   // is `not-allowed` – a code that also covers a device in use and a policy block. Checking
   // what setup recorded lets the failure name setup, which is the actual fix.
@@ -187,17 +219,19 @@ export async function startListening() {
   await broadcastState();
   // `create` injects the panel into whatever tab is in front. Everything after this is a merge
   // onto that state, so a turn never has to restate the roster or the shortcut.
-  await panel({
-    phase: 'listening', visible: true,
-    transcript: '', volatile: '', answer: '', sub: '', message: '',
-    agentName: null, channel: null,
-  }, { create: true });
+  await panel(reply
+    ? { phase: 'listening', transcript: '', volatile: '', message: '' }
+    : {
+      phase: 'listening', visible: true,
+      transcript: '', volatile: '', answer: '', sub: '', message: '',
+      agentName: null, channel: null,
+    }, { create: !reply });
 
   const phrases = await phrasesForRoster();
   // How many names and at what weight – a count and a number, not the names. Paired with the
   // tail measurement below it, this is what makes a boost sweep readable: each turn says what
   // it was listening with before it says how it ended.
-  beginTurn('turn');
+  beginTurn(reply ? 'reply to the offer' : 'turn');
   trace('listening', `${phrases.length} phrases at boost ${phrases[0]?.boost ?? 0}`);
   await tell('openposse.listen.start', { options: { phrases } });
   await broadcastState();
@@ -450,7 +484,7 @@ export function handleOffscreenMessage(message) {
         // Length, not the words. It is the one number that tells a mis-heard fragment from a
         // full sentence when routing then refuses it.
         trace('heard (final)', `${message.text.length} chars`);
-        turnHandler?.(message.text);
+        turnHandler?.(message.text, { reply: replying });
       }
       return true;
 
@@ -476,6 +510,14 @@ export function handleOffscreenMessage(message) {
             : message.speechEndFired
               ? `speechend after the final, ${message.tailMs}ms final→end`
               : `speechend never fired, ${message.tailMs}ms final→end`);
+      // A reply nobody gave is not a failure. The offer lapses and the panel goes back to how it
+      // was before the microphone opened, question and all. A reply that *was* given has already
+      // been handed on, and what it started owns the panel now.
+      if (replying) {
+        replying = false;
+        if (!turn?.isFinal) panel({ phase: 'idle', transcript: asked ?? '', volatile: '' });
+        asked = null;
+      }
       settle();
       return true;
 
@@ -488,7 +530,11 @@ export function handleOffscreenMessage(message) {
       // `no-speech` is the common one and is not a failure – but it does mean the turn produced
       // nothing, and a surface showing the last thing heard would otherwise keep showing a
       // previous utterance as though it had just been said.
-      if (message.note === 'no-speech') { turn = null; failure = { code: 'no-speech', message: "Didn't hear anything." }; }
+      // Not for a reply, though: saying nothing to "would you like to see it?" is an answer.
+      if (message.note === 'no-speech') {
+        turn = null;
+        failure = replying ? null : { code: 'no-speech', message: "Didn't hear anything." };
+      }
       return true;
 
     case 'openposse.speaking':
@@ -566,6 +612,17 @@ export function handleOffscreenMessage(message) {
       // A voice that failed or was cancelled before making a sound never sent `audible`.
       panel({ warming: false });
       if (!message.ok) reportUnspoken(message.reason);
+      if (awaitingReply) {
+        awaitingReply = false;
+        // Only once the question has actually been heard. A voice that failed or was cut off
+        // asked nothing, and a microphone opening by itself after that is just a microphone
+        // opening by itself.
+        if (message.ok && message.reason !== 'cancelled') {
+          startListening({ reply: true }).catch((error) => {
+            console.warn('[openposse] could not listen for the reply –', error?.message ?? error);
+          });
+        }
+      }
       return true;
 
     case 'openposse.level':

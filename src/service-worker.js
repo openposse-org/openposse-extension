@@ -18,17 +18,19 @@ import {
 import {
   handleOffscreenMessage, toggleListening, startListening, stopListening,
   isListening, currentTurn, setBias, setTurnHandler, markThinking, markDone, say, previewVoice,
-  warmVoice,
+  warmVoice, listenAfterSpeaking,
 } from './listening.js';
 import {
   runDemo, stopDemo, pauseDemo, resumeDemo, endDemo,
 } from './demo.js';
 import { needsShortening, spokenForm } from './saying.js';
 import {
-  route, navigationTarget, productName, productLabel, floorWindow, FLOOR_OVERRIDE_KEY,
+  route, navigationTarget, replyToOffer, productName, productLabel, floorWindow,
+  FLOOR_OVERRIDE_KEY,
 } from './routing.js';
 import { GRACE_OVERRIDE_KEY } from './grace.js';
 import { matchPattern } from './domain.js';
+import { vendorTab } from './tabs.js';
 import { unpack } from './share.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
 import {
@@ -207,10 +209,8 @@ async function goToAgent(nav) {
 
   const agent = nav.agent;
   const recipe = await recipeFor(agent);
-  const tabs = recipe?.domainPattern
-    ? await chrome.tabs.query({ url: matchPattern(recipe.domainPattern) })
-    : [];
-  const tab = tabs.find((t) => t.active) ?? tabs[0];
+  // An open tab or nothing: "show me" switches to what you have and never opens the site.
+  const tab = await vendorTab(recipe?.domainPattern);
 
   if (!tab) {
     markDone('tab-not-found');
@@ -235,9 +235,26 @@ async function goToAgent(nav) {
   markDone(null);
 }
 
-async function handleUtterance(text) {
+async function handleUtterance(text, { reply = false } = {}) {
   const agents = await rosterWithProducts();
   const floor = await floorHolder(agents);
+
+  // The answer to "would you like to see it?", read only when the microphone opened for it: a
+  // bare "yes" means something here because a question was just asked, and nowhere else. Anything
+  // that is neither yes nor no carries on below, so "show me" and a follow-up question still work.
+  if (reply) {
+    const answer = replyToOffer(text, agents, { floorHolder: floor });
+    if (answer?.accept) {
+      trace('offer', 'accepted');
+      return goToAgent(answer.accept);
+    }
+    if (answer?.decline) {
+      trace('offer', 'declined');
+      markDone(null);
+      panel({ phase: 'idle' });
+      return;
+    }
+  }
 
   // Navigation is checked first and returns null unless it is *certain* – the opening phrase
   // plus a name it recognises has to consume the whole utterance. Anything left over falls
@@ -260,7 +277,7 @@ async function handleUtterance(text) {
     return;
   }
 
-  return putQuestion(decision.agent, decision.prompt, decision.matched);
+  return putQuestion(decision.agent, decision.prompt, decision.matched, { spoken: true });
 }
 
 /**
@@ -270,7 +287,7 @@ async function handleUtterance(text) {
  * the answer on the orb and typing put it in the popup – two answer surfaces for one product,
  * and the popup's was an E2 stopgap from when there was no orb to put anything on.
  */
-async function putQuestion(agent, prompt, matched) {
+async function putQuestion(agent, prompt, matched, { spoken = false } = {}) {
   trace('routed', `${agent.name} (${matched}), ${prompt.length} chars`);
   await rememberPrompt(prompt);
   markThinking(agent.name, channelOf(agent));
@@ -300,7 +317,9 @@ async function putQuestion(agent, prompt, matched) {
     markDone(null);
     const answer = result.payload?.text ?? '';
     panel({ phase: 'answering', agentName: agent.name, answer });
-    await readAloud(answer, agent);
+    // Only a spoken turn is offered the rest: someone who typed may be somewhere they cannot
+    // talk, and asking them a question the microphone then waits on would be asking them to.
+    await readAloud(answer, agent, { offer: spoken });
   } else {
     markDone(result.payload?.code ?? 'failed');
     panel({
@@ -319,15 +338,17 @@ async function putQuestion(agent, prompt, matched) {
  * which was the observation that started this whole architecture.
  *
  * A long answer is spoken as its first sentence and a pointer to the screen – see `spokenForm`.
+ * With `offer`, that pointer ends in "would you like to see it?" and the microphone opens for the
+ * reply once the voice has finished; `handleUtterance` reads what comes back.
  */
-async function readAloud(answer, agent) {
+async function readAloud(answer, agent, { offer = false } = {}) {
   if (!answer) return;
   // The answer is on screen seconds before a word of it can be heard – a cold Kokoro load and the
   // first sentence's synthesis – and "is speaking" over that silence reads as broken. The voice
   // clears it at its first sound: `audible` in `listening.js`.
   panel({ warming: true });
   if (needsShortening(answer)) trace('shortened', 'first sentence');
-  const { text, shortened } = spokenForm(answer);
+  const { text, shortened } = spokenForm(answer, { offer });
   if (!text) {
     panel({ warming: false });
     return;
@@ -336,14 +357,16 @@ async function readAloud(answer, agent) {
   // The panel says when it is reading a shortened version, because someone hearing one sentence
   // about a six-paragraph answer should know that is what happened.
   if (shortened) panel({ sub: 'Shortened – the full answer is above.' });
+  // Before `say`, not after: a voice that fails at once can report back before `say` returns.
+  if (shortened && offer) listenAfterSpeaking();
   await say(text, agent.id);
 }
 
 // Wrapped, because nothing awaits this. An unhandled rejection in a service worker is silent,
 // and the visible symptom would be a badge stuck on an agent who is not thinking about
 // anything – the turn simply stopping, with no way to tell it from a slow vendor.
-setTurnHandler((text) => {
-  handleUtterance(text).catch((error) => {
+setTurnHandler((text, { reply = false } = {}) => {
+  handleUtterance(text, { reply }).catch((error) => {
     markDone('failed');
     panel({ phase: 'needs-attention', message: 'Something went wrong handling that.' });
     console.error('[openposse] turn failed:', error?.message ?? error);
@@ -820,8 +843,7 @@ async function dispatchIntent(request) {
     return;
   }
 
-  const tabs = await chrome.tabs.query({ url: matchPattern(recipe.domainPattern) });
-  const tab = tabs.find((t) => t.active) ?? tabs[0];
+  const tab = await vendorTab(recipe.domainPattern);
   if (!tab) {
     reply('error', {
       code: ERROR.tabNotFound,
