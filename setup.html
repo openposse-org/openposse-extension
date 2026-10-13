@@ -190,10 +190,16 @@
          plans are pushed to the right end, a hairline between those two. Go Pro is a plain
          question and a button: the landing's "Add to Chrome" – an orange pill with near-black
          ink – with a warm glow under it. Its colours are fixed rather than tokens, because
-         dark ink on that orange holds on the dark stage and on white alike. */
-      .page-foot :is(nav, .pro) { padding-left: 14px; box-shadow: inset 1px 0 0 var(--line); }
+         dark ink on that orange holds on the dark stage and on white alike. The hairline before
+         it is drawn text-height, because the button makes the group taller than a line. */
+      .page-foot :is(nav, .pro) { padding-left: 14px; }
+      .page-foot nav { box-shadow: inset 1px 0 0 var(--line); }
       .page-foot .socials { display: flex; gap: 2px; margin-left: auto; }
-      .page-foot .pro { display: inline-flex; align-items: center; gap: 10px; }
+      .page-foot .pro { display: inline-flex; align-items: center; gap: 10px; position: relative; }
+      .page-foot .pro::before {
+        content: ''; position: absolute; left: 0; top: calc(50% - 9px);
+        width: 1px; height: 18px; background: var(--line);
+      }
       .page-foot .pro a {
         padding: 6px 14px 6px 11px; border-radius: 999px;
         background: linear-gradient(160deg, #ffae3a, #ff8a1f 55%, #ff6b1f);
