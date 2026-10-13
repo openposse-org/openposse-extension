@@ -266,6 +266,74 @@ const NODES = {
       ['path', { d: 'M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1' }],
     ],
   },
+  // Settings' footer: the project's own links.
+  globe: {
+    nodes: [
+      ['circle', { cx: '12', cy: '12', r: '10' }],
+      ['path', { d: 'M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20' }],
+      ['path', { d: 'M2 12h20' }],
+    ],
+  },
+  'circle-alert': {
+    nodes: [
+      ['circle', { cx: '12', cy: '12', r: '10' }],
+      ['line', { x1: '12', x2: '12', y1: '8', y2: '12' }],
+      ['line', { x1: '12', x2: '12.01', y1: '16', y2: '16' }],
+    ],
+  },
+  sparkles: {
+    nodes: [
+      ['path', { d: 'M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z' }],
+      ['path', { d: 'M20 2v4' }],
+      ['path', { d: 'M22 4h-4' }],
+      ['circle', { cx: '4', cy: '20', r: '2' }],
+    ],
+  },
+  heart: {
+    nodes: [
+      ['path', { d: 'M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5' }],
+    ],
+  },
+  rocket: {
+    nodes: [
+      ['path', { d: 'M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5' }],
+      ['path', { d: 'M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09' }],
+      ['path', { d: 'M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z' }],
+      ['path', { d: 'M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05' }],
+    ],
+  },
+  'message-square-heart': {
+    nodes: [
+      ['path', { d: 'M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z' }],
+      ['path', { d: 'M7.5 9.5c0 .687.265 1.383.697 1.844l3.009 3.264a1.14 1.14 0 0 0 .407.314 1 1 0 0 0 .783-.004 1.14 1.14 0 0 0 .398-.31l3.008-3.264A2.77 2.77 0 0 0 16.5 9.5 2.5 2.5 0 0 0 12 8a2.5 2.5 0 0 0-4.5 1.5' }],
+    ],
+  },
+  scale: {
+    nodes: [
+      ['path', { d: 'M12 3v18' }],
+      ['path', { d: 'm19 8 3 8a5 5 0 0 1-6 0zV7' }],
+      ['path', { d: 'M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1' }],
+      ['path', { d: 'm5 8 3 8a5 5 0 0 1-6 0zV7' }],
+      ['path', { d: 'M7 21h10' }],
+    ],
+  },
+  // The footer's socials. X's mark is Simple Icons' (CC0), filled with no stroke like GitHub's.
+  // Simple Icons dropped LinkedIn's at LinkedIn's request, so that one is Lucide 0.469.0's
+  // outline (ISC) filled, which draws the same solid "in" and so matches the other two marks.
+  x: {
+    filled: true,
+    nodes: [
+      ['path', { stroke: 'none', d: 'M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z' }],
+    ],
+  },
+  linkedin: {
+    filled: true,
+    nodes: [
+      ['path', { d: 'M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z' }],
+      ['rect', { width: '4', height: '12', x: '2', y: '9' }],
+      ['circle', { cx: '4', cy: '4', r: '2' }],
+    ],
+  },
   // GitHub's own mark, the octocat in a disc, from Simple Icons (CC0). Lucide has no brand icons
   // now, and its old outline GitHub was not the mark people recognise. Filled with no stroke: the
   // shared outline stroke would thicken it.

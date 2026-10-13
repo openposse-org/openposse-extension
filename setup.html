@@ -7,7 +7,11 @@
     <script src="dist/theme-boot.js"></script>
     <link rel="stylesheet" href="ui.css" />
     <style>
-      body { padding: 36px 40px 60px; }
+      /* The bottom padding clears the fixed footer, whose height setup.js writes to `--foot`
+         because its links wrap onto a second line in a narrow window. `overflow-x: clip` keeps
+         the header's full-width ground from adding a sideways scroll, and unlike `hidden` it does
+         not make the body a scroll container, which would stop the header sticking. */
+      body { padding: 36px 40px calc(var(--foot, 44px) + 40px); overflow-x: clip; }
       main { max-width: 1080px; margin: 0 auto; }
       section { margin-bottom: 30px; }
 
@@ -35,9 +39,13 @@
            around them at full size, and 198px is the width they had on the whole plate at 420. */
         object-view-box: inset(26.74% 26.22% 23.91% 26.58%);
         aspect-ratio: 1435 / 454;
-        width: 198px; max-width: 100%; height: auto;
+        width: var(--logo); max-width: 100%; height: auto;
         margin: 0 auto 0 0;
+        transition: width 180ms ease;
       }
+      /* Smaller once the header is holding at the top, so the logo has room around it the way
+         the 30px icons do, rather than filling the bar's height. */
+      .page-head.stuck .lockup { width: var(--logo-stuck); }
       /* The same lockup with a near-black wordmark on white, which is the light stage. It is
        * design/assets/openposse-lockup-light.png with its #f6f4f1 (and the hat band, which is that
        * background showing through) turned white. */
@@ -50,18 +58,53 @@
          followed the same day, so the roster has the page's width. Setup comes first: it is the
          one somebody is sent here for. `display` is left to the UA, so a closed sheet stays
          hidden – see `.palette`. */
-      /* The logo at the left; setup, debug, the two appearance switches and GitHub at the right,
-         in that order. The two sheets are popovers, so they never take a place in the row. */
+      /* The logo at the left; feedback, setup, debug, the two appearance switches, the website and
+         GitHub at the right, in that order. The three sheets are popovers, so they never take a
+         place in the row. */
+      /* It stays at the top of the window as the page scrolls. Its ground runs the window's full
+         width, so nothing shows beside it in the gutters as it slides under, and a hairline
+         appears once it is actually holding (`.stuck`, from setup.js). The ground is a pseudo-
+         element rather than `clip-path` on a box-shadow, because a clip would cut off the
+         tooltips that hang below the header's icons. The padding is taken back out of the
+         margins, so at rest it sits where it always did. */
+      /* The bar loses the logo's lost height when it shrinks, and a sticky header is in the
+         page's flow, so everything under it would jump up. The bottom margin takes that height
+         back over the same transition, so the page holds still. */
       .page-head {
+        --logo: 198px; --logo-stuck: calc(30px * 1435 / 454); /* 30px tall, the icons' height */
         display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-        margin-bottom: 28px;
+        position: sticky; top: 0; z-index: 30;
+        padding-block: 10px; margin: -10px 0 18px;
+        transition: margin-bottom 180ms ease;
       }
+      .page-head.stuck { margin-bottom: calc(18px + (var(--logo) - var(--logo-stuck)) * 454 / 1435); }
+      .page-head::before {
+        content: ''; position: absolute; z-index: -1; inset: 0 calc(50% - 50vw);
+        background: var(--stage);
+        box-shadow: 0 1px 0 transparent;
+        transition: box-shadow 160ms ease;
+      }
+      .page-head.stuck::before { box-shadow: 0 1px 0 var(--line), 0 10px 24px -18px var(--shadow); }
       /* Light or dark, and the panel's orb as a sphere or a waveform – how the extension looks,
          after the two tools for setting it up. */
-      .page-head .appearance { display: flex; gap: 8px; }
+      /* A hairline either side of the pair, so the row reads as three groups: setting up, how it
+         looks, and where to find the project. Text-height rather than the icons' 30px, like the
+         footer's. The quiet icons beside it carry 7px of invisible button around their glyphs,
+         so the switches' side gets 7px more than the row's gap and each hairline sits midway
+         between what can be seen. */
+      .page-head .appearance { display: flex; gap: 8px; position: relative; padding-inline: 15px; }
+      .page-head .appearance::before, .page-head .appearance::after {
+        content: ''; position: absolute; top: calc(50% - 9px);
+        width: 1px; height: 18px; background: var(--line);
+      }
+      .page-head .appearance::before { left: 0; }
+      .page-head .appearance::after { right: 0; }
+      #feedback { anchor-name: --feedback; }
       #setup { anchor-name: --setup; }
       #debug { anchor-name: --debug; }
-      :is(#setup, #debug, #github):not([aria-expanded="true"], :hover, .primary) { border-color: transparent; }
+      :is(#feedback, #setup, #debug, #website, #github, .socials .icon):not([aria-expanded="true"], :hover, .primary) {
+        border-color: transparent;
+      }
 
       /* ── What it is, and what the name means ─────────────────────────────────────────────
          Side by side under the logo's row, one under the other on a narrow window.
@@ -70,17 +113,17 @@
          orange wash under an orange hairline – and the posse is its banner, the full sunset
          ramp with near-black ink, so the name is the louder of the two. The ramp is the same in
          both themes, which is why its ink is a fixed colour rather than a token. `--amber` is
-         the landing's link and label colour, and its darker light-mode twin. */
+         the landing's link and label colour, and its darker light-mode twin – on `body`, since
+         the footer's Go Pro uses it too. */
+      body { --amber: #ffae3a; --amber-hover: #ffd36b; }
+      :root[data-theme="light"] body { --amber: #b4480c; --amber-hover: #8f3609; }
       .intro {
         --sunset: linear-gradient(160deg, #ffd36b 0%, #ffae3a 26%, #ff8a1f 52%, #ff6b1f 76%, #e4497a 100%);
-        --amber: #ffae3a;
-        --amber-hover: #ffd36b;
         /* Two columns at most, so the pill row spanning `1 / -1` cannot hold open a third,
            empty one – which is what a plain 280px minimum did on a wide window. */
         display: grid; grid-template-columns: repeat(auto-fit, minmax(max(280px, 40%), 1fr));
         gap: 14px; margin-bottom: 34px;
       }
-      :root[data-theme="light"] .intro { --amber: #b4480c; --amber-hover: #8f3609; }
       .intro section { margin: 0; border-radius: 22px; padding: 26px 28px 24px; }
       .intro h2 { font-size: 17px; letter-spacing: -0.01em; margin-bottom: 6px; text-wrap: balance; }
       .intro p { max-width: 62ch; line-height: 1.55; }
@@ -120,6 +163,58 @@
       }
       .promises li span { display: inline-flex; color: var(--amber); }
       :root[data-theme="light"] .promises li { color: var(--amber); }
+
+      /* ── The footer ───────────────────────────────────────────────────────────────────────
+         Fixed to the bottom of the window: at its left the version and the links an open-source
+         project is usually asked for, at its right the socials and Go Pro. The
+         addresses are filled in by setup.js from a few URLs, so the repository's can change in
+         one place when it exists. The full window's width, inside the page's 40px gutters. */
+      .page-foot {
+        position: fixed; inset: auto 0 0; z-index: 30;
+        background: var(--stage); box-shadow: 0 -1px 0 var(--line);
+        font-size: 12.5px; color: var(--text-dim);
+      }
+      .page-foot .inner {
+        padding: 10px 40px;
+        display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px;
+      }
+      .page-foot .version { font-weight: 500; color: var(--text); font-feature-settings: var(--figures); }
+      .page-foot .version span { margin-left: 5px; font-weight: 400; color: var(--text-faint); }
+      .page-foot nav { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+      .page-foot a {
+        display: inline-flex; align-items: center; gap: 6px;
+        color: inherit; text-decoration: none; border-radius: 4px;
+      }
+      .page-foot a:hover { color: var(--text); }
+      .page-foot a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+      .page-foot a span { display: inline-flex; opacity: 0.8; }
+      /* The links follow the version, set off by a hairline; the socials and then the paid
+         plans are pushed to the right end, a hairline between those two. Go Pro is a plain
+         question and a button: the landing's "Add to Chrome" – an orange pill with near-black
+         ink – with a warm glow under it. Its colours are fixed rather than tokens, because
+         dark ink on that orange holds on the dark stage and on white alike. The hairline before
+         it is drawn text-height, because the button makes the group taller than a line. */
+      .page-foot :is(nav, .pro) { padding-left: 14px; }
+      .page-foot nav { box-shadow: inset 1px 0 0 var(--line); }
+      .page-foot .socials { display: flex; gap: 2px; margin-left: auto; }
+      .page-foot .pro { display: inline-flex; align-items: center; gap: 10px; position: relative; }
+      .page-foot .pro::before {
+        content: ''; position: absolute; left: 0; top: calc(50% - 9px);
+        width: 1px; height: 18px; background: var(--line);
+      }
+      .page-foot .pro a {
+        padding: 6px 14px 6px 11px; border-radius: 999px;
+        background: linear-gradient(160deg, #ffae3a, #ff8a1f 55%, #ff6b1f);
+        color: #141417; font-weight: 600;
+        box-shadow: 0 4px 14px rgba(255, 107, 31, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+        transition: box-shadow 160ms ease, transform 160ms ease;
+      }
+      .page-foot .pro a:hover {
+        color: #141417; transform: translateY(-1px);
+        box-shadow: 0 6px 20px rgba(255, 107, 31, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+      }
+      .page-foot .pro a:focus-visible { outline-color: #ff8a1f; }
+      .page-foot .pro a span { opacity: 1; }
       /* A debug value is in force – a changed timing, or mock recordings in the roster. On the
          icon, because the sheet being shut is exactly when either would otherwise be invisible. */
       #debug.overridden::before {
@@ -127,7 +222,7 @@
         width: 7px; height: 7px; border-radius: 50%;
         background: #ff7a18; box-shadow: 0 0 0 2px var(--stage);
       }
-      :is(#setup-sheet, #debug-tools) {
+      :is(#feedback-sheet, #setup-sheet, #debug-tools) {
         inset: auto; margin: 8px 0 0;
         position-area: bottom span-left;
         max-height: calc(100vh - 110px); overflow-y: auto;
@@ -155,6 +250,38 @@
       /* The mock roster's sizes, in the row a slider would take. */
       #debug-tools .sizes { grid-area: slider; display: flex; gap: 8px; }
       #debug-tools .sizes .icon { font-size: 11px; font-weight: 600; font-feature-settings: var(--figures); }
+      /* Feedback: what kind, what happened, and an address only if a reply is wanted. The kinds
+         are radios drawn as pills, so the choice is one tap and none is made for anybody. */
+      #feedback-sheet { position-anchor: --feedback; width: min(360px, 100vw - 32px); padding: 14px 16px 16px; }
+      #feedback-form { display: grid; gap: 10px; }
+      #feedback-form .eyebrow {
+        font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--text-faint);
+      }
+      #feedback-form .lede { margin: -4px 0 0; font-size: 12px; line-height: 1.45; color: var(--text-dim); }
+      #feedback-form .kinds { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; border: 0; }
+      #feedback-form .kinds legend {
+        position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
+      }
+      #feedback-form .kinds label {
+        position: relative; padding: 4px 11px; border-radius: 999px;
+        border: 1px solid var(--line); font-size: 12px; color: var(--text-dim); cursor: pointer;
+      }
+      #feedback-form .kinds label:hover { color: var(--text); }
+      #feedback-form .kinds label:has(:checked) {
+        color: var(--text); border-color: var(--blue);
+        background: color-mix(in srgb, var(--blue) 14%, transparent);
+      }
+      #feedback-form .kinds label:has(:focus-visible) { outline: 2px solid var(--blue); outline-offset: 2px; }
+      #feedback-form .kinds input { position: absolute; opacity: 0; pointer-events: none; }
+      #feedback-form input[type="email"] {
+        font: inherit; width: 100%; color: var(--text); background: var(--well);
+        border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
+      }
+      #feedback-form input[type="email"]:focus { outline: 1px solid var(--blue); }
+      #feedback-form .send { display: flex; align-items: center; gap: 10px; }
+      #feedback-form .send .status { flex: 1; margin: 0; font-size: 12px; line-height: 1.4; }
+      #feedback-form .send button { margin-left: auto; }
 
       /* ── A heading and what belongs to it ───────────────────────────────────────────────
          One line: the title, the (i) that explains it, and at the far end the switch or button
@@ -689,7 +816,9 @@
       textarea:focus { outline: 1px solid var(--blue); }
 
       @media (prefers-reduced-motion: reduce) {
-        button.switch, button.switch::before, .tip, button.icon[aria-label]::after { transition: none; }
+        button.switch, button.switch::before, .tip, button.icon[aria-label]::after,
+        .page-head, .page-head::before, .lockup, .page-foot .pro a { transition: none; }
+        .page-foot .pro a:hover { transform: none; }
       }
     </style>
   </head>
@@ -701,6 +830,36 @@
       <header class="page-head">
         <img class="lockup" src="icons/openposse-lockup-dark.png" alt="OpenPosse"
              width="3040" height="920" />
+
+        <!-- Product feedback, moved up from the footer on 2026-10-13. The form is real and the
+             backend is not: `sendFeedback` in setup.js is where one plugs in, and until then the
+             form says plainly that nothing was sent and keeps what was typed. -->
+        <button class="icon" id="feedback" popovertarget="feedback-sheet"
+                data-icon="message-square-heart" data-size="16" data-tip-at="end" data-tip-below
+                aria-label="Send feedback"></button>
+        <div id="feedback-sheet" popover="auto" role="group" aria-labelledby="feedback-title">
+          <form id="feedback-form">
+            <div class="eyebrow" id="feedback-title">Feedback</div>
+            <p class="lede">What works, what doesn't, and what you'd like OpenPosse to do next.</p>
+            <fieldset class="kinds">
+              <legend>What kind of feedback</legend>
+              <label><input type="radio" name="kind" value="idea" />Idea</label>
+              <label><input type="radio" name="kind" value="problem" />Problem</label>
+              <label><input type="radio" name="kind" value="praise" />Praise</label>
+            </fieldset>
+            <textarea id="feedback-message" rows="5" maxlength="4000" required autofocus
+                      aria-label="Your feedback" placeholder="Tell us what happened"></textarea>
+            <input type="email" id="feedback-email" autocomplete="email"
+                   aria-label="Your email, if you'd like a reply"
+                   placeholder="Your email, if you'd like a reply" />
+            <div class="send">
+              <span class="status" id="feedback-status" role="status"></span>
+              <button class="icon primary" id="feedback-send" type="submit"
+                      data-icon="send-horizontal" data-tip-at="end" aria-label="Send feedback"
+                      disabled></button>
+            </div>
+          </form>
+        </div>
 
         <!-- The setup steps, behind an icon of their own and first of the two, since they are
              what somebody is sent here for. They were a column beside the roster until
@@ -1013,7 +1172,10 @@
           <div id="theme"></div>
         </div>
 
-        <!-- Opens the project's GitHub page. The URL is `GITHUB_URL` in setup.js. -->
+        <!-- The website, then the project's GitHub page. The URLs are `WEBSITE_URL` and
+             `GITHUB_URL` in setup.js. -->
+        <button class="icon" id="website" data-icon="globe" data-size="16"
+                data-tip-at="end" data-tip-below aria-label="The OpenPosse website"></button>
         <button class="icon" id="github" data-icon="github" data-size="16"
                 data-tip-at="end" data-tip-below aria-label="OpenPosse on GitHub"></button>
       </header>
@@ -1154,6 +1316,27 @@
         <p id="roster-none" hidden></p>
       </section>
     </main>
+    <footer class="page-foot">
+      <div class="inner">
+        <span class="version">OpenPosse<span id="version"></span></span>
+        <nav aria-label="OpenPosse project">
+          <a data-link="releases" target="_blank" rel="noopener"><span data-icon="sparkles" data-size="13" aria-hidden="true"></span>What's new</a>
+          <a data-link="licence" target="_blank" rel="noopener"><span data-icon="scale" data-size="13" aria-hidden="true"></span>Licence</a>
+          <a data-link="issues" target="_blank" rel="noopener"><span data-icon="circle-alert" data-size="13" aria-hidden="true"></span>Report a problem</a>
+          <a data-link="sponsor" target="_blank" rel="noopener"><span data-icon="heart" data-size="13" aria-hidden="true"></span>Sponsor</a>
+        </nav>
+        <!-- Socials: buttons rather than links, so they get the page's own hover labels. -->
+        <div class="socials" aria-label="OpenPosse on social media" role="group">
+          <button class="icon" data-social="x" data-icon="x" data-size="14"
+                  aria-label="OpenPosse on X"></button>
+          <button class="icon" data-social="linkedin" data-icon="linkedin" data-size="14"
+                  aria-label="OpenPosse on LinkedIn"></button>
+        </div>
+        <span class="pro">Want more support?
+          <a data-link="pro" target="_blank" rel="noopener"><span data-icon="rocket" data-size="13" aria-hidden="true"></span>Go Pro</a>
+        </span>
+      </div>
+    </footer>
     <script type="module" src="dist/setup.js"></script>
   </body>
 </html>

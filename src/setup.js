@@ -1783,6 +1783,85 @@ el('setup-sheet').addEventListener('toggle', (event) => {
   el('setup').setAttribute('aria-expanded', String(event.newState === 'open'));
 });
 
+// ── Feedback ───────────────────────────────────────────────────────────────────────────────
+//
+// The form behind the speech-bubble icon, ahead of setup's. It has no backend yet, so
+// `sendFeedback` is the one place a real one goes; everything around it already handles both
+// outcomes. Nothing here logs what anyone wrote – the kind of feedback at most.
+
+/**
+ * Sends one piece of feedback. Resolves `{ ok: true }` once it has been accepted, or
+ * `{ ok: false, reason }`. The reason reaches the person, so a new one wants a sentence in
+ * `FEEDBACK_REASONS`; until then the code itself is shown rather than nothing.
+ */
+async function sendFeedback(entry) {
+  console.info('[openposse] setup: feedback not sent – no backend yet; kind:', entry.kind ?? 'none');
+  return { ok: false, reason: 'no-backend' };
+}
+
+const FEEDBACK_REASONS = {
+  'no-backend': "Not sent – there's nowhere to send feedback yet. What you wrote is still here.",
+};
+
+const feedbackForm = el('feedback-form');
+const feedbackStatus = el('feedback-status');
+const feedbackSend = el('feedback-send');
+
+// Closing forgets the last outcome, so the next opening starts without yesterday's "Sent". It
+// keeps an unsent draft: a click outside closes this too, and that is too easy a way to lose
+// a long message. A sent one is cleared by the send itself, below.
+el('feedback-sheet').addEventListener('toggle', (event) => {
+  el('feedback').setAttribute('aria-expanded', String(event.newState === 'open'));
+  if (event.newState === 'closed') {
+    feedbackStatus.textContent = '';
+    feedbackStatus.classList.remove('bad');
+  }
+});
+
+feedbackForm.addEventListener('input', () => {
+  feedbackSend.disabled = !el('feedback-message').value.trim();
+  feedbackStatus.textContent = '';
+  feedbackStatus.classList.remove('bad');
+});
+
+feedbackForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const email = el('feedback-email');
+  if (!email.checkValidity()) {
+    feedbackStatus.textContent = "That email address doesn't look complete.";
+    feedbackStatus.classList.add('bad');
+    return;
+  }
+  const entry = {
+    kind: feedbackForm.querySelector('input[name="kind"]:checked')?.value ?? null,
+    message: el('feedback-message').value.trim(),
+    email: email.value.trim() || null,
+    version: chrome.runtime.getManifest().version,
+  };
+  if (!entry.message) return;
+
+  feedbackSend.disabled = true;
+  feedbackStatus.classList.remove('bad');
+  feedbackStatus.textContent = 'Sending…';
+  let result;
+  try {
+    result = await sendFeedback(entry);
+  } catch (error) {
+    result = { ok: false, reason: error?.message ?? String(error) };
+  }
+  if (result.ok) {
+    // Ready for the next one, with the address kept – it is the same person.
+    feedbackForm.reset();
+    email.value = entry.email ?? '';
+    feedbackStatus.textContent = 'Sent. Thank you.';
+    return;
+  }
+  // Kept as typed, so a failed send costs nothing but the retry.
+  feedbackStatus.textContent = FEEDBACK_REASONS[result.reason] ?? `Not sent – ${result.reason}.`;
+  feedbackStatus.classList.add('bad');
+  feedbackSend.disabled = false;
+});
+
 // ── Appearance ─────────────────────────────────────────────────────────────────────────────
 //
 // Light or dark, and the panel's orb as a sphere or a waveform. The panel follows both live: the
@@ -1822,16 +1901,63 @@ async function paintAvatarSizing() {
   });
 }
 
-// ── GitHub ─────────────────────────────────────────────────────────────────────────────────
+// ── GitHub, and the footer's links ─────────────────────────────────────────────────────────
 //
-// A placeholder until the repository exists: it opens github.com itself. Change the one URL.
+// A placeholder until the repository exists: it opens github.com itself. Change the one URL,
+// and the header's icon and every repository link in the footer follow. The website's pages
+// and both social accounts are placeholders too.
 const GITHUB_URL = 'https://github.com';
+const WEBSITE_URL = 'https://openposse.org';
+const SOCIAL_URLS = {
+  x: 'https://x.com',
+  linkedin: 'https://www.linkedin.com',
+};
 
-el('github').addEventListener('click', () => {
-  chrome.tabs.create({ url: GITHUB_URL }).catch((error) => {
-    console.error('[openposse] setup: GitHub did not open –', error?.message ?? error);
+/** Where each footer link goes, by its `data-link`. */
+const FOOTER_LINKS = {
+  pro: 'https://openposse.com',
+  issues: `${GITHUB_URL}/issues`,
+  releases: `${GITHUB_URL}/releases`,
+  sponsor: 'https://github.com/sponsors',
+  licence: `${GITHUB_URL}/blob/main/LICENSE`,
+};
+
+/** Opens `url` in a new tab, naming `what` if Chrome refuses. */
+function openTab(url, what) {
+  chrome.tabs.create({ url }).catch((error) => {
+    console.error(`[openposse] setup: ${what} did not open –`, error?.message ?? error);
   });
-});
+}
+
+el('website').addEventListener('click', () => openTab(WEBSITE_URL, 'the website'));
+el('github').addEventListener('click', () => openTab(GITHUB_URL, 'GitHub'));
+for (const button of document.querySelectorAll('[data-social]')) {
+  const url = SOCIAL_URLS[button.dataset.social];
+  if (url) button.addEventListener('click', () => openTab(url, button.dataset.social));
+  else console.warn('[openposse] setup: no address for social', button.dataset.social);
+}
+
+for (const link of document.querySelectorAll('.page-foot [data-link]')) {
+  const url = FOOTER_LINKS[link.dataset.link];
+  if (url) link.href = url;
+  else console.warn('[openposse] setup: no address for footer link', link.dataset.link);
+}
+el('version').textContent = chrome.runtime.getManifest().version;
+
+// The footer's height, for the page's bottom padding: its links wrap in a narrow window.
+const footer = document.querySelector('.page-foot');
+new ResizeObserver(() => {
+  document.body.style.setProperty('--foot', `${footer.offsetHeight}px`);
+}).observe(footer);
+
+// The header's hairline, once it is holding at the top rather than sitting where it was.
+// A sticky element reports nothing about being stuck, so the observer watches the window less
+// its top pixel: a header holding at `top: 0` is then never wholly inside it.
+const head = document.querySelector('.page-head');
+new IntersectionObserver(
+  ([entry]) => head.classList.toggle('stuck', entry.intersectionRatio < 1),
+  { threshold: 1, rootMargin: '-1px 0px 0px 0px' },
+).observe(head);
 
 // ── Start ──────────────────────────────────────────────────────────────────────────────────
 
