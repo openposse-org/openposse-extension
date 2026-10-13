@@ -33,7 +33,7 @@ import { channelOf, initialFor } from './channels.js';
 import { FLOOR_OVERRIDE_KEY, floorWindow, productLabel } from './routing.js';
 import { patternForHost, matchPattern } from './domain.js';
 import { drawSphere, drawWave, modeFor } from './sphere.js';
-import { watchTheme } from './theme.js';
+import { bindThemeKey, watchTheme } from './theme.js';
 import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
 
@@ -976,9 +976,10 @@ showListening({ listening: false });
 setAsk(false);
 showDemo('idle');
 
-// Light or dark is chosen in Settings; the panel has no switch of its own. It still follows a
-// change made there, or the system's until someone chooses, while it is open.
+// Light or dark has its switch in Settings; here there is only T, outside the typed box. The panel
+// follows a change made either way, or the system's until someone chooses, while it is open.
 watchTheme(() => {});
+bindThemeKey();
 orbStyle()
   .then(showOrbStyle)
   .catch((error) => console.warn('[panel] could not read the orb style, drawing the sphere:', error?.message ?? error));
