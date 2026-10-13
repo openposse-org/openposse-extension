@@ -441,6 +441,9 @@ cycle:
 | `activeTab`, `alarms` | the recording gesture; keeping the worker alive mid-recording |
 | `optional_host_permissions: https://*/*` | **requested one origin at a time, by you, per assistant** |
 
+What is stored, what goes over the network and what never does, in plain words for users, is in
+[PRIVACY.md](PRIVACY.md).
+
 That last one is what a Web Store reviewer will ask about, and the honest answer is in the wording:
 it is *optional*, and it is spent one origin at a time through `permissions.request()` behind a
 button. Nothing is granted at install.
@@ -486,7 +489,8 @@ npm run package        # the Chrome Web Store zip: no manifest key, no developer
 ```
 
 What the tests cover, and the checklist for what only a person can check, are in
-[docs/testing.md](docs/testing.md).
+[docs/testing.md](docs/testing.md). How a merge becomes a beta in the Chrome Web Store, and how
+versions are released, is in [docs/releasing.md](docs/releasing.md).
 
 ### The shortcut
 

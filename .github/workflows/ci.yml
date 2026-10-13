@@ -48,18 +48,7 @@ jobs:
         run: npm run package
 
       - name: Check the store zip
-        run: |
-          zip="openposse-$(node -p "require('./package.json').version").zip"
-          unzip -p "$zip" manifest.json | node -e '
-            const manifest = JSON.parse(require("fs").readFileSync(0, "utf8"));
-            if ("key" in manifest) {
-              console.error("the store manifest carries a key, which the Web Store refuses");
-              process.exit(1);
-            }'
-          if unzip -Z1 "$zip" | grep -E '(^|/)(spike\.(js|html)|capture\.js|\.DS_Store)$'; then
-            echo "the store zip contains a developer-only file, listed above" >&2
-            exit 1
-          fi
+        run: bash tools/check-zip.sh "openposse-$(node -p "require('./package.json').version").zip"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

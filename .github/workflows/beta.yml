@@ -1,0 +1,114 @@
+# Sends a beta of every merge to the "OpenPosse Beta" item in the Chrome Web Store, and does the
+# same when run by hand from the Actions tab. docs/releasing.md has the one-time setup.
+#
+# It signs in to Google without a stored key: GitHub vouches for this run, and Google Cloud
+# trusts that for this repository's main branch only (workload identity federation). So a run
+# from any other branch is refused at sign-in, by design.
+#
+# Until the four repository variables it needs exist, it says which are missing and stops.
+#
+# Actions are pinned to commits rather than tags, because a tag can be moved to other code.
+
+name: Beta
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One submission at a time: a second run waits for the first, which may have just put a
+  # version into review that the second should see and leave alone.
+  group: beta
+  cancel-in-progress: false
+
+jobs:
+  not-set-up:
+    name: Beta publishing is not set up
+    if: >-
+      vars.CWS_PUBLISHER_ID == '' || vars.CWS_BETA_ITEM_ID == '' ||
+      vars.GCP_WORKLOAD_IDENTITY_PROVIDER == '' || vars.GCP_SERVICE_ACCOUNT == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Say what is missing
+        env:
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_BETA_ITEM_ID: ${{ vars.CWS_BETA_ITEM_ID }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+        run: |
+          missing=()
+          for name in CWS_PUBLISHER_ID CWS_BETA_ITEM_ID GCP_WORKLOAD_IDENTITY_PROVIDER GCP_SERVICE_ACCOUNT; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          line="Nothing sent: beta publishing needs the repository variables ${missing[*]}. See docs/releasing.md."
+          echo "::notice::$line"
+          echo "$line" >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: Send the beta to the Chrome Web Store
+    if: >-
+      vars.CWS_PUBLISHER_ID != '' && vars.CWS_BETA_ITEM_ID != '' &&
+      vars.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && vars.GCP_SERVICE_ACCOUNT != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Lets the run ask GitHub for the signed statement Google Cloud trusts in place of a key.
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # CI runs these on the same commit at the same time, but nothing waits for it. Running
+      # them here too means a merge whose tests fail on main is never sent to testers.
+      - name: Lint and test
+        run: npm test
+
+      - name: Build the beta zip
+        env:
+          # Numbers this beta 0.3.1.<run>, higher than every earlier beta. See tools/beta.mjs.
+          BETA_BUILD: ${{ github.run_number }}
+        run: npm run package:beta
+
+      - name: Check the beta zip
+        run: bash tools/check-zip.sh openposse-beta.zip
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: beta-zip
+          path: openposse-beta.zip
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Sign in to Google
+        id: google
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+          access_token_lifetime: 600s
+          # Only the token is needed. No credentials file in the workspace, nothing exported.
+          create_credentials_file: false
+          export_environment_variables: false
+
+      - name: Send it to the Chrome Web Store
+        env:
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_ITEM_ID: ${{ vars.CWS_BETA_ITEM_ID }}
+          CWS_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+        run: node tools/cws.mjs openposse-beta.zip
