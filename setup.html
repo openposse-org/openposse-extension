@@ -177,12 +177,24 @@
       .page-foot a span { display: inline-flex; opacity: 0.8; }
       /* The links follow the version, set off by a hairline; the socials and then the paid
          plans are pushed to the right end, a hairline between those two. Go Pro is a plain
-         question and the landing's amber answer. */
+         question and a button: the landing's "Add to Chrome" – an orange pill with near-black
+         ink – with a warm glow under it. Its colours are fixed rather than tokens, because
+         dark ink on that orange holds on the dark stage and on white alike. */
       .page-foot :is(nav, .pro) { padding-left: 14px; box-shadow: inset 1px 0 0 var(--line); }
       .page-foot .socials { display: flex; gap: 2px; margin-left: auto; }
-      .page-foot .pro { display: inline-flex; align-items: center; gap: 8px; }
-      .page-foot .pro a { color: var(--amber); font-weight: 500; }
-      .page-foot .pro a:hover { color: var(--amber-hover); }
+      .page-foot .pro { display: inline-flex; align-items: center; gap: 10px; }
+      .page-foot .pro a {
+        padding: 6px 14px 6px 11px; border-radius: 999px;
+        background: linear-gradient(160deg, #ffae3a, #ff8a1f 55%, #ff6b1f);
+        color: #141417; font-weight: 600;
+        box-shadow: 0 4px 14px rgba(255, 107, 31, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+        transition: box-shadow 160ms ease, transform 160ms ease;
+      }
+      .page-foot .pro a:hover {
+        color: #141417; transform: translateY(-1px);
+        box-shadow: 0 6px 20px rgba(255, 107, 31, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+      }
+      .page-foot .pro a:focus-visible { outline-color: #ff8a1f; }
       .page-foot .pro a span { opacity: 1; }
       /* A debug value is in force – a changed timing, or mock recordings in the roster. On the
          icon, because the sheet being shut is exactly when either would otherwise be invisible. */
@@ -754,7 +766,8 @@
 
       @media (prefers-reduced-motion: reduce) {
         button.switch, button.switch::before, .tip, button.icon[aria-label]::after,
-        .page-head, .page-head::before, .lockup { transition: none; }
+        .page-head, .page-head::before, .lockup, .page-foot .pro a { transition: none; }
+        .page-foot .pro a:hover { transform: none; }
       }
     </style>
   </head>
