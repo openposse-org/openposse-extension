@@ -515,7 +515,7 @@ async function ensureContentScript(tabId) {
 
   await chrome.scripting.executeScript({
     target: { tabId, allFrames: true },
-    files: ['dist/content.js'],
+    files: CONTENT_SCRIPT,
   });
   return { injected: true };
 }
@@ -683,6 +683,9 @@ function notifyAccess(pattern, granted, error) {
  */
 let reconcileQueue = Promise.resolve();
 
+/** The vendor driver, as its path inside the built extension. */
+const CONTENT_SCRIPT = ['content.js'];
+
 function reconcileRegistrations() {
   reconcileQueue = reconcileQueue.then(runReconcile, runReconcile);
   return reconcileQueue;
@@ -712,7 +715,7 @@ async function runReconcile() {
     .map((origin) => ({
       id: registrationID(origin),
       matches: [origin],
-      js: ['dist/content.js'],
+      js: CONTENT_SCRIPT,
       runAt: 'document_idle',
       allFrames: true,
       persistAcrossSessions: true,
@@ -729,6 +732,25 @@ async function runReconcile() {
   //
   // Registering separately costs one extra round trip per vendor and confines the damage to
   // the origin that actually had a problem.
+  //
+  // **A registration Chrome kept from an older build still names that build's file.** Chrome
+  // keeps them across reloads and updates, and `already` only asks whether an origin has one,
+  // so when the bundle moved – `dist/content.js` became `content.js` once the build started
+  // writing a whole extension into `dist/` – every granted vendor kept a script that no longer
+  // existed, and nothing injected. Both id styles count: `registerFor` uses `openposse-`.
+  const outdated = existing.filter((script) =>
+    script.id.startsWith('openposse') && script.js?.join() !== CONTENT_SCRIPT.join());
+  for (const { id } of outdated) {
+    try {
+      await chrome.scripting.updateContentScripts([{ id, js: CONTENT_SCRIPT }]);
+    } catch (error) {
+      console.warn(
+        `[openposse] could not update the outdated registration ${id}:`,
+        error?.message ?? error
+      );
+    }
+  }
+
   for (const script of toAdd) {
     try {
       await chrome.scripting.registerContentScripts([script]);
@@ -1497,7 +1519,7 @@ async function registerFor(pattern) {
   await chrome.scripting.registerContentScripts([{
     id,
     matches: [matchPattern(pattern)],
-    js: ['dist/content.js'],
+    js: CONTENT_SCRIPT,
     allFrames: true,
     runAt: 'document_idle',
   }]);

@@ -13,7 +13,7 @@
 // does not exist should not reach a browser.
 export default [
   {
-    files: ['src/**/*.js', 'tools/**/*.js', 'tools/**/*.mjs'],
+    files: ['src/**/*.js', 'tools/**/*.js', 'tools/**/*.mjs', 'test/**/*.mjs'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',

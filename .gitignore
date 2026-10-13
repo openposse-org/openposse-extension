@@ -1,23 +1,20 @@
 .DS_Store
-.build/
-xcuserdata/
-*.xcuserstate
-DerivedData/
+node_modules/
 
-# Extension signing key. The *public* half lives in extension/manifest.json and is what
-# pins the extension ID, so the ID stays reproducible without this file. The private half
-# is only needed to pack a .crx and must never be committed.
+# Build output: the extension Chrome loads, written by `npm run build`.
+dist/
+
+# Extension signing key. The *public* half lives in src/manifest.json and is what pins the
+# extension ID, so the ID stays reproducible without this file. The private half is only
+# needed to pack a .crx and must never be committed.
 #
-# Kept OUT of extension/ deliberately. Chrome warns about a .pem inside a loaded unpacked
-# extension — "You probably don't want to do that" — and it is right: anything that packs or
+# Kept out of dist/ deliberately. Chrome warns about a .pem inside a loaded unpacked
+# extension – "You probably don't want to do that" – and it is right: anything that packs or
 # zips that directory ships the private key with it, and whoever has it can sign updates
 # Chrome accepts as ours. Being gitignored protects the repo, not the folder.
 keys/
-extension/keys/
-node_modules/
-extension/dist/
 
 # Throwaway copies of an extension page, with its CSS and bundle inlined, for previewing it in
 # the Claude app's browser pane. Never committed, and ignored so a preview does not show up as
 # ~1,900 changed lines while it exists.
-extension/preview-*-tmp.html
+preview-*-tmp.html
