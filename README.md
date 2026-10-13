@@ -36,8 +36,7 @@ the half OpenPosse is built around.
 
 ### Three promises that shape every design decision
 
-**Nothing leaves the device.** Speech recognition, routing, summarising and speech synthesis all
-run locally. A turn is a microphone, a page, and an answer, with nothing else in it. There is no
+**Nothing leaves the device.** Speech recognition, routing and speech synthesis all run locally. A turn is a microphone, a page, and an answer, with nothing else in it. There is no
 account, no API key and no server.
 
 **No JSON, no terminal, no jargon.** Adding a new assistant is a four-step wizard where you show
