@@ -88,10 +88,10 @@
          after the two tools for setting it up. */
       /* A hairline either side of the pair, so the row reads as three groups: setting up, how it
          looks, and where to find the project. Text-height rather than the icons' 30px, like the
-         footer's. */
-      .page-head .appearance {
-        display: flex; gap: 8px; position: relative; padding-inline: 14px; margin-inline: 6px;
-      }
+         footer's. The quiet icons beside it carry 7px of invisible button around their glyphs,
+         so the switches' side gets 7px more than the row's gap and each hairline sits midway
+         between what can be seen. */
+      .page-head .appearance { display: flex; gap: 8px; position: relative; padding-inline: 15px; }
       .page-head .appearance::before, .page-head .appearance::after {
         content: ''; position: absolute; top: calc(50% - 9px);
         width: 1px; height: 18px; background: var(--line);
