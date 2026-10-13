@@ -29,12 +29,12 @@ test('a pace outside the engines\' range is clamped rather than passed on', () =
 test('garbage reads as the default, not as zero', () => {
   // **This is the case worth having.** `Number(undefined)` is NaN, and a NaN reaching either
   // engine is a voice that does not speak – where the honest answer to an unreadable setting
-  // is "nobody has chosen one, so use the normal pace".
-  assert.equal(clampSpeed(undefined), 1);
-  assert.equal(clampSpeed(null), 1);
-  assert.equal(clampSpeed('abc'), 1);
-  assert.equal(clampSpeed(NaN), 1);
-  assert.equal(clampSpeed({}), 1);
+  // is "nobody has chosen one, so use the default pace".
+  assert.equal(clampSpeed(undefined), 1.3);
+  assert.equal(clampSpeed(null), 1.3);
+  assert.equal(clampSpeed('abc'), 1.3);
+  assert.equal(clampSpeed(NaN), 1.3);
+  assert.equal(clampSpeed({}), 1.3);
 });
 
 test('a numeric string is accepted, because that is what a range input gives you', () => {

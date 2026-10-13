@@ -19,6 +19,7 @@ import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from '.
 import { setSurface } from './surface.js';
 import { MOCK_SIZES } from './mocks.js';
 import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
+import { localVoices } from './voices.js';
 import {
   weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES, VOICES,
 } from './weights.js';
@@ -224,6 +225,7 @@ async function refreshEngine() {
   // voices.js. The step had no done state at all until 2026-10-06, so it was never green.
   markDone('step-voices', choice.engine === 'kokoro'
     || speechSynthesis.getVoices().some((voice) => voice.localService));
+  refreshSystemVoices(choice.engine !== 'kokoro');
 }
 
 // Chrome fills the system voice list after the page asks for it, so the first check can find
@@ -344,7 +346,7 @@ el('drop-weights').addEventListener('click', async () => {
 // valid rather than being silently rejected by one engine and accepted by the other.
 
 /** The live value, so a preview started from this page speaks at what the slider now says. */
-let pace = 1;
+let pace = 1.3;
 
 const showPace = () => { el('speed-value').textContent = `${pace.toFixed(2)}×`; };
 
@@ -584,16 +586,65 @@ async function refreshVoices() {
   // list of voices to show.
   el('voices-section').hidden = !ready;
   if (!ready) return;
+  renderVoiceGroups(el('voice-list'),
+    VOICE_GROUPS.map((accent) => ({ accent, voices: voicesIn(accent) })));
+}
 
-  const list = el('voice-list');
+// ── The system voices, to try ──────────────────────────────────────────────────────────────
+//
+// Step 4's list, the twin of step 5's and drawn by the same code. Shown only while the system
+// voices are what answers use: once Kokoro is installed, `speak` routes every preview to it
+// (it never forks the engine), so a system voice played from here would be Kokoro wearing its
+// name.
+//
+// **English only, grouped by region.** A Mac lists well over a hundred local voices across
+// languages, and recognition is English, so the rest would be a long scroll of voices no
+// assistant here answers in. Region is what anybody narrows by first, as accent is in step 5.
+
+const REGIONS = {
+  US: 'American', GB: 'British', AU: 'Australian', IE: 'Irish', IN: 'Indian',
+  ZA: 'South African', NZ: 'New Zealand',
+};
+
+function systemVoiceGroups() {
+  const groups = new Map();
+  for (const voice of localVoices(speechSynthesis.getVoices())) {
+    const [language, region = ''] = String(voice.lang).split(/[-_]/);
+    if (language.toLowerCase() !== 'en') continue;
+    const accent = REGIONS[region.toUpperCase()] ?? 'Other English';
+    // "Eddy (English (UK))" is Eddy once the group heading says British.
+    const name = voice.name.replace(/\s*\(English \([^)]*\)\)$/, '') || voice.name;
+    if (!groups.has(accent)) groups.set(accent, []);
+    groups.get(accent).push({ id: voice.voiceURI, name });
+  }
+  const order = [...Object.values(REGIONS), 'Other English'];
+  return [...groups]
+    .sort(([a], [b]) => order.indexOf(a) - order.indexOf(b))
+    .map(([accent, voices]) => ({
+      accent, voices: voices.sort((a, b) => a.name.localeCompare(b.name)),
+    }));
+}
+
+function refreshSystemVoices(answering) {
+  const groups = answering ? systemVoiceGroups() : [];
+  el('system-voices-section').hidden = groups.length === 0;
+  renderVoiceGroups(el('system-voice-list'), groups);
+}
+
+/**
+ * Collapsible groups of try-it rows, for either engine's voices.
+ *
+ * @param list    the container, emptied first
+ * @param groups  `{ accent, voices: [{ id, name }] }` in the order they are offered
+ */
+function renderVoiceGroups(list, groups) {
   list.textContent = '';
 
-  // **Four collapsible groups, two columns each.** 28 rows in one column is a scroll rather
+  // **Collapsible groups, two columns each.** 28 rows in one column is a scroll rather
   // than a list, and the first thing anybody narrows by is accent – so the accent is the thing
   // that collapses. The heading carries it, which leaves each row's second line free to carry
   // a failure instead, which is what it is really for.
-  for (const accent of VOICE_GROUPS) {
-    const voices = voicesIn(accent);
+  for (const { accent, voices } of groups) {
     if (voices.length === 0) continue;
 
     const group = document.createElement('details');
@@ -674,9 +725,9 @@ function renderVoice(grid, id, name, { endsColumn = false } = {}) {
   play.addEventListener('click', () => {
     // Every button disabled, not just this one: the engines speak one utterance at a time, and
     // leaving the rest live would mean a second click cancels a sample that is still loading –
-    // which looks like the first voice simply failing. `#play-sample` is in the set too; it goes
-    // down the same path.
-    const buttons = [...grid.closest('#voice-list').querySelectorAll('button'), el('play-sample')];
+    // which looks like the first voice simply failing. Both lists' rows and `#play-sample` are in
+    // the set; they all go down the same path.
+    const buttons = [...document.querySelectorAll('.voice-grid button'), el('play-sample')];
     for (const b of buttons) b.disabled = true;
     show('loader-circle');
     sub.textContent = '';

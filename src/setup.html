@@ -804,8 +804,10 @@
       }
       .voice-group[open] > summary { padding-bottom: 4px; }
       .voice-group .voice-grid { padding-bottom: 9px; }
-      #voices-section { margin-top: 14px; }
-      #voices-section h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--text-dim); }
+      #voices-section, #system-voices-section { margin-top: 14px; }
+      #voices-section h3, #system-voices-section h3 {
+        margin: 0; font-size: 12px; font-weight: 600; color: var(--text-dim);
+      }
 
       textarea {
         font: inherit; width: 100%; resize: vertical;
@@ -1018,9 +1020,9 @@
 
               <div class="pace">
                 <label for="speed">Pace</label>
-                <input type="range" id="speed" min="0.7" max="1.6" step="0.05" value="1"
+                <input type="range" id="speed" min="0.7" max="1.6" step="0.05" value="1.3"
                        aria-describedby="speed-value" />
-                <output class="tech" id="speed-value" for="speed">1.00×</output>
+                <output class="tech" id="speed-value" for="speed">1.30×</output>
               </div>
 
               <!-- **The sample lives here rather than beside the voice list, because three
@@ -1041,6 +1043,29 @@
                         aria-label="Play the sample"></button>
               </div>
               <span class="status tech" id="sample-status"></span>
+
+              <!-- The system voices, listed the way step 5 lists Kokoro's: each one speaks the
+                   box above at the pace above. Shown only while the system voices are what
+                   answers use. Once Kokoro is installed, step 5's list is the true one, so
+                   neither list offers a voice that answers would not be spoken in. -->
+              <div id="system-voices-section" hidden>
+                <div class="head">
+                  <h3>Try each voice</h3>
+                  <div class="about">
+                    <button class="info" data-icon="info" data-size="15"
+                            aria-label="About trying the system voices"
+                            aria-describedby="about-try-system"></button>
+                    <div class="tip" role="tooltip" id="about-try-system">
+                      <p>
+                        Your computer's own English voices, each saying whatever is in the box
+                        above at the pace above. Playing one here does not change the voice an
+                        assistant answers in.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div id="system-voice-list"></div>
+              </div>
             </div>
           </section>
 

@@ -436,7 +436,11 @@ async function speak({ text, agentID, roster = [], speed = 1, wanted = null, pre
   // recorded an assistant, where there is nothing to assign *from* – and answering "no local
   // voice" would send somebody to check a speech setting that is working perfectly.
   const local = localVoices(available);
-  const voice = assigned.get(agentID) ?? (preview ? local[0] ?? null : null);
+  // A voice named by Settings' system list wins, matched against the *local* voices only, so an
+  // id that is stale – or one of Kokoro's, left over from that list – falls back rather than
+  // reaching a remote voice.
+  const named = local.find((v) => v.voiceURI === wanted) ?? null;
+  const voice = named ?? assigned.get(agentID) ?? (preview ? local[0] ?? null : null);
 
   const utterance = new SpeechSynthesisUtterance(text);
   // No voice means nothing local could be found. Speaking anyway would use the browser default,
