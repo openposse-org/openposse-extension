@@ -19,6 +19,7 @@ import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from '.
 import { setSurface } from './surface.js';
 import { MOCK_SIZES } from './mocks.js';
 import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
+import { offeredVoices } from './voices.js';
 import {
   weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES, VOICES,
 } from './weights.js';
@@ -202,21 +203,25 @@ el('grant-panel').addEventListener('click', async () => {
 // The offscreen document is the only context that can answer: WebGPU and the voice list both
 // live there, and it is created on demand by the worker.
 
-async function refreshEngine() {
-  // **Worked out here rather than asked of the offscreen document.**
-  //
-  // The first version messaged that document for the answer, and it usually does not exist –
-  // it is created when a turn starts, and opening settings is not a turn. So the send threw,
-  // the catch fell back to the bland "System voices", and the page never showed the *reason*,
-  // which is the only part worth reading. It looked like the line was not updating.
-  //
-  // This page is a Window, so it has `navigator.gpu` and can read the weights itself. Nothing
-  // about the choice needs a microphone, and asking something that may not be there for an
-  // answer we can compute was the whole mistake.
-  const choice = chooseEngine({
+// **Worked out here rather than asked of the offscreen document.**
+//
+// The first version messaged that document for the answer, and it usually does not exist –
+// it is created when a turn starts, and opening settings is not a turn. So the send threw,
+// the catch fell back to the bland "System voices", and the page never showed the *reason*,
+// which is the only part worth reading. It looked like the line was not updating.
+//
+// This page is a Window, so it has `navigator.gpu` and can read the weights itself. Nothing
+// about the choice needs a microphone, and asking something that may not be there for an
+// answer we can compute was the whole mistake.
+async function answeringEngine() {
+  return chooseEngine({
     hasWebGPU: await hasWebGPU(),
     hasKokoroAssets: (await weightsStatus()).state === 'ready',
   });
+}
+
+async function refreshEngine() {
+  const choice = await answeringEngine();
   // Green for Kokoro; the system voices are the working fallback rather than a fault, so neutral.
   setStatus('engine', describeEngine(choice), choice.engine === 'kokoro' ? 'good' : '');
   // **Done once something on this machine can speak an answer**: Kokoro, or an on-device system
@@ -224,6 +229,9 @@ async function refreshEngine() {
   // voices.js. The step had no done state at all until 2026-10-06, so it was never green.
   markDone('step-voices', choice.engine === 'kokoro'
     || speechSynthesis.getVoices().some((voice) => voice.localService));
+  refreshSystemVoices(choice.engine !== 'kokoro');
+  // Each assistant's picker lists this engine's voices, so it redraws with it.
+  redrawRoster();
 }
 
 // Chrome fills the system voice list after the page asks for it, so the first check can find
@@ -287,11 +295,18 @@ el('get-weights').addEventListener('click', async () => {
   el('get-weights').disabled = true;
   setStatus('weights-status', 'starting…');
 
+  // Progress arrives per chunk of the file being fetched, so the line is only rewritten when
+  // what it says changes – a whole percent or a whole megabyte.
+  let shown = '';
   let result;
   try {
     result = await downloadWeights({
-      onProgress: ({ bytes, totalBytes, done, total }) => {
-        setStatus('weights-status', `${mb(bytes)} of ${mb(totalBytes)} · file ${done} of ${total}`);
+      onProgress: ({ bytes, totalBytes }) => {
+        const percent = Math.min(100, Math.floor((bytes / totalBytes) * 100));
+        const line = `${percent}% · ${Math.round(bytes / 1e6)} of ${mb(totalBytes)}`;
+        if (line === shown) return;
+        shown = line;
+        setStatus('weights-status', line);
       },
     });
   } catch (error) {
@@ -344,7 +359,7 @@ el('drop-weights').addEventListener('click', async () => {
 // valid rather than being silently rejected by one engine and accepted by the other.
 
 /** The live value, so a preview started from this page speaks at what the slider now says. */
-let pace = 1;
+let pace = 1.3;
 
 const showPace = () => { el('speed-value').textContent = `${pace.toFixed(2)}×`; };
 
@@ -584,16 +599,89 @@ async function refreshVoices() {
   // list of voices to show.
   el('voices-section').hidden = !ready;
   if (!ready) return;
+  renderVoiceGroups(el('voice-list'),
+    VOICE_GROUPS.map((accent) => ({ accent, voices: voicesIn(accent) })));
+}
 
-  const list = el('voice-list');
+// ── The system voices, to try ──────────────────────────────────────────────────────────────
+//
+// Step 4's list, the twin of step 5's and drawn by the same code. Shown only while the system
+// voices are what answers use: once Kokoro is installed, `speak` routes every preview to it
+// (it never forks the engine), so a system voice played from here would be Kokoro wearing its
+// name.
+//
+// **The offered voices, grouped by region.** `offeredVoices` decides which: on a Mac, the four
+// the user chose; elsewhere every local English voice. The same set feeds each assistant's
+// picker and the automatic assignment, so nothing here can be heard that an assistant could not
+// be given.
+
+const REGIONS = {
+  US: 'American', GB: 'British', AU: 'Australian', IE: 'Irish', IN: 'Indian',
+  ZA: 'South African', NZ: 'New Zealand',
+};
+const REGION_ORDER = [...Object.values(REGIONS), 'Other English', 'Other languages'];
+
+function systemVoiceGroups() {
+  const groups = new Map();
+  for (const voice of offeredVoices(speechSynthesis.getVoices())) {
+    const [language, region = ''] = String(voice.lang).split(/[-_]/);
+    const accent = language.toLowerCase() === 'en'
+      ? REGIONS[region.toUpperCase()] ?? 'Other English'
+      : 'Other languages';
+    // "Eddy (English (UK))" is Eddy once the group heading says British.
+    const name = voice.name.replace(/\s*\(English \([^)]*\)\)$/, '') || voice.name;
+    if (!groups.has(accent)) groups.set(accent, []);
+    groups.get(accent).push({ id: voice.voiceURI, name });
+  }
+  return [...groups]
+    .sort(([a], [b]) => REGION_ORDER.indexOf(a) - REGION_ORDER.indexOf(b))
+    .map(([accent, voices]) => ({
+      accent, voices: voices.sort((a, b) => a.name.localeCompare(b.name)),
+    }));
+}
+
+function refreshSystemVoices(answering) {
+  const groups = answering ? systemVoiceGroups() : [];
+  const list = el('system-voice-list');
+  el('system-voices-section').hidden = groups.length === 0;
+
+  // A handful of voices do not need a drawer each: the Mac's four are one short list, each
+  // named with its accent. A machine offering every English voice gets them grouped, as in step 5.
+  const flat = groups.flatMap(({ accent, voices }) =>
+    voices.map((v) => ({ ...v, name: `${v.name} – ${accent}` })));
+  if (flat.length > 6) {
+    renderVoiceGroups(list, groups);
+    return;
+  }
+  list.textContent = '';
+  if (flat.length > 0) list.append(voiceGrid(flat));
+}
+
+/**
+ * What an assistant's voice picker offers: the voices its answers are actually spoken in.
+ * Kokoro's when Kokoro answers, the offered system voices otherwise.
+ */
+async function voiceChoices() {
+  if ((await answeringEngine()).engine === 'kokoro') {
+    return VOICE_GROUPS.map((accent) => ({ accent, voices: voicesIn(accent) }));
+  }
+  return systemVoiceGroups();
+}
+
+/**
+ * Collapsible groups of try-it rows, for either engine's voices.
+ *
+ * @param list    the container, emptied first
+ * @param groups  `{ accent, voices: [{ id, name }] }` in the order they are offered
+ */
+function renderVoiceGroups(list, groups) {
   list.textContent = '';
 
-  // **Four collapsible groups, two columns each.** 28 rows in one column is a scroll rather
+  // **Collapsible groups, two columns each.** 28 rows in one column is a scroll rather
   // than a list, and the first thing anybody narrows by is accent – so the accent is the thing
   // that collapses. The heading carries it, which leaves each row's second line free to carry
   // a failure instead, which is what it is really for.
-  for (const accent of VOICE_GROUPS) {
-    const voices = voicesIn(accent);
+  for (const { accent, voices } of groups) {
     if (voices.length === 0) continue;
 
     const group = document.createElement('details');
@@ -610,21 +698,25 @@ async function refreshVoices() {
     count.textContent = String(voices.length);
     summary.append(icon('chevron-right', { size: 12, className: 'chev' }), label, count);
 
-    const grid = document.createElement('div');
-    grid.className = 'voice-grid';
-    // Where the second column starts. The grid fills downwards, so this is what splits the
-    // alphabet in half rather than interleaving it – and it is set here because each group is a
-    // different size and CSS has no way to count its own children.
-    const rows = Math.ceil(voices.length / 2);
-    grid.style.setProperty('--rows', String(rows));
-    // The bottom of each column, so its rule can go: the drawer's own border is directly below.
-    voices.forEach(({ id, name }, i) => {
-      renderVoice(grid, id, name, { endsColumn: i === rows - 1 || i === voices.length - 1 });
-    });
-
-    group.append(summary, grid);
+    group.append(summary, voiceGrid(voices));
     list.append(group);
   }
+}
+
+/** Two columns of try-it rows, filled downwards. */
+function voiceGrid(voices) {
+  const grid = document.createElement('div');
+  grid.className = 'voice-grid';
+  // Where the second column starts. The grid fills downwards, so this is what splits the
+  // alphabet in half rather than interleaving it – and it is set here because each group is a
+  // different size and CSS has no way to count its own children.
+  const rows = Math.ceil(voices.length / 2);
+  grid.style.setProperty('--rows', String(rows));
+  // The bottom of each column, so its rule can go: the drawer's own border is directly below.
+  voices.forEach(({ id, name }, i) => {
+    renderVoice(grid, id, name, { endsColumn: i === rows - 1 || i === voices.length - 1 });
+  });
+  return grid;
 }
 
 /** One row of the try-it list: a play control, the name it plays, and a line for what went wrong. */
@@ -674,9 +766,9 @@ function renderVoice(grid, id, name, { endsColumn = false } = {}) {
   play.addEventListener('click', () => {
     // Every button disabled, not just this one: the engines speak one utterance at a time, and
     // leaving the rest live would mean a second click cancels a sample that is still loading –
-    // which looks like the first voice simply failing. `#play-sample` is in the set too; it goes
-    // down the same path.
-    const buttons = [...grid.closest('#voice-list').querySelectorAll('button'), el('play-sample')];
+    // which looks like the first voice simply failing. Both lists' rows and `#play-sample` are in
+    // the set; they all go down the same path.
+    const buttons = [...document.querySelectorAll('.voice-grid button'), el('play-sample')];
     for (const b of buttons) b.disabled = true;
     show('loader-circle');
     sub.textContent = '';
@@ -761,6 +853,7 @@ async function refreshRoster() {
   const patterns = Object.fromEntries(await Promise.all(
     agents.map(async (agent) => [agent.id, (await recipeFor(agent))?.domainPattern])));
   const icons = await iconPages(patterns);
+  const choices = await voiceChoices();
   if (drawing !== rosterDrawn) return;
 
   const built = [];
@@ -914,14 +1007,17 @@ async function refreshRoster() {
 
     // ── Its voice ──────────────────────────────────────────────────────────────────────
     //
-    // **Only the voices that are actually downloaded**, because offering one that is not on
-    // disk would fail at the first answer, three layers from anything that could explain it.
-    // Empty is a real choice rather than an absence: it hands the agent back to the accent
-    // heuristic, which keeps every agent sounding different as the roster grows.
+    // **Only the voices this agent's answers can actually be spoken in**: Kokoro's when Kokoro
+    // answers, the offered system voices otherwise. It used to list Kokoro's 28 whether or not
+    // they were installed, and picking one without them silently gave the agent some unrelated
+    // system voice. Empty is a real choice rather than an absence: it hands the agent back to
+    // the accent heuristic, which keeps every agent sounding different as the roster grows.
     //
-    // Grouped by accent now that there are 28 of them. A flat list of six was a list; a flat
-    // list of 28 is a search, and the first thing anyone narrows by is whether they want a
-    // British voice or an American one.
+    // One stored field holds either kind. A system voice chosen here is kept if Kokoro is
+    // installed later, and comes back if it is removed; meanwhile Kokoro assigns by accent.
+    //
+    // Grouped by accent. A flat list of six was a list; a flat list of 28 is a search, and the
+    // first thing anyone narrows by is whether they want a British voice or an American one.
     const voice = document.createElement('select');
     voice.className = 'voice-pick';
     voice.setAttribute('aria-label', `Voice for ${agent.name}`);
@@ -931,10 +1027,10 @@ async function refreshRoster() {
     auto.textContent = 'Chosen for me';
     voice.append(auto);
 
-    for (const accent of VOICE_GROUPS) {
+    for (const { accent, voices } of choices) {
       const group = document.createElement('optgroup');
       group.label = accent;
-      for (const { id, name } of voicesIn(accent)) {
+      for (const { id, name } of voices) {
         const option = document.createElement('option');
         option.value = id;
         option.textContent = name;
@@ -942,7 +1038,8 @@ async function refreshRoster() {
       }
       voice.append(group);
     }
-    voice.value = VOICES.some((v) => v.id === agent.voice) ? agent.voice : '';
+    voice.value = choices.some(({ voices }) => voices.some((v) => v.id === agent.voice))
+      ? agent.voice : '';
 
     voice.addEventListener('change', async () => {
       const result = await chrome.runtime
@@ -1348,8 +1445,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
   const keys = Object.keys(changes);
   const watched = ['agents', 'rosterOrder', 'iconSites'];
   if (!keys.some((key) => watched.includes(key) || key.startsWith('recipe:'))) return;
+  redrawRoster();
+});
 
-  // Not mid-drag either: a redraw would take the tile out from under the pointer.
+/** Redraws the roster, unless that would pull something out from under the person using it. */
+function redrawRoster() {
+  // Not mid-drag: a redraw would take the tile out from under the pointer.
   if (dragged) { redrawAfterDrag = true; return; }
 
   // Not under somebody's typing. A redraw replaces every field in the list, so one arriving
@@ -1361,7 +1462,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     return;
   }
   refreshRoster();
-});
+}
 
 // ── Adding an assistant somebody else recorded ─────────────────────────────────────────────
 //

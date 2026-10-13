@@ -262,7 +262,8 @@ export async function ensureAccess() {
   try {
     if (await chrome.permissions.contains(HOSTS)) return true;
     return await chrome.permissions.request(HOSTS);
-  } catch {
+  } catch (error) {
+    console.warn('[openposse] could not ask for access to the weights hosts –', error?.message ?? error);
     return false;
   }
 }
@@ -391,9 +392,11 @@ export async function downloadWeights({ onProgress = () => {}, fetchImpl = fetch
    *
    * Neither is a download failure, and neither should be silent, so it gets its own guard.
    */
-  const notify = (id) => {
+  // `arriving` is the part of the current file received so far, so progress moves during a file
+  // as well as between them.
+  const notify = (id, arriving = 0) => {
     try {
-      onProgress({ id, done, total: ALL.length, bytes, totalBytes: TOTAL_BYTES });
+      onProgress({ id, done, total: ALL.length, bytes: bytes + arriving, totalBytes: TOTAL_BYTES });
     } catch (error) {
       console.warn('[openposse] weights progress handler threw –', error?.message ?? error);
     }
@@ -410,7 +413,7 @@ export async function downloadWeights({ onProgress = () => {}, fetchImpl = fetch
     try {
       const response = await fetchImpl(file.url);
       if (!response?.ok) throw new Error(`HTTP ${response?.status ?? '?'}`);
-      const buffer = await response.arrayBuffer();
+      const buffer = await readBody(response, (received) => notify(file.id, received));
 
       const check = await verify(file, buffer);
       if (check !== 'ok') {
@@ -433,4 +436,37 @@ export async function downloadWeights({ onProgress = () => {}, fetchImpl = fetch
   }
 
   return { ok: failed.length === 0, failed };
+}
+
+/**
+ * Reads a response body as it arrives, reporting how much has come in.
+ *
+ * **`arrayBuffer()` says nothing until the last byte**, and the model is 326 MB of the 340 – so
+ * the status line read "starting…" for minutes, which is indistinguishable from a stall.
+ *
+ * One buffer, sized from `Content-Length` when the server sends it, so the model is held once
+ * rather than as chunks plus a joined copy. It grows by doubling when the length is missing or
+ * wrong, which keeps it correct either way; the hash check afterwards is what says whether the
+ * bytes are right. A response with no readable body falls back to `arrayBuffer()`.
+ */
+async function readBody(response, onBytes) {
+  const reader = response.body?.getReader?.();
+  if (!reader) return response.arrayBuffer();
+
+  const announced = Number(response.headers?.get?.('content-length'));
+  let out = new Uint8Array(Number.isFinite(announced) && announced > 0 ? announced : 0);
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (received + value.byteLength > out.byteLength) {
+      const grown = new Uint8Array(Math.max(out.byteLength * 2, received + value.byteLength));
+      grown.set(out.subarray(0, received));
+      out = grown;
+    }
+    out.set(value, received);
+    received += value.byteLength;
+    onBytes(received);
+  }
+  return received === out.byteLength ? out.buffer : out.slice(0, received).buffer;
 }

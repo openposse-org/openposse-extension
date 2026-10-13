@@ -57,13 +57,12 @@ export async function micGranted() {
  * of the two is speaking depends on whether the weights downloaded, which is not a thing anybody
  * should have to think about while deciding how fast they want to be spoken to.
  *
- * **The default is 1, deliberately, even though 1 measured slow.** Kokoro's own pace came out at
- * 102–126 wpm against a natural ~150 on one roster on one machine, which is an observation about
- * those voices rather than a finding about the product. Shipping a different default on that
- * evidence would change what every user hears to match one person's ear. Move it when there are
- * numbers from more than one of them.
+ * **The default is 1.3, by the user's decision of 2026-10-13.** It was 1 until then, because 1
+ * measured slow only on one roster on one machine: Kokoro came out at 102–126 wpm against a
+ * natural ~150, and 1.3 is roughly what closes that gap. It is one number for both engines, so
+ * the system voices are 1.3× too. A pace somebody has already chosen is kept.
  */
-const SPEED_DEFAULT = 1;
+const SPEED_DEFAULT = 1.3;
 // HeadTTS refuses anything outside this and says so; `utterance.rate` would silently clamp.
 // Enforced here so one stored value cannot be valid for one engine and rejected by the other.
 const SPEED_MIN = 0.25;

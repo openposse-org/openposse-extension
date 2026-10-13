@@ -18,7 +18,7 @@
 // name, an error code or a duration – except `text`, which goes to exactly one place: a live
 // message to whoever is displaying it.
 
-import { assignVoices, localVoices } from './voices.js';
+import { assignVoices, localVoices, offeredVoices } from './voices.js';
 import { chooseEngine, hasWebGPU, assignKokoroVoices, KOKORO_VOICES } from './tts.js';
 import { weightsStatus } from './weights.js';
 import {
@@ -429,14 +429,21 @@ async function speak({ text, agentID, roster = [], speed = 1, wanted = null, pre
     return;
   }
 
-  const assigned = assignVoices(roster, available);
+  // Assigned from the offered voices only – on a Mac, the four the user chose – so an assistant
+  // never lands on a voice the Settings picker would not have let anybody choose.
+  const offered = offeredVoices(available);
+  const assigned = assignVoices(roster, offered);
   // **An empty roster is not a missing voice, and only a preview can tell the difference.**
   // During a turn there is always an agent, so `assigned.get(agentID)` coming back empty means
   // nothing local matched and refusing is right. A preview can be asked for before anybody has
   // recorded an assistant, where there is nothing to assign *from* – and answering "no local
   // voice" would send somebody to check a speech setting that is working perfectly.
   const local = localVoices(available);
-  const voice = assigned.get(agentID) ?? (preview ? local[0] ?? null : null);
+  // A voice named by Settings' system list wins, matched against the *local* voices only, so an
+  // id that is stale – or one of Kokoro's, left over from that list – falls back rather than
+  // reaching a remote voice.
+  const named = local.find((v) => v.voiceURI === wanted) ?? null;
+  const voice = named ?? assigned.get(agentID) ?? (preview ? offered[0] ?? null : null);
 
   const utterance = new SpeechSynthesisUtterance(text);
   // No voice means nothing local could be found. Speaking anyway would use the browser default,

@@ -8,7 +8,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { localVoices, resolveVoice, assignVoices, leafName } from '../src/voices.js';
+import {
+  localVoices, resolveVoice, assignVoices, leafName, offeredVoices, baseName,
+} from '../src/voices.js';
 
 const voice = (name, lang, uri, localService = true) => ({ name, lang, voiceURI: uri, localService });
 
@@ -104,4 +106,46 @@ test('more agents than voices collide rather than falling silent', () => {
 
 test('an agent gets no voice when the machine has none', () => {
   assert.equal(assignVoices([{ id: 'a', voice: null }], []).size, 0);
+});
+
+// ── Which system voices are offered ───────────────────────────────────────────────────────
+
+const names = (list) => list.map((v) => v.name);
+
+test('on a Mac, only the preferred voices are offered', () => {
+  // Eddy is local and English and still left out: the user narrowed the set to four by name.
+  assert.deepEqual(names(offeredVoices(MAC)), ['Daniel', 'Samantha']);
+});
+
+test('an enhanced download of a preferred voice counts as that voice', () => {
+  const mac = [...MAC, voice('Samantha (Enhanced)', 'en-US', 'com.apple.voice.enhanced.en-US.Samantha')];
+  assert.ok(names(offeredVoices(mac)).includes('Samantha (Enhanced)'));
+});
+
+test('a machine with none of them offers every local English voice', () => {
+  const windows = [
+    voice('Microsoft David - English (United States)', 'en-US', 'david'),
+    voice('Microsoft Hazel - English (United Kingdom)', 'en-GB', 'hazel'),
+    voice('Microsoft Hedda - German (Germany)', 'de-DE', 'hedda'),
+    voice('Google US English', 'en-US', 'Google US English', false),
+  ];
+  assert.deepEqual(names(offeredVoices(windows)), [
+    'Microsoft David - English (United States)', 'Microsoft Hazel - English (United Kingdom)',
+  ]);
+});
+
+test('a machine with no local English voice keeps the local voices it has', () => {
+  // Narrowing to English must not leave an assistant on a German-only machine silent.
+  const german = [
+    voice('Microsoft Hedda - German (Germany)', 'de-DE', 'hedda'),
+    voice('Google US English', 'en-US', 'Google US English', false),
+  ];
+  assert.deepEqual(names(offeredVoices(german)), ['Microsoft Hedda - German (Germany)']);
+});
+
+test('a voice name loses its parenthetical, and only that', () => {
+  assert.equal(baseName('Eddy (English (UK))'), 'Eddy');
+  assert.equal(baseName('Samantha (Enhanced)'), 'Samantha');
+  assert.equal(baseName('Microsoft David - English (United States)'), 'Microsoft David - English');
+  assert.equal(baseName('Moira'), 'Moira');
 });
