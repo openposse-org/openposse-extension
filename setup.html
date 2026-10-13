@@ -89,7 +89,9 @@
       /* A hairline either side of the pair, so the row reads as three groups: setting up, how it
          looks, and where to find the project. Text-height rather than the icons' 30px, like the
          footer's. */
-      .page-head .appearance { display: flex; gap: 8px; position: relative; padding-inline: 8px; }
+      .page-head .appearance {
+        display: flex; gap: 8px; position: relative; padding-inline: 14px; margin-inline: 6px;
+      }
       .page-head .appearance::before, .page-head .appearance::after {
         content: ''; position: absolute; top: calc(50% - 9px);
         width: 1px; height: 18px; background: var(--line);
