@@ -55,7 +55,7 @@ ort.env.wasm.wasmPaths = chrome.runtime.getURL('vendor/transformers/');
 ort.env.wasm.numThreads = 1;
 
 const $ = (id) => document.getElementById(id);
-const buttons = ['download', 'forget', 'load', 'kokoro', 'run', 'own-run', 'kokoro-run', 'copy'].map($);
+const buttons = ['download', 'forget', 'load', 'kokoro', 'run', 'own-run', 'kokoro-run', 'hear', 'copy'].map($);
 
 let tts = null;
 let sessions = [];
@@ -293,6 +293,71 @@ $('kokoro-run').addEventListener('click', () => busy($('kokoro-status'), async (
   say($('kokoro-status'), `Sent to Kokoro (${$('kokoro-voice').value}). It is speaking, or loading first.`);
 }));
 
+// ── 5. Which languages can Chrome hear? ──────────────────────────────────────────────────────
+//
+// The same question the offscreen document asks before every turn, `available()` with
+// `processLocally: true`, put for each of Supertonic's languages. It answers without downloading
+// anything. Chrome keys its packs by locale, so each language tries its usual locales and its
+// bare code, and the best answer wins.
+
+const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
+
+const LOCALES = {
+  en: ['en-US', 'en-GB'], ko: ['ko-KR'], ja: ['ja-JP'], ar: ['ar-SA', 'ar-EG'], bg: ['bg-BG'],
+  cs: ['cs-CZ'], da: ['da-DK'], de: ['de-DE'], el: ['el-GR'], es: ['es-ES', 'es-US'],
+  et: ['et-EE'], fi: ['fi-FI'], fr: ['fr-FR'], hi: ['hi-IN'], hr: ['hr-HR'], hu: ['hu-HU'],
+  id: ['id-ID'], it: ['it-IT'], lt: ['lt-LT'], lv: ['lv-LV'], nl: ['nl-NL'], pl: ['pl-PL'],
+  pt: ['pt-BR', 'pt-PT'], ro: ['ro-RO'], ru: ['ru-RU'], sk: ['sk-SK'], sl: ['sl-SI'],
+  sv: ['sv-SE'], tr: ['tr-TR'], uk: ['uk-UA'], vi: ['vi-VN'],
+};
+
+/** What each answer means to a person, best first. */
+const HEARD = {
+  available: 'can hear now',
+  downloading: 'downloading',
+  downloadable: 'could download',
+  unavailable: 'cannot hear',
+};
+const RANK = Object.keys(HEARD);
+const languageName = new Intl.DisplayNames(['en'], { type: 'language' });
+const heard = [];
+
+$('hear').addEventListener('click', () => busy($('hear-status'), async () => {
+  if (!SR?.available) throw new Error('This Chrome cannot say: it has no on-device speech recognition API.');
+  heard.length = 0;
+  $('hear-results').replaceChildren();
+  for (const [lang, locales] of Object.entries(LOCALES)) {
+    say($('hear-status'), `Asking about ${languageName.of(lang)}…`);
+    let best = { state: 'unavailable', locale: locales[0] };
+    const problems = [];
+    for (const locale of [...locales, lang]) {
+      try {
+        const state = await SR.available({ langs: [locale], processLocally: true });
+        if (RANK.indexOf(state) !== -1 && RANK.indexOf(state) < RANK.indexOf(best.state)) best = { state, locale };
+        if (RANK.indexOf(state) === -1) problems.push(`${locale}: unexpected answer "${state}"`);
+      } catch (error) {
+        problems.push(`${locale}: ${error?.message ?? error}`);
+      }
+    }
+    heard.push({ lang, name: languageName.of(lang), ...best, problems });
+  }
+  heard.sort((a, b) => RANK.indexOf(a.state) - RANK.indexOf(b.state) || a.name.localeCompare(b.name));
+  for (const row of heard) {
+    const tr = document.createElement('tr');
+    const detail = row.problems.length > 0 ? ` (${row.problems.join('; ')})` : '';
+    for (const [i, text] of [row.name, HEARD[row.state] + detail, row.locale].entries()) {
+      const td = document.createElement('td');
+      td.textContent = text;
+      if (i === 1 && row.state === 'unavailable') td.className = 'bad';
+      tr.append(td);
+    }
+    $('hear-results').append(tr);
+  }
+  const count = (state) => heard.filter((row) => row.state === state).length;
+  say($('hear-status'), `Of 31 languages, Chrome can hear ${count('available')} now, could download `
+    + `${count('downloadable') + count('downloading')} more, and cannot hear ${count('unavailable')}.`);
+}));
+
 // ── Results ──────────────────────────────────────────────────────────────────────────────────
 
 $('copy').addEventListener('click', () => busy($('run-status'), async () => {
@@ -302,7 +367,11 @@ $('copy').addEventListener('click', () => busy($('run-status'), async () => {
     `Kokoro in the offscreen page: ${kokoro}`,
     'language\tbackend\tsteps\trun\tsynthesis s\taudio s\treal-time factor\tpeak',
     ...rows.map((r) => [r.lang, r.backend, r.steps, r.run, (r.ms / 1000).toFixed(2), r.audio.toFixed(2), r.rtf.toFixed(2), Number.isNaN(r.peak) ? 'NaN' : r.peak.toFixed(3)].join('\t')),
+    ...(heard.length > 0
+      ? ['', 'Chrome on-device recognition', 'language\tlocale\tanswer',
+        ...heard.map((h) => [h.name, h.locale, h.state + (h.problems.length > 0 ? ` (${h.problems.join('; ')})` : '')].join('\t'))]
+      : []),
   ];
   await navigator.clipboard.writeText(lines.join('\n'));
-  say($('run-status'), `Copied ${rows.length} rows.`);
+  say($('run-status'), `Copied ${rows.length} timing rows${heard.length > 0 ? ` and ${heard.length} languages` : ''}.`);
 }));

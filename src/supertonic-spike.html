@@ -27,6 +27,7 @@
       th, td { text-align: right; padding: 5px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
       th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
       td.bad { color: var(--error); }
+      table.left th, table.left td { text-align: left; }
     </style>
   </head>
   <body>
@@ -103,6 +104,27 @@
           <button id="kokoro-run">Speak with Kokoro</button>
         </div>
         <div id="kokoro-status" class="status"></div>
+      </section>
+
+      <section>
+        <h2>5. Which languages can Chrome hear?</h2>
+        <p>
+          Asks Chrome's on-device speech recogniser, the one OpenPosse listens with, about each of
+          Supertonic's 31 languages. Nothing is downloaded: "could download" means Chrome has a
+          pack for that language that setup could install.
+        </p>
+        <div class="row">
+          <button id="hear">Check all 31</button>
+        </div>
+        <div id="hear-status" class="status"></div>
+        <div class="table-wrap">
+          <table class="left">
+            <thead>
+              <tr><th>Language</th><th>On this machine</th><th>Locale</th></tr>
+            </thead>
+            <tbody id="hear-results"></tbody>
+          </table>
+        </div>
       </section>
 
       <section>
