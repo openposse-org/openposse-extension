@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>OpenPosse — Supertonic spike</title>
+    <link rel="stylesheet" href="ui.css" />
+    <style>
+      body { padding: 32px 36px 60px; }
+      main { max-width: 860px; }
+      section { margin: 26px 0; }
+      h2 { font-size: 14px; margin: 0 0 8px; }
+      p { max-width: 68ch; }
+      .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
+      label { font-size: 12.5px; color: var(--text-dim); display: flex; gap: 6px; align-items: center; }
+      input[type='number'] { width: 4.5em; }
+      input[type='text'] { flex: 1 1 320px; min-width: 0; }
+      .status {
+        font-feature-settings: var(--figures); font-size: 11.5px; color: var(--text-dim);
+        white-space: pre-wrap; word-break: break-word; margin-top: 6px;
+      }
+      .status.bad { color: var(--error); }
+      .table-wrap { overflow-x: auto; }
+      table { border-collapse: collapse; font-size: 12px; font-feature-settings: var(--figures); }
+      th, td { text-align: right; padding: 5px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+      th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+      td.bad { color: var(--error); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Supertonic 3, measured here</h1>
+      <p>
+        How fast Supertonic speaks from an extension page on this machine, how each language
+        sounds, and whether it keeps up with Kokoro loaded at the same time. Developer-only: store
+        builds leave this page out.
+      </p>
+
+      <section>
+        <h2>1. The weights</h2>
+        <p>
+          About 400 MB from Hugging Face, at a pinned revision, each file checked against a
+          SHA-256 written into this page before it is kept. Downloaded once, into a cache of its
+          own.
+        </p>
+        <div class="row">
+          <button id="download">Download</button>
+          <button id="forget">Delete the download</button>
+        </div>
+        <div id="download-status" class="status"></div>
+      </section>
+
+      <section>
+        <h2>2. Load</h2>
+        <div class="row">
+          <label>Backend
+            <select id="backend">
+              <option value="webgpu" selected>WebGPU</option>
+              <option value="wasm">WebAssembly (CPU)</option>
+            </select>
+          </label>
+          <button id="load">Load</button>
+          <button id="kokoro">Load Kokoro too</button>
+        </div>
+        <div id="load-status" class="status"></div>
+      </section>
+
+      <section>
+        <h2>3. Speak</h2>
+        <div class="row">
+          <label>Voice
+            <select id="voice"></select>
+          </label>
+          <label>Steps <input id="steps" type="number" min="1" max="32" value="8" /></label>
+          <label>Speed <input id="speed" type="number" min="0.5" max="2" step="0.05" value="1.05" /></label>
+          <label><input id="play" type="checkbox" checked /> Play each</label>
+        </div>
+        <div class="row">
+          <button id="run">Run English, German and French</button>
+        </div>
+        <div class="row">
+          <input id="own-text" type="text" placeholder="Or type a sentence in any of the 31 languages" />
+          <select id="own-lang"></select>
+          <button id="own-run">Speak it</button>
+        </div>
+        <div id="run-status" class="status"></div>
+      </section>
+
+      <section>
+        <h2>Results</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Language</th><th>Backend</th><th>Steps</th><th>Run</th>
+                <th>Synthesis</th><th>Audio</th><th>Real-time factor</th><th>Peak</th>
+              </tr>
+            </thead>
+            <tbody id="results"></tbody>
+          </table>
+        </div>
+        <div class="row">
+          <button id="copy">Copy results</button>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="supertonic-spike.js"></script>
+  </body>
+</html>

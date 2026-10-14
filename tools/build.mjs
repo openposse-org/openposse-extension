@@ -55,6 +55,7 @@ const MODULES = {
   sidepanel: 'src/sidepanel.js',
   offscreen: 'src/offscreen.js',
   spike: 'src/spike.js',
+  'supertonic-spike': 'src/supertonic-spike.js',
 };
 
 /**
@@ -69,7 +70,9 @@ const SCRIPTS = {
 };
 
 /** For developing OpenPosse rather than using it. Left out of a store build. */
-const DEV_ONLY = new Set(['spike', 'spike.html', 'capture']);
+const DEV_ONLY = new Set([
+  'spike', 'spike.html', 'supertonic-spike', 'supertonic-spike.html', 'capture',
+]);
 
 const shipped = (entries) =>
   Object.fromEntries(Object.entries(entries).filter(([name]) => !(store && DEV_ONLY.has(name))));
