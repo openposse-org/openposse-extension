@@ -1,4 +1,4 @@
-// Supertonic 3's browser helper, vendored for the Supertonic voice (`supertonic.js`) and its spike.
+// Supertonic 3's browser helper, vendored for the Supertonic voice (`supertonic.js`).
 //
 // From supertone-oss-archive/supertonic, `web/helper.js` at 912c54b4. MIT, Supertone Inc.; the
 // licence is beside this file, and the build copies it into the package. The project is archived
@@ -11,7 +11,7 @@
 
 // OpenPosse patch: the WebGPU build of ONNX Runtime, pinned in package.json to the version
 // transformers.js ships. Its `ort-wasm-simd-threaded.asyncify` files are the ones already in
-// `public/vendor/transformers/`, byte for byte, so the spike adds no runtime of its own.
+// `public/vendor/transformers/`, byte for byte, so Supertonic adds no runtime of its own.
 import * as ort from 'onnxruntime-web/webgpu';
 
 // Available languages for multilingual TTS
