@@ -150,6 +150,7 @@ export async function speak(text, voice, { onLevel = () => {}, onStart = () => {
   const ms = {};
   const started = performance.now();
   const mine = cancels;
+  let player = null;
 
   try {
     const cold = session === null;
@@ -187,7 +188,7 @@ export async function speak(text, voice, { onLevel = () => {}, onStart = () => {
     // and every later sentence is then synthesised against time that is already being spent
     // speaking. The engine only has to keep ahead of the speakers, not finish before them.
     const synthAt = performance.now();
-    const player = play(onLevel, {
+    player = play(onLevel, {
       held: paused,
       onEnd: (ended) => { if (playing === ended) playing = null; },
     });
@@ -242,6 +243,10 @@ export async function speak(text, voice, { onLevel = () => {}, onStart = () => {
     // The session is dropped rather than latched, so one bad load does not disable neural
     // voices for the rest of the browser session. The reason is passed up: a refused network
     // request from the shim and a WASM compile failure read very differently.
+    //
+    // A failure partway through an answer leaves a player behind, so it is stopped here.
+    // Otherwise its level meter keeps reporting to the orb until the next answer cancels it.
+    player?.stop();
     session = null;
     return { ok: false, reason: `kokoro: ${error?.message ?? error}`, ms };
   }
