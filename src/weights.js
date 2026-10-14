@@ -1,5 +1,5 @@
-// Kokoro's weights: what they are, where they come from, and how we know they are what we
-// asked for.
+// The voice models' weights – Kokoro's and Supertonic's: what they are, where they come from, and
+// how we know they are what we asked for.
 //
 // **This file is the whole of the amended rule made real.** The local-only rule, as amended on
 // 2026-09-26, permits a model to be downloaded from setup, when the user asks, from a pinned
@@ -9,6 +9,11 @@
 //
 // Nothing here is called during a turn. Speaking reads from local storage or falls back to the
 // system voices; it never fetches.
+//
+// Each model is a **set**: a list of pinned, hashed files and a cache of its own, made by
+// `weightSet` below. The two sets share every line that verifies, stores and reports, so the rule
+// is enforced once rather than twice. Kokoro's set keeps the names it has always had
+// (`weightsStatus`, `downloadWeights` and the rest); Supertonic's is `SUPERTONIC`.
 
 /**
  * Where the files live, pinned to a **revision** rather than to `main`.
@@ -236,10 +241,79 @@ export const ALL = [MODEL, ...CONFIG, ...VOICES];
 /** Total download, for a sentence in setup that does not surprise anyone on a slow connection. */
 export const TOTAL_BYTES = ALL.reduce((sum, f) => sum + f.bytes, 0);
 
-const CACHE = 'openposse-kokoro-v1';
+// ── Supertonic ────────────────────────────────────────────────────────────────────────────
 
 /**
- * The hosts a download actually touches – **both of them**.
+ * Supertonic 3's weights, pinned to a revision of `supertone-oss-archive/supertonic-3`.
+ *
+ * **The repository is archived**, so this revision is the last there will be. That makes the
+ * pin a formality rather than a precaution, and it is kept anyway: a URL that names a commit
+ * says what it fetches, and a hash mismatch then can only mean that something is wrong.
+ *
+ * **The weights are BigScience Open RAIL-M, not Apache-2.0**, and that is why Kokoro stays. The
+ * licence allows commercial use and asks that its use restrictions bind everyone who uses the
+ * model, so setup shows them and asks for agreement before this set may be downloaded. Kokoro
+ * has no such restrictions, which some organisations will need. The code that runs the model,
+ * `src/supertonic/helper.js`, is MIT.
+ *
+ * **No phonemizer, so no eSpeak.** Supertonic reads characters: `unicode_indexer.json` maps each
+ * NFKD-normalised code point to an id. The GPL route that ruled out `kokoro-js` does not exist here.
+ *
+ * Four ONNX graphs, two JSON files the code needs before it can build them, and the voices. The
+ * hashes are the Git-LFS object ids from Hugging Face's API (the SHA-256 of the contents, as for
+ * Kokoro's), and the two JSON files were digested after download; the sizes are exact. Measured
+ * on 2026-10-15 at real-time factor 0.03–0.04 on WebGPU, and 0.73 at best on WebAssembly, which
+ * is why this set is only offered where WebGPU is.
+ */
+const SUPERTONIC_REVISION = 'aafc6e32416a594460b32413efc49d7fe4ce6d46';
+const SUPERTONIC_REPO = 'https://huggingface.co/supertone-oss-archive/supertonic-3/resolve';
+
+const supertonicFile = (id, path, bytes, sha256) => ({
+  id,
+  url: `${SUPERTONIC_REPO}/${SUPERTONIC_REVISION}/${path}`,
+  bytes,
+  sha256,
+});
+
+const SUPERTONIC_CORE = [
+  supertonicFile('vector_estimator', 'onnx/vector_estimator.onnx', 256_534_781,
+    '883ac868ea0275ef0e991524dc64f16b3c0376efd7c320af6b53f5b780d7c61c'),
+  supertonicFile('vocoder', 'onnx/vocoder.onnx', 101_424_195,
+    '085de76dd8e8d5836d6ca66826601f615939218f90e519f70ee8a36ed2a4c4ba'),
+  supertonicFile('text_encoder', 'onnx/text_encoder.onnx', 36_416_150,
+    'c7befd5ea8c3119769e8a6c1486c4edc6a3bc8365c67621c881bbb774b9902ff'),
+  supertonicFile('duration_predictor', 'onnx/duration_predictor.onnx', 3_700_147,
+    'c3eb91414d5ff8a7a239b7fe9e34e7e2bf8a8140d8375ffb14718b1c639325db'),
+  supertonicFile('tts.json', 'onnx/tts.json', 8_253,
+    '42078d3aef1cd43ab43021f3c54f47d2d75ceb4e75f627f118890128b06a0d09'),
+  supertonicFile('unicode_indexer.json', 'onnx/unicode_indexer.json', 277_676,
+    '9bf7346e43883a81f8645c81224f786d43c5b57f3641f6e7671a7d6c493cb24f'),
+];
+
+/**
+ * **All ten voices**, F1–F5 and M1–M5, about 0.3 MB each. Every voice speaks every one of the
+ * 31 languages, so there is no per-language set to choose from.
+ *
+ * The whole set ships for the reason Kokoro's does: with part of it on disk, "which voices exist"
+ * and "which are installed" become different questions and a caller eventually asks the wrong
+ * one. **The order is load-bearing once agents are assigned voices by position**, so it does not
+ * change after it ships; new voices, if any ever came, would go after these.
+ */
+const SUPERTONIC_VOICES = Object.entries({
+  F1: [292_046, 'bbdec6ee00231c2c742ad05483df5334cab3b52fda3ba38e6a07059c4563dbc2'],
+  F2: [292_423, '7c722c6a72707b1a77f035d67f0d1351ba187738e06f7683e8c72b1df3477fc6'],
+  F3: [290_794, '12f6ef2573baa2defa1128069cb59f203e3ab67c92af77b42df8a0e3a2f7c6ab'],
+  F4: [291_808, 'c2fa764c1225a76dfc3e2c73e8aa4f70d9ee48793860eb34c295fff01c2e032b'],
+  F5: [291_479, '45966e73316415626cf41a7d1c6f3b4c70dbc1ba2bee5c1978ef0ce33244fc8d'],
+  M1: [291_748, 'e35604687f5d23694b8e91593a93eec0e4eca6c0b02bb8ed69139ab2ea6b0a5b'],
+  M2: [292_055, 'b76cbf62bac707c710cf0ae5aba5e31eea1a6339a9734bfae33ab98499534a50'],
+  M3: [290_198, 'ea1ac35ccb91b0d7ecad533a2fbd0eec10c91513d8951e3b25fbba99954e159b'],
+  M4: [291_522, 'ca8eefad4fcd989c9379032ff3e50738adc547eeb5e221b82593a6d7b3bac303'],
+  M5: [291_469, 'dd22b92740314321f8ae11c5e87f8dd60d060f15dd3a632b5adf77f471f77af2'],
+}).map(([id, [bytes, sha256]]) => supertonicFile(id, `voice_styles/${id}.json`, bytes, sha256));
+
+/**
+ * The hosts a download actually touches – **both of them**, and the same two for both sets.
  *
  * `huggingface.co/…/resolve/…` answers with a **302 to `us.aws.cdn.hf.co`**, and that response
  * carries `access-control-allow-origin: https://huggingface.co` rather than `*`. So a fetch
@@ -294,7 +368,10 @@ export async function verify(file, buffer) {
 // Cache Storage rather than IndexedDB: these are large immutable blobs fetched over HTTP, which
 // is exactly what it is for, and it hands back a `Response` so the reader gets `arrayBuffer()`
 // without a serialisation step. Version in the cache name, so a future model is a new cache
-// rather than a migration.
+// rather than a migration. One cache per set, so removing one model leaves the other alone.
+//
+// Each function below takes the set it works on first. `weightSet` binds them, and Kokoro's
+// long-standing exports at the end of the file are those bindings for Kokoro's set.
 
 /**
  * Cached entries are keyed by their **source URL**, not by our short id.
@@ -305,21 +382,22 @@ export async function verify(file, buffer) {
  * carries the pinned revision, so bumping `REVISION` invalidates the old entry by itself rather
  * than needing a migration.
  */
-const keyFor = (id) => ALL.find((f) => f.id === id)?.url ?? null;
+const keyFor = (set, id) => set.files.find((f) => f.id === id)?.url ?? null;
 
-export async function stored(id) {
-  const key = keyFor(id);
+async function storedIn(set, id) {
+  const key = keyFor(set, id);
   if (!key) return null;
   try {
-    const cache = await caches.open(CACHE);
+    const cache = await caches.open(set.cache);
     return (await cache.match(key)) ?? null;
-  } catch {
+  } catch (error) {
+    console.warn(`[openposse] could not read ${id} from ${set.cache} –`, error?.message ?? error);
     return null;
   }
 }
 
-export async function readWeight(id) {
-  const hit = await stored(id);
+async function readFrom(set, id) {
+  const hit = await storedIn(set, id);
   return hit ? hit.arrayBuffer() : null;
 }
 
@@ -335,29 +413,32 @@ export async function readWeight(id) {
  *
  * `core` is what tells them apart, and it is a fact rather than a guess: the model is 96% of
  * the bytes and is fetched first, so a download that stopped early does not have it, while an
- * install that predates a new voice has everything except that voice.
+ * install that predates a new voice has everything except that voice. The same holds for
+ * Supertonic, whose four graphs are 99% of its set and come before its voices.
  */
-export async function weightsStatus() {
-  const present = await Promise.all(ALL.map(async (f) => Boolean(await stored(f.id))));
+async function statusOf(set) {
+  const { files } = set;
+  const present = await Promise.all(files.map(async (f) => Boolean(await storedIn(set, f.id))));
   const count = present.filter(Boolean).length;
 
-  const isVoice = new Set(VOICES.map((v) => v.id));
-  const core = ALL.every((f, i) => isVoice.has(f.id) || present[i]);
+  const isVoice = new Set(set.voices.map((v) => v.id));
+  const core = files.every((f, i) => isVoice.has(f.id) || present[i]);
   // What is still to fetch, summed from the manifest rather than from a file size repeated in
   // the UI – the figure somebody decides on before committing a connection has to be the real
   // one, and a constant copied into setup would be right until the day it was not.
-  const missingBytes = ALL.reduce((n, f, i) => (present[i] ? n : n + f.bytes), 0);
+  const missingBytes = files.reduce((n, f, i) => (present[i] ? n : n + f.bytes), 0);
 
-  if (count === 0) return { state: 'missing', have: 0, want: ALL.length, core: false, missingBytes };
-  if (count < ALL.length) return { state: 'partial', have: count, want: ALL.length, core, missingBytes };
-  return { state: 'ready', have: count, want: ALL.length, core: true, missingBytes: 0 };
+  if (count === 0) return { state: 'missing', have: 0, want: files.length, core: false, missingBytes };
+  if (count < files.length) return { state: 'partial', have: count, want: files.length, core, missingBytes };
+  return { state: 'ready', have: count, want: files.length, core: true, missingBytes: 0 };
 }
 
-export async function removeWeights() {
+async function removeFrom(set) {
   try {
-    await caches.delete(CACHE);
+    await caches.delete(set.cache);
     return true;
-  } catch {
+  } catch (error) {
+    console.warn(`[openposse] could not delete ${set.cache} –`, error?.message ?? error);
     return false;
   }
 }
@@ -377,7 +458,8 @@ export async function removeWeights() {
  * @param onProgress `{ id, done, total, bytes, totalBytes }`
  * @returns `{ ok, failed: [{ id, reason }] }`
  */
-export async function downloadWeights({ onProgress = () => {}, fetchImpl = fetch } = {}) {
+async function downloadInto(set, { onProgress = () => {}, fetchImpl = fetch } = {}) {
+  const { files, totalBytes } = set;
   const failed = [];
   let bytes = 0;
   let done = 0;
@@ -396,14 +478,14 @@ export async function downloadWeights({ onProgress = () => {}, fetchImpl = fetch
   // as well as between them.
   const notify = (id, arriving = 0) => {
     try {
-      onProgress({ id, done, total: ALL.length, bytes: bytes + arriving, totalBytes: TOTAL_BYTES });
+      onProgress({ id, done, total: files.length, bytes: bytes + arriving, totalBytes });
     } catch (error) {
       console.warn('[openposse] weights progress handler threw –', error?.message ?? error);
     }
   };
 
-  for (const file of ALL) {
-    if (await stored(file.id)) {
+  for (const file of files) {
+    if (await storedIn(set, file.id)) {
       done += 1;
       bytes += file.bytes;
       notify(file.id);
@@ -424,7 +506,7 @@ export async function downloadWeights({ onProgress = () => {}, fetchImpl = fetch
         continue;
       }
 
-      const cache = await caches.open(CACHE);
+      const cache = await caches.open(set.cache);
       await cache.put(file.url, new Response(buffer));
       done += 1;
       bytes += file.bytes;
@@ -470,3 +552,53 @@ async function readBody(response, onBytes) {
   }
   return received === out.byteLength ? out.buffer : out.slice(0, received).buffer;
 }
+
+// ── The sets ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One model's files and its cache, with everything that reads or fills that cache bound to it.
+ *
+ * The file objects are held, not copied, so a test that swaps a hash in `ALL` swaps it here too.
+ *
+ * @param files   every file, each `{ id, url, bytes, sha256 }`; ids are unique within a set
+ * @param cache   the Cache Storage name, versioned
+ * @param voices  the files that are voices, which `status` counts apart from the rest
+ */
+export function weightSet({ files, cache, voices = [] }) {
+  const set = {
+    files,
+    cache,
+    voices,
+    totalBytes: files.reduce((sum, f) => sum + f.bytes, 0),
+  };
+  return Object.freeze({
+    ...set,
+    stored: (id) => storedIn(set, id),
+    read: (id) => readFrom(set, id),
+    status: () => statusOf(set),
+    remove: () => removeFrom(set),
+    download: (options) => downloadInto(set, options),
+  });
+}
+
+export const KOKORO = weightSet({ files: ALL, cache: 'openposse-kokoro-v1', voices: VOICES });
+
+/**
+ * Supertonic's set: about 401 MB, in a cache of its own.
+ *
+ * The graphs come first, largest first, so a download that stops early is missing the expensive
+ * part and `status` reports it as interrupted rather than as an install short of a voice.
+ */
+export const SUPERTONIC = weightSet({
+  files: [...SUPERTONIC_CORE, ...SUPERTONIC_VOICES],
+  cache: 'openposse-supertonic-v1',
+  voices: SUPERTONIC_VOICES,
+});
+
+// Kokoro's names from before there were two sets. Setup, the offscreen page and the tests use
+// them, and nothing about Kokoro changed, so neither do they.
+export const stored = KOKORO.stored;
+export const readWeight = KOKORO.read;
+export const weightsStatus = KOKORO.status;
+export const removeWeights = KOKORO.remove;
+export const downloadWeights = KOKORO.download;

@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 
 import {
   MODEL, VOICES, ALL, TOTAL_BYTES, verify, digest, downloadWeights, DTYPE, KNOWN_DTYPES, langOf,
-  weightsStatus,
+  weightsStatus, removeWeights, KOKORO, SUPERTONIC,
 } from '../src/weights.js';
 
 /**
@@ -49,7 +49,7 @@ test('the URLs are pinned to a revision, not to a branch', () => {
   // A `main` URL is a moving target: the bytes behind it can change without the URL changing,
   // so a hash mismatch would one day mean "upstream rebuilt" rather than "something is wrong",
   // and the check would be retired as flaky. Pinning makes a mismatch mean what it should.
-  for (const file of ALL) {
+  for (const file of [...ALL, ...SUPERTONIC.files]) {
     assert.ok(!file.url.includes('/main/'), `${file.id} points at a branch: ${file.url}`);
     assert.match(file.url, /\/resolve\/[0-9a-f]{40}\//, file.id);
   }
@@ -154,11 +154,134 @@ test('the advertised total matches what is actually listed', () => {
 test('every file has a hash, and they look like hashes', () => {
   // The invariant the amended rule rests on. Adding a voice without its hash would sail past
   // review and quietly reduce "verified" to "downloaded" for that file alone.
-  for (const file of ALL) {
+  const every = [...ALL, ...SUPERTONIC.files];
+  for (const file of every) {
     assert.match(file.sha256 ?? '', /^[0-9a-f]{64}$/, `${file.id} has no usable hash`);
     assert.ok(file.bytes > 0, file.id);
   }
-  assert.equal(new Set(ALL.map((f) => f.sha256)).size, ALL.length, 'no two files share a hash');
+  assert.equal(new Set(every.map((f) => f.sha256)).size, every.length, 'no two files share a hash');
+});
+
+// ── Supertonic ────────────────────────────────────────────────────────────────────────────
+
+test("Supertonic's set: four graphs, the two files they need, and all ten voices", () => {
+  const ids = SUPERTONIC.files.map((f) => f.id);
+  assert.equal(new Set(ids).size, ids.length, 'no id listed twice');
+  for (const id of ['vector_estimator', 'vocoder', 'text_encoder', 'duration_predictor',
+    'tts.json', 'unicode_indexer.json']) {
+    assert.ok(ids.includes(id), `${id} is in the set`);
+  }
+
+  // The order is the assignment order once agents get Supertonic voices by position, so it is
+  // pinned here the way Kokoro's first six are.
+  assert.deepEqual(
+    SUPERTONIC.voices.map((v) => v.id),
+    ['F1', 'F2', 'F3', 'F4', 'F5', 'M1', 'M2', 'M3', 'M4', 'M5'],
+  );
+  assert.ok(SUPERTONIC.voices.every((v) => v.url.endsWith(`/voice_styles/${v.id}.json`)));
+
+  // Every graph before every voice, so a download that stops early is missing a graph and reads
+  // as interrupted rather than as an install short of a voice.
+  const firstVoice = ids.indexOf('F1');
+  assert.ok(ids.slice(firstVoice).every((id) => /^[FM][1-5]$/.test(id)), 'voices come last');
+});
+
+test("Supertonic's advertised total is the sum of exact sizes, about 401 MB", () => {
+  // Exact sizes from Hugging Face, so the figure setup shows is the one that arrives, and a
+  // change to the set has to be an explicit edit here.
+  assert.equal(SUPERTONIC.totalBytes, SUPERTONIC.files.reduce((n, f) => n + f.bytes, 0));
+  assert.equal(SUPERTONIC.totalBytes, 401_276_744);
+});
+
+test("Kokoro's set is the one it always was", () => {
+  // Kokoro's long-standing exports are now bindings of `KOKORO`. If the two ever named
+  // different files or caches, setup would report one set and the voice would read another.
+  assert.equal(KOKORO.files, ALL);
+  assert.equal(KOKORO.totalBytes, TOTAL_BYTES);
+  assert.equal(KOKORO.cache, 'openposse-kokoro-v1');
+  assert.notEqual(SUPERTONIC.cache, KOKORO.cache);
+});
+
+/**
+ * Cache Storage with **separate named caches**, which the double above does not model: it hands
+ * every name the same store, so it could not tell whether a set wrote into the other's cache.
+ */
+function namedCaches() {
+  const caches = new Map();
+  const named = (name) => {
+    if (!caches.has(name)) caches.set(name, new Map());
+    return caches.get(name);
+  };
+  globalThis.caches = {
+    open: async (name) => ({
+      match: async (k) => named(name).get(String(k)) ?? null,
+      put: async (k, v) => { named(name).set(String(k), v); },
+    }),
+    delete: async (name) => caches.delete(name),
+  };
+  return caches;
+}
+
+/** As `withServedBytes`, for any list of files. */
+async function servingAs(files, buffer, run) {
+  const real = files.map((f) => f.sha256);
+  const hash = await digest(buffer);
+  for (const f of files) f.sha256 = hash;
+  try {
+    return await run();
+  } finally {
+    files.forEach((f, i) => { f.sha256 = real[i]; });
+  }
+}
+
+test('the two sets keep to their own caches', async () => {
+  // Downloading one model must not count as the other, and removing Kokoro – which somebody
+  // will do to free 340 MB once Supertonic is speaking – must not take Supertonic with it.
+  const stores = namedCaches();
+  const buffer = new TextEncoder().encode('x').buffer;
+
+  const result = await servingAs(SUPERTONIC.files, buffer, () => SUPERTONIC.download({
+    fetchImpl: async () => response(buffer),
+  }));
+  assert.equal(result.ok, true);
+  assert.equal(stores.get('openposse-supertonic-v1').size, SUPERTONIC.files.length);
+  assert.equal((await SUPERTONIC.status()).state, 'ready');
+  assert.equal((await weightsStatus()).state, 'missing', "Supertonic's files are not Kokoro's");
+
+  await removeWeights();
+  assert.equal((await SUPERTONIC.status()).state, 'ready', 'removing Kokoro left Supertonic');
+  assert.equal(await SUPERTONIC.remove(), true);
+  assert.equal((await SUPERTONIC.status()).state, 'missing');
+});
+
+test('a Supertonic file whose bytes do not match is not stored', async () => {
+  // The same rule as Kokoro's, through the same code: bytes we did not pin are not installed.
+  const stores = namedCaches();
+  const result = await SUPERTONIC.download({
+    fetchImpl: async () => response(new Uint8Array([9, 9, 9]).buffer),
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.failed.every((f) => f.reason === 'mismatch'));
+  assert.equal(result.failed.length, SUPERTONIC.files.length);
+  assert.equal(stores.get('openposse-supertonic-v1')?.size ?? 0, 0, 'nothing was kept');
+});
+
+test('a Supertonic download that stopped is told apart from one short of a voice', async () => {
+  const store = new Map();
+  namedCaches().set(SUPERTONIC.cache, store);
+  const put = (f) => store.set(f.url, response(new ArrayBuffer(1)));
+
+  for (const f of SUPERTONIC.files) if (f.id !== 'vector_estimator') put(f);
+  const stopped = await SUPERTONIC.status();
+  assert.equal(stopped.state, 'partial');
+  assert.equal(stopped.core, false, 'the largest graph is missing, so this was interrupted');
+  assert.equal(stopped.missingBytes, 256_534_781);
+
+  store.clear();
+  for (const f of SUPERTONIC.files) if (f.id !== 'M5') put(f);
+  const short = await SUPERTONIC.status();
+  assert.equal(short.state, 'partial');
+  assert.equal(short.core, true, 'every graph is here');
 });
 
 test('a missing hash is "unverified", never a pass', async () => {
