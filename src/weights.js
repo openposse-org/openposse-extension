@@ -265,6 +265,13 @@ export const TOTAL_BYTES = ALL.reduce((sum, f) => sum + f.bytes, 0);
  * on 2026-10-15 at real-time factor 0.03–0.04 on WebGPU, and 0.73 at best on WebAssembly, which
  * is why this set is only offered where WebGPU is.
  */
+export const SUPERTONIC_LICENCE = {
+  name: 'BigScience Open RAIL-M',
+  // The licence's own date, which is how it is versioned. A stored agreement names this, so an
+  // agreement to some other version is not taken as agreement to this one.
+  version: '2022-08-18',
+};
+
 const SUPERTONIC_REVISION = 'aafc6e32416a594460b32413efc49d7fe4ce6d46';
 const SUPERTONIC_REPO = 'https://huggingface.co/supertone-oss-archive/supertonic-3/resolve';
 

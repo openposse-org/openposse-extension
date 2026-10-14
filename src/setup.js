@@ -7,7 +7,7 @@
 
 import {
   loadRoster, recipeFor, setMicGranted, micGranted, voiceSpeed, setVoiceSpeed, clampSpeed,
-  orbStyle, setOrbStyle, avatarsByCount, setAvatarsByCount,
+  orbStyle, setOrbStyle, avatarsByCount, setAvatarsByCount, engineSettings,
 } from './storage.js';
 import { mountThemeToggle, segmented } from './appearance.js';
 import { channelOf, colourName, initialFor, PALETTE } from './channels.js';
@@ -21,7 +21,7 @@ import { MOCK_SIZES } from './mocks.js';
 import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
 import { offeredVoices } from './voices.js';
 import {
-  weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES, VOICES,
+  weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES, VOICES, SUPERTONIC,
 } from './weights.js';
 import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
@@ -217,19 +217,25 @@ async function answeringEngine() {
   return chooseEngine({
     hasWebGPU: await hasWebGPU(),
     hasKokoroAssets: (await weightsStatus()).state === 'ready',
+    hasSupertonicAssets: (await SUPERTONIC.status()).state === 'ready',
+    // The same preference and agreement every answer is sent with, so this line cannot name an
+    // engine the answers would not use.
+    ...(await engineSettings()),
   });
 }
 
 async function refreshEngine() {
   const choice = await answeringEngine();
-  // Green for Kokoro; the system voices are the working fallback rather than a fault, so neutral.
-  setStatus('engine', describeEngine(choice), choice.engine === 'kokoro' ? 'good' : '');
-  // **Done once something on this machine can speak an answer**: Kokoro, or an on-device system
-  // voice. Remote ones sit in the same list and do not count – see the local-only rule in
+  const neural = choice.engine !== 'system';
+  // Green for a neural voice; the system voices are the working fallback rather than a fault,
+  // so neutral.
+  setStatus('engine', describeEngine(choice), neural ? 'good' : '');
+  // **Done once something on this machine can speak an answer**: a neural voice, or an on-device
+  // system voice. Remote ones sit in the same list and do not count – see the local-only rule in
   // voices.js. The step had no done state at all until 2026-10-06, so it was never green.
-  markDone('step-voices', choice.engine === 'kokoro'
+  markDone('step-voices', neural
     || speechSynthesis.getVoices().some((voice) => voice.localService));
-  refreshSystemVoices(choice.engine !== 'kokoro');
+  refreshSystemVoices(!neural);
   // Each assistant's picker lists this engine's voices, so it redraws with it.
   redrawRoster();
 }
@@ -493,7 +499,7 @@ chrome.runtime.onMessage.addListener((message) => {
 
 /** What actually spoke, which is the one thing a preview can report that reading cannot tell you. */
 function describeSpoken(message) {
-  const engine = message.engine === 'kokoro' ? 'Kokoro' : 'System voice';
+  const engine = { kokoro: 'Kokoro', supertonic: 'Supertonic' }[message.engine] ?? 'System voice';
   const voice = message.engine === 'kokoro' && message.voice
     ? describeVoice(message.voice).name
     : message.voice;

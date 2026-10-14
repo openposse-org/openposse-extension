@@ -10,7 +10,15 @@ import assert from 'node:assert/strict';
 
 import {
   chooseEngine, describeEngine, assignKokoroVoices, KOKORO_VOICES, REASONS,
+  assignSupertonicVoices, SUPERTONIC_VOICES, genderOf, agreedToSupertonic,
 } from '../src/tts.js';
+import { SUPERTONIC_LICENCE } from '../src/weights.js';
+import { engineOf } from '../src/storage.js';
+
+/** An agreement as `setSupertonicAgreement` stores it. */
+const AGREED = {
+  licence: SUPERTONIC_LICENCE.name, version: SUPERTONIC_LICENCE.version, at: '2026-10-15T09:00:00Z',
+};
 
 test('Kokoro needs WebGPU, the files, and an engine to read them', () => {
   const both = { hasWebGPU: true, hasKokoroAssets: true };
@@ -51,7 +59,9 @@ test('WebGPU is a hard gate rather than a preference', () => {
 test('each reason sends someone somewhere different', () => {
   // "Your machine cannot do this", "it can but the files are missing" and "you chose this" need
   // different actions. One generic "using system voices" would be true and useless.
-  const reasons = ['no-webgpu', 'no-assets', 'not-built', 'preference', 'kokoro'];
+  const reasons = [
+    'no-webgpu', 'no-assets', 'no-agreement', 'not-built', 'preference', 'kokoro', 'supertonic',
+  ];
   const said = reasons.map((r) => describeEngine({ reason: r }));
   assert.equal(new Set(said).size, reasons.length, 'every reason reads differently');
   for (const s of said) assert.ok(s.length > 10, s);
@@ -156,4 +166,114 @@ test('every reason has copy', () => {
   for (const key of Object.keys(REASONS)) {
     assert.ok(REASONS[key] && REASONS[key].length > 5, key);
   }
+});
+
+// ── Supertonic ────────────────────────────────────────────────────────────────────────────
+
+test('the engine table: Supertonic when installed, Kokoro kept for existing installs', () => {
+  const gpu = { hasWebGPU: true, agreement: AGREED };
+  const pick = (installed) => chooseEngine({ ...gpu, ...installed }).engine;
+
+  assert.equal(pick({ hasSupertonicAssets: true }), 'supertonic');
+  // An existing install, updated: nothing about what it speaks with changes.
+  assert.equal(pick({ hasKokoroAssets: true }), 'kokoro');
+  assert.equal(pick({ hasSupertonicAssets: true, hasKokoroAssets: true }), 'supertonic');
+  assert.equal(pick({}), 'system');
+});
+
+test('Kokoro is preferred only when both are installed', () => {
+  const both = { hasWebGPU: true, agreement: AGREED, hasSupertonicAssets: true, hasKokoroAssets: true };
+  assert.equal(chooseEngine({ ...both, preference: 'kokoro' }).engine, 'kokoro');
+  assert.equal(chooseEngine({ ...both, preference: 'supertonic' }).engine, 'supertonic');
+  assert.equal(chooseEngine({ ...both, preference: 'system' }).engine, 'system');
+
+  // A preference for something that is not there falls to what is, rather than to silence.
+  assert.equal(chooseEngine({ ...both, hasKokoroAssets: false, preference: 'kokoro' }).engine, 'supertonic');
+});
+
+test('Supertonic is never chosen without a stored agreement to its licence', () => {
+  // The licence binds its use restrictions to whoever uses the model, and the agreement is how
+  // they are bound. Weights that got onto disk some other way are weights without one.
+  const installed = { hasWebGPU: true, hasSupertonicAssets: true };
+  for (const agreement of [
+    null,
+    undefined,
+    {},
+    { ...AGREED, version: '2021-01-01' },             // a different version of the licence
+    { ...AGREED, licence: 'Apache-2.0' },              // a different licence altogether
+  ]) {
+    const choice = chooseEngine({ ...installed, agreement });
+    assert.equal(choice.engine, 'system', JSON.stringify(agreement));
+    assert.equal(choice.reason, 'no-agreement', 'and says so, rather than "nothing installed"');
+    // With Kokoro beside it, Kokoro answers instead of the system voices.
+    assert.equal(chooseEngine({ ...installed, hasKokoroAssets: true, agreement }).engine, 'kokoro');
+  }
+  assert.equal(agreedToSupertonic(AGREED), true);
+  assert.match(describeEngine({ reason: 'no-agreement' }), /use restrictions/);
+});
+
+test('WebGPU gates Supertonic as it gates Kokoro', () => {
+  // Its best WebAssembly run measured 0.73× real time: an answer arriving at three quarters of
+  // the speed it is spoken is not a conversation.
+  const choice = chooseEngine({ hasWebGPU: false, hasSupertonicAssets: true, agreement: AGREED });
+  assert.equal(choice.engine, 'system');
+  assert.equal(choice.reason, 'no-webgpu');
+});
+
+test('an engine preference from anywhere else reads as automatic', () => {
+  for (const known of ['auto', 'supertonic', 'kokoro', 'system']) assert.equal(engineOf(known), known);
+  for (const unknown of [undefined, null, '', 'Kokoro', 'piper', 7]) assert.equal(engineOf(unknown), 'auto');
+});
+
+test('a voice id says its gender, whichever engine it belongs to', () => {
+  assert.equal(genderOf('af_heart'), 'female');
+  assert.equal(genderOf('bm_george'), 'male');
+  assert.equal(genderOf('F3'), 'female');
+  assert.equal(genderOf('M5'), 'male');
+  // A system voice's identifier says nothing about gender, and must not be guessed at.
+  for (const silent of ['com.apple.eloquence.en-GB.Eddy', 'Fiona', 'F', 'M10', null, undefined]) {
+    assert.equal(genderOf(silent), null, String(silent));
+  }
+  assert.equal(SUPERTONIC_VOICES.filter((v) => v.gender === 'female').length, 5);
+  assert.equal(SUPERTONIC_VOICES.filter((v) => v.gender === 'male').length, 5);
+});
+
+test("an agent keeps its Kokoro voice's gender when Supertonic takes over", () => {
+  // Whether the Kokoro voice was chosen or assigned: Kokoro is what most people heard first.
+  const agents = [
+    { id: 'chose-male', voice: 'am_michael' },
+    { id: 'chose-female', voice: 'bf_emma' },
+    { id: 'assigned', voice: null },
+  ];
+  const kokoro = assignKokoroVoices(agents);
+  const supertonic = assignSupertonicVoices(agents);
+  for (const { id } of agents) {
+    assert.equal(genderOf(supertonic.get(id)), genderOf(kokoro.get(id)), id);
+  }
+  assert.equal(new Set(supertonic.values()).size, agents.length, 'and all different');
+});
+
+test('a Supertonic voice somebody chose is kept, and survives agents added before it', () => {
+  const before = assignSupertonicVoices([{ id: 'a', voice: 'M4' }]).get('a');
+  const after = assignSupertonicVoices([
+    { id: 'new', voice: null }, { id: 'other', voice: 'am_adam' }, { id: 'a', voice: 'M4' },
+  ]);
+  assert.equal(before, 'M4');
+  assert.equal(after.get('a'), 'M4');
+  assert.ok([...after].every(([id, voice]) => id === 'a' || voice !== 'M4'), 'nobody else gets it');
+});
+
+test("an agent moved back to Kokoro keeps its Supertonic voice's gender", () => {
+  const agents = [{ id: 'a', voice: 'F2' }, { id: 'b', voice: 'M1' }];
+  const kokoro = assignKokoroVoices(agents);
+  assert.equal(genderOf(kokoro.get('a')), 'female');
+  assert.equal(genderOf(kokoro.get('b')), 'male');
+});
+
+test('ten Supertonic voices are all used before any repeats, and then they repeat', () => {
+  const agents = Array.from({ length: 12 }, (_, i) => ({ id: `agent-${i}`, voice: null }));
+  const got = assignSupertonicVoices(agents);
+  assert.equal(got.size, 12, 'nobody is left without a voice');
+  assert.equal(new Set(agents.slice(0, 10).map((a) => got.get(a.id))).size, 10);
+  assert.ok(SUPERTONIC_VOICES.some((v) => v.id === got.get('agent-11')));
 });
