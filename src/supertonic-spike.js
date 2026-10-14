@@ -13,7 +13,7 @@
 
 import * as ort from 'onnxruntime-web/webgpu';
 import { Style, TextToSpeech, UnicodeProcessor, AVAILABLE_LANGS } from './supertonic/helper.js';
-import { digest, ensureAccess } from './weights.js';
+import { digest, ensureAccess, VOICES as KOKORO_VOICES } from './weights.js';
 
 const REVISION = 'aafc6e32416a594460b32413efc49d7fe4ce6d46';
 const BASE = `https://huggingface.co/supertone-oss-archive/supertonic-3/resolve/${REVISION}/`;
@@ -55,7 +55,7 @@ ort.env.wasm.wasmPaths = chrome.runtime.getURL('vendor/transformers/');
 ort.env.wasm.numThreads = 1;
 
 const $ = (id) => document.getElementById(id);
-const buttons = ['download', 'forget', 'load', 'kokoro', 'run', 'own-run', 'copy'].map($);
+const buttons = ['download', 'forget', 'load', 'kokoro', 'run', 'own-run', 'kokoro-run', 'copy'].map($);
 
 let tts = null;
 let sessions = [];
@@ -167,21 +167,31 @@ $('load').addEventListener('click', () => busy($('load-status'), async () => {
   say($('load-status'), `Loaded on ${backend} in ${(loaded.ms / 1000).toFixed(1)} s · GPU: ${gpu} · ${tts.sampleRate} Hz`);
 }));
 
-// Kokoro loads in the offscreen document when it is asked to speak. Settings' sample button
-// sends the same message, so this is Kokoro loaded exactly as the product loads it.
+// Kokoro speaks in the offscreen document, through the message Settings' sample button sends, so
+// it is loaded and heard exactly as the product loads it and speaks an answer. The outcome comes
+// back as `openposse.spoke`, after the speaking has finished, to whichever section asked.
+let spokeStatus = $('load-status');
+
 chrome.runtime.onMessage.addListener((message) => {
   if (message?.kind !== 'openposse.spoke' || !message.preview) return;
   kokoro = message.ok ? `spoke with ${message.engine}` : `did not speak: ${message.reason ?? 'no reason given'}`;
-  say($('load-status'), `Offscreen sample ${kokoro}.${message.engine === 'system' ? ' That is the system voice, so Kokoro is not loaded: is it downloaded in Settings?' : ''}`, !message.ok || message.engine !== 'kokoro');
+  const who = message.engine === 'kokoro' ? `Kokoro (${message.voice})` : message.engine ?? 'the offscreen page';
+  const system = message.engine === 'system'
+    ? ' That was the system voice, so Kokoro did not answer: is it downloaded in Settings, and does this machine have WebGPU?'
+    : '';
+  say(spokeStatus, message.ok ? `${who} finished speaking.${system}` : `${who} did not speak: ${message.reason ?? 'no reason given'}`,
+    !message.ok || message.engine !== 'kokoro');
 });
+
+async function askKokoro(text, voice, status) {
+  spokeStatus = status;
+  const reply = await chrome.runtime.sendMessage({ kind: 'openposse.voice.preview', text, voice });
+  if (reply?.ok === false) throw new Error(`The offscreen page did not take it: ${reply.reason ?? 'no reason given'}`);
+}
 
 $('kokoro').addEventListener('click', () => busy($('load-status'), async () => {
   kokoro = 'asked';
-  const reply = await chrome.runtime.sendMessage({
-    kind: 'openposse.voice.preview',
-    text: 'Kokoro is loaded and speaking from the offscreen page.',
-  });
-  if (reply?.ok === false) throw new Error(`The offscreen page did not take it: ${reply.reason ?? 'no reason given'}`);
+  await askKokoro('Kokoro is loaded and speaking from the offscreen page.', null, $('load-status'));
   say($('load-status'), 'Asked the offscreen page for a sample, which loads Kokoro. Wait for it to speak, then run.');
 }));
 
@@ -195,6 +205,12 @@ function option(value) {
 }
 for (const voice of VOICES) $('voice').append(option(voice));
 for (const lang of AVAILABLE_LANGS.filter((l) => l !== 'na')) $('own-lang').append(option(lang));
+for (const { id } of KOKORO_VOICES) $('kokoro-voice').append(option(id));
+$('kokoro-voice').value = 'af_heart';
+
+// Both boxes start with the same English sentence, so the first comparison is one click each.
+$('own-text').value = SENTENCES[0].text;
+$('kokoro-text').value = SENTENCES[0].text;
 
 async function styleFor(voice) {
   const json = await (await cached(`voice_styles/${voice}.json`)).json();
@@ -268,6 +284,13 @@ $('own-run').addEventListener('click', () => busy($('run-status'), async () => {
   const text = $('own-text').value.trim();
   if (!text) throw new Error('Type a sentence first.');
   await runAll([{ lang: $('own-lang').value, text }], $('run-status'));
+}));
+
+$('kokoro-run').addEventListener('click', () => busy($('kokoro-status'), async () => {
+  const text = $('kokoro-text').value.trim();
+  if (!text) throw new Error('Type something for Kokoro to say first.');
+  await askKokoro(text, $('kokoro-voice').value, $('kokoro-status'));
+  say($('kokoro-status'), `Sent to Kokoro (${$('kokoro-voice').value}). It is speaking, or loading first.`);
 }));
 
 // ── Results ──────────────────────────────────────────────────────────────────────────────────

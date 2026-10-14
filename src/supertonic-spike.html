@@ -13,7 +13,10 @@
       .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
       label { font-size: 12.5px; color: var(--text-dim); display: flex; gap: 6px; align-items: center; }
       input[type='number'] { width: 4.5em; }
-      input[type='text'] { flex: 1 1 320px; min-width: 0; }
+      textarea {
+        display: block; width: 100%; box-sizing: border-box; min-height: 5.5em; margin: 8px 0;
+        font: inherit; font-size: 13px; resize: vertical;
+      }
       .status {
         font-feature-settings: var(--figures); font-size: 11.5px; color: var(--text-dim);
         white-space: pre-wrap; word-break: break-word; margin-top: 6px;
@@ -65,7 +68,7 @@
       </section>
 
       <section>
-        <h2>3. Speak</h2>
+        <h2>3. Speak with Supertonic</h2>
         <div class="row">
           <label>Voice
             <select id="voice"></select>
@@ -77,12 +80,29 @@
         <div class="row">
           <button id="run">Run English, German and French</button>
         </div>
+        <label for="own-text">Your own text, in any of the 31 languages. Timed and added to the results.</label>
+        <textarea id="own-text"></textarea>
         <div class="row">
-          <input id="own-text" type="text" placeholder="Or type a sentence in any of the 31 languages" />
-          <select id="own-lang"></select>
-          <button id="own-run">Speak it</button>
+          <label>Language <select id="own-lang"></select></label>
+          <button id="own-run">Speak with Supertonic</button>
         </div>
         <div id="run-status" class="status"></div>
+      </section>
+
+      <section>
+        <h2>4. Speak with Kokoro, to compare</h2>
+        <p>
+          English only. Spoken by the offscreen page exactly as an answer is, at the pace set in
+          Settings, so it is for listening rather than timing: set Supertonic's speed above to
+          compare like with like.
+        </p>
+        <label for="kokoro-text">Text for Kokoro</label>
+        <textarea id="kokoro-text"></textarea>
+        <div class="row">
+          <label>Voice <select id="kokoro-voice"></select></label>
+          <button id="kokoro-run">Speak with Kokoro</button>
+        </div>
+        <div id="kokoro-status" class="status"></div>
       </section>
 
       <section>
