@@ -61,6 +61,9 @@ export async function micGranted() {
  * measured slow only on one roster on one machine: Kokoro came out at 102–126 wpm against a
  * natural ~150, and 1.3 is roughly what closes that gap. It is one number for both engines, so
  * the system voices are 1.3× too. A pace somebody has already chosen is kept.
+ *
+ * Supertonic is the exception, by the user's decision of 2026-10-15: it speaks faster at the same
+ * number, so it runs at 1.2/1.3 of this pace (`supertonicSpeed` in tts.js). Still one setting.
  */
 const SPEED_DEFAULT = 1.3;
 // HeadTTS refuses anything outside this and says so; `utterance.rate` would silently clamp.

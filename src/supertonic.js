@@ -21,6 +21,7 @@ import * as ort from 'onnxruntime-web/webgpu';
 import { Style, TextToSpeech, UnicodeProcessor, chunkText } from './supertonic/helper.js';
 import { SUPERTONIC } from './weights.js';
 import { play, peak, SILENT_PEAK } from './player.js';
+import { supertonicSpeed } from './tts.js';
 
 // ONNX Runtime's own files are the ones transformers.js already ships, byte for byte, so they are
 // loaded from there. One thread: an extension page is not cross-origin isolated, so there is no
@@ -42,14 +43,6 @@ const LANG = 'en';
 
 /** Denoising steps. Upstream's default, and what the spike measured at 0.03–0.04× real time. */
 const STEPS = 8;
-
-/**
- * Supertonic's speed at a pace of 1 in Settings.
- *
- * Upstream's own default, so pace 1 sounds the way Supertonic's authors meant it to. Like
- * Kokoro's, the speed stretches durations rather than resampling, so the pitch does not move.
- */
-const PACE_FACTOR = 1.05;
 
 /** Silence between chunks, in seconds: upstream's own gap when it joins chunks itself. */
 const GAP_S = 0.3;
@@ -206,7 +199,8 @@ function toBuffer(wav, sampleRate, leadingSilence) {
  * @param voice    a Supertonic voice id, `F1`–`F5` or `M1`–`M5`
  * @param onLevel  called with an amplitude as the audio plays, for the orb
  * @param onStart  called once, as the first chunk starts playing
- * @param speed    the Settings pace, 1 being Supertonic's own (`PACE_FACTOR`)
+ * @param speed    the Settings pace, converted by `supertonicSpeed` so Supertonic keeps the pace
+ *                 that was set by ear against Kokoro's
  * @returns `{ ok, ms }` or `{ ok: false, reason, ms }`, with `ms` shaped like Kokoro's
  */
 export async function speak(text, voice, { onLevel = () => {}, onStart = () => {}, speed = 1 } = {}) {
@@ -252,7 +246,7 @@ export async function speak(text, voice, { onLevel = () => {}, onStart = () => {
     let silent = false;
 
     for (const chunk of chunkText(text)) {
-      const { wav } = await exclusive(() => tts.call(chunk, LANG, style, STEPS, PACE_FACTOR * speed, 0));
+      const { wav } = await exclusive(() => tts.call(chunk, LANG, style, STEPS, supertonicSpeed(speed), 0));
       // A cancel has already stopped the player; what is left is to stop making audio.
       if (cancels !== mine) break;
       if (wav.length === 0) continue;

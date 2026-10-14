@@ -71,6 +71,28 @@ export const REASONS = {
   'system': 'System voices',
 };
 
+/** Supertonic's own speed, upstream's default: what its authors meant it to sound like. */
+const SUPERTONIC_OWN_SPEED = 1.05;
+
+/**
+ * Supertonic speaks faster than Kokoro at the same setting, so it runs at 1.2/1.3 of the pace.
+ *
+ * Set by ear on 2026-10-15, by the user's decision: with the slider at 1.3, Kokoro sounded right
+ * at 1.3 and Supertonic at 1.2. The pace stays one setting, so moving the slider still moves both
+ * voices together, keeping that ratio between them.
+ */
+const SUPERTONIC_PACE = 1.2 / 1.3;
+
+/**
+ * The speed Supertonic is given for a pace from Settings.
+ *
+ * Linear because Supertonic's speed divides its predicted durations, as Kokoro's does, so twice
+ * the pace is half the length on both.
+ */
+export function supertonicSpeed(pace) {
+  return SUPERTONIC_OWN_SPEED * SUPERTONIC_PACE * pace;
+}
+
 /**
  * Whether a stored agreement covers the licence Supertonic's weights are under now.
  *

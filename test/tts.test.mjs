@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 
 import {
   chooseEngine, describeEngine, assignKokoroVoices, KOKORO_VOICES, REASONS,
-  assignSupertonicVoices, SUPERTONIC_VOICES, genderOf, agreedToSupertonic,
+  assignSupertonicVoices, SUPERTONIC_VOICES, genderOf, agreedToSupertonic, supertonicSpeed,
 } from '../src/tts.js';
 import { SUPERTONIC_LICENCE } from '../src/weights.js';
 import { engineOf } from '../src/storage.js';
@@ -268,6 +268,15 @@ test("an agent moved back to Kokoro keeps its Supertonic voice's gender", () => 
   const kokoro = assignKokoroVoices(agents);
   assert.equal(genderOf(kokoro.get('a')), 'female');
   assert.equal(genderOf(kokoro.get('b')), 'male');
+});
+
+test("Supertonic runs at 1.2/1.3 of the pace, keeping that ratio as the slider moves", () => {
+  // Set by ear: at the default pace of 1.3 Kokoro sounded right at 1.3 and Supertonic at 1.2,
+  // where 1 is Supertonic's own speed of 1.05.
+  const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} ≠ ${expected}`);
+  close(supertonicSpeed(1.3), 1.05 * 1.2);
+  close(supertonicSpeed(2.6) / supertonicSpeed(1.3), 2);
+  close(supertonicSpeed(1), 1.05 * (1.2 / 1.3));
 });
 
 test('ten Supertonic voices are all used before any repeats, and then they repeat', () => {
