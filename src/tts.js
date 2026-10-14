@@ -42,6 +42,26 @@ export const KOKORO_VOICES = VOICES.map(({ id }) => ({ id, lang: langOf(id) }));
 export const SUPERTONIC_VOICES = SUPERTONIC.voices.map(({ id }) => ({ id, gender: genderOf(id) }));
 
 /**
+ * The 31 languages Supertonic speaks, English first, all from the one download.
+ *
+ * A copy of `AVAILABLE_LANGS` in the vendored helper, without its `na`, because the helper
+ * imports ONNX Runtime and cannot be loaded by a page that only needs the list. The test reads
+ * the helper's own line, so the two cannot drift apart.
+ */
+export const SUPERTONIC_LANGUAGES = [
+  'en', 'ko', 'ja', 'ar', 'bg', 'cs', 'da', 'de', 'el', 'es', 'et', 'fi', 'fr', 'hi', 'hr', 'hu',
+  'id', 'it', 'lt', 'lv', 'nl', 'pl', 'pt', 'ro', 'ru', 'sk', 'sl', 'sv', 'tr', 'uk', 'vi',
+];
+
+/**
+ * The language Supertonic reads answers in: the one chosen in Settings, if Supertonic has it,
+ * and English otherwise. Kokoro and the system voices are English whatever this says.
+ */
+export function supertonicLanguage(chosen) {
+  return SUPERTONIC_LANGUAGES.includes(chosen) ? chosen : 'en';
+}
+
+/**
  * `female`, `male`, or null, from either engine's voice id.
  *
  * Kokoro names voices `<accent><gender>_<name>` (`af_heart`), Supertonic `<gender><number>`

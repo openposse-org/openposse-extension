@@ -485,6 +485,12 @@
         margin-top: 12px; font-size: 13.5px;
       }
       .pace label { color: var(--text-dim); flex: 0 0 auto; }
+      /* Drawn like each assistant's voice picker, so the two read as the same kind of control. */
+      .pace select {
+        padding: 4px 7px; font: inherit; font-size: 12.5px; color: var(--text);
+        background: transparent; border: 1px solid rgb(var(--ink) / 0.14); border-radius: 7px;
+      }
+      .pace select:hover { border-color: rgb(var(--ink) / 0.3); }
       .pace input[type="range"] { flex: 1; min-width: 0; accent-color: #ff8a1f; }
       /* Fixed width and tabular figures, so the number does not shuffle the slider sideways as
          it counts through 1.00 → 1.05 → 1.10. */
@@ -1062,6 +1068,24 @@
                 <input type="range" id="speed" min="0.7" max="1.6" step="0.05" value="1.3"
                        aria-describedby="speed-value" />
                 <output class="tech" id="speed-value" for="speed">1.30×</output>
+              </div>
+
+              <!-- Supertonic only, so shown only while it answers. It changes how answers are
+                   read, not what is heard: OpenPosse still listens in English. -->
+              <div class="pace" id="language-row" hidden>
+                <label for="voice-language">Language</label>
+                <select id="voice-language"></select>
+                <div class="about">
+                  <button class="info" data-icon="info" data-size="15"
+                          aria-label="About the language" aria-describedby="about-language"></button>
+                  <div class="tip" role="tooltip" id="about-language">
+                    <p>
+                      The language Supertonic reads answers in. It speaks 31 from the one
+                      download, in every voice. OpenPosse still listens only in English, so for
+                      another language, type your question, or try it with the sample below.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <!-- **The sample lives here rather than beside the voice list, because three

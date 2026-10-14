@@ -102,6 +102,7 @@ export async function setVoiceSpeed(value) {
 
 const ENGINE_KEY = 'voiceEngine';
 const AGREEMENT_KEY = 'supertonicAgreement';
+const LANGUAGE_KEY = 'voiceLanguage';
 
 /**
  * `auto` picks the best installed engine; `kokoro` prefers Kokoro when Supertonic is installed
@@ -133,16 +134,35 @@ export async function clearSupertonicAgreement() {
   await chrome.storage.local.remove(AGREEMENT_KEY);
 }
 
-/** What choosing an engine needs from storage: `{ preference, agreement }`. */
+/**
+ * The language Supertonic reads answers in, as a two-letter code. Anything that is not one reads
+ * as English; whether Supertonic has the language is `supertonicLanguage`'s question in tts.js.
+ */
+export const languageOf = (value) => (typeof value === 'string' && /^[a-z]{2}$/.test(value) ? value : 'en');
+
+export async function setVoiceLanguage(value) {
+  const language = languageOf(value);
+  await chrome.storage.local.set({ [LANGUAGE_KEY]: language });
+  return language;
+}
+
+/**
+ * What speaking an answer needs from storage besides the pace: `{ preference, agreement,
+ * language }`, which engine is preferred, Supertonic's agreement, and the language it reads in.
+ */
 export async function engineSettings() {
   try {
-    const stored = await chrome.storage.local.get([ENGINE_KEY, AGREEMENT_KEY]);
-    return { preference: engineOf(stored[ENGINE_KEY]), agreement: stored[AGREEMENT_KEY] ?? null };
+    const stored = await chrome.storage.local.get([ENGINE_KEY, AGREEMENT_KEY, LANGUAGE_KEY]);
+    return {
+      preference: engineOf(stored[ENGINE_KEY]),
+      agreement: stored[AGREEMENT_KEY] ?? null,
+      language: languageOf(stored[LANGUAGE_KEY]),
+    };
   } catch (error) {
     // No agreement is the safe reading: Supertonic is then never chosen, and Kokoro or the
     // system voices answer instead, which is what happened before either setting existed.
     console.warn('[openposse] could not read the voice settings –', error?.message ?? error);
-    return { preference: 'auto', agreement: null };
+    return { preference: 'auto', agreement: null, language: 'en' };
   }
 }
 

@@ -11,9 +11,11 @@ import assert from 'node:assert/strict';
 import {
   chooseEngine, describeEngine, assignKokoroVoices, KOKORO_VOICES, REASONS,
   assignSupertonicVoices, SUPERTONIC_VOICES, genderOf, agreedToSupertonic, supertonicSpeed,
+  SUPERTONIC_LANGUAGES, supertonicLanguage,
 } from '../src/tts.js';
 import { SUPERTONIC_LICENCE } from '../src/weights.js';
-import { engineOf } from '../src/storage.js';
+import { engineOf, languageOf } from '../src/storage.js';
+import { readFile } from 'node:fs/promises';
 
 /** An agreement as `setSupertonicAgreement` stores it. */
 const AGREED = {
@@ -277,6 +279,27 @@ test("Supertonic runs at 1.2/1.3 of the pace, keeping that ratio as the slider m
   close(supertonicSpeed(1.3), 1.05 * 1.2);
   close(supertonicSpeed(2.6) / supertonicSpeed(1.3), 2);
   close(supertonicSpeed(1), 1.05 * (1.2 / 1.3));
+});
+
+test("Supertonic's language list is the vendored helper's, less its `na`", async () => {
+  // The helper imports ONNX Runtime, so the list is copied rather than imported. Read from the
+  // helper's own source, so a copy that drifts fails here rather than as an unspoken answer.
+  const source = await readFile(new URL('../src/supertonic/helper.js', import.meta.url), 'utf8');
+  const line = /export const AVAILABLE_LANGS = \[([^\]]*)\]/.exec(source)?.[1];
+  assert.ok(line, 'the helper still declares AVAILABLE_LANGS');
+  const helper = [...line.matchAll(/'([a-z]+)'/g)].map((m) => m[1]).filter((code) => code !== 'na');
+  assert.deepEqual(SUPERTONIC_LANGUAGES, helper);
+  assert.equal(SUPERTONIC_LANGUAGES.length, 31);
+});
+
+test('an answer language Supertonic does not have is read as English', () => {
+  assert.equal(supertonicLanguage('de'), 'de');
+  assert.equal(supertonicLanguage('ja'), 'ja');
+  for (const other of ['na', 'xx', 'zh', '', null, undefined, 'DE']) {
+    assert.equal(supertonicLanguage(other), 'en', String(other));
+  }
+  assert.equal(languageOf('fr'), 'fr');
+  for (const odd of [undefined, null, '', 'French', 7, 'fr-FR']) assert.equal(languageOf(odd), 'en', String(odd));
 });
 
 test('ten Supertonic voices are all used before any repeats, and then they repeat', () => {

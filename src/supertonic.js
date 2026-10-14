@@ -18,7 +18,9 @@
 // this exists to improve on. `chooseEngine` only routes here when WebGPU is present.
 
 import * as ort from 'onnxruntime-web/webgpu';
-import { Style, TextToSpeech, UnicodeProcessor, chunkText } from './supertonic/helper.js';
+import {
+  Style, TextToSpeech, UnicodeProcessor, chunkText, isValidLang,
+} from './supertonic/helper.js';
 import { SUPERTONIC } from './weights.js';
 import { play, peak, SILENT_PEAK } from './player.js';
 import { supertonicSpeed } from './tts.js';
@@ -33,13 +35,10 @@ ort.env.wasm.numThreads = 1;
 const GRAPHS = ['duration_predictor', 'text_encoder', 'vector_estimator', 'vocoder'];
 
 /**
- * The language every answer is spoken in, for now.
- *
- * Supertonic speaks 31, but the extension hears only English (`offscreen.js` listens in `en-US`),
- * so an answer in another language would come from a question nobody could have asked aloud.
- * Per-agent answer languages are their own piece of work.
+ * The longest chunk upstream speaks at once: 120 characters for Korean and Japanese, 300 for the
+ * rest, as upstream's own `call` chooses.
  */
-const LANG = 'en';
+const chunkLimit = (lang) => (lang === 'ko' || lang === 'ja' ? 120 : 300);
 
 /** Denoising steps. Upstream's default, and what the spike measured at 0.03–0.04× real time. */
 const STEPS = 8;
@@ -201,9 +200,13 @@ function toBuffer(wav, sampleRate, leadingSilence) {
  * @param onStart  called once, as the first chunk starts playing
  * @param speed    the Settings pace, converted by `supertonicSpeed` so Supertonic keeps the pace
  *                 that was set by ear against Kokoro's
+ * @param lang     the language to read the text in, a code from `SUPERTONIC_LANGUAGES`. Chosen
+ *                 in Settings; the extension still listens only in English.
  * @returns `{ ok, ms }` or `{ ok: false, reason, ms }`, with `ms` shaped like Kokoro's
  */
-export async function speak(text, voice, { onLevel = () => {}, onStart = () => {}, speed = 1 } = {}) {
+export async function speak(text, voice, {
+  onLevel = () => {}, onStart = () => {}, speed = 1, lang = 'en',
+} = {}) {
   if (!text) return { ok: true };
 
   // Measured and handed back rather than logged here, as Kokoro's are: a `console` line in the
@@ -215,6 +218,9 @@ export async function speak(text, voice, { onLevel = () => {}, onStart = () => {
 
   if (!SUPERTONIC.voices.some((v) => v.id === voice)) {
     return { ok: false, reason: `supertonic: there is no voice named ${voice}`, ms };
+  }
+  if (!isValidLang(lang) || lang === 'na') {
+    return { ok: false, reason: `supertonic: it does not speak a language called ${lang}`, ms };
   }
 
   try {
@@ -245,8 +251,9 @@ export async function speak(text, voice, { onLevel = () => {}, onStart = () => {
     const chunks = [];
     let silent = false;
 
-    for (const chunk of chunkText(text)) {
-      const { wav } = await exclusive(() => tts.call(chunk, LANG, style, STEPS, supertonicSpeed(speed), 0));
+    ms.lang = lang;
+    for (const chunk of chunkText(text, chunkLimit(lang))) {
+      const { wav } = await exclusive(() => tts.call(chunk, lang, style, STEPS, supertonicSpeed(speed), 0));
       // A cancel has already stopped the player; what is left is to stop making audio.
       if (cancels !== mine) break;
       if (wav.length === 0) continue;

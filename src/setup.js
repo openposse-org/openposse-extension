@@ -8,7 +8,7 @@
 import {
   loadRoster, recipeFor, setMicGranted, micGranted, voiceSpeed, setVoiceSpeed, clampSpeed,
   orbStyle, setOrbStyle, avatarsByCount, setAvatarsByCount, engineSettings, setVoiceEngine,
-  setSupertonicAgreement, clearSupertonicAgreement,
+  setSupertonicAgreement, clearSupertonicAgreement, setVoiceLanguage,
 } from './storage.js';
 import { mountThemeToggle, segmented } from './appearance.js';
 import { channelOf, colourName, initialFor, PALETTE } from './channels.js';
@@ -19,7 +19,9 @@ import { FLOOR_MS, FLOOR_OVERRIDE_KEY, FLOOR_RANGE, floorWindow, productLabel } 
 import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from './grace.js';
 import { setSurface } from './surface.js';
 import { MOCK_SIZES } from './mocks.js';
-import { chooseEngine, describeEngine, hasWebGPU, agreedToSupertonic } from './tts.js';
+import {
+  chooseEngine, describeEngine, hasWebGPU, agreedToSupertonic, SUPERTONIC_LANGUAGES, supertonicLanguage,
+} from './tts.js';
 import { offeredVoices } from './voices.js';
 import {
   weightsStatus, ensureAccess, VOICES, KOKORO, SUPERTONIC, SUPERTONIC_LICENCE,
@@ -237,9 +239,48 @@ async function refreshEngine() {
   markDone('step-voices', neural
     || speechSynthesis.getVoices().some((voice) => voice.localService));
   refreshSystemVoices(!neural);
+  await refreshLanguage(choice.engine);
   // Each assistant's picker lists this engine's voices, so it redraws with it.
   redrawRoster();
 }
+
+// ── Supertonic's language ──────────────────────────────────────────────────────────────────
+//
+// Shown only while Supertonic answers, because it is the only engine with more than English.
+// One setting for every answer rather than one per assistant: the extension listens only in
+// English, so this is for trying the other languages with typed questions and the sample box.
+
+const languageName = new Intl.DisplayNames(['en'], { type: 'language' });
+
+/** English first, then by name, since that is how somebody looks for theirs among 31. */
+function fillLanguages() {
+  const select = el('voice-language');
+  if (select.options.length > 0) return;
+  const [english, ...rest] = SUPERTONIC_LANGUAGES;
+  rest.sort((a, b) => languageName.of(a).localeCompare(languageName.of(b)));
+  for (const code of [english, ...rest]) {
+    const option = document.createElement('option');
+    option.value = code;
+    option.textContent = languageName.of(code);
+    select.append(option);
+  }
+}
+
+async function refreshLanguage(engine) {
+  el('language-row').hidden = engine !== 'supertonic';
+  if (engine !== 'supertonic') return;
+  fillLanguages();
+  el('voice-language').value = supertonicLanguage((await engineSettings()).language);
+}
+
+el('voice-language').addEventListener('change', async () => {
+  try {
+    await setVoiceLanguage(el('voice-language').value);
+  } catch (error) {
+    console.error('[openposse] the language could not be saved –', error?.message ?? error);
+    await refreshEngine();
+  }
+});
 
 // Chrome fills the system voice list after the page asks for it, so the first check can find
 // it empty; this runs the check again once it is there.

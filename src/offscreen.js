@@ -21,7 +21,7 @@
 import { assignVoices, localVoices, offeredVoices } from './voices.js';
 import {
   chooseEngine, hasWebGPU, assignKokoroVoices, KOKORO_VOICES,
-  assignSupertonicVoices, SUPERTONIC_VOICES,
+  assignSupertonicVoices, SUPERTONIC_VOICES, supertonicLanguage,
 } from './tts.js';
 import { weightsStatus, SUPERTONIC } from './weights.js';
 import * as kokoro from './kokoro.js';
@@ -439,6 +439,8 @@ async function speak({
       // The first sound, which `started` above is not: that fires before the model has loaded.
       onStart: () => send('openposse.speaking', { audible: true, preview }),
       speed,
+      // Supertonic's alone: Kokoro is English and ignores it.
+      lang: supertonicLanguage(settings?.language),
     });
 
     // **No silent fall-through to the system voices.** Getting the other voices when a neural
