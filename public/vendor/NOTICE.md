@@ -20,10 +20,16 @@ distinction is this project's standing rule and it has already caught one real p
 | `inter/InterVariable.woff2` | 4.1 | OFL-1.1 | [rsms/inter](https://github.com/rsms/inter) |
 | `lucide/LICENSE` (covering `../src/icons.js`) | `main` @ 2026-10-04 | ISC, plus MIT for the Feather-derived icons | [lucide-icons/lucide](https://github.com/lucide-icons/lucide) |
 | `../dictionaries/en-us.txt` | with HeadTTS | see below | CMU Pronouncing Dictionary, via HeadTTS |
+| `src/supertonic/helper.js` (from the repository root) | `web/helper.js` @ `912c54b4` | MIT | [supertone-oss-archive/supertonic](https://github.com/supertone-oss-archive/supertonic) |
+| `onnxruntime-web` JavaScript, bundled into the offscreen page | 1.25.0-dev.20260327-722743c0e2 | MIT | [onnxruntime-web](https://www.npmjs.com/package/onnxruntime-web) |
 
 Each licence text travels with the code it covers: `headtts/LICENSE`,
-`transformers/LICENSE-transformers`, `transformers/LICENSE-onnxruntime` and
-`inter/LICENSE.txt`. OpenPosse's own licence is Apache-2.0, at the repository root.
+`transformers/LICENSE-transformers`, `transformers/LICENSE-onnxruntime` (which covers the bundled
+ONNX Runtime JavaScript too: same project, same licence), `inter/LICENSE.txt`, and
+`src/supertonic/LICENSE`, which the build copies to `vendor/supertonic/`. OpenPosse's own licence
+is Apache-2.0, at the repository root.
+
+Supertonic 3's **weights** are not vendored, and their licence is not MIT: see *Supertonic* below.
 
 ## Inter
 
@@ -73,6 +79,37 @@ and copy each element inside it into `NODES` as `[tag, attributes]` – Lucide's
 format – under **Lucide's own name** for it. Renaming an icon to something that reads better
 locally is how the next person fails to find one that is already there.
 
+## Supertonic
+
+The second neural voice, checked 2026-10-15 by the same rule as everything else here: what gets
+linked, not the badge.
+
+- **The code is MIT and reads characters, not phonemes.** `helper.js`'s `UnicodeProcessor`
+  NFKD-normalises the text and looks every code point up in `unicode_indexer.json`. There is no
+  phonemizer, so the eSpeak route that ruled out `kokoro-js` does not exist here. Its only import
+  is ONNX Runtime Web, MIT.
+- **It is vendored from GitHub, not npm.** npm's `supertonic` is a 627-byte placeholder and
+  `supertonic-js` does not exist. `src/supertonic/helper.js` is upstream's `web/helper.js` at
+  `912c54b4` with **two marked patches**: it imports `onnxruntime-web/webgpu`, and it exports
+  `chunkText` so each chunk can be spoken as soon as it exists. `grep -n "OpenPosse patch"
+  src/supertonic/helper.js` finds both.
+- **ONNX Runtime's runtime files are the ones above.** `onnxruntime-web` is pinned in
+  `package.json` to the version transformers.js 4.0.0 ships, whose
+  `ort-wasm-simd-threaded.asyncify.{mjs,wasm}` are byte-identical to `transformers/`, so the
+  offscreen page points ONNX Runtime there and nothing large is added. **If transformers.js is
+  updated, update this pin to match**, or the two disagree about which runtime files they load.
+- **The weights are BigScience Open RAIL-M** (dated August 18, 2022), downloaded from
+  `supertone-oss-archive/supertonic-3` at a pinned revision, each file SHA-256-checked by
+  `src/weights.js`. The licence permits commercial use and redistribution, but paragraph 5
+  requires everyone who uses the model to be bound by the use restrictions in its Attachment A.
+  Settings therefore shows Attachment A word for word, links to the full text
+  (`src/supertonic/MODEL_LICENSE.txt`, the repository's `LICENSE` at the pinned revision,
+  SHA-256 `0d944a91…`), and keeps the download disabled until "I agree" is ticked; the agreement
+  is stored with the licence's version and date, and Supertonic is never used without it.
+- **The upstream project is archived**: no updates, fixes or support. Paragraph 7's request to
+  use the latest version is therefore met by the pinned revision.
+- **Kokoro stays because of this licence**, as the English voice without use restrictions.
+
 ## What was checked, and what was found
 
 - **HeadTTS** states it *"doesn't use eSpeak or any other GPL-licensed module"*, converting
@@ -94,11 +131,13 @@ locally is how the next person fails to find one that is already there.
 
 ## Updating these files
 
-The packages are **not** dependencies of this extension — they were installed once, three files
-were copied out, and they were removed again. That is deliberate: Chrome loads the whole
-unpacked directory, so `node_modules` counts toward what it reports, and installing
-transformers.js takes `onnxruntime-web` (131 MB) and `sharp` with it. The extension read
-**437 MB** in `chrome://extensions` until they were uninstalled.
+transformers.js is **not** a dependency of this extension – it was installed once, three files
+were copied out, and it was removed again. That was deliberate while Chrome loaded the repository
+itself, because `node_modules` then counted toward what it reported: installing transformers.js
+takes `onnxruntime-web` (131 MB) and `sharp` with it, and the extension read **437 MB** in
+`chrome://extensions` until they were uninstalled. Chrome now loads `dist/`, so that no longer
+applies, and `onnxruntime-web` *is* a dependency, for Supertonic: the build bundles its JavaScript,
+and nothing else of it reaches the package.
 
 To take a newer version:
 

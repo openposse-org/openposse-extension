@@ -61,7 +61,7 @@ sequenceDiagram
     participant Mic as Offscreen document<br/>(mic + speech)
     participant CS as Content script<br/>(the vendor's tab)
     participant Orb as Orb overlay
-    participant K as Kokoro voice<br/>(WebGPU)
+    participant K as Supertonic or Kokoro<br/>(WebGPU)
 
     You->>SW: ⌥V
     SW->>Mic: start listening
@@ -136,7 +136,7 @@ flowchart TB
 
         subgraph ext["OpenPosse extension"]
             SW["<b>Service worker</b><br/>roster · routing · floor holder<br/>dispatch · recording wizard<br/><i>MV3: dies after ~30 s idle</i>"]
-            OFF["<b>Offscreen document</b><br/>microphone · SpeechRecognition<br/>speechSynthesis · Kokoro<br/><i>invisible, survives tab switches</i>"]
+            OFF["<b>Offscreen document</b><br/>microphone · SpeechRecognition<br/>speechSynthesis · Supertonic · Kokoro<br/><i>invisible, survives tab switches</i>"]
             POP["<b>Popup</b><br/>roster · mic status<br/>type-instead-of-speak<br/>Record this tab"]
             SET["<b>Settings page</b><br/>mic grant · model download<br/>shortcut · voices · assistants"]
         end
@@ -148,7 +148,7 @@ flowchart TB
     end
 
     STORE[("chrome.storage<br/>agents + recipes")]
-    CACHE[("Cache Storage<br/>Kokoro weights<br/>SHA-256 verified")]
+    CACHE[("Cache Storage<br/>Supertonic and Kokoro weights<br/>SHA-256 verified")]
 
     SW <--> OFF
     SW <--> CS
@@ -175,7 +175,8 @@ flowchart TB
 
 - **`chrome.storage.local`** – the roster (`agents`) and one `recipe:<id>` per assistant.
 - **`chrome.storage.session`** – the floor holder and its timestamp. Cleared when the browser closes.
-- **Cache Storage** – Kokoro's weights, written once by setup after each file's SHA-256 is checked.
+- **Cache Storage** – Supertonic's and Kokoro's weights, each in a cache of its own, written once by
+  setup after each file's SHA-256 is checked.
 
 ---
 
@@ -279,11 +280,19 @@ flowchart TB
 
     SPLIT --> GATE{"<b>chooseEngine</b>"}
     GATE -->|"no WebGPU"| SYS
-    GATE -->|"weights absent"| SYS
-    GATE -->|"user chose system"| SYS
-    GATE -->|"all present"| HT
+    GATE -->|"no weights"| SYS
+    GATE -->|"Supertonic downloaded<br/>and its licence agreed to"| UNI
+    GATE -->|"Kokoro downloaded,<br/>alone or chosen"| HT
 
     SYS["<b>speechSynthesis</b><br/>filtered to localService === true<br/><i>the OS's own voices</i>"] --> OUT
+
+    subgraph supertonic["Supertonic 3 – all local"]
+        direction TB
+        UNI["<b>characters, not phonemes</b><br/>NFKD → unicode_indexer.json"]
+        GRAPHS["<b>four ONNX graphs</b>, 8 denoising steps<br/>onnxruntime-web on <b>WebGPU</b><br/><i>read from the verified cache</i>"]
+        UNI --> GRAPHS
+    end
+    GRAPHS --> CHK
 
     subgraph kokoro["Kokoro via vendored HeadTTS – all local"]
         direction TB
@@ -300,9 +309,51 @@ flowchart TB
     CHK -->|"audible"| SCH["scheduled on the audio clock<br/><code>start(when)</code>, sample-accurate joins"]
     SCH --> OUT["🔊"]
 
+    style supertonic fill:#eef6ff,stroke:#80a8d8
     style kokoro fill:#fff7ef,stroke:#e0b080
     style CHK fill:#ffe9e9,stroke:#d08080
 ```
+
+### Supertonic, and why Kokoro stays
+
+[Supertonic 3](https://huggingface.co/supertone-oss-archive/supertonic-3) is the recommended voice:
+it speaks 31 languages from one download, all ten voices in every one of them, and measured at
+**0.03–0.04× real time** on WebGPU here, about five times faster than Kokoro. It reads characters
+rather than phonemes, so there is no phonemizer and no eSpeak anywhere in its graph:
+
+| Component | Licence |
+|---|---|
+| Supertonic's browser helper (`src/supertonic/helper.js`, vendored, two marked patches) | MIT |
+| ONNX Runtime Web | MIT |
+| Supertonic 3 weights and voices (downloaded, not bundled) | **BigScience Open RAIL-M** |
+
+**The weights' licence is why Kokoro stays.** Open RAIL-M allows commercial use, but it lists
+use restrictions – no medical advice, no automated legal decisions, no use in law enforcement or
+immigration processes, among others – and requires everyone using the model to be bound by them.
+So Settings shows them word for word, ships the full licence text, and keeps Supertonic's Download
+disabled until "I agree" is ticked. The agreement is stored with the licence's version and date,
+and Supertonic is never used without it. Kokoro has no such restrictions and stays as the
+English voice for anyone, or any organisation, that cannot accept them.
+
+How the voice is chosen:
+
+| Downloaded | Speaks |
+|---|---|
+| Supertonic only | Supertonic |
+| Kokoro only | Kokoro, so an existing install keeps what it has |
+| Both | Supertonic, or Kokoro if chosen in Settings |
+| Neither | the system voices |
+
+Three more things worth knowing:
+
+- **WebGPU or nothing.** Its best WebAssembly run measured 0.73× real time, which is no way to hold
+  a conversation, so without WebGPU the system voices answer, as for Kokoro.
+- **Answers can be read in any of its languages**, chosen in Settings. OpenPosse still listens in
+  English only, so for now another language means a typed question or the Settings sample.
+- **It is faster at the same pace setting**, so it runs at 1.2/1.3 of it: at the default 1.3,
+  Kokoro is at 1.3× and Supertonic sounds as it does at 1.2×. Set by ear.
+
+The upstream project is archived, so the pinned revision is the last there will be.
 
 ### Why HeadTTS and not `kokoro-js`
 
@@ -351,9 +402,10 @@ successfully while the room stayed quiet.
 *Measured:* synthesis runs at 0.17–0.24× real time, and chunks are spoken as they arrive, so the
 voice step costs ~1.15× the answer's own length against 2.58× before.
 
-### The download
+### The downloads
 
-340.2 MB, once, **from setup, when you press the button** – never during a turn, never on first use.
+Supertonic is 401.3 MB and Kokoro 340.2 MB, each once, **from setup, when you press its button** –
+never during a turn, never on first use, and Supertonic's only after its licence is agreed to.
 Each file is checked against a SHA-256 baked into the build before anything uses it; a mismatch means
 the file is discarded. A model is code in every sense that counts, and one that arrives unverified is
 arbitrary code from a third party.
@@ -515,8 +567,10 @@ src/                     Plain JS, bundled with esbuild, no framework; the pages
   recorder.js              captures a recipe
   selector.js  dom.js      two-sample selectors, entropy rejection
   routing.js  domain.js    pure, tested under node --test
-  kokoro.js  tts.js        the voice and the gate in front of it
-  weights.js               pinned URLs, SHA-256, download and verify
+  supertonic.js kokoro.js  the two neural voices
+  player.js  tts.js        the audio both play through, and the gate in front of them
+  supertonic/              Supertonic's vendored helper, its MIT licence and the model's licence
+  weights.js               pinned URLs, SHA-256, download and verify, for both models
 public/                  Copied into the extension as-is: icons, dictionaries, and vendor/
                          (HeadTTS, transformers.js, Inter – with NOTICE.md)
 recipes/                 Recorded assistants, as shareable recipe files
@@ -549,8 +603,8 @@ V2 gets it back if "from any app, not just Chrome" turns out to matter.
 
 ## Status
 
-**Working:** speech in, routing, driving a recorded assistant, the orb, spoken answers, Kokoro
-voices, recording a new assistant end to end, navigation intents.
+**Working:** speech in, routing, driving a recorded assistant, the orb, spoken answers, Supertonic
+and Kokoro voices, recording a new assistant end to end, navigation intents.
 
 **Not yet:** constrained-decoding routing behind the Prompt API (layer 3), the Web Store listing, and
 using a recorded "still generating" indicator to cut the ~4 s a turn currently spends waiting out a
@@ -567,3 +621,8 @@ than shrank.
 Kokoro-82M and its voices are Apache-2.0. HeadTTS is MIT. Inter is SIL OFL 1.1. The eSpeak NG
 dependency common to other Kokoro ports is deliberately absent – see
 [the voice section](#why-headtts-and-not-kokoro-js).
+
+Supertonic's helper code is MIT. Its weights are not part of this repository or the package: they
+are downloaded on request under the BigScience Open RAIL-M licence, whose text ships as
+`vendor/supertonic/MODEL_LICENSE.txt` and whose use restrictions are agreed to in Settings – see
+[Supertonic, and why Kokoro stays](#supertonic-and-why-kokoro-stays).
