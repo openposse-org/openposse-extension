@@ -47,6 +47,8 @@ export default [
         // The loudness meter in the offscreen document. `SpeechRecognition` reports no level,
         // so the orb's radius comes from a second capture of the same device through this.
         AudioContext: 'readonly',
+        // Supertonic hands back samples, which the offscreen document wraps for the player.
+        AudioBuffer: 'readonly',
         Float32Array: 'readonly',
         // The orb registers Inter on the *vendor's* document, because a font face declared
         // inside a shadow root is not reliably honoured. See `ensureFont` in `orb.js`.

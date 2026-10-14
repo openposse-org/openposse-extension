@@ -88,6 +88,10 @@ async function copyStatic() {
     }
   }
 
+  // Supertonic's helper is bundled into the offscreen page rather than copied, so its MIT licence
+  // would otherwise be the one vendored licence missing from the package.
+  await cp('src/supertonic/LICENSE', `${OUT}/vendor/supertonic/LICENSE`);
+
   let manifest = JSON.parse(await readFile('src/manifest.json', 'utf8'));
   const { version } = JSON.parse(await readFile('package.json', 'utf8'));
   // Two version numbers that can disagree eventually will. The manifest's is the one Chrome and

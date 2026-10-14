@@ -1,8 +1,9 @@
-// Supertonic 3's browser helper, vendored for the Supertonic spike (`supertonic-spike.js`).
+// Supertonic 3's browser helper, vendored for the Supertonic voice (`supertonic.js`) and its spike.
 //
 // From supertone-oss-archive/supertonic, `web/helper.js` at 912c54b4. MIT, Supertone Inc.; the
-// licence is beside this file. The project is archived upstream, so nothing here will be fixed
-// there. Everything below is the original except the one line marked "OpenPosse patch".
+// licence is beside this file, and the build copies it into the package. The project is archived
+// upstream, so nothing here will be fixed there. Everything below is the original except the two
+// lines marked "OpenPosse patch".
 //
 // Text goes in as characters, not phonemes: `UnicodeProcessor` normalises it and looks every code
 // point up in `unicode_indexer.json`. There is no phonemizer and so no eSpeak, which is why this
@@ -486,7 +487,9 @@ export async function loadTextToSpeech(onnxDir, sessionOptions = {}, progressCal
 /**
  * Chunk text into manageable segments
  */
-function chunkText(text, maxLen = 300) {
+// OpenPosse patch: exported, so `supertonic.js` can speak each chunk as soon as it exists rather
+// than waiting for `call` to synthesise the whole answer.
+export function chunkText(text, maxLen = 300) {
     if (typeof text !== 'string') {
         throw new Error(`chunkText expects a string, got ${typeof text}`);
     }
