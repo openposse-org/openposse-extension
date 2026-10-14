@@ -89,8 +89,12 @@ async function copyStatic() {
   }
 
   // Supertonic's helper is bundled into the offscreen page rather than copied, so its MIT licence
-  // would otherwise be the one vendored licence missing from the package.
-  await cp('src/supertonic/LICENSE', `${OUT}/vendor/supertonic/LICENSE`);
+  // would otherwise be the one vendored licence missing from the package. The model's licence
+  // goes beside it: Settings links to it from the agreement, and the weights' own licence asks
+  // that it travel with anything that uses them.
+  for (const file of ['LICENSE', 'MODEL_LICENSE.txt']) {
+    await cp(`src/supertonic/${file}`, `${OUT}/vendor/supertonic/${file}`);
+  }
 
   let manifest = JSON.parse(await readFile('src/manifest.json', 'utf8'));
   const { version } = JSON.parse(await readFile('package.json', 'utf8'));

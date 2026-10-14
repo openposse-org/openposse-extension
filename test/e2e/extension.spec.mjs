@@ -21,6 +21,34 @@ test('every extension page opens without an error', async ({ context, extensionI
   }
 });
 
+test("Supertonic's download waits for its use restrictions to be agreed to", async ({ context, extensionId }) => {
+  // The licence binds its restrictions to everyone who uses the model, and the box is where that
+  // happens, so nothing may fetch the weights before it is ticked. No network: nothing is downloaded.
+  const settings = await context.newPage();
+  await settings.goto(`chrome-extension://${extensionId}/setup.html`);
+  const download = settings.locator('#get-supertonic');
+  const box = settings.locator('#agree-supertonic');
+  const stored = () => settings.evaluate(
+    async () => (await chrome.storage.local.get('supertonicAgreement')).supertonicAgreement ?? null);
+
+  await expect(settings.locator('#supertonic-status')).toHaveText(/not downloaded/);
+  await expect(download).toBeDisabled();
+
+  await box.check();
+  await expect(download).toBeEnabled();
+  await expect.poll(stored).toMatchObject({ licence: 'BigScience Open RAIL-M', version: '2022-08-18' });
+
+  // Unticking withdraws it.
+  await box.uncheck();
+  await expect(download).toBeDisabled();
+  await expect.poll(stored).toBeNull();
+
+  // The full licence the agreement links to is in the package.
+  const href = await settings.locator('.terms a').getAttribute('href');
+  const text = await settings.evaluate(async (path) => (await fetch(path)).text(), href);
+  expect(text).toContain('BigScience Open RAIL-M License');
+});
+
 test('an assistant shared as a file is added from Settings', async ({ context, extensionId }) => {
   const settings = await context.newPage();
   await settings.goto(`chrome-extension://${extensionId}/setup.html`);
