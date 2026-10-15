@@ -528,8 +528,10 @@ small enough to read and understand.
 follow-up questions, recording and sharing assistants, asking to see an answer in its tab, and
 answers read by Supertonic, Kokoro or your computer's own voices.
 
-**In progress:** the Chrome Web Store listing, listening in more languages, and using an
-assistant's own "still generating" indicator to read answers sooner.
+**Coming next:** the Chrome Web Store listing.
+
+**Being explored:** listening in more languages, and using an assistant's own "still generating"
+indicator to read answers sooner.
 
 ---
 
