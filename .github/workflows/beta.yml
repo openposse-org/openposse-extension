@@ -7,7 +7,9 @@
 #
 # Until the four repository variables it needs exist, it says which are missing and stops.
 #
-# Actions are pinned to commits rather than tags, because a tag can be moved to other code.
+# Actions are pinned to commits rather than tags, because a tag can be moved to other code. The
+# runner is pinned to ubuntu-24.04 for a similar reason: ubuntu-latest moves to a new release on
+# its own.
 
 name: Beta
 
@@ -31,7 +33,7 @@ jobs:
     if: >-
       vars.CWS_PUBLISHER_ID == '' || vars.CWS_BETA_ITEM_ID == '' ||
       vars.GCP_WORKLOAD_IDENTITY_PROVIDER == '' || vars.GCP_SERVICE_ACCOUNT == ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
       - name: Say what is missing
@@ -54,7 +56,7 @@ jobs:
     if: >-
       vars.CWS_PUBLISHER_ID != '' && vars.CWS_BETA_ITEM_ID != '' &&
       vars.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && vars.GCP_SERVICE_ACCOUNT != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read

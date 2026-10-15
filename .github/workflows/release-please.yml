@@ -11,7 +11,9 @@
 # request opened with the built-in token does not trigger other workflows, so CI would never
 # run on the release pull request.
 #
-# Actions are pinned to commits rather than tags, because a tag can be moved to other code.
+# Actions are pinned to commits rather than tags, because a tag can be moved to other code. The
+# runner is pinned to ubuntu-24.04 for a similar reason: ubuntu-latest moves to a new release on
+# its own.
 
 name: Release
 
@@ -29,7 +31,7 @@ concurrency:
 
 jobs:
   release-please:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
