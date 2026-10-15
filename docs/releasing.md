@@ -98,11 +98,94 @@ The API cannot create an item, and cannot fill in its listing, so the first pack
    ```
 
 2. In the dashboard, **New item** → upload `openposse-beta.zip`. Note the item's ID.
-3. **Store listing:** description, category, language, and at least one screenshot.
+3. **Store listing:** fill it in from the listing below.
 4. **Privacy:** fill it in with the answers below.
 5. **Distribution:** visibility **Private**, then choose the testers.
 6. Leave it unsubmitted. The workflow's first run uploads a newer build over it and submits that,
    which proves the whole path at once.
+
+#### The store listing
+
+The beta and the public item share this listing. The beta adds the opening paragraph marked
+below, which comes out for the public listing.
+
+**Summary:** the store takes it from the manifest's `description`: *Talk to the AI assistants
+you already use. It listens, works out who you meant, and asks them.*
+
+**Category:** Productivity, and Tools if the dashboard asks for a subcategory.
+
+**Language:** English.
+
+**Description:** the store shows it as plain text, so it is written without formatting. Paste
+everything inside the block.
+
+```text
+This is the beta of OpenPosse, for testers. It updates more often than the public version, and
+things may change between versions. If something doesn't work as you'd expect, please let us
+know at https://github.com/openposse-org/openposse-extension/issues
+
+OpenPosse lets you talk to the AI assistants you already use, such as Notion AI, by voice.
+
+Give each assistant a name, then simply ask: "Ivan, summarise the Q3 planning page." OpenPosse
+works out which assistant you meant, types your question into that assistant in the tab you
+already have open, waits for the reply, and reads it back to you in that assistant's own voice.
+A follow-up such as "and what about next quarter?" goes to whoever answered last.
+
+PRIVATE BY DESIGN
+• Speech recognition, choosing the right assistant, and the voices all run on your computer.
+• There is no OpenPosse account, API key or server, and nothing you say is sent to us.
+• Your question goes only to the assistant you address, just as if you had typed it there.
+
+WORKS WITH THE TABS YOU ALREADY HAVE
+• OpenPosse uses the assistant in the tab you're signed into, and never opens a site by itself.
+• Say "show me" to bring that tab forward when you'd like to see the full answer.
+• Site access is requested one site at a time, only when you add an assistant there.
+
+SIMPLE TO SET UP
+• Add an assistant by showing OpenPosse how you use it, once. A short guided recording does the
+  rest, with no code or configuration.
+• Share an assistant with a colleague as a small file.
+• Type your question instead of speaking whenever that suits you better.
+
+NATURAL VOICES
+• Use your computer's own voices, or download a neural voice once from Settings:
+  – Supertonic: fast and natural, and able to read answers in 31 languages. Its licence
+    includes use restrictions, which you agree to before downloading.
+  – Kokoro: natural English, with no use restrictions.
+• Every download is checked against a fingerprint built into OpenPosse before it is used.
+
+GETTING STARTED
+1. Open OpenPosse from the toolbar and choose to finish setup. In Settings, allow the microphone
+   and download the speech model.
+2. Open the tab with your assistant, open OpenPosse again, and choose Record this tab.
+3. Press the shortcut (⌘⇧9 on a Mac, Ctrl+Shift+9 elsewhere, or any keys you choose) and talk.
+
+Requires Chrome 139 or later. The neural voices need WebGPU; without it, your computer's own
+voices are used. OpenPosse listens in English for now.
+
+OpenPosse is open source, under the Apache-2.0 licence:
+https://github.com/openposse-org/openposse-extension
+
+Privacy policy:
+https://github.com/openposse-org/openposse-extension/blob/main/PRIVACY.md
+```
+
+**Icon:** `public/icons/icon-128.png`.
+
+**Screenshots:** 1280×800, PNG or JPEG, up to five; the first one leads the listing. Take them
+in a workspace with no real company content, since anything on screen is public once the item
+is listed.
+
+1. **An answer, beside its assistant.** The side panel showing an answer, with the assistant's
+   page beside it. The whole product in one picture.
+2. **Listening.** The side panel listening on an ordinary page, with the question appearing as it
+   is heard.
+3. **Adding an assistant.** The recording guide in the side panel, partway through, with steps
+   ticked off.
+4. **Your assistants.** The list in Settings, with each assistant's name and voice.
+5. **Voices.** Settings' voice step, with Supertonic and Kokoro side by side.
+
+If the dashboard asks for a small promo tile (440×280), there is not one yet.
 
 #### Answers for the Privacy tab
 

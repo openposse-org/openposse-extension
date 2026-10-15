@@ -80,9 +80,10 @@ Then, in Chrome:
 
 1. Open `chrome://extensions` and turn on **Developer mode**.
 2. Choose **Load unpacked** and select the `dist/` folder.
-3. Settings opens. Allow the microphone, download the speech model, and choose a shortcut.
-4. Open the tab with your assistant, open OpenPosse from the toolbar, and choose **Record this
-   tab**.
+3. Open OpenPosse from the toolbar. It offers to finish setup, which opens Settings: allow the
+   microphone, download the speech model, and choose a shortcut.
+4. Open the tab with your assistant, open OpenPosse from the toolbar again, and choose **Record
+   this tab**.
 
 ### The keyboard shortcut
 
