@@ -24,8 +24,11 @@ concurrency:
 
 jobs:
   e2e:
+    # The name is the check the main ruleset requires, "Browser tests (ubuntu-latest)", so the
+    # matrix keeps the label and only the machine is pinned. Ubuntu stays on 24.04 until
+    # `playwright install --with-deps` is known to work on the release ubuntu-latest moves to.
     name: Browser tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os == 'ubuntu-latest' && 'ubuntu-24.04' || matrix.os }}
     timeout-minutes: 15
     strategy:
       # One system failing says nothing about the others, so all of them run to the end.

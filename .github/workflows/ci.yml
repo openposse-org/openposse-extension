@@ -4,7 +4,9 @@
 # sent. A build that passes the tests but packs the manifest key, the spike or the capture tool
 # would be refused by the store or would ship developer tools, and nothing else would notice.
 #
-# Actions are pinned to commits rather than tags, because a tag can be moved to other code.
+# Actions are pinned to commits rather than tags, because a tag can be moved to other code. The
+# runner is pinned to ubuntu-24.04 for a similar reason: ubuntu-latest moves to a new release on
+# its own.
 
 name: CI
 
@@ -24,7 +26,7 @@ concurrency:
 jobs:
   test:
     name: Lint, test and package
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
