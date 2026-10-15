@@ -54,7 +54,17 @@ export const test = base.extend({
 
   extensionId: async ({ context }, use) => {
     const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
-    await use(new URL(worker.url()).host);
+    const id = new URL(worker.url()).host;
+    // A first install opens Settings. Waiting for it here keeps that tab from turning up partway
+    // through a test that counts tabs, and fails every test if the install stops opening it.
+    // Polled rather than awaited as an event, because a new tab can report `about:blank` before
+    // it reaches its address.
+    const settings = `chrome-extension://${id}/setup.html`;
+    await expect.poll(() => context.pages().some((page) => page.url() === settings), {
+      message: 'a first install opens Settings',
+      timeout: 10_000,
+    }).toBe(true);
+    await use(id);
   },
 });
 

@@ -61,7 +61,7 @@ assistant with Share first.
 
 | Check | macOS | Windows | Linux |
 |---|---|---|---|
-| **Setup.** Load `dist/` unpacked; opening OpenPosse from the toolbar offers to finish setup, which opens Settings; the microphone grant and the speech-model download both complete | ☐ | ☐ | ☐ |
+| **Setup.** Load `dist/` unpacked into a profile without OpenPosse; Settings opens by itself; the microphone grant and the speech-model download both complete. Reloading the extension afterwards does not open it again | ☐ | ☐ | ☐ |
 | **The shortcut.** The default (⌘⇧9 on a Mac, Ctrl+Shift+9 elsewhere) starts a turn with Chrome not in front; a shortcut changed at `chrome://extensions/shortcuts` and ticked Global does too | ☐ | ☐ | ☐ |
 | **Site access.** Record this tab on a real vendor: Chrome's dialog names the site, and after Allow, `await chrome.scripting.getRegisteredContentScripts()` in the service worker's console lists it | ☐ | ☐ | ☐ |
 | **Recording.** Record a real assistant (Notion AI): the coaching ticks each step, the dry run passes, the assistant is named in Settings | ☐ | ☐ | ☐ |

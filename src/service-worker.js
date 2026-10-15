@@ -1639,8 +1639,15 @@ watchSurface(pointActionAt);
 hydrateFront();
 watchFront();
 
-chrome.runtime.onInstalled.addListener(() => {
-  console.info('[openposse] extension installed');
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  console.info('[openposse] extension installed:', reason);
+  // A first install opens Settings, where setup starts: nothing works until the microphone is
+  // allowed and the speech model is in. Only on `install` – an update, which is also what the
+  // reload button in chrome://extensions sends, must not open a tab every time.
+  if (reason === chrome.runtime.OnInstalledReason.INSTALL) {
+    chrome.runtime.openOptionsPage().catch((error) =>
+      console.warn('[openposse] could not open Settings after install:', error?.message ?? error));
+  }
   // A reload destroys the offscreen document and clears session storage, but the badge is the
   // browser's and survives – so without this the toolbar claims a microphone is open that
   // nothing is holding.

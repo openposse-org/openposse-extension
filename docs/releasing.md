@@ -155,9 +155,8 @@ NATURAL VOICES
 • Every download is checked against a fingerprint built into OpenPosse before it is used.
 
 GETTING STARTED
-1. Open OpenPosse from the toolbar and choose to finish setup. In Settings, allow the microphone
-   and download the speech model.
-2. Open the tab with your assistant, open OpenPosse again, and choose Record this tab.
+1. After installing, Settings opens. Allow the microphone and download the speech model.
+2. Open the tab with your assistant, open OpenPosse from the toolbar, and choose Record this tab.
 3. Press the shortcut (⌘⇧9 on a Mac, Ctrl+Shift+9 elsewhere, or any keys you choose) and talk.
 
 Requires Chrome 139 or later. The neural voices need WebGPU; without it, your computer's own
