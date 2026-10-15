@@ -1,0 +1,15 @@
+{
+  "agentName": "Acme AI",
+  "domainPattern": "*.openposse.org",
+  "openMethod": "click",
+  "openSelector": "button[data-testid=\"assistant-launcher\"]",
+  "inputSelector": "textarea[data-testid=\"assistant-composer\"]",
+  "submitMethod": "click",
+  "submitSelector": "button[data-testid=\"assistant-send\"]",
+  "responseContainerSelector": "div[data-testid=\"assistant-answer-text\"]",
+  "busySelector": "button[data-testid=\"assistant-stop\"]",
+  "quietPeriodMs": 900,
+  "responseTimeoutMs": 60000,
+  "shortcut": null,
+  "triggerMethod": "synthetic"
+}
