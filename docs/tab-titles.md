@@ -167,3 +167,8 @@ Once this ships, two small things in `openposse-website`:
    open, by either route, and the content script is already in the tab by then.
 3. **Streaming assistants that rewrite the title while answering** (§4.4 handles it, but the
    observer firing on every token is worth measuring once on a real page).
+4. **Not yet checked on a real vendor: asking from another tab.** Checked on Notion 2026-10-15
+   from its own tab only (`done` for 5 s, then the title back), because the test profile runs
+   Notion in an Incognito window. Still to see on a real page: the three words on a background
+   tab, `done` clearing when the tab is looked at, and whether the title flickers while Notion
+   streams (question 3). The browser tests cover the background-tab sequence on the fixture.
