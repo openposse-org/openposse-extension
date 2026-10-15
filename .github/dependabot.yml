@@ -29,5 +29,12 @@ updates:
     groups:
       npm:
         patterns: ['*']
+    # onnxruntime-web is pinned to the version transformers.js ships, because Supertonic's ONNX
+    # Runtime loads its .wasm engine from public/vendor/transformers/. A newer onnxruntime-web
+    # would load an older engine, which CI cannot see (no test runs Supertonic) and Chrome only
+    # shows as answers falling back to the system voices. Update it by hand, together with the
+    # vendored transformers.js files.
+    ignore:
+      - dependency-name: onnxruntime-web
     commit-message:
       prefix: chore(deps)
