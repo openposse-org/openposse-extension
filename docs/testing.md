@@ -39,6 +39,9 @@ What they check:
 - **A shared assistant is added from Settings**, through the same box a person pastes into.
 - **A typed question reaches the vendor and its answer comes back to the panel.**
 - **With no vendor tab open, a turn says "No Fixture tab is open." and opens nothing.**
+- **The vendor's tab title follows the turn:** `typing…`, `answering…`, then `done`. A turn that
+  fails gives the tab its own title back, and a page that renames itself mid-turn keeps the new
+  name.
 
 **A test fails if any page logged an error**, extension pages included. That is the point of
 the layer: a bundle that throws while it loads passes ESLint and every unit test, and has
@@ -67,6 +70,7 @@ assistant with Share first.
 | **Recording.** Record a real assistant (Notion AI): the coaching ticks each step, the dry run passes, the assistant is named in Settings | ☐ | ☐ | ☐ |
 | **A spoken turn.** "Ivan, …" is heard, routed, answered and spoken; a long answer is spoken as its first sentence and asks "Would you like to see it?" | ☐ | ☐ | ☐ |
 | **Showing.** "Yes" and "show me" switch to the vendor's tab and raise its window; with no tab open, "No Notion tab is open." and nothing opens | ☐ | ☐ | ☐ |
+| **Tab titles.** Asked from another tab, the vendor's tab reads `typing…`, `answering…`, then `done` before its title; clicking the tab or "show me" clears `done`, and left alone it clears within 90 s; reloading the extension mid-answer gives the tab its title back within about 90 s | ☐ | ☐ | ☐ |
 | **System voices.** Step 4's list plays each voice at the set pace. On a Mac it lists Samantha, Fred, Daniel and Moira | ☐ | ☐ | ☐ |
 | **Kokoro.** Step 5 downloads with a moving percentage and verifies; answers are spoken in Kokoro; with WebGPU off, the system voices take over | ☐ | ☐ | ☐ |
 | **An update keeps Kokoro.** On an install with only Kokoro downloaded, answers are still spoken in Kokoro after loading the new build | ☐ | ☐ | ☐ |
