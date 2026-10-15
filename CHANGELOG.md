@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/openposse-org/openposse-extension/compare/v0.3.1...v0.4.0) (2026-10-15)
+
+
+### Features
+
+* Supertonic as the main voice, with Kokoro kept for its licence ([#7](https://github.com/openposse-org/openposse-extension/issues/7)) ([ec7a194](https://github.com/openposse-org/openposse-extension/commit/ec7a194c99c7e6544e41a37937623efc7771ce00))
+
 ## [0.3.1](https://github.com/openposse-org/openposse-extension/compare/v0.3.0...v0.3.1) (2026-10-13)
 
 
