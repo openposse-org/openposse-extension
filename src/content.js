@@ -25,6 +25,7 @@ import {
 } from './recorder.js';
 import { tell } from './tell.js';
 import { graceWindow } from './grace.js';
+import { DONE_IN_VIEW_MS, DONE_MS, original, STATES, withState } from './title.js';
 
 /** Error codes this script can originate, unchanged from the Mac app's wire protocol. */
 const ERROR = {
@@ -227,6 +228,10 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
       setInputValue(input, prompt);
     }
   };
+  // The tab's title follows the turn: `typing…` now, `answering…` once it is sent. Reported
+  // rather than written here, because this frame may be an iframe, and only the top frame's
+  // title is the tab's. The worker passes it on; see `show_turn_state` below.
+  emit({ kind: 'tab_state', state: 'typing' });
   applyPrompt();
 
   // Prefer the button. A click is far less likely to be gated on `isTrusted` than a
@@ -258,6 +263,7 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
   } else {
     pressShortcut({ key: 'Enter' }, input);
   }
+  emit({ kind: 'tab_state', state: 'answering' });
 
   // From the recipe, not a constant. The vendor decides how long it thinks for, and a
   // hardcoded ceiling reports a healthy-but-slow answer as a broken agent.
@@ -559,12 +565,103 @@ function ping() {
   return { ok: true, href: location.origin };
 }
 
+/**
+ * The tab's title during a turn, in the top frame only: `typing…`, `answering…`, `done`, then the
+ * page's own title again. The words are in `title.js`; see `docs/tab-titles.md`.
+ *
+ * The worker sends the states, but everything that ends one lives here, in the page:
+ * - **`done` ends when the page is looked at**, which `visibilitychange` reports however that
+ *   happens: a click on the tab, "show me", or raising its window.
+ * - **Every state has a ceiling**, timed in the page. The worker is stopped after about 30 s idle
+ *   and an extension reload cuts it off from this script, so a title that waited for the worker
+ *   could keep saying `answering…` for good.
+ * - **A page that writes its own title keeps it.** Notion renames the tab after navigating, mail
+ *   clients add counts. That title becomes the one to restore, with the state put back on top.
+ *
+ * A closed set of words, not a way to set a title: `state` is a key of `STATES`, or null.
+ */
+const turnTitle = {
+  base: null,
+  written: null,
+  observer: null,
+  timer: null,
+  onVisible: null,
+};
+
+function writeTitle(state) {
+  turnTitle.written = withState(turnTitle.base, state);
+  document.title = turnTitle.written;
+  // Setting the title can create the element, so the observer goes on after the write.
+  watchTitle(state);
+}
+
+function watchTitle(state) {
+  turnTitle.observer?.disconnect();
+  turnTitle.observer = new MutationObserver(() => {
+    if (document.title === turnTitle.written) return;
+    turnTitle.base = original(document.title);
+    writeTitle(state);
+  });
+  const element = document.querySelector('title');
+  if (element) {
+    turnTitle.observer.observe(element, { childList: true, characterData: true, subtree: true });
+  }
+  // A page that replaces the element rather than its text. Not `subtree`: the head is where
+  // style tags come and go on every render, and only the title matters here.
+  if (document.head) turnTitle.observer.observe(document.head, { childList: true });
+}
+
+function restoreTitle() {
+  turnTitle.observer?.disconnect();
+  clearTimeout(turnTitle.timer);
+  if (turnTitle.onVisible) document.removeEventListener('visibilitychange', turnTitle.onVisible);
+  if (turnTitle.base !== null && document.title === turnTitle.written) {
+    document.title = turnTitle.base;
+  }
+  Object.assign(turnTitle, { base: null, written: null, observer: null, timer: null, onVisible: null });
+}
+
+function showTurnState({ state, clearAfterMs }) {
+  if (state === null || state === undefined) {
+    restoreTitle();
+    return { ok: true };
+  }
+  if (!STATES[state]) return failure(ERROR.unsupportedIntent, `no tab-title state called ${state}`);
+  if (window !== window.top) {
+    return failure(ERROR.unsupportedIntent, 'the tab title belongs to the top frame');
+  }
+
+  turnTitle.base ??= original(document.title);
+  writeTitle(state);
+
+  clearTimeout(turnTitle.timer);
+  // A missing ceiling would be `setTimeout(…, undefined)`, which fires at once.
+  let ceiling = Number.isFinite(clearAfterMs) && clearAfterMs > 0 ? clearAfterMs : DONE_MS;
+  // A tab already in view never becomes visible, so the listener below would never clear `done`
+  // there and it sat for the whole 90 s. In view, it only has to show that the turn finished.
+  if (state === 'done' && document.visibilityState === 'visible') {
+    ceiling = Math.min(ceiling, DONE_IN_VIEW_MS);
+  }
+  turnTitle.timer = setTimeout(restoreTitle, ceiling);
+
+  if (turnTitle.onVisible) {
+    document.removeEventListener('visibilitychange', turnTitle.onVisible);
+    turnTitle.onVisible = null;
+  }
+  if (state === 'done') {
+    turnTitle.onVisible = () => { if (document.visibilityState === 'visible') restoreTitle(); };
+    document.addEventListener('visibilitychange', turnTitle.onVisible);
+  }
+  return { ok: true };
+}
+
 const INTENTS = {
   ask_assistant: askAssistant,
   get_last_response: getLastResponse,
   invoke_via_shortcut: invokeViaShortcut,
   arm_recording: armRecording,
   disarm_recording: disarmRecording,
+  show_turn_state: showTurnState,
   ping,
 };
 
