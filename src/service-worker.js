@@ -31,6 +31,7 @@ import {
 import { GRACE_OVERRIDE_KEY } from './grace.js';
 import { matchPattern } from './domain.js';
 import { vendorTab } from './tabs.js';
+import { DONE_MS } from './title.js';
 import { unpack } from './share.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
 import {
@@ -828,6 +829,21 @@ const WORKER_INTENTS = {
 // no-op that read as though it were doing something.
 
 /**
+ * Shows a turn's state in the vendor tab's title, or restores it with `null`. See `docs/tab-titles.md`.
+ *
+ * Always frame 0, whichever frame asked: the assistant can sit in an iframe, and only the top
+ * frame's title is the tab's. Never awaited on a turn's path, and a failure only logs, because
+ * a title is never the reason a turn fails.
+ */
+function showTurnState(tabId, state, clearAfterMs) {
+  chrome.tabs.sendMessage(tabId, { intent: 'show_turn_state', state, clearAfterMs }, { frameId: 0 })
+    .then((result) => {
+      if (result && !result.ok) console.warn('[openposse] tab title not updated –', result.code, result.message);
+    })
+    .catch((error) => console.warn('[openposse] tab title not updated –', error?.message ?? error));
+}
+
+/**
  * Runs one intent against the right tab and reports the outcome to the app.
  *
  * Every failure is a specific wire error rather than a generic one, because they need
@@ -878,8 +894,18 @@ async function dispatchIntent(request) {
 
   // Relays this exchange's partial results. Registered before the intent is sent so an
   // assistant that answers instantly cannot beat the listener into place.
+  // `typing…` and `answering…` end on their own after the vendor's response timeout and a margin,
+  // so an extension reloaded mid-answer cannot leave one in the tab's title for good.
+  const titleCeiling = (recipe.responseTimeoutMs ?? 60000) + 30000;
+  let titled = false;
   const onStream = (note) => {
     if (note?.kind !== 'openposse.stream' || note.id !== id) return;
+    // For the tab's title, not the answer: `ask()` reads every relayed event as answer text.
+    if (note.event?.kind === 'tab_state') {
+      titled = true;
+      showTurnState(tab.id, note.event.state, titleCeiling);
+      return;
+    }
     reply('event', note.event);
   };
   chrome.runtime.onMessage.addListener(onStream);
@@ -911,6 +937,10 @@ async function dispatchIntent(request) {
       }
     }
 
+    // `done` marks the tab that answered, so the person knows where "show me" goes. A failure
+    // puts the title straight back: the panel already says what went wrong.
+    if (titled) showTurnState(tab.id, result?.ok ? 'done' : null, DONE_MS);
+
     if (result?.ok) {
       reply('response', {
         text: result.text ?? '',
@@ -937,6 +967,7 @@ async function dispatchIntent(request) {
     const detail = String(error?.message ?? error);
     const noListener = detail.includes('Receiving end does not exist');
     console.warn('[openposse] dispatch failed –', detail);
+    if (titled) showTurnState(tab.id, null);
 
     reply('error', {
       code: ERROR.tabNotFound,
