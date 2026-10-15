@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/openposse-org/openposse-extension/compare/v0.4.1...v0.4.2) (2026-10-15)
+
+
+### Fixes
+
+* Supertonic no longer reports an expected warning as an error ([#17](https://github.com/openposse-org/openposse-extension/issues/17)) ([eec47ab](https://github.com/openposse-org/openposse-extension/commit/eec47ab2ecda8f8838ab48499e4305f4ae442d12))
+
 ## [0.4.1](https://github.com/openposse-org/openposse-extension/compare/v0.4.0...v0.4.1) (2026-10-15)
 
 
