@@ -123,6 +123,10 @@ async function connect() {
       try {
         sessions.push(await ort.InferenceSession.create(new Uint8Array(bytes), {
           executionProviders: ['webgpu'],
+          // Errors only. At its default level ONNX Runtime warns on every load that it placed a
+          // graph's shape ops on the CPU, which it does on purpose, and the wasm build prints that
+          // through console.error, so chrome://extensions listed it as an error on each answer.
+          logSeverityLevel: 3,
         }));
       } catch (error) {
         throw new Error(`${id} would not load on WebGPU: ${error?.message ?? error}`);
