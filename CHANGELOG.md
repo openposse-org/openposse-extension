@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/openposse-org/openposse-extension/compare/v0.4.2...v0.5.0) (2026-10-15)
+
+
+### Features
+
+* the assistant's tab shows what it is doing during a turn ([#20](https://github.com/openposse-org/openposse-extension/issues/20)) ([a08fb63](https://github.com/openposse-org/openposse-extension/commit/a08fb639a8bae33fd749775d7ccb75e5d7abdeac))
+
 ## [0.4.2](https://github.com/openposse-org/openposse-extension/compare/v0.4.1...v0.4.2) (2026-10-15)
 
 
