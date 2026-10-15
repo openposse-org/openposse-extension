@@ -86,3 +86,72 @@ test('with no vendor tab open, a turn says so and opens nothing', async ({ conte
   await expect(panel.locator('body')).toContainText('No Fixture tab is open.');
   expect(context.pages().length, 'no tab or window was opened').toBe(before);
 });
+
+/**
+ * Every title the vendor page shows from now on, in order, kept on the page as `__titles`. A
+ * recorder rather than a poll, because `typing…` lasts only as long as typing does.
+ *
+ * With `rename`, the page renames itself once, the moment it first shows `answering…`, the way
+ * Notion renames a tab after navigating.
+ */
+async function recordTitles(page, { rename = null } = {}) {
+  await page.evaluate((rename) => {
+    const titles = [document.title];
+    window.__titles = titles;
+    let renamed = false;
+    new MutationObserver(() => {
+      if (titles.at(-1) !== document.title) titles.push(document.title);
+      if (rename && !renamed && document.title.startsWith('answering…')) {
+        renamed = true;
+        document.title = rename;
+      }
+    }).observe(document.head, { childList: true, subtree: true, characterData: true });
+  }, rename);
+  return () => page.evaluate(() => window.__titles);
+}
+
+test("the vendor tab's title says what it is doing during a turn", async ({ context, extensionId }) => {
+  await addAcme(context, extensionId);
+  const vendor = await context.newPage();
+  await vendor.goto(VENDOR_URL);
+  const titles = await recordTitles(vendor);
+  const panel = await openPanel(context, extensionId);
+
+  await ask(panel, 'What is the pipeline total?');
+
+  await expect(panel.locator('body')).toContainText(ANSWER, { timeout: 20_000 });
+  await expect.poll(titles, { timeout: 5_000 }).toContain('done · Fixture CRM');
+  expect((await titles()).slice(0, 4)).toEqual([
+    'Fixture CRM', 'typing… · Fixture CRM', 'answering… · Fixture CRM', 'done · Fixture CRM',
+  ]);
+});
+
+test("a turn that fails gives the vendor tab its own title back", async ({ context, extensionId }) => {
+  await addAcme(context, extensionId);
+  const vendor = await context.newPage();
+  await vendor.goto(VENDOR_URL);
+  // No send button: the question is typed, then the turn fails.
+  await vendor.evaluate(() => document.querySelector('[data-testid="send"]').remove());
+  const titles = await recordTitles(vendor);
+  const panel = await openPanel(context, extensionId);
+
+  await ask(panel, 'What is the pipeline total?');
+
+  await expect(panel.locator('body')).toContainText('send button not found', { timeout: 10_000 });
+  await expect.poll(titles, { timeout: 5_000 })
+    .toEqual(['Fixture CRM', 'typing… · Fixture CRM', 'Fixture CRM']);
+});
+
+test('a page that renames itself mid-turn keeps its new title', async ({ context, extensionId }) => {
+  await addAcme(context, extensionId);
+  const vendor = await context.newPage();
+  await vendor.goto(VENDOR_URL);
+  const titles = await recordTitles(vendor, { rename: 'Pipeline review' });
+  const panel = await openPanel(context, extensionId);
+
+  await ask(panel, 'What is the pipeline total?');
+
+  await expect(panel.locator('body')).toContainText(ANSWER, { timeout: 20_000 });
+  await expect.poll(titles, { timeout: 5_000 }).toContain('done · Pipeline review');
+  expect(await titles()).toContain('answering… · Pipeline review');
+});
