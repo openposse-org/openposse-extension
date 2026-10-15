@@ -82,7 +82,7 @@ sequenceDiagram
     SW->>Orb: answer on screen (full text)
 
     alt answer is long
-        SW->>SW: Summarizer → one sentence
+        SW->>SW: first sentence + "the rest is on screen"
     end
 
     SW->>K: speak(sentence, Ivan's voice)
@@ -267,14 +267,17 @@ last answered keeps the floor for 90 s.
 
 ## The voice, end to end
 
-Long answers are shortened before they are spoken – Chrome's on-device `Summarizer` with
-`type: 'tldr', length: 'short'` returns one sentence, while the full text stays on screen. Then the
-sentence is synthesised.
+Long answers are shortened before they are spoken: the first sentence, then "The rest is on
+screen", while the full text stays on screen. Then that is synthesised.
+
+This used Chrome's on-device `Summarizer` until 13 October 2026. It runs on Gemini Nano, which
+enterprise policy blocks on most of the managed machines OpenPosse is for, so the first-sentence
+fallback was what nearly everyone heard anyway, and it is now the only path.
 
 ```mermaid
 flowchart TB
     TXT["answer text"] --> SUM{"long?"}
-    SUM -->|yes| SU["<b>Summarizer</b> (on-device)<br/>tldr · short → one sentence"]
+    SUM -->|yes| SU["first sentence<br/>+ the rest is on screen"]
     SUM -->|no| SPLIT
     SU --> SPLIT["split into sentences<br/><i>so speaking starts before<br/>synthesis finishes</i>"]
 
