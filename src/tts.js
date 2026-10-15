@@ -1,6 +1,6 @@
 // Which engine speaks, and in whose voice.
 //
-// Two engines, chosen at runtime rather than at build time:
+// Three engines, chosen at runtime rather than at build time:
 //
 // - **System** (`speechSynthesis`) – always present, free, and on macOS it is Apple's own 41
 //   local voices, which is the same set the Mac app used. Elsewhere it is whatever the OS
@@ -8,13 +8,16 @@
 // - **Kokoro** (E6) – 82M parameters of neural TTS, Apache-2.0, run locally through ONNX. It
 //   is the answer to "the voices are ugly, too robotic", and it needs WebGPU to be fast enough
 //   to hold a conversation with.
+// - **Supertonic 3** – neural TTS in 31 languages, about five times faster than Kokoro here,
+//   also on WebGPU. Its weights are Open RAIL-M, so it is only ever chosen once somebody has
+//   agreed to the licence's use restrictions, and Kokoro stays for anyone who cannot.
 //
 // **The selection is the interesting part and it is pure, so it is tested.** Getting it wrong
 // is not a crash: it is a product that sounds worse than it should on a capable machine, or
 // one that stutters unusably on a machine that cannot keep up – and both of those are
 // invisible on whatever laptop the developer happened to use.
 
-import { VOICES, langOf } from './weights.js';
+import { VOICES, langOf, SUPERTONIC, SUPERTONIC_LICENCE } from './weights.js';
 
 /**
  * Kokoro's English voices, Apache-2.0 with the weights.
@@ -32,6 +35,45 @@ import { VOICES, langOf } from './weights.js';
 export const KOKORO_VOICES = VOICES.map(({ id }) => ({ id, lang: langOf(id) }));
 
 /**
+ * Supertonic's ten voices, from `weights.js` for the same reason. Every one speaks every
+ * language, so the only thing to know about a voice besides its id is whether it is female or
+ * male, and the id says that too.
+ */
+export const SUPERTONIC_VOICES = SUPERTONIC.voices.map(({ id }) => ({ id, gender: genderOf(id) }));
+
+/**
+ * The 31 languages Supertonic speaks, English first, all from the one download.
+ *
+ * A copy of `AVAILABLE_LANGS` in the vendored helper, without its `na`, because the helper
+ * imports ONNX Runtime and cannot be loaded by a page that only needs the list. The test reads
+ * the helper's own line, so the two cannot drift apart.
+ */
+export const SUPERTONIC_LANGUAGES = [
+  'en', 'ko', 'ja', 'ar', 'bg', 'cs', 'da', 'de', 'el', 'es', 'et', 'fi', 'fr', 'hi', 'hr', 'hu',
+  'id', 'it', 'lt', 'lv', 'nl', 'pl', 'pt', 'ro', 'ru', 'sk', 'sl', 'sv', 'tr', 'uk', 'vi',
+];
+
+/**
+ * The language Supertonic reads answers in: the one chosen in Settings, if Supertonic has it,
+ * and English otherwise. Kokoro and the system voices are English whatever this says.
+ */
+export function supertonicLanguage(chosen) {
+  return SUPERTONIC_LANGUAGES.includes(chosen) ? chosen : 'en';
+}
+
+/**
+ * `female`, `male`, or null, from either engine's voice id.
+ *
+ * Kokoro names voices `<accent><gender>_<name>` (`af_heart`), Supertonic `<gender><number>`
+ * (`F1`). Anything else, a system voice's identifier among them, says nothing about gender.
+ */
+export function genderOf(id) {
+  const text = String(id ?? '');
+  const letter = /^[ab][fm]_/.test(text) ? text[1] : /^[FM][1-9]$/.test(text) ? text[0].toLowerCase() : null;
+  return letter === 'f' ? 'female' : letter === 'm' ? 'male' : null;
+}
+
+/**
  * Why an engine was chosen, in words a person can act on.
  *
  * Each of these sends someone somewhere different – one is "your machine cannot do this", one
@@ -39,13 +81,48 @@ export const KOKORO_VOICES = VOICES.map(({ id }) => ({ id, lang: langOf(id) }));
  * system voices" would be true and useless.
  */
 export const REASONS = {
+  'supertonic': 'Supertonic – neural voices, running on this machine',
   'kokoro': 'Kokoro – neural voices, running on this machine',
-  'no-webgpu': 'System voices – this browser has no WebGPU, and Kokoro without it is too slow to hold a conversation',
-  'no-assets': 'System voices – the Kokoro voice model is not installed',
+  'no-webgpu': 'System voices – this browser has no WebGPU, and the neural voices are too slow without it to hold a conversation',
+  'no-assets': 'System voices – no neural voice model is installed',
+  'no-agreement': 'System voices – Supertonic is downloaded, but its use restrictions have not been agreed to',
   'not-built': 'System voices – the Kokoro model is downloaded, but the engine that reads it is not built yet',
   'preference': 'System voices – chosen in settings',
   'system': 'System voices',
 };
+
+/** Supertonic's own speed, upstream's default: what its authors meant it to sound like. */
+const SUPERTONIC_OWN_SPEED = 1.05;
+
+/**
+ * Supertonic speaks faster than Kokoro at the same setting, so it runs at 1.2/1.3 of the pace.
+ *
+ * Set by ear on 2026-10-15, by the user's decision: with the slider at 1.3, Kokoro sounded right
+ * at 1.3 and Supertonic at 1.2. The pace stays one setting, so moving the slider still moves both
+ * voices together, keeping that ratio between them.
+ */
+const SUPERTONIC_PACE = 1.2 / 1.3;
+
+/**
+ * The speed Supertonic is given for a pace from Settings.
+ *
+ * Linear because Supertonic's speed divides its predicted durations, as Kokoro's does, so twice
+ * the pace is half the length on both.
+ */
+export function supertonicSpeed(pace) {
+  return SUPERTONIC_OWN_SPEED * SUPERTONIC_PACE * pace;
+}
+
+/**
+ * Whether a stored agreement covers the licence Supertonic's weights are under now.
+ *
+ * Matched on the licence's version as well as its presence, so if the weights ever moved to a
+ * different licence, an agreement to the old one would not carry over to terms nobody was shown.
+ */
+export function agreedToSupertonic(agreement) {
+  return agreement?.licence === SUPERTONIC_LICENCE.name
+    && agreement?.version === SUPERTONIC_LICENCE.version;
+}
 
 /**
  * Whether there is anything here that can actually run the model.
@@ -70,21 +147,44 @@ export const KOKORO_IMPLEMENTED = true;
  * broken on exactly the machines least able to afford it. Falling back to system voices is the
  * status quo rather than a failure, which is what makes the gate safe to enforce.
  *
- * @param hasWebGPU        `navigator.gpu` is present
- * @param hasKokoroAssets  the model and voices are actually on disk
- * @param preference       `'system'` to force it, anything else to allow the best available
+ * **Between the two neural engines, Supertonic unless somebody chose Kokoro**, and only from
+ * what is installed:
+ *
+ * | Installed | Speaks |
+ * |---|---|
+ * | Supertonic only | Supertonic |
+ * | Kokoro only | Kokoro, so an existing install keeps exactly what it has |
+ * | Both | Supertonic, or Kokoro if that is the stored preference |
+ * | Neither | the system voices |
+ *
+ * **Supertonic is never chosen without a stored agreement to its licence**, however it came to
+ * be on disk. The agreement is what binds its use restrictions to the person using it, so
+ * weights without one are treated as weights that are not there.
+ *
+ * @param hasWebGPU            `navigator.gpu` gives an adapter
+ * @param hasKokoroAssets      Kokoro's model and voices are actually on disk
+ * @param hasSupertonicAssets  Supertonic's graphs and voices are actually on disk
+ * @param agreement            the stored agreement to Supertonic's licence, or null
+ * @param preference           `'system'` to force it, `'kokoro'` to prefer Kokoro when both are
+ *                             installed, anything else for the best available
  */
 export function chooseEngine({
-  hasWebGPU = false, hasKokoroAssets = false, preference = 'auto',
-  implemented = KOKORO_IMPLEMENTED,
+  hasWebGPU = false, hasKokoroAssets = false, hasSupertonicAssets = false, agreement = null,
+  preference = 'auto', implemented = KOKORO_IMPLEMENTED,
 } = {}) {
   if (preference === 'system') return { engine: 'system', reason: 'preference' };
   if (!hasWebGPU) return { engine: 'system', reason: 'no-webgpu' };
-  if (!hasKokoroAssets) return { engine: 'system', reason: 'no-assets' };
-  // Checked last, so the reason names the *nearest* obstacle: somebody without WebGPU should be
-  // told that, not told we have not finished building something they could not have run anyway.
-  if (!implemented) return { engine: 'system', reason: 'not-built' };
-  return { engine: 'kokoro', reason: 'kokoro' };
+
+  const supertonic = hasSupertonicAssets && agreedToSupertonic(agreement);
+  const kokoro = hasKokoroAssets && implemented;
+  if (kokoro && (preference === 'kokoro' || !supertonic)) return { engine: 'kokoro', reason: 'kokoro' };
+  if (supertonic) return { engine: 'supertonic', reason: 'supertonic' };
+
+  // Nothing can speak. Name the nearest obstacle, so somebody is sent to the thing that is
+  // actually in the way: an agreement not given, then an engine not built, then a missing download.
+  if (hasSupertonicAssets) return { engine: 'system', reason: 'no-agreement' };
+  if (hasKokoroAssets) return { engine: 'system', reason: 'not-built' };
+  return { engine: 'system', reason: 'no-assets' };
 }
 
 /** One sentence for the setup page, so the choice is visible rather than mysterious. */
@@ -143,10 +243,53 @@ export function assignKokoroVoices(agents, voices = KOKORO_VOICES) {
     // A stored *system* voice identifier is not a Kokoro id, but it does say which accent was
     // wanted, so it is still worth reading rather than discarding.
     const wanted = /en-GB/i.test(String(agent?.voice ?? '')) ? 'en-GB' : 'en-US';
+    // And a Supertonic voice somebody chose says which gender, so an agent moved back to Kokoro
+    // keeps it. Null for everything else, which leaves the choice exactly as it always was.
+    const gender = genderOf(agent?.voice);
     const free = voices.filter((v) => !taken.has(v.id));
     const pool = free.length > 0 ? free : voices;
 
-    const voice = pool.find((v) => v.lang === wanted) ?? pool[0];
+    const voice = pool.find((v) => v.lang === wanted && (!gender || genderOf(v.id) === gender))
+      ?? pool.find((v) => v.lang === wanted) ?? pool[0];
+    if (!voice) continue;
+    taken.add(voice.id);
+    out.set(agent.id, voice.id);
+  }
+  return out;
+}
+
+/**
+ * A Supertonic voice per agent: one somebody chose is kept, and the rest are handed out in the
+ * fixed order of `SUPERTONIC_VOICES`, distinct until all ten are in use and repeating after that.
+ *
+ * **The gender carries over from Kokoro.** Each agent without a chosen Supertonic voice gets one
+ * of the gender of the Kokoro voice it has, chosen or assigned, because Kokoro is what most
+ * people heard before Supertonic and an agent changing from a woman's voice to a man's would
+ * not feel like the same agent. Every agent has a Kokoro voice to read, so every agent gets a hint.
+ *
+ * Supertonic's voices have no accent to keep: each one speaks every language it knows the same way.
+ */
+export function assignSupertonicVoices(agents, voices = SUPERTONIC_VOICES) {
+  const taken = new Set();
+  const out = new Map();
+  const known = new Set(voices.map((v) => v.id));
+
+  // Chosen voices first, as for Kokoro, so a deliberate choice is never reassigned.
+  for (const agent of agents ?? []) {
+    if (known.has(agent?.voice)) {
+      taken.add(agent.voice);
+      out.set(agent.id, agent.voice);
+    }
+  }
+
+  const kokoro = assignKokoroVoices(agents);
+  for (const agent of agents ?? []) {
+    if (out.has(agent.id)) continue;
+    const gender = genderOf(kokoro.get(agent.id));
+    const free = voices.filter((v) => !taken.has(v.id));
+    const pool = free.length > 0 ? free : voices;
+
+    const voice = pool.find((v) => v.gender === gender) ?? pool[0];
     if (!voice) continue;
     taken.add(voice.id);
     out.set(agent.id, voice.id);

@@ -17,7 +17,7 @@ unzip -p "$zip" manifest.json | node -e '
     process.exit(1);
   }'
 
-if unzip -Z1 "$zip" | grep -E '(^|/)(spike\.(js|html)|capture\.js|\.DS_Store)$'; then
+if unzip -Z1 "$zip" | grep -E '(^|/)(([a-z0-9]+-)*spike\.(js|html)|capture\.js|\.DS_Store)$'; then
   echo "the store zip contains a developer-only file, listed above" >&2
   exit 1
 fi

@@ -29,7 +29,13 @@ Chrome's dialog, which automation cannot reach. It is never loaded by hand and n
 
 What they check:
 
-- **Every extension page opens without an error.** Settings, the side panel and the popup.
+- **Every extension page opens without an error.** Settings, the side panel, the popup, and the
+  offscreen page that speaks, opened as a tab because Chrome's own offscreen document is not a page
+  Playwright watches. It carries ONNX Runtime for Supertonic, so a load-time throw there would
+  otherwise only show as a voice that never speaks.
+- **Supertonic's download waits for its licence.** Download is disabled until "I agree" is
+  ticked; ticking stores the agreement, unticking withdraws it, and the full licence it links to is
+  in the package. Nothing is downloaded.
 - **A shared assistant is added from Settings**, through the same box a person pastes into.
 - **A typed question reaches the vendor and its answer comes back to the panel.**
 - **With no vendor tab open, a turn says "No Fixture tab is open." and opens nothing.**
@@ -38,7 +44,7 @@ What they check:
 the layer: a bundle that throws while it loads passes ESLint and every unit test, and has
 shipped once that way.
 
-What they do not reach: speech in either direction, Kokoro, real vendors, Chrome's Allow
+What they do not reach: speech in either direction, Supertonic and Kokoro, real vendors, Chrome's Allow
 dialog, the side panel's own frame (its page is opened as a tab), the global shortcut, and
 registering the vendor script ahead of a turn – the manifest grant skips registration, and
 turns inject the script when they need it.
@@ -63,6 +69,9 @@ assistant with Share first.
 | **Showing.** "Yes" and "show me" switch to the vendor's tab and raise its window; with no tab open, "No Notion tab is open." and nothing opens | ☐ | ☐ | ☐ |
 | **System voices.** Step 4's list plays each voice at the set pace. On a Mac it lists Samantha, Fred, Daniel and Moira | ☐ | ☐ | ☐ |
 | **Kokoro.** Step 5 downloads with a moving percentage and verifies; answers are spoken in Kokoro; with WebGPU off, the system voices take over | ☐ | ☐ | ☐ |
+| **An update keeps Kokoro.** On an install with only Kokoro downloaded, answers are still spoken in Kokoro after loading the new build | ☐ | ☐ | ☐ |
+| **Supertonic.** Its Download stays disabled until "I agree" is ticked; it downloads 401 MB with a moving percentage and verifies; answers are spoken in Supertonic; with Kokoro too, "Which one speaks" switches between them; unticking "I agree", or removing Supertonic, returns answers to Kokoro | ☐ | ☐ | ☐ |
+| **Another language.** With Supertonic answering, choose German under the pace; a German sentence in the sample box is read in German, and a German question typed to an assistant is answered and read in German | ☐ | ☐ | ☐ |
 | **The side panel.** Opens from the icon and the shortcut, survives a click elsewhere, and nothing clips with the panel on the left at about 320px | ☐ | ☐ | ☐ |
 | **Sharing.** Share an assistant, import the file into a second profile, ask it something | ☐ | ☐ | ☐ |
 | **Nothing leaves the machine.** With a network monitor running, a whole turn makes no connection; only setup's downloads do | ☐ | ☐ | ☐ |
@@ -72,6 +81,6 @@ What differs by system, so a difference is not mistaken for a fault:
 - **Voices.** Windows offers its own voices (David, Zira and Mark on a US install). Linux offers
   eSpeak voices through speech-dispatcher, often with no language recorded, or none at all.
   Choosing a curated set for each is parked for a later release.
-- **WebGPU,** which Kokoro needs, is not available on every Linux setup; the system voices are
-  the expected result there.
+- **WebGPU,** which Supertonic and Kokoro both need, is not available on every Linux setup; the
+  system voices are the expected result there.
 - **ChromeOS** has no global shortcuts, so it is driven from the toolbar icon only.

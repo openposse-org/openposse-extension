@@ -19,12 +19,13 @@
 // message to whoever is displaying it.
 
 import { assignVoices, localVoices, offeredVoices } from './voices.js';
-import { chooseEngine, hasWebGPU, assignKokoroVoices, KOKORO_VOICES } from './tts.js';
-import { weightsStatus } from './weights.js';
 import {
-  speak as speakWithKokoro, cancel as cancelKokoro, warm as warmKokoro,
-  pause as pauseKokoro, resume as resumeKokoro,
-} from './kokoro.js';
+  chooseEngine, hasWebGPU, assignKokoroVoices, KOKORO_VOICES,
+  assignSupertonicVoices, SUPERTONIC_VOICES, supertonicLanguage,
+} from './tts.js';
+import { weightsStatus, SUPERTONIC } from './weights.js';
+import * as kokoro from './kokoro.js';
+import * as supertonic from './supertonic.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const Phrase = globalThis.SpeechRecognitionPhrase;
@@ -170,7 +171,7 @@ const ERROR_COPY = {
  * The plan says to verify this here before porting anything, so `end` reports the gap since the
  * last result: that number is the measurement, and a long tail means the endpointer comes back.
  */
-async function start({ phrases = [], lang = 'en-US' } = {}) {
+async function start({ phrases = [], lang = 'en-US' } = {}, engineSettings = null) {
   if (!SR) {
     send('openposse.listen.failed', {
       code: 'no-api',
@@ -278,7 +279,7 @@ async function start({ phrases = [], lang = 'en-US' } = {}) {
   startMeter();
 
   // Loads the model while the turn is still happening, so the ~1.7 s never lands on the answer.
-  warmVoice();
+  warmVoice(engineSettings);
   send('openposse.listen.started', { biased: Boolean(Phrase) && phrases.length > 0 });
 }
 
@@ -331,11 +332,41 @@ async function hasKokoroAssets() {
   return (await weightsStatus()).state === 'ready';
 }
 
-/** Decided per turn rather than cached: a GPU can be lost, and assets can be added. */
-async function engine() {
+/**
+ * Decided per turn rather than cached: a GPU can be lost, and assets can be added.
+ *
+ * @param settings  `{ preference, agreement }` from `engineSettings()` in storage.js, sent with
+ *                  the message because this document cannot read storage. Missing means no
+ *                  agreement, so Supertonic is not chosen: the safe reading of an older sender.
+ */
+async function engine(settings = null) {
   return chooseEngine({
     hasWebGPU: await hasWebGPU(),
     hasKokoroAssets: await hasKokoroAssets(),
+    hasSupertonicAssets: (await SUPERTONIC.status()).state === 'ready',
+    agreement: settings?.agreement ?? null,
+    preference: settings?.preference ?? 'auto',
+  });
+}
+
+/**
+ * The two neural engines, by the name `chooseEngine` gives them, each with its voices and the way
+ * it hands them out. `speak` and the warm-up treat them alike from here on.
+ */
+const NEURAL = {
+  kokoro: { module: kokoro, voices: KOKORO_VOICES, assign: assignKokoroVoices },
+  supertonic: { module: supertonic, voices: SUPERTONIC_VOICES, assign: assignSupertonicVoices },
+};
+
+/**
+ * Frees Supertonic's graphs when another engine has been chosen, so a change of engine in
+ * Settings does not leave two models on the GPU. Kokoro's lives in its own worker and is not
+ * unloaded, as before. A no-op when Supertonic never loaded.
+ */
+function release(chosen) {
+  if (chosen === 'supertonic') return;
+  supertonic.unload().catch((error) => {
+    console.warn('[openposse] Supertonic could not be unloaded –', error?.message ?? error);
   });
 }
 
@@ -347,8 +378,11 @@ async function engine() {
  * Not awaited and not reported: if it fails, the speaking path will say so with a reason, and a
  * warm-up complaining before anything needs it would be noise.
  */
-function warmVoice() {
-  engine().then(({ engine: chosen }) => { if (chosen === 'kokoro') warmKokoro(); });
+function warmVoice(settings) {
+  engine(settings).then(({ engine: chosen }) => {
+    release(chosen);
+    NEURAL[chosen]?.module.warm();
+  });
 }
 
 // `speed` arrives with the message rather than being read from storage here, for the same
@@ -367,35 +401,37 @@ function warmVoice() {
 // - `preview` is a label, not behaviour. It travels back out on `openposse.speaking` and
 //   `openposse.spoke` so the worker can tell a preview from a turn – no floor is held, no panel
 //   is waiting, and `trace`'s clock belongs to whatever turn last ran.
-async function speak({ text, agentID, roster = [], speed = 1, wanted = null, preview = false }) {
+async function speak({
+  text, agentID, roster = [], speed = 1, wanted = null, preview = false, engine: settings = null,
+}) {
   if (!text) return;
   speechSynthesis.cancel();                 // never two agents at once
   // `cancel` leaves a paused synthesizer paused, by the spec, so an answer queued after the demo
   // was paused would wait, silent, for a resume that is never coming.
   speechSynthesis.resume();
-  cancelKokoro();
+  kokoro.cancel();
+  supertonic.cancel();
 
-  // E6's fork. `chooseEngine` routes to Kokoro when WebGPU *and* the weights are both present,
-  // and to the system voices otherwise – which is every machine today, because the weights are
-  // not bundled yet. The branch is live rather than hypothetical, so adding the assets is the
-  // whole of the remaining change.
-  const { engine: chosen } = await engine();
-  if (chosen === 'kokoro') {
-    // **Passed explicitly even though all 28 now ship**, because the argument is about which
-    // question is being asked rather than about the answer being different today. What is
+  // The fork. `chooseEngine` routes to Supertonic or Kokoro when WebGPU and that engine's weights
+  // are present (and, for Supertonic, its licence agreed to), and to the system voices otherwise.
+  const { engine: chosen } = await engine(settings);
+  release(chosen);
+  const neural = NEURAL[chosen];
+  if (neural) {
+    // **Passed explicitly even though every voice now ships**, because the argument is about
+    // which question is being asked rather than about the answer being different today. What is
     // downloadable and what is downloaded are separate facts, and `weights.js` is the one that
-    // knows the second. When they were six and 28, taking the default handed a third British
+    // knows the second. When Kokoro's were six and 28, taking the default handed a third British
     // agent `bf_isabella` – a file the shim would refuse, correctly, three layers from anything
     // that could explain it. Naming the source keeps that true for whatever the next subset is.
-    const installed = KOKORO_VOICES;
-    // A named voice wins, but only if it is one of the installed ones. An id from a stale
-    // Settings page would otherwise reach the shim, which refuses a file it has no hash for –
-    // correctly, and three layers from anything that could explain it.
+    const installed = neural.voices;
+    // A named voice wins, but only if it is one of this engine's installed ones. An id from a
+    // stale Settings page, or one of the other engine's, would otherwise reach an engine that
+    // has no such file, three layers from anything that could explain it.
     const named = installed.some((v) => v.id === wanted) ? wanted : null;
-    const voice = named ?? assignKokoroVoices(roster, installed).get(agentID) ?? installed[0]?.id
-      ?? 'bm_george';
+    const voice = named ?? neural.assign(roster, installed).get(agentID) ?? installed[0]?.id;
     send('openposse.speaking', { started: true, preview });
-    const result = await speakWithKokoro(text, voice, {
+    const result = await neural.module.speak(text, voice, {
       // A real amplitude, on the same channel the microphone uses – so the orb follows an
       // answering agent exactly as it follows you. The system-voice path can only send
       // `pulse`, because `speechSynthesis` exposes no audio to measure.
@@ -403,20 +439,22 @@ async function speak({ text, agentID, roster = [], speed = 1, wanted = null, pre
       // The first sound, which `started` above is not: that fires before the model has loaded.
       onStart: () => send('openposse.speaking', { audible: true, preview }),
       speed,
+      // Supertonic's alone: Kokoro is English and ignores it.
+      lang: supertonicLanguage(settings?.language),
     });
 
-    // **No silent fall-through to the system voices.** Getting the other voices when Kokoro
-    // fails would be a quieter failure than it deserves: somebody who downloaded 89 MB for
-    // better voices and is hearing the old ones needs telling, not soothing. The reason
-    // reaches the console and, where it is actionable, the panel.
+    // **No silent fall-through to the system voices.** Getting the other voices when a neural
+    // engine fails would be a quieter failure than it deserves: somebody who downloaded hundreds
+    // of megabytes for better voices and is hearing the old ones needs telling, not soothing. The
+    // reason reaches the console and, where it is actionable, the panel.
     //
     // **The voice travels with the result**, which it did not, and the omission cost a round.
     // Everything about *how* the speaking went was reported – load, synthesis, duration, peak –
     // and the one thing identifying *who* spoke was dropped on the floor, two lines after being
-    // computed. `assignKokoroVoices` hands out voices by position, so an agent's voice changes
-    // when the roster does; without this, "is this the voice it used last week" is unanswerable
-    // from the log, and the answer to "why does it sound different" is a shrug.
-    send('openposse.spoke', { ...result, engine: 'kokoro', voice, preview });
+    // computed. Voices are handed out by position, so an agent's voice changes when the roster
+    // does; without this, "is this the voice it used last week" is unanswerable from the log,
+    // and the answer to "why does it sound different" is a shrug.
+    send('openposse.spoke', { ...result, engine: chosen, voice, preview });
     return;
   }
 
@@ -490,32 +528,35 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
       // have, and stopping the wrong one is worse than stopping one that was already silent.
       speechSynthesis.cancel();
       speechSynthesis.resume();                 // see `speak` – a cancel keeps a pause
-      cancelKokoro();
+      kokoro.cancel();
+      supertonic.cancel();
       respond({ ok: true });
       return true;
     case 'openposse.voice.pause':
-      // The demo's Pause. Both engines for the same reason as `hush`, and Kokoro's holds even if
-      // the model is still loading.
+      // The demo's Pause. Every engine for the same reason as `hush`, and the neural ones hold
+      // even if their model is still loading.
       speechSynthesis.pause();
-      pauseKokoro();
+      kokoro.pause();
+      supertonic.pause();
       respond({ ok: true });
       return true;
     case 'openposse.voice.resume':
       speechSynthesis.resume();
-      resumeKokoro();
+      kokoro.resume();
+      supertonic.resume();
       respond({ ok: true });
       return true;
     case 'openposse.voice.warm':
-      warmVoice();
+      warmVoice(message.engine);
       respond({ ok: true });
       return true;
     case 'openposse.engine.query':
-      // Asked by setup. This document is the only place that can answer – WebGPU and the voice
-      // list both live here.
-      engine().then(respond);
+      // This document is the only place that can answer for itself – WebGPU and the voice list
+      // both live here. The engine settings come with the question, as with everything else.
+      engine(message.engine).then(respond);
       return true;
     case 'openposse.listen.start':
-      start(message.options).then(() => respond({ ok: true }));
+      start(message.options, message.engine).then(() => respond({ ok: true }));
       return true;                              // keeps the channel open for the async reply
     case 'openposse.listen.stop':
       stop();

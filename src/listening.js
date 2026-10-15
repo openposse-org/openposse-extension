@@ -9,7 +9,7 @@
 // for something that was never meant to be kept. Only the listening *flag* is persisted, because
 // a badge that says we are listening after the worker has died is a lie a user would act on.
 
-import { loadRoster, micGranted, voiceSpeed } from './storage.js';
+import { loadRoster, micGranted, voiceSpeed, engineSettings } from './storage.js';
 import { channelOf, initialFor } from './channels.js';
 import { panel, panelLevel, panelSpeaking } from './panel.js';
 import { beginTurn, trace } from './trace.js';
@@ -233,7 +233,9 @@ export async function startListening({ reply = false } = {}) {
   // it was listening with before it says how it ended.
   beginTurn(reply ? 'reply to the offer' : 'turn');
   trace('listening', `${phrases.length} phrases at boost ${phrases[0]?.boost ?? 0}`);
-  await tell('openposse.listen.start', { options: { phrases } });
+  // The engine settings travel with it because listening is when the offscreen document warms
+  // the voice, and it cannot read storage to find out which voice that is.
+  await tell('openposse.listen.start', { options: { phrases }, engine: await engineSettings() });
   await broadcastState();
   return null;
 }
@@ -255,6 +257,9 @@ export async function say(text, agentID) {
     // spoken. An MV3 worker is torn down every 30 s anyway, which makes a cache here a thing
     // that is sometimes stale and sometimes not – the worst of both.
     speed: await voiceSpeed(),
+    // Which engine is preferred and whether Supertonic's licence is agreed to, for the same
+    // reason and read the same way.
+    engine: await engineSettings(),
   });
 }
 
@@ -264,7 +269,7 @@ export async function say(text, agentID) {
  * listening. Fire and forget; an answer that lands first just waits out the load, as before.
  */
 export function warmVoice() {
-  tell('openposse.voice.warm').catch((error) => {
+  engineSettings().then((engine) => tell('openposse.voice.warm', { engine })).catch((error) => {
     console.warn('[openposse] the voice could not be warmed –', error?.message ?? error);
   });
 }
@@ -309,6 +314,7 @@ export async function previewVoice(text, voice = null) {
     agentID: agents[0]?.id ?? null,
     roster: agents.map((a) => ({ id: a.id, voice: a.voice })),
     speed: await voiceSpeed(),
+    engine: await engineSettings(),
     wanted: voice,
     // Says this is not a turn. The outcome goes back to the page that asked, which is listening
     // for it; nothing here holds a floor or a panel open on its behalf.

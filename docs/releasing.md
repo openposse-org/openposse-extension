@@ -122,8 +122,9 @@ and reads its answer aloud.
 | `favicon` (optional) | Shows the icons of the user's assistants' sites, when the user turns that setting on. |
 | Host permissions (optional, `https://*/*`) | Requested for one site at a time, when the user adds an assistant on that site, and used only to type into that assistant and read its answer. |
 
-**Remote code:** No. Everything that runs is in the package. The Kokoro voice files downloaded
-from setup are model data, checked against SHA-256 hashes built into the package, not code.
+**Remote code:** No. Everything that runs is in the package, ONNX Runtime included. The Supertonic
+and Kokoro voice files downloaded from setup are model data, checked against SHA-256 hashes built
+into the package, not code.
 
 **Data usage:** OpenPosse sends nothing to its developers. Your question reaches the assistant you
 address, which receives it as if you had typed it there. Which categories, if any, that puts on the

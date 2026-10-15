@@ -61,6 +61,9 @@ export async function micGranted() {
  * measured slow only on one roster on one machine: Kokoro came out at 102–126 wpm against a
  * natural ~150, and 1.3 is roughly what closes that gap. It is one number for both engines, so
  * the system voices are 1.3× too. A pace somebody has already chosen is kept.
+ *
+ * Supertonic is the exception, by the user's decision of 2026-10-15: it speaks faster at the same
+ * number, so it runs at 1.2/1.3 of this pace (`supertonicSpeed` in tts.js). Still one setting.
  */
 const SPEED_DEFAULT = 1.3;
 // HeadTTS refuses anything outside this and says so; `utterance.rate` would silently clamp.
@@ -89,6 +92,78 @@ export async function setVoiceSpeed(value) {
   const speed = clampSpeed(value);
   await chrome.storage.local.set({ [SPEED_KEY]: speed });
   return speed;
+}
+
+// ── Which neural voice, and Supertonic's agreement ─────────────────────────────────────────
+//
+// Both are read where an answer starts and sent with it, like the pace: the offscreen document
+// that speaks has only `chrome.runtime`, so it cannot read them itself. `chooseEngine` in tts.js
+// is what acts on them.
+
+const ENGINE_KEY = 'voiceEngine';
+const AGREEMENT_KEY = 'supertonicAgreement';
+const LANGUAGE_KEY = 'voiceLanguage';
+
+/**
+ * `auto` picks the best installed engine; `kokoro` prefers Kokoro when Supertonic is installed
+ * too; `supertonic` and `system` say what they mean. Anything else, from a newer build or from
+ * nowhere, reads as `auto`, which is what everyone had before the setting existed.
+ */
+export const ENGINES = ['auto', 'supertonic', 'kokoro', 'system'];
+export const engineOf = (value) => (ENGINES.includes(value) ? value : 'auto');
+
+export async function setVoiceEngine(value) {
+  const engine = engineOf(value);
+  await chrome.storage.local.set({ [ENGINE_KEY]: engine });
+  return engine;
+}
+
+/**
+ * Records that somebody agreed to Supertonic's licence, which and when.
+ *
+ * @param licence  `{ name, version }`, from `SUPERTONIC_LICENCE` in weights.js. Passed in rather
+ *                 than imported, so this file does not carry the weights manifest into every page.
+ */
+export async function setSupertonicAgreement(licence) {
+  const agreement = { licence: licence.name, version: licence.version, at: new Date().toISOString() };
+  await chrome.storage.local.set({ [AGREEMENT_KEY]: agreement });
+  return agreement;
+}
+
+export async function clearSupertonicAgreement() {
+  await chrome.storage.local.remove(AGREEMENT_KEY);
+}
+
+/**
+ * The language Supertonic reads answers in, as a two-letter code. Anything that is not one reads
+ * as English; whether Supertonic has the language is `supertonicLanguage`'s question in tts.js.
+ */
+export const languageOf = (value) => (typeof value === 'string' && /^[a-z]{2}$/.test(value) ? value : 'en');
+
+export async function setVoiceLanguage(value) {
+  const language = languageOf(value);
+  await chrome.storage.local.set({ [LANGUAGE_KEY]: language });
+  return language;
+}
+
+/**
+ * What speaking an answer needs from storage besides the pace: `{ preference, agreement,
+ * language }`, which engine is preferred, Supertonic's agreement, and the language it reads in.
+ */
+export async function engineSettings() {
+  try {
+    const stored = await chrome.storage.local.get([ENGINE_KEY, AGREEMENT_KEY, LANGUAGE_KEY]);
+    return {
+      preference: engineOf(stored[ENGINE_KEY]),
+      agreement: stored[AGREEMENT_KEY] ?? null,
+      language: languageOf(stored[LANGUAGE_KEY]),
+    };
+  } catch (error) {
+    // No agreement is the safe reading: Supertonic is then never chosen, and Kokoro or the
+    // system voices answer instead, which is what happened before either setting existed.
+    console.warn('[openposse] could not read the voice settings –', error?.message ?? error);
+    return { preference: 'auto', agreement: null, language: 'en' };
+  }
 }
 
 /**

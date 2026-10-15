@@ -8,7 +8,10 @@
 import { test, expect, addAcme, openPanel, ask, RECIPE, VENDOR_URL, ANSWER } from './browser.mjs';
 
 test('every extension page opens without an error', async ({ context, extensionId }) => {
-  for (const name of ['setup.html', 'sidepanel.html', 'popup.html']) {
+  // `offscreen.html` too, opened as a tab: Chrome's own offscreen document is not a page these
+  // tests watch, so a module that throws as it loads there (it carries ONNX Runtime for
+  // Supertonic) would otherwise only ever show up as a voice that never speaks.
+  for (const name of ['setup.html', 'sidepanel.html', 'popup.html', 'offscreen.html']) {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/${name}`);
     // Long enough for each page's startup work to finish, so an error in it is caught too.
@@ -16,6 +19,34 @@ test('every extension page opens without an error', async ({ context, extensionI
     await expect(page).toHaveTitle(/OpenPosse/);
     await page.close();
   }
+});
+
+test("Supertonic's download waits for its use restrictions to be agreed to", async ({ context, extensionId }) => {
+  // The licence binds its restrictions to everyone who uses the model, and the box is where that
+  // happens, so nothing may fetch the weights before it is ticked. No network: nothing is downloaded.
+  const settings = await context.newPage();
+  await settings.goto(`chrome-extension://${extensionId}/setup.html`);
+  const download = settings.locator('#get-supertonic');
+  const box = settings.locator('#agree-supertonic');
+  const stored = () => settings.evaluate(
+    async () => (await chrome.storage.local.get('supertonicAgreement')).supertonicAgreement ?? null);
+
+  await expect(settings.locator('#supertonic-status')).toHaveText(/not downloaded/);
+  await expect(download).toBeDisabled();
+
+  await box.check();
+  await expect(download).toBeEnabled();
+  await expect.poll(stored).toMatchObject({ licence: 'BigScience Open RAIL-M', version: '2022-08-18' });
+
+  // Unticking withdraws it.
+  await box.uncheck();
+  await expect(download).toBeDisabled();
+  await expect.poll(stored).toBeNull();
+
+  // The full licence the agreement links to is in the package.
+  const href = await settings.locator('.terms a').getAttribute('href');
+  const text = await settings.evaluate(async (path) => (await fetch(path)).text(), href);
+  expect(text).toContain('BigScience Open RAIL-M License');
 });
 
 test('an assistant shared as a file is added from Settings', async ({ context, extensionId }) => {

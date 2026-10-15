@@ -3,7 +3,9 @@
 <img src="public/icons/openposse-lockup-dark.png" alt="OpenPosse" width="420">
 
 **Talk to the AI assistants you already use.**
-It listens, works out who you meant, and asks them – without anything leaving your machine.
+
+OpenPosse listens for an assistant's name, passes your question to it in the tab you already have
+open, and reads the answer back to you, all on your own computer.
 
 [![Licence](https://img.shields.io/badge/licence-Apache--2.0-blue.svg)](LICENSE)
 ![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-green.svg)
@@ -13,121 +15,237 @@ It listens, works out who you meant, and asks them – without anything leaving 
 
 ---
 
-## What it is
+## Overview
 
-You already have AI assistants. Notion has one. Your EA tool has one. Your helpdesk has one.
-Each lives behind a different button, in a different tab, with a different text box.
+Many of the tools we use at work now come with an AI assistant built in. Notion has one, your
+enterprise architecture tool has one, and so does your helpdesk. Each sits behind its own button,
+in its own tab, with its own text box.
 
-OpenPosse gives each of them a **name** and lets you talk to them out loud.
+OpenPosse brings them together behind your voice. You give each assistant a name, and then simply
+ask:
 
 > *"Ivan, summarise the Q3 planning page."*
 >
-> *"Andy, how many of our applications are end of life?"*
+> *"Andy, how many of our applications are reaching end of life?"*
 >
-> *"...and what about next quarter?"* – no name needed; the last one to answer still holds the floor.
+> *"And what about next quarter?"* – a follow-up goes to whoever answered last, so there is no need
+> to repeat the name.
 
-You press a shortcut, say a name and a request. OpenPosse routes the utterance to the right
-assistant, types into the assistant's own box, presses its own send button, watches for the answer,
-and reads it back to you in that assistant's voice.
+Press the shortcut, say a name and your question, and OpenPosse takes care of the rest. It works
+out which assistant you meant, types your question into that assistant's own box, presses its send
+button, waits for the reply, and reads it back to you in that assistant's voice.
 
-**It acts.** That is the whole point. Dictation into a web field is a solved feature and a crowded
-category; the market leader states plainly that it will not click Send for you. Clicking Send is
-the half OpenPosse is built around.
+Plenty of tools can dictate into a text field. OpenPosse carries the request all the way through,
+which is what makes it feel more like asking a colleague than filling in a form.
 
-### Three promises that shape every design decision
+### What we care about
 
-**Nothing leaves the device.** Speech recognition, routing and speech synthesis all run locally. A turn is a microphone, a page, and an answer, with nothing else in it. There is no
-account, no API key and no server.
+**Your privacy.** Speech recognition, choosing the right assistant, and the voice that reads
+answers back all run on your computer. There is no OpenPosse account, API key or server, and a
+conversation involves only your microphone, the assistant's page and its answer.
 
-**No JSON, no terminal, no jargon.** Adding a new assistant is a four-step wizard where you show
-OpenPosse how you use it. Nobody writes a selector.
+**Simplicity.** Setting up OpenPosse never calls for a configuration file, a terminal or technical
+terms. Adding an assistant is a short guided recording: you show OpenPosse how you use it once, and
+it takes it from there.
 
-**It only uses tabs you already have open.** OpenPosse drives the assistant in the tab you are
-signed into, and "show me" switches to that same tab. It never opens a vendor's site for you: not
-to ask a question, and not to show you an answer. A fresh tab would be the assistant with none of
-your conversation in it, possibly not signed in at all. If no tab is open, OpenPosse says so and
-stops. `test/tabs.test.mjs` fails if code outside the Settings page creates a tab or a
-window.
+**Your tabs.** OpenPosse works with the assistant in the tab you are already signed into, and when
+you ask to see an answer, it brings that same tab forward. It never opens a vendor's site on your
+behalf, so your conversation always stays in one place. If no tab is open for an assistant,
+OpenPosse lets you know rather than opening one.
 
 ---
 
-## How a turn works, end to end
+## Getting started
+
+### Requirements
+
+- **Google Chrome 139 or later**, on macOS 13 or later, Windows 10 or 11, Linux or ChromeOS. This
+  is the version that brought on-device speech recognition.
+- **WebGPU in Chrome**, for the neural voices. Without it, OpenPosse uses your computer's own
+  voices.
+- **Node.js 20 or later**, to build from source.
+
+### Installing from source
+
+A Chrome Web Store listing is in preparation. Until then, OpenPosse can be built and loaded
+directly:
+
+```bash
+git clone https://github.com/openposse-org/openposse-extension.git && cd openposse-extension
+npm install
+npm run build          # a complete extension in dist/
+```
+
+Then, in Chrome:
+
+1. Open `chrome://extensions` and turn on **Developer mode**.
+2. Choose **Load unpacked** and select the `dist/` folder.
+3. Settings opens. Allow the microphone, download the speech model, and choose a shortcut.
+4. Open the tab with your assistant, open OpenPosse from the toolbar, and choose **Record this
+   tab**.
+
+### The keyboard shortcut
+
+OpenPosse suggests **⌘⇧9** on a Mac and **Ctrl+Shift+9** elsewhere, because Chrome only lets an
+extension suggest a shortcut from that small set. You are free to choose any combination you like
+at `chrome://extensions/shortcuts`; tick **Global** there so it works while Chrome is in the
+background. ⌥V is a comfortable choice. Settings shows your current shortcut and links straight to
+that page.
+
+On a Mac, ⌘⇧3 to ⌘⇧6 already belong to the screenshot tools, so those are best avoided. ChromeOS
+does not support global shortcuts, so there OpenPosse is opened from the toolbar icon.
+
+---
+
+## Using OpenPosse
+
+### Asking a question
+
+Press your shortcut and OpenPosse opens in Chrome's side panel, ready to listen. Say an
+assistant's name and your question. The panel shows what it heard, then the assistant's full
+answer once it arrives.
+
+Short answers are read out in full. For a longer one, OpenPosse reads the first sentence and then
+asks, *"The rest is on screen. Would you like to see it?"* Answer "yes" and it brings the
+assistant's tab forward; "no", or simply staying quiet, leaves you where you are.
+
+If speaking isn't convenient, in a meeting or a quiet office for example, you can type your
+question into the side panel instead. Typed questions are answered in just the same way, without
+the spoken offer at the end.
+
+### Follow-up questions
+
+The assistant that answered last keeps the conversation for 90 seconds. During that time, a
+question without a name, such as *"and what about next quarter?"*, goes straight to it.
+
+### Seeing an answer in its tab
+
+OpenPosse works with each assistant's page in the background, so your current tab stays in front
+while you ask. When you would like to see the answer where it lives, just ask:
+
+| You say | What happens |
+|---|---|
+| "show me", "open it", "take me there" | Brings forward the tab of the assistant you were just talking to |
+| "take me to Notion", "switch to Notion" | Brings forward that assistant's tab, by product name |
+| "yes", after "Would you like to see it?" | Brings forward the tab of the assistant that just answered |
+| "show me the Q3 numbers" | Treated as a question, not as navigation |
+
+Each of these switches to a tab that is already open, the same one your question was asked in. A
+phrase only counts as navigation when it makes up the whole request, so a question that happens
+to begin with "show me" is always asked rather than mistaken for a request to switch tabs.
+
+### Adding an assistant
+
+Assistants are added by showing OpenPosse how you use them, with no code or configuration
+involved. The recording takes a minute or two:
+
+```mermaid
+flowchart LR
+    G["<b>1 · Allow</b><br/>the assistant's site,<br/>with one click"]
+    R["<b>2 · Record</b><br/>use the assistant<br/>as usual, twice"]
+    D["<b>3 · Check</b><br/>OpenPosse tries the<br/>recording by itself"]
+    N["<b>4 · Name</b><br/>it in Settings"]
+    G --> R --> D --> N
+```
+
+While you record, OpenPosse watches you open the assistant, type a question, send it and receive
+the answer, and does so twice so that it can recognise answers in general rather than one
+particular message. A short guide in the panel ticks off each step as it is captured. Once you
+finish, OpenPosse replays the recording by itself to make sure it works before the assistant is
+added.
+
+The result is a **recipe**: a short description of how to use the assistant's page. Anyone adding
+a shared recipe sees its steps before granting anything, along these lines:
+
+| Step | Example |
+|---|---|
+| `site` | `notion.so` |
+| `opens with` | `⌘ J`, or a recorded button |
+| `message box` | `[data-testid="composer"] textarea` |
+| `sends with` | `↩ Enter`, or a recorded button |
+| `answer appears` | a container on the page |
+| `knows when done` | the assistant's own "still generating" control |
+| `quiet period` | `900 ms` |
+| `gives up after` | `60 s` |
+
+### Sharing an assistant
+
+Once an assistant works for you, **Share** in Settings shows its recipe and saves it as a small
+file you can send to a colleague. They add it under **Add a shared AI assistant** in Settings,
+Chrome asks them to allow the assistant's site, and it is ready to use. A recipe holds the assistant's name and how to use its page, and never anything from
+your conversations. The [`recipes/`](recipes) folder has an example.
+
+### Voices
+
+Answers can be read by three kinds of voice, chosen in Settings:
+
+| Voice | Download | Languages | Notes |
+|---|---|---|---|
+| **Your computer's own voices** | none | English | Always available |
+| **Supertonic** *(recommended)* | 401 MB | 31 | The fastest and most natural; its licence includes use restrictions you agree to before downloading |
+| **Kokoro** | 340 MB | English | Natural and free of use restrictions |
+
+Both downloadable voices run on your computer and need WebGPU. Once downloaded, OpenPosse uses
+them automatically:
+
+| Downloaded | Answers are read by |
+|---|---|
+| Supertonic | Supertonic |
+| Kokoro | Kokoro |
+| Both | Supertonic, or Kokoro if you prefer it under **Which one speaks** |
+| Neither | your computer's own voices |
+
+Settings also lets you set the **pace**, choose a **voice for each assistant** or let OpenPosse
+choose distinct ones for you, and listen to every voice with a sample sentence of your own. With
+Supertonic, you can also choose the **language** answers are read in. OpenPosse currently listens
+in English only, so for other languages, type your question or try the sample.
+
+---
+
+## How it works
+
+### A conversation, step by step
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor You
     participant SW as Service worker<br/>(router)
-    participant Mic as Offscreen document<br/>(mic + speech)
-    participant CS as Content script<br/>(the vendor's tab)
-    participant Orb as Orb overlay
-    participant K as Kokoro voice<br/>(WebGPU)
+    participant Mic as Offscreen document<br/>(microphone and voice)
+    participant CS as Content script<br/>(the assistant's tab)
+    participant Panel as Side panel
 
-    You->>SW: ⌥V
+    You->>SW: shortcut
     SW->>Mic: start listening
-    Note over Mic: SODA, processLocally: true<br/>roster names biased via phrases
-    Mic-->>Orb: interim text, live
+    Note over Mic: on-device recognition<br/>assistant names given extra weight
+    Mic-->>Panel: what it hears, as you speak
     You->>Mic: "Ivan, summarise this page"
-    Mic-->>SW: speechend, then final transcript
+    Mic-->>SW: the finished sentence
 
     rect rgb(245,245,248)
-    Note over SW: Routing – closed roster, never free-text
-    SW->>SW: 1 name match → 2 fuzzy → 3 floor holder
+    Note over SW: Routing – only assistants you have added can be chosen
+    SW->>SW: name by spelling → name by sound → whoever answered last
     end
 
-    SW->>CS: ask_assistant(recipe, prompt)
-    Note over CS: opens the panel, types into<br/>the real box, clicks the real button
-    CS->>CS: watch for the answer
-    CS-->>SW: partial_result… then final answer
-    SW->>Orb: answer on screen (full text)
+    SW->>CS: ask the assistant (recipe, question)
+    Note over CS: opens the assistant, types into<br/>its box, presses its button
+    CS->>CS: waits for the answer
+    CS-->>SW: the answer as it arrives, then in full
+    SW->>Panel: the full answer, on screen
 
-    alt answer is long
-        SW->>SW: Summarizer → one sentence
+    alt the answer is long
+        SW->>SW: first sentence + "the rest is on screen"
     end
 
-    SW->>K: speak(sentence, Ivan's voice)
-    K-->>You: audio, synthesised on this machine
-    Note over SW: Ivan now holds the floor (90 s)
+    SW->>Mic: speak, in Ivan's voice
+    Mic-->>You: audio, made on this computer
+    Note over SW: Ivan keeps the conversation for 90 s
 ```
 
-Nothing in that sequence touches the network. The one exception is the vendor's own page doing what
-it always does: you are already logged into Notion, and Notion talks to Notion.
+None of these steps uses the network. The only traffic is the assistant's own page doing what it
+always does: you are signed into Notion, and Notion talks to Notion.
 
-### It does not switch tabs, and that is deliberate
-
-Driving the page happens through the DOM, not through synthetic keystrokes, so the tab does not need
-focus. Measured with the tab unfocused, on another page of the same vendor, in a different window,
-and in the vendor's chat view: all four work.
-
-So an automatic tab switch buys nothing and costs a context switch. Navigation is something you
-**ask for** instead:
-
-| You say | What happens |
-|---|---|
-| `show me`, `open it`, `take me there` | Raises the floor holder's tab |
-| `take me to Notion`, `switch to Notion` | Raises that assistant's tab, by product name |
-| `yes` to "Would you like to see it?" | Raises the tab of the assistant that just answered |
-| `show me the Q3 numbers` | **Stays a question.** Not navigation |
-
-Every row switches to a tab that is already open, and the same one a question would be asked in.
-None of them opens one: with no Notion tab open, "take me to Notion" answers "No Notion tab is
-open."
-
-A long answer is spoken as its first sentence and "The rest is on screen. Would you like to see
-it?" On a spoken turn the microphone then opens once for the reply: yes goes to the tab, no closes
-the offer, and silence lets it lapse. A typed question is not asked, because someone who typed may
-not be able to talk.
-
-That last row is the whole reason this needs care. An utterance is navigation only when the intent
-phrase plus an optional vendor name consumes *the entire utterance*. Anything left over is a
-question. A false positive here does not merely misfire – it eats the request and switches tabs
-while the user watches their question vanish.
-
----
-
-## Architecture
-
-Five contexts, each picked for a constraint rather than for tidiness.
+### Architecture
 
 ```mermaid
 flowchart TB
@@ -135,25 +253,23 @@ flowchart TB
         direction TB
 
         subgraph ext["OpenPosse extension"]
-            SW["<b>Service worker</b><br/>roster · routing · floor holder<br/>dispatch · recording wizard<br/><i>MV3: dies after ~30 s idle</i>"]
-            OFF["<b>Offscreen document</b><br/>microphone · SpeechRecognition<br/>speechSynthesis · Kokoro<br/><i>invisible, survives tab switches</i>"]
-            POP["<b>Popup</b><br/>roster · mic status<br/>type-instead-of-speak<br/>Record this tab"]
-            SET["<b>Settings page</b><br/>mic grant · model download<br/>shortcut · voices · assistants"]
+            SW["<b>Service worker</b><br/>assistants · routing · follow-ups<br/>asking · the recording guide"]
+            OFF["<b>Offscreen document</b><br/>microphone · speech recognition<br/>system voices · Supertonic · Kokoro"]
+            SP["<b>Side panel</b><br/>listening · answers · typed questions<br/>Record this tab"]
+            SET["<b>Settings page</b><br/>microphone · downloads · shortcut<br/>voices · assistants"]
         end
 
-        subgraph tab["A vendor's tab (granted one at a time)"]
-            CS["<b>Content script</b><br/>drives the page<br/>via a recorded recipe"]
-            ORB["<b>Orb overlay</b><br/>closed shadow root<br/>six turn states"]
+        subgraph tab["An assistant's tab (allowed one site at a time)"]
+            CS["<b>Content script</b><br/>uses the page<br/>through its recipe"]
         end
     end
 
-    STORE[("chrome.storage<br/>agents + recipes")]
-    CACHE[("Cache Storage<br/>Kokoro weights<br/>SHA-256 verified")]
+    STORE[("chrome.storage<br/>assistants · recipes · settings")]
+    CACHE[("Cache Storage<br/>Supertonic and Kokoro<br/>checked by SHA-256")]
 
     SW <--> OFF
     SW <--> CS
-    SW --> ORB
-    POP --> SW
+    SW <--> SP
     SET --> SW
     SW <--> STORE
     OFF <--> CACHE
@@ -163,407 +279,271 @@ flowchart TB
     style tab fill:#fff7ef,stroke:#e0b080
 ```
 
-| Context | Job | Why there and not somewhere else |
+| Part | What it does | Why it lives there |
 |---|---|---|
-| **Offscreen document** | mic, speech recognition, speech synthesis | Extension origin, so **one** microphone grant rather than one per site. Invisible, and survives tab switches. A service worker has no DOM and so no audio at all |
-| **Service worker** | roster, routing, floor holder, dispatch, the recording wizard | The only thing that outlives any single page. It is terminated after ~30 s idle and **reconstructs its state from storage on every wake** |
-| **Content script** | drives the vendor's page; hosts the orb | Only place with DOM access to someone else's app |
-| **Popup** | roster, mic status, manual fallback, "Record this tab" | Owns the **user gesture** that `chrome.permissions.request()` needs |
-| **Settings page** | one-time grants, model download, voices, assistants | The mic prompt needs a real tab. An offscreen document has nowhere to show it, and a side panel fails with `NotAllowedError` on macOS |
+| **Offscreen document** | The microphone, speech recognition and the voices | It belongs to the extension, so the microphone is allowed once rather than once per site. It is invisible and keeps working when you switch tabs |
+| **Service worker** | Your assistants, routing, follow-ups, and the recording guide | It is the one part that outlasts any single page. Chrome stops it after about 30 seconds of quiet, so it rebuilds its state from storage each time it wakes |
+| **Content script** | Uses the assistant's page | Only a script inside the page can work with it |
+| **Side panel** | The main window: listening, answers, typed questions and recording | It stays open while you work, sits beside any page, and can ask Chrome for access to a site |
+| **Settings page** | One-time setup, downloads, voices and assistants | Chrome can only ask for the microphone from a full page |
 
-### Where state lives
+Settings live in `chrome.storage.local`, the conversation in progress in `chrome.storage.session`
+(cleared when Chrome closes), and the downloaded voices in Cache Storage, each in its own cache.
 
-- **`chrome.storage.local`** – the roster (`agents`) and one `recipe:<id>` per assistant.
-- **`chrome.storage.session`** – the floor holder and its timestamp. Cleared when the browser closes.
-- **Cache Storage** – Kokoro's weights, written once by setup after each file's SHA-256 is checked.
+### Listening
 
----
-
-## Speech in
-
-Chrome 139 shipped `processLocally` on the Web Speech API. Recognition runs on Google's **SODA**
-model, on your machine.
+OpenPosse uses Chrome's speech recognition with `processLocally` set, so recognition always
+happens on your computer:
 
 ```js
-recognition.processLocally = true;   // a requirement, not a preference
+recognition.processLocally = true;   // on-device, or not at all
 recognition.interimResults = true;
 recognition.phrases = roster.map(name => new SpeechRecognitionPhrase(name, 3.0));
 ```
 
-Three things worth knowing:
+- **On-device is required, not preferred.** Left at its default, Chrome may choose an online
+  service. With `processLocally` set, a computer that cannot recognise speech locally reports an
+  error instead, and OpenPosse tells you so.
+- **Assistant names get a gentle boost.** The `phrases` weight works on a logarithmic scale, so a
+  modest 3.0 is enough to help "Ivan" win over "even" without the recogniser hearing names that
+  were never said.
+- **Chrome decides when you have finished speaking**, so there is no timer to tune.
 
-**`processLocally` must be `true`.** The default is `false`, which lets Chrome choose, which can
-mean Google's servers. Setting it true makes local a *requirement* – you get an `error` event with
-`service-not-allowed` rather than a silent cloud fallback. That is the failure mode to want.
+### Routing
 
-**The `phrases` boost is logarithmic.** It takes 0.0–10.0 and invites reading as "how keen are you,
-out of ten". It is roughly the *natural log* of how many times likelier the phrase is than the model
-thinks. An early version used 8, asserting "Ivan" was ~3,000× more likely than English says; the
-recogniser duly produced interim text reading `Ivan Ivan Ivan…` thirty-three times. **3.0** (~20×)
-is what the spec's own explainer uses for a proper noun. Biasing is for winning close calls –
-"Ivan" over "even" – not for overruling the audio.
-
-**Endpointing is free here.** The macOS app had to detect end-of-turn from the *absence* of
-transcription, because Apple's `SpeechDetector` emits nothing. Web Speech ends the turn itself:
-`speechend` fires, a final result follows ~76 ms later, and `end` closes it. No timer, no threshold
-to tune.
-
----
-
-## Routing
-
-Three independent layers. Each is cheap; together they make a wrong assistant unlikely and an
-*invalid* one impossible.
+Finding the right assistant happens in three simple steps, and only assistants you have added can
+ever be chosen:
 
 ```mermaid
 flowchart LR
-    U["utterance"] --> L1
+    U["what you said"] --> L1
 
-    subgraph L1["1 · Bias the recogniser"]
+    subgraph L1["1 · Listen for names"]
         direction TB
-        A1["roster names as<br/><code>phrases</code>, boost 3.0"]
+        A1["your assistants' names<br/>as <code>phrases</code>"]
     end
 
     L1 --> L2
 
-    subgraph L2["2 · Match a closed roster"]
+    subgraph L2["2 · Match a name"]
         direction TB
-        A2["normalised prefix,<br/>then fuzzy fallback"]
+        A2["by spelling,<br/>then by sound"]
     end
 
-    L2 -->|"no confident match"| L3
-    L2 -->|"matched"| OUT
-
-    subgraph L3["3 · Constrained decoding <i>(optional)</i>"]
-        direction TB
-        A3["Prompt API, JSON Schema<br/><code>anyOf</code> over the roster"]
-    end
-
-    L3 --> OUT
-    L2 -->|"no name at all"| FLOOR["floor holder<br/>(90 s)"]
+    L2 -->|"a name"| OUT
+    L2 -->|"no name"| FLOOR["whoever answered<br/>last (90 s)"]
     FLOOR --> OUT
-    OUT["an assistant that exists"]
-
-    style L3 stroke-dasharray: 5 5
+    OUT["one of your assistants"]
 ```
 
-Layers 1 and 2 are the product. **Layer 3 is decoration** and must be treated as absent by default.
-Chrome's Prompt API needs 22 GB free disk plus either >4 GB VRAM or 16 GB RAM – but on the
-development machine the real blocker was something else entirely:
+Matching by sound means "Andie", "Preeya" and "Macks" still reach Andy, Priya and Max. Ordinary
+English words are never matched loosely, so "even" stays "even" even with an assistant called
+Ivan.
 
-> The on-device model is not available because the enterprise policy disables the feature.
+Routing does not rely on Chrome's built-in language model. Many companies switch that model off
+through browser policy, and OpenPosse is designed to work just as well on those computers.
 
-`availability()` returns plain `'unavailable'` for that, indistinguishable from a weak machine. This
-is probably the *common* case for this product: OpenPosse is for people talking to Notion and their
-EA tool **at work**, which is the same population whose browsers are centrally managed. So the copy
-never tells a managed user their machine is not powerful enough – it is, and buying a better one
-changes nothing.
-
-**The floor holder** makes a name-less follow-up a first-class outcome rather than a failure. Whoever
-last answered keeps the floor for 90 s.
-
----
-
-## The voice, end to end
-
-Long answers are shortened before they are spoken – Chrome's on-device `Summarizer` with
-`type: 'tldr', length: 'short'` returns one sentence, while the full text stays on screen. Then the
-sentence is synthesised.
+### The voice
 
 ```mermaid
 flowchart TB
     TXT["answer text"] --> SUM{"long?"}
-    SUM -->|yes| SU["<b>Summarizer</b> (on-device)<br/>tldr · short → one sentence"]
+    SUM -->|yes| SU["first sentence<br/>+ the rest is on screen"]
     SUM -->|no| SPLIT
-    SU --> SPLIT["split into sentences<br/><i>so speaking starts before<br/>synthesis finishes</i>"]
+    SU --> SPLIT["split into sentences<br/><i>so speaking starts before<br/>the whole answer is ready</i>"]
 
-    SPLIT --> GATE{"<b>chooseEngine</b>"}
-    GATE -->|"no WebGPU"| SYS
-    GATE -->|"weights absent"| SYS
-    GATE -->|"user chose system"| SYS
-    GATE -->|"all present"| HT
+    SPLIT --> GATE{"<b>which voice?</b>"}
+    GATE -->|"no WebGPU,<br/>or nothing downloaded"| SYS
+    GATE -->|"Supertonic, downloaded<br/>and agreed to"| UNI
+    GATE -->|"Kokoro, downloaded<br/>alone or preferred"| HT
 
-    SYS["<b>speechSynthesis</b><br/>filtered to localService === true<br/><i>the OS's own voices</i>"] --> OUT
+    SYS["<b>Your computer's voices</b><br/>local voices only"] --> OUT
 
-    subgraph kokoro["Kokoro via vendored HeadTTS – all local"]
+    subgraph supertonic["Supertonic 3 – on this computer"]
         direction TB
-        HT["<b>HeadTTS worker</b><br/><i>fetch replaced by a local-only shim</i>"]
-        G2P["<b>G2P, rule-based</b><br/>CMU dict (134k words)<br/>↓ NRL letter-to-sound for the rest<br/>ARPAbet → IPA → Misaki"]
-        TOK["tokenizer"]
-        ONNX["<b>Kokoro-82M ONNX</b>, fp32<br/>transformers.js + ONNX Runtime<br/>on <b>WebGPU</b>"]
-        PCM["PCM + phoneme timings"]
-        HT --> G2P --> TOK --> ONNX --> PCM
+        UNI["<b>reads characters</b><br/>no phoneme conversion"]
+        GRAPHS["<b>four ONNX models</b><br/>ONNX Runtime on <b>WebGPU</b>"]
+        UNI --> GRAPHS
     end
+    GRAPHS --> CHK
 
-    PCM --> CHK{"peak amplitude<br/>> 0?"}
-    CHK -->|"silence"| SYS
-    CHK -->|"audible"| SCH["scheduled on the audio clock<br/><code>start(when)</code>, sample-accurate joins"]
+    subgraph kokoro["Kokoro, through HeadTTS – on this computer"]
+        direction TB
+        HT["<b>HeadTTS</b>, in a worker"]
+        G2P["<b>pronunciation</b><br/>CMU dictionary, then<br/>letter-to-sound rules"]
+        ONNX["<b>Kokoro-82M</b><br/>ONNX Runtime on <b>WebGPU</b>"]
+        HT --> G2P --> ONNX
+    end
+    ONNX --> CHK
+
+    CHK{"is it audible?"}
+    CHK -->|"silent"| SYS
+    CHK -->|"yes"| SCH["played back to back<br/>on the audio clock"]
     SCH --> OUT["🔊"]
 
+    style supertonic fill:#eef6ff,stroke:#80a8d8
     style kokoro fill:#fff7ef,stroke:#e0b080
     style CHK fill:#ffe9e9,stroke:#d08080
 ```
 
-### Why HeadTTS and not `kokoro-js`
+A few details that keep the voice dependable:
 
-The obvious package is disqualified by a licence rule this project applies to anything with a model
-in it: **verify the dependency graph, not the badge.**
+- **Speaking starts early.** Each sentence plays as soon as it is ready, while the next is being
+  made, and sentences are scheduled on the audio clock so they join without gaps.
+- **Every voice checks its own output.** If a model ever produces silence, which can happen with
+  some graphics drivers, OpenPosse notices and reads the answer with a system voice instead.
+- **Only local system voices are used.** Chrome lists some online voices alongside your computer's
+  own, so OpenPosse picks only voices marked as local.
+- **Kokoro runs at full precision (fp32).** Lighter fp16 variants are faster but produce silence
+  on WebGPU today, due to a known ONNX Runtime issue
+  ([#29807](https://github.com/microsoft/onnxruntime/issues/29807)).
 
-`kokoro-js` depends on `phonemizer@1.2.1`, which declares `Apache-2.0` while describing itself as *a
-text to phones converter using eSpeak NG* – 2.7 MB unpacked, zero npm dependencies, and no NOTICE
-anywhere. eSpeak NG is **GPL-3.0**. A package that size with no dependencies is shipping the engine
-inside it.
+#### Supertonic and Kokoro
 
-[HeadTTS](https://github.com/met4citizen/HeadTTS) replaced the GPL front end rather than merely
-claiming to. Verified by graph:
+[Supertonic 3](https://huggingface.co/supertone-oss-archive/supertonic-3) is the recommended voice.
+It speaks 31 languages from a single download, with all ten of its voices available in every
+language, and it is quick: around 0.03–0.04× real time on WebGPU in our measurements, roughly five
+times faster than Kokoro. It reads text as characters, so it needs no separate pronunciation
+engine.
 
-| Component | Licence |
-|---|---|
-| HeadTTS | MIT |
-| CMU Pronouncing Dictionary (134k words) | simplified BSD |
-| NRL Report 7948 letter-to-sound rules (1976) | US Navy report |
-| transformers.js + ONNX Runtime | Apache-2.0 |
-| Kokoro-82M-v1.0-ONNX-timestamped + voices | Apache-2.0 |
+Its model weights are published under the **BigScience Open RAIL-M** licence. The licence allows
+commercial use and asks that everyone using the model agrees to a short list of use restrictions,
+covering areas such as medical advice, fully automated legal decisions, and law enforcement or
+immigration processes. Settings shows these restrictions in full, links to the complete licence,
+and enables the download once you tick **I agree**. Your agreement is saved with the licence
+version and date, and Supertonic is only ever used with it.
 
-No eSpeak in that graph. HeadTTS is architected as a Node server and is not on npm, so only its
-in-browser module is used, vendored from GitHub with four OpenPosse patches marked in-file.
+**Kokoro remains available for anyone who prefers a voice without those terms**, whether as a
+personal choice or because an organisation's policies call for it. It is English only, and its
+model and voices are Apache-2.0.
 
-### Three things about the weights that cost real time
+Supertonic needs WebGPU to keep up with a conversation; on computers without it, your system's
+voices are used instead. Because Supertonic speaks a little faster at the same setting, its pace
+is scaled so that both voices sound comfortable at the default.
 
-**Do not switch the model to fp16.** The reasoning that leads there is correct – int8 graphs often
-have no WebGPU kernels, so part of the graph runs on CPU, which is why `q8` measures ~1.6× real time.
-fp16 fixes exactly that: 5.3 s of speech in 660 ms, **thirteen times faster**. Every sample was zero.
-ONNX Runtime's WebGPU backend produces NaN for Kokoro at fp16 ([#29807](https://github.com/microsoft/onnxruntime/issues/29807),
-[#26732](https://github.com/microsoft/onnxruntime/issues/26732)), and NaN reaches the WAV encoder as
-zeros – so it plays for exactly the right number of milliseconds and cannot be heard.
-**fp32 is the default**; `q8` is the fallback worth remembering.
+#### Downloads
 
-**An unrecognised dtype is ignored, not rejected.** transformers.js silently falls back to its fp32
-default, and two names break the `model_<dtype>.onnx` pattern anyway: fp32 is the unsuffixed
-`model.onnx` and q8 is `model_quantized.onnx`. A test pins the dtype to its file, because nothing
-downstream ever will.
+Each voice is downloaded once, from Settings, when you press its button, and never during a
+conversation. Every file is checked against a SHA-256 fingerprint built into OpenPosse before it
+is used, and any file that does not match is discarded. Both sets come from fixed versions on
+Hugging Face, so the files you receive are always the ones OpenPosse was built and tested with.
 
-**The voice checks its own output.** `kokoro.js` measures peak amplitude and refuses a buffer of
-zeros, falling back to a system voice. Until that existed, "the model produced silence" and "the
-audio was inaudible" were the same event – buffers played for the right duration and resolved
-successfully while the room stayed quiet.
+### Working with real pages
 
-*Measured:* synthesis runs at 0.17–0.24× real time, and chunks are spoken as they arrive, so the
-voice step costs ~1.15× the answer's own length against 2.58× before.
+Every assistant's page is built a little differently, and the recorder and content script are
+designed around what real pages do:
 
-### The download
+- **Text boxes built with frameworks such as React** need text entered through the browser's
+  native input path, which OpenPosse uses so the page notices what was typed.
+- **Some pages ignore simulated key presses**, so OpenPosse prefers recording and clicking an
+  assistant's send button over pressing Enter.
+- **"Still generating" indicators** are often replaced rather than changed, so the recorder
+  watches for what appears and disappears instead of watching a single element.
+- **Answers arrive in stages**, so OpenPosse waits until the page has been quiet for a moment and
+  any "stop" control has stayed gone before treating an answer as finished.
+- **Assistants often live in frames**, so OpenPosse finds the frame that holds the assistant and
+  talks to that frame directly.
+- **Questions and answers can look identical** in a page's markup, so the recipe identifies the
+  conversation and OpenPosse picks the answer at runtime, skipping the echo of your own question.
 
-340.2 MB, once, **from setup, when you press the button** – never during a turn, never on first use.
-Each file is checked against a SHA-256 baked into the build before anything uses it; a mismatch means
-the file is discarded. A model is code in every sense that counts, and one that arrives unverified is
-arbitrary code from a third party.
-
-All **28 voices** ship. It was six, on a comment claiming the full set would cost 28.7 MB. It is
-14.6 – every voice file is exactly 522,240 bytes – so the other 22 cost 11.5 MB against a 326 MB
-model. The bytes were never the real cost of a subset: with part of the set on disk, *"which voices
-exist"* and *"which are installed"* became different questions, and one caller got it wrong and
-handed an assistant a voice file that was not there.
-
----
-
-## Adding an assistant
-
-No vendor appears in `manifest.json`. There is no static `content_scripts` entry and no
-`host_permissions` – a hardcoded vendor is exactly what "add an assistant without writing code" means
-to be rid of. **An assistant is a recorded recipe in storage, not code.**
-
-```mermaid
-flowchart LR
-    G["<b>1 · Grant</b><br/>one origin, from<br/>the popup's button"]
-    R["<b>2 · Record</b><br/>use the assistant<br/>normally, twice"]
-    D["<b>3 · Dry run</b><br/>replays the recipe<br/>by itself"]
-    N["<b>4 · Name</b><br/>in Settings"]
-    G --> R --> D --> N
-```
-
-The wizard watches you open the assistant, type a question, send it, and receive an answer – twice,
-because two samples are what let it derive a selector describing *both* answers rather than one
-message. The orb coaches you through it and ticks each capture off as it lands.
-
-A finished recipe is inspectable from Settings ("See"):
-
-| Field | Example |
-|---|---|
-| `site` | `notion.so` |
-| `opens with` | `⌘ J` or a recorded selector |
-| `message box` | `[data-testid="composer"] textarea` |
-| `sends with` | `↩ Enter`, or a button selector |
-| `answer appears` | a container selector |
-| `knows when done` | the vendor's own "still generating" control |
-| `quiet period` | `900 ms` |
-| `gives up after` | `60 s` |
-
-**The dry run is not the recording.** It executes the finished recipe twice, automatically, and is
-the only place two things can be settled – whether a *synthetic* trigger opens the panel a real
-keypress opened, and whether the answer selector still names one answer on an exchange it did not
-witness. Notion broke this once: a per-message id made the recipe name exactly one message, and the
-recorder's own 0→1 count passed it.
-
-### Things the page will do to you
-
-Recording someone else's app is mostly a catalogue of surprises, each of which has cost a debugging
-cycle:
-
-- **React-controlled inputs ignore `element.value = x`.** The framework tracks input through an
-  overridden native setter, so a direct assignment updates the DOM and not the app's state: text
-  appears, the app never sees it. Call the native setter, then dispatch `input`.
-- **Synthetic `KeyboardEvent` may be silently rejected.** Browsers mark JS-dispatched events
-  `isTrusted: false` and some vendors check it on send. Record the *button*, not the shortcut,
-  wherever a vendor offers both.
-- **A busy signal is a replacement, not a state change.** On Notion the send button is swapped for a
-  different element, so a `MutationObserver` on attributes can never fire. The recorder takes a
-  baseline of every `data-testid` at submit and looks for what is new.
-- **"It has stopped" needs *sustained* absence.** An answer has phases, and the stop control
-  disappears between them. One disappearance is not the end.
-- **Answers reach the right *frame*, not just the right tab.** `chrome.tabs.sendMessage` without a
-  `frameId` goes to every frame and resolves with whichever answers first. On Notion – two iframes –
-  the frame with no composer failed on a three-second timeout, which beat any real exchange, so the
-  wrong answer won every time.
-- **Some vendors give a selector no way to name an answer.** After one exchange Notion's transcript
-  holds question, answer and a timestamp carrying an *identical* attribute set. The recipe names rows
-  and the runtime picks: skip the row echoing our own prompt, skip rows below a length floor, re-pick
-  once the page settles.
+When a page changes in a way the recipe no longer matches, OpenPosse reports that clearly rather
+than guessing, and recording the assistant again brings it up to date.
 
 ---
 
-## Permissions and privacy
+## Privacy and permissions
 
-| Permission | Why |
+What is stored, what uses the network and what never does is described in plain language in
+[PRIVACY.md](PRIVACY.md). In short, OpenPosse has no servers and sends nothing to its developers.
+
+| Permission | Used for |
 |---|---|
-| `offscreen` | the microphone and the speech engines |
-| `storage` | roster and recipes |
-| `tabs`, `scripting` | find the assistant's tab, register its content script |
-| `activeTab`, `alarms` | the recording gesture; keeping the worker alive mid-recording |
-| `optional_host_permissions: https://*/*` | **requested one origin at a time, by you, per assistant** |
+| `offscreen` | The microphone, speech recognition and voices |
+| `storage` | Your assistants, their recipes and your settings |
+| `sidePanel` | OpenPosse's main window |
+| `tabs`, `scripting` | Finding an assistant's tab and working with its page |
+| `activeTab`, `alarms` | Starting a recording on the current tab, and keeping OpenPosse awake while you record |
+| `favicon` *(optional)* | Showing your assistants' site icons, if you turn that on |
+| Site access *(optional)* | Requested **one site at a time**, when you add an assistant there |
 
-What is stored, what goes over the network and what never does, in plain words for users, is in
-[PRIVACY.md](PRIVACY.md).
+No site access is granted when OpenPosse is installed. Chrome describes site access in broad terms
+because it has only one wording for it, but OpenPosse asks for one site at a time, through a
+button, and uses it only to work with the assistants you have added.
 
-That last one is what a Web Store reviewer will ask about, and the honest answer is in the wording:
-it is *optional*, and it is spent one origin at a time through `permissions.request()` behind a
-button. Nothing is granted at install.
+The code follows a few firm rules:
 
-Chrome words it as *"Read and change all your data on all websites"*, because that is the only
-wording it has. What OpenPosse does with it is draw the orb on pages you have granted, and drive the
-assistants you recorded.
-
-**Hard rules, enforced in review:**
-
-- Never log transcripts, page content, or vendor responses. Event types and error codes only.
-- Credentials never leave the browser. Auth lives in the cookie jar. The extension may report
-  *whether* a session is valid; it must never read, forward or log cookies, tokens or form values.
-- TTS voices are filtered on `localService === true`. Chrome on macOS lists Apple's 41 local voices
-  *and* three remote Google ones in the same array – taking the default could send text to a server.
-- No model fetching during a turn, and nothing unverified, ever.
+- Questions, answers and page content are never logged, stored or sent anywhere.
+- Sign-ins stay in the browser. OpenPosse never reads, forwards or logs cookies, tokens or form
+  values.
+- Only voices that run on your computer are used.
+- Nothing is downloaded during a conversation, and every download is checked before use.
 
 ---
 
-## Install and build
-
-Requires Chrome 139+ (for local speech recognition) on macOS 13+, Windows 10/11, Linux or ChromeOS.
-Node 20+ to build.
+## Development
 
 ```bash
-git clone https://github.com/openposse-org/openposse-extension.git && cd openposse-extension
-npm install
-npm run build          # a complete extension in dist/
+npm test               # ESLint and the unit tests
+npm run test:e2e       # the built extension in a real browser, against a sample assistant
+npm run watch          # rebuild dist/ on every change; reload the extension to pick it up
+npm run package        # the Chrome Web Store package
 ```
 
-Then load it:
+[docs/testing.md](docs/testing.md) describes what the automated tests cover and the checklist for
+what is best checked by hand. [docs/releasing.md](docs/releasing.md) explains how a merge becomes
+a beta in the Chrome Web Store and how versions are released.
 
-1. Open `chrome://extensions`, turn on **Developer mode**
-2. **Load unpacked** → select the `dist/` folder
-3. The options page opens: grant the microphone, download the speech model, pick a shortcut
-4. Open an assistant's tab, click the OpenPosse icon, **Record this tab**
-
-```bash
-npm test               # eslint + node --test
-npm run test:e2e       # the extension in a real browser, against a fake vendor (Playwright)
-npm run watch          # rebuild dist/ on change; reload the extension to pick it up
-npm run package        # the Chrome Web Store zip: no manifest key, no developer tools
-```
-
-What the tests cover, and the checklist for what only a person can check, are in
-[docs/testing.md](docs/testing.md). How a merge becomes a beta in the Chrome Web Store, and how
-versions are released, is in [docs/releasing.md](docs/releasing.md).
-
-### The shortcut
-
-The manifest may only *suggest* `Ctrl+Shift+[0-9]` for a shortcut that works outside the browser, so
-it ships as ⌘⇧9. That restriction binds the manifest, **not you**: at `chrome://extensions/shortcuts`
-any combination can be assigned and ticked **Global**, so ⌥V works. Setup has a step that shows the
-current binding and opens that page.
-
-*(Of the ten permitted digits, macOS Screenshot owns 3, 4, 5 and 6. An earlier default of ⌘⇧5 opened
-the screenshot toolbar and never reached Chrome.)*
-
----
-
-## Repo layout
+### Repository layout
 
 ```
-src/                     Plain JS, bundled with esbuild, no framework; the pages and manifest
-  service-worker.js        routing, dispatch, the recording wizard
-  offscreen.js             mic, SpeechRecognition, speechSynthesis
-  content.js               drives the vendor's page
-  orb.js                   the overlay, six turn states
+src/                     The extension's code, pages and manifest (plain JavaScript, bundled with esbuild)
+  service-worker.js        routing, asking, and the recording guide
+  offscreen.js             microphone, speech recognition, and the voices
+  sidepanel.js             the main window
+  setup.js                 Settings
+  content.js               works with an assistant's page
   recorder.js              captures a recipe
-  selector.js  dom.js      two-sample selectors, entropy rejection
-  routing.js  domain.js    pure, tested under node --test
-  kokoro.js  tts.js        the voice and the gate in front of it
-  weights.js               pinned URLs, SHA-256, download and verify
-public/                  Copied into the extension as-is: icons, dictionaries, and vendor/
-                         (HeadTTS, transformers.js, Inter – with NOTICE.md)
-recipes/                 Recorded assistants, as shareable recipe files
-test/                    node --test suites; e2e/ browser tests and fixtures/, a fake vendor
-tools/                   The build script, and a capture helper for DevTools
-docs/                    The Assistant hooks RFC, research notes
-spikes/                  The E0 spike that proved speech works in an offscreen document
-dist/                    Build output: the extension Chrome loads (not committed)
+  selector.js  dom.js      finding the right elements on a page
+  routing.js  domain.js    choosing an assistant, and site access
+  supertonic.js kokoro.js  the two downloadable voices
+  player.js  tts.js        playback, and choosing which voice speaks
+  supertonic/              Supertonic's browser helper, its licence, and the model's licence
+  weights.js               the voice downloads: fixed versions, SHA-256 checks
+public/                  Files copied as they are: icons, the pronunciation dictionary, and vendor/
+recipes/                 Example assistants, as shareable recipe files
+test/                    Unit tests; e2e/ browser tests, with a sample assistant in fixtures/
+tools/                   The build script and developer helpers
+docs/                    Testing, releasing, and design notes
+dist/                    The built extension that Chrome loads (not committed)
 ```
 
-**Plain JS on purpose.** No framework. The extension should stay small enough to read in one sitting.
+OpenPosse is written in plain JavaScript without a framework, so that the whole extension stays
+small enough to read and understand.
 
 ---
 
-## The parked macOS app
+## Project status
 
-OpenPosse began as a native macOS app: a non-activating summon panel, a native messaging host, a
-Unix domain socket, a TCC-keyed Accessibility grant and this same extension as a thin relay. It
-works, and it is **parked, not deleted**: it lives in a separate repository, where it still builds
-and passes its tests.
+**Available today:** speaking and typing to your assistants, routing by name and by sound,
+follow-up questions, recording and sharing assistants, asking to see an answer in its tab, and
+answers read by Supertonic, Kokoro or your computer's own voices.
 
-It was parked because four things converged: Chrome shipped local speech, a local LLM and a local
-summariser; and every capability the app had turned out to exist in the extension – on **four
-operating systems**, with one click to install instead of a notarized app plus Accessibility grants.
-The thing that looked like a sacrifice was a platform expansion.
+**Coming next:** the Chrome Web Store listing.
 
-V2 gets it back if "from any app, not just Chrome" turns out to matter.
-
----
-
-## Status
-
-**Working:** speech in, routing, driving a recorded assistant, the orb, spoken answers, Kokoro
-voices, recording a new assistant end to end, navigation intents.
-
-**Not yet:** constrained-decoding routing behind the Prompt API (layer 3), the Web Store listing, and
-using a recorded "still generating" indicator to cut the ~4 s a turn currently spends waiting out a
-grace period. That last one is captured and carried in the recipe already – the time moved rather
-than shrank.
+**Being explored:** listening in more languages, and using an assistant's own "still generating"
+indicator to read answers sooner.
 
 ---
 
 ## Licence
 
-[Apache-2.0](LICENSE). Bundled components and their licences are listed in [NOTICE](NOTICE) and
-[public/vendor/NOTICE.md](public/vendor/NOTICE.md).
+OpenPosse is released under the [Apache-2.0](LICENSE) licence. Bundled components and their
+licences are listed in [NOTICE](NOTICE) and [public/vendor/NOTICE.md](public/vendor/NOTICE.md).
 
-Kokoro-82M and its voices are Apache-2.0. HeadTTS is MIT. Inter is SIL OFL 1.1. The eSpeak NG
-dependency common to other Kokoro ports is deliberately absent – see
-[the voice section](#why-headtts-and-not-kokoro-js).
+- **Kokoro-82M** and its voices are Apache-2.0, and **HeadTTS** is MIT. OpenPosse uses HeadTTS's
+  own rule-based pronunciation, so no GPL-licensed component is included.
+- **Supertonic**'s browser helper is MIT. Its model weights are not included in this repository
+  or the extension: they are downloaded on request under the BigScience Open RAIL-M licence, whose
+  full text ships with the extension as `vendor/supertonic/MODEL_LICENSE.txt`.
+- **ONNX Runtime Web** is MIT, and **transformers.js** is Apache-2.0.
+- The **Inter** typeface is under the SIL Open Font License 1.1.

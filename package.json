@@ -15,6 +15,9 @@
     "lint": "eslint src tools test",
     "test": "eslint src tools test && node --test test/*.test.mjs"
   },
+  "dependencies": {
+    "onnxruntime-web": "1.25.0-dev.20260327-722743c0e2"
+  },
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "esbuild": "^0.25.0",

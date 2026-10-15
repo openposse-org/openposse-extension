@@ -25,6 +25,17 @@ licence text committed beside the code it covers:
   public/vendor/inter/                       Inter, SIL Open Font License 1.1
   public/dictionaries/en-us.txt              CMU Pronouncing Dictionary,
                                              simplified BSD, via HeadTTS
+  src/supertonic/helper.js                   Supertonic's browser helper, MIT
+  onnxruntime-web (bundled into the          ONNX Runtime Web, MIT; licence text
+    offscreen page by the build)             in public/vendor/transformers/
+
+The build copies src/supertonic/LICENSE into the package as vendor/supertonic/.
+
+Supertonic 3's model weights are not bundled. They are downloaded from Hugging
+Face when the user presses Download in Settings, after agreeing to their
+licence, the BigScience Open RAIL-M License (dated August 18, 2022). Its text
+is src/supertonic/MODEL_LICENSE.txt, shipped in the package as
+vendor/supertonic/MODEL_LICENSE.txt.
 
 What was checked in each case, and the one package that failed the check, is in
 public/vendor/NOTICE.md. That file is the record, not this one.

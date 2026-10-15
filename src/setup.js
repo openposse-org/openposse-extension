@@ -7,7 +7,8 @@
 
 import {
   loadRoster, recipeFor, setMicGranted, micGranted, voiceSpeed, setVoiceSpeed, clampSpeed,
-  orbStyle, setOrbStyle, avatarsByCount, setAvatarsByCount,
+  orbStyle, setOrbStyle, avatarsByCount, setAvatarsByCount, engineSettings, setVoiceEngine,
+  setSupertonicAgreement, clearSupertonicAgreement, setVoiceLanguage,
 } from './storage.js';
 import { mountThemeToggle, segmented } from './appearance.js';
 import { channelOf, colourName, initialFor, PALETTE } from './channels.js';
@@ -18,10 +19,12 @@ import { FLOOR_MS, FLOOR_OVERRIDE_KEY, FLOOR_RANGE, floorWindow, productLabel } 
 import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from './grace.js';
 import { setSurface } from './surface.js';
 import { MOCK_SIZES } from './mocks.js';
-import { chooseEngine, describeEngine, hasWebGPU } from './tts.js';
+import {
+  chooseEngine, describeEngine, hasWebGPU, agreedToSupertonic, SUPERTONIC_LANGUAGES, supertonicLanguage,
+} from './tts.js';
 import { offeredVoices } from './voices.js';
 import {
-  weightsStatus, downloadWeights, removeWeights, ensureAccess, TOTAL_BYTES, VOICES,
+  weightsStatus, ensureAccess, VOICES, KOKORO, SUPERTONIC, SUPERTONIC_LICENCE,
 } from './weights.js';
 import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
@@ -217,22 +220,67 @@ async function answeringEngine() {
   return chooseEngine({
     hasWebGPU: await hasWebGPU(),
     hasKokoroAssets: (await weightsStatus()).state === 'ready',
+    hasSupertonicAssets: (await SUPERTONIC.status()).state === 'ready',
+    // The same preference and agreement every answer is sent with, so this line cannot name an
+    // engine the answers would not use.
+    ...(await engineSettings()),
   });
 }
 
 async function refreshEngine() {
   const choice = await answeringEngine();
-  // Green for Kokoro; the system voices are the working fallback rather than a fault, so neutral.
-  setStatus('engine', describeEngine(choice), choice.engine === 'kokoro' ? 'good' : '');
-  // **Done once something on this machine can speak an answer**: Kokoro, or an on-device system
-  // voice. Remote ones sit in the same list and do not count – see the local-only rule in
+  const neural = choice.engine !== 'system';
+  // Green for a neural voice; the system voices are the working fallback rather than a fault,
+  // so neutral.
+  setStatus('engine', describeEngine(choice), neural ? 'good' : '');
+  // **Done once something on this machine can speak an answer**: a neural voice, or an on-device
+  // system voice. Remote ones sit in the same list and do not count – see the local-only rule in
   // voices.js. The step had no done state at all until 2026-10-06, so it was never green.
-  markDone('step-voices', choice.engine === 'kokoro'
+  markDone('step-voices', neural
     || speechSynthesis.getVoices().some((voice) => voice.localService));
-  refreshSystemVoices(choice.engine !== 'kokoro');
+  refreshSystemVoices(!neural);
+  await refreshLanguage(choice.engine);
   // Each assistant's picker lists this engine's voices, so it redraws with it.
   redrawRoster();
 }
+
+// ── Supertonic's language ──────────────────────────────────────────────────────────────────
+//
+// Shown only while Supertonic answers, because it is the only engine with more than English.
+// One setting for every answer rather than one per assistant: the extension listens only in
+// English, so this is for trying the other languages with typed questions and the sample box.
+
+const languageName = new Intl.DisplayNames(['en'], { type: 'language' });
+
+/** English first, then by name, since that is how somebody looks for theirs among 31. */
+function fillLanguages() {
+  const select = el('voice-language');
+  if (select.options.length > 0) return;
+  const [english, ...rest] = SUPERTONIC_LANGUAGES;
+  rest.sort((a, b) => languageName.of(a).localeCompare(languageName.of(b)));
+  for (const code of [english, ...rest]) {
+    const option = document.createElement('option');
+    option.value = code;
+    option.textContent = languageName.of(code);
+    select.append(option);
+  }
+}
+
+async function refreshLanguage(engine) {
+  el('language-row').hidden = engine !== 'supertonic';
+  if (engine !== 'supertonic') return;
+  fillLanguages();
+  el('voice-language').value = supertonicLanguage((await engineSettings()).language);
+}
+
+el('voice-language').addEventListener('change', async () => {
+  try {
+    await setVoiceLanguage(el('voice-language').value);
+  } catch (error) {
+    console.error('[openposse] the language could not be saved –', error?.message ?? error);
+    await refreshEngine();
+  }
+});
 
 // Chrome fills the system voice list after the page asks for it, so the first check can find
 // it empty; this runs the check again once it is there.
@@ -251,98 +299,179 @@ speechSynthesis.addEventListener('voiceschanged', () => { refreshEngine(); });
 
 const mb = (bytes) => `${Math.round(bytes / 1e6)} MB`;
 
-async function refreshWeights() {
-  const { state, have, want, core, missingBytes } = await weightsStatus();
-  const done = state === 'ready';
-  el('weights-size').textContent = mb(TOTAL_BYTES);
+/**
+ * The two downloads, by the name `chooseEngine` gives each engine, with the ids of their
+ * buttons, status line and size. One routine below serves both, so the rule is kept the same way
+ * for each: started by the button, pinned, verified, and every failure named.
+ */
+const MODELS = {
+  supertonic: {
+    set: SUPERTONIC, name: 'Supertonic',
+    get: 'get-supertonic', drop: 'drop-supertonic', status: 'supertonic-status', size: 'supertonic-size',
+  },
+  kokoro: {
+    set: KOKORO, name: 'Kokoro',
+    get: 'get-weights', drop: 'drop-weights', status: 'weights-status', size: 'weights-size',
+  },
+};
 
-  el('drop-weights').hidden = !have;
-  el('get-weights').hidden = done;
-  // **"Resume" is wrong for an install that grew.** Nothing stopped: the voice set went from
-  // six to 28, so a complete install is now short some files it never had. `core` distinguishes
-  // the two, and the word has to follow – "Resume" and "interrupted" send somebody looking for
-  // a failure that did not happen.
+/** Whether the box says the restrictions are agreed to. It mirrors what is stored. */
+const agreed = () => el('agree-supertonic').checked;
+
+async function refreshDownload(model, { usable = true } = {}) {
+  const { state, have, want, core, missingBytes } = await model.set.status();
+  const done = state === 'ready';
+  el(model.size).textContent = mb(model.set.totalBytes);
+
+  el(model.drop).hidden = !have;
+  el(model.get).hidden = done;
+  // Supertonic's download waits for the agreement. Kokoro's never waits.
+  el(model.get).disabled = !usable;
+  // **"Resume" is wrong for an install that grew.** Nothing stopped: Kokoro's voice set went
+  // from six to 28, so a complete install was short some files it never had. `core`
+  // distinguishes the two, and the word has to follow – "Resume" and "interrupted" send somebody
+  // looking for a failure that did not happen.
   const extending = state === 'partial' && core;
-  label(el('get-weights'), extending
-    ? 'Download the new voices' : state === 'partial' ? 'Resume the download' : 'Download the voices');
-  // Says what is on disk, and nothing about whether it is being used – the engine line above
-  // owns that, and this claiming "used whenever WebGPU is available" directly contradicted it
-  // while the engine was still unbuilt. One fact, one place.
+  label(el(model.get), extending
+    ? `Download ${model.name}'s new voices`
+    : state === 'partial' ? `Resume downloading ${model.name}` : `Download ${model.name}`);
+  // Says what is on disk, and nothing about whether it is being used – the engine line in
+  // Voices owns that. One fact, one place. The one exception is Supertonic downloaded but not
+  // agreed to, because the fix is right here: the box under it.
   // Not downloaded is neutral: the step is optional. Interrupted is amber – something started
   // and did not finish.
-  setStatus('weights-status', done
-    ? `installed – ${want} files, verified`
-    : extending
-      ? `${want - have} more voices available · ${mb(missingBytes)}`
-      : state === 'partial'
-        ? `${have} of ${want} files – interrupted`
-        : `not downloaded · ${mb(TOTAL_BYTES)}`,
-  done ? 'good' : state === 'partial' && !extending ? 'warn' : '');
-  markDone('step-weights', done);
+  const [text, tone] = done && !usable
+    ? ['installed – not used until you agree to its use restrictions', 'warn']
+    : done
+      ? [`installed – ${want} files, verified`, 'good']
+      : extending
+        ? [`${want - have} more voices available · ${mb(missingBytes)}`, '']
+        : state === 'partial'
+          ? [`${have} of ${want} files – interrupted`, 'warn']
+          : [`not downloaded · ${mb(model.set.totalBytes)}`, ''];
+  setStatus(model.status, text, tone);
   return state;
 }
 
-el('get-weights').addEventListener('click', async () => {
+async function refreshWeights() {
+  const { preference, agreement } = await engineSettings();
+  el('agree-supertonic').checked = agreedToSupertonic(agreement);
+  const supertonic = await refreshDownload(MODELS.supertonic, { usable: agreed() });
+  const kokoro = await refreshDownload(MODELS.kokoro);
+
+  const speaks = { supertonic: supertonic === 'ready' && agreed(), kokoro: kokoro === 'ready' };
+  markDone('step-weights', speaks.supertonic || speaks.kokoro);
+
+  // A choice only once both can speak. Supertonic is what speaks unless Kokoro was chosen.
+  el('engine-choice').hidden = !(speaks.supertonic && speaks.kokoro);
+  const speaking = preference === 'kokoro' ? 'kokoro' : 'supertonic';
+  for (const radio of el('engine-choice').querySelectorAll('input')) {
+    radio.checked = radio.value === speaking;
+  }
+}
+
+/** Everything a change of download, agreement or engine choice can change on this page. */
+async function afterVoiceChange() {
+  await refreshWeights();
+  await refreshEngine();
+  await refreshVoices();
+}
+
+async function download(model) {
   // First, before any await: `permissions.request` needs this click to still be a live user
   // gesture. HuggingFace redirects to a CDN on another host and neither sends `*` for CORS, so
   // without both origins every file fails with a message that says nothing useful.
   const allowed = await ensureAccess();
   if (!allowed) {
-    setStatus('weights-status', 'needs access to huggingface.co to download – not granted', 'warn');
+    setStatus(model.status, 'needs access to huggingface.co to download – not granted', 'warn');
     return;
   }
 
-  el('get-weights').disabled = true;
-  setStatus('weights-status', 'starting…');
+  el(model.get).disabled = true;
+  setStatus(model.status, 'starting…');
 
   // Progress arrives per chunk of the file being fetched, so the line is only rewritten when
   // what it says changes – a whole percent or a whole megabyte.
   let shown = '';
   let result;
   try {
-    result = await downloadWeights({
+    result = await model.set.download({
       onProgress: ({ bytes, totalBytes }) => {
         const percent = Math.min(100, Math.floor((bytes / totalBytes) * 100));
         const line = `${percent}% · ${Math.round(bytes / 1e6)} of ${mb(totalBytes)}`;
         if (line === shown) return;
         shown = line;
-        setStatus('weights-status', line);
+        setStatus(model.status, line);
       },
     });
   } catch (error) {
     // A button that does nothing is the worst outcome available, so nothing gets to throw
     // past here silently – the page says what happened and the console says it precisely.
-    console.error('[openposse] weights download threw –', error?.message ?? error);
-    setStatus('weights-status', `could not start: ${error?.message ?? error}`, 'bad');
-    el('get-weights').disabled = false;
+    console.error(`[openposse] ${model.name} download threw –`, error?.message ?? error);
+    setStatus(model.status, `could not start: ${error?.message ?? error}`, 'bad');
+    el(model.get).disabled = false;
     return;
   }
-  el('get-weights').disabled = false;
+  el(model.get).disabled = false;
 
   if (!result.ok) {
     // **The reason, not a count of failures.** The first version said "could not download
     // model, bm_george, … – try again" for every cause there is, and the actual message –
     // which named a CORS refusal – was thrown away by this very line. Listing the files told
     // nobody anything; they had all failed for one reason.
-    for (const f of result.failed) console.warn('[openposse] weights:', f.id, '–', f.reason);
+    for (const f of result.failed) console.warn(`[openposse] ${model.name}:`, f.id, '–', f.reason);
 
     const mismatched = result.failed.filter((f) => f.reason === 'mismatch');
     const reasons = [...new Set(result.failed.map((f) => f.reason))];
-    setStatus('weights-status', mismatched.length
+    setStatus(model.status, mismatched.length
       ? `refused: ${mismatched.map((f) => f.id).join(', ')} did not match the expected contents`
-      : `${result.failed.length} of ${result.failed.length} failed – ${reasons.join(' · ')}`, 'bad');
-    el('drop-weights').hidden = false;
+      : `${result.failed.length} of ${model.set.files.length} failed – ${reasons.join(' · ')}`, 'bad');
+    el(model.drop).hidden = false;
     return;
   }
-  await refreshWeights();
-  await refreshEngine();
-  await refreshVoices();
+  await afterVoiceChange();
+}
+
+for (const model of Object.values(MODELS)) {
+  el(model.get).addEventListener('click', () => {
+    // The button is disabled until the box is ticked; this is the same rule, checked again
+    // where the download starts, so no other way of pressing it gets round the agreement.
+    if (model === MODELS.supertonic && !agreed()) {
+      setStatus(model.status, 'agree to the use restrictions below first', 'warn');
+      return;
+    }
+    download(model);
+  });
+  el(model.drop).addEventListener('click', async () => {
+    await model.set.remove();
+    await afterVoiceChange();
+  });
+}
+
+// **The box is the agreement.** Ticking it stores which licence was agreed to and when;
+// unticking it withdraws the agreement, and Supertonic stops being used at the next answer,
+// whether or not it is downloaded.
+el('agree-supertonic').addEventListener('change', async () => {
+  const box = el('agree-supertonic');
+  try {
+    if (box.checked) await setSupertonicAgreement(SUPERTONIC_LICENCE);
+    else await clearSupertonicAgreement();
+  } catch (error) {
+    console.error('[openposse] the agreement could not be saved –', error?.message ?? error);
+    box.checked = !box.checked;
+    setStatus('supertonic-status', `could not save the agreement: ${error?.message ?? error}`, 'bad');
+    return;
+  }
+  await afterVoiceChange();
 });
 
-el('drop-weights').addEventListener('click', async () => {
-  await removeWeights();
-  await refreshWeights();
-  await refreshEngine();
+el('engine-choice').addEventListener('change', async (event) => {
+  try {
+    await setVoiceEngine(event.target.value);
+  } catch (error) {
+    console.error('[openposse] the engine choice could not be saved –', error?.message ?? error);
+  }
+  await afterVoiceChange();
 });
 
 // ── Pace ───────────────────────────────────────────────────────────────────────────────────
@@ -493,8 +622,8 @@ chrome.runtime.onMessage.addListener((message) => {
 
 /** What actually spoke, which is the one thing a preview can report that reading cannot tell you. */
 function describeSpoken(message) {
-  const engine = message.engine === 'kokoro' ? 'Kokoro' : 'System voice';
-  const voice = message.engine === 'kokoro' && message.voice
+  const engine = { kokoro: 'Kokoro', supertonic: 'Supertonic' }[message.engine] ?? 'System voice';
+  const voice = (message.engine === 'kokoro' || message.engine === 'supertonic') && message.voice
     ? describeVoice(message.voice).name
     : message.voice;
   return voice ? `${engine} · ${voice}` : engine;
@@ -560,6 +689,13 @@ const ACCENT = { a: 'American', b: 'British' };
 const GENDER = { f: 'female', m: 'male' };
 
 function describeVoice(id) {
+  // Supertonic's voices have no names, only a gender and a number, and no accent: each speaks
+  // every language it knows. So "Female 2" is the name, and the group is the gender.
+  const supertonic = /^([FM])(\d)$/.exec(id);
+  if (supertonic) {
+    const gender = supertonic[1] === 'F' ? 'Female' : 'Male';
+    return { name: `${gender} ${supertonic[2]}`, accent: gender };
+  }
   const [accent, gender] = id;
   const name = id.slice(3);
   return {
@@ -589,18 +725,35 @@ const voicesIn = (accent) => VOICES
   .filter((v) => v.accent === accent)
   .sort((a, b) => a.name.localeCompare(b.name));
 
+/**
+ * A neural engine's voices in the groups they are offered in: Kokoro's by accent, Supertonic's by
+ * gender, female first, in their own order.
+ */
+function neuralGroups(engine) {
+  if (engine === 'supertonic') {
+    return ['Female', 'Male'].map((gender) => ({
+      accent: gender,
+      voices: SUPERTONIC.voices
+        .map(({ id }) => ({ id, ...describeVoice(id) }))
+        .filter((v) => v.accent === gender),
+    }));
+  }
+  return VOICE_GROUPS.map((accent) => ({ accent, voices: voicesIn(accent) }));
+}
+
+/**
+ * The voices of whichever neural engine answers, to try one by one.
+ *
+ * **The engine that answers, not the one downloaded.** A preview is spoken by whatever answers
+ * would be spoken by, so listing Kokoro's voices while Supertonic answers would play Supertonic
+ * under Kokoro's names. When the system voices answer, the list above them is the true one, and
+ * this one is hidden.
+ */
 async function refreshVoices() {
-  const ready = (await weightsStatus()).state === 'ready';
-  // Read by the pace slider, which lives outside this section and must know whether it can
-  // play anything back.
-  // **Nothing outside this section reads it any more.** It used to gate the Play sample button,
-  // because the page could only speak through Kokoro – now the worker speaks and that button is
-  // live on every machine, so "are the weights here" is only a question about whether there is a
-  // list of voices to show.
-  el('voices-section').hidden = !ready;
-  if (!ready) return;
-  renderVoiceGroups(el('voice-list'),
-    VOICE_GROUPS.map((accent) => ({ accent, voices: voicesIn(accent) })));
+  const { engine } = await answeringEngine();
+  el('voices-section').hidden = engine === 'system';
+  if (engine === 'system') return;
+  renderVoiceGroups(el('voice-list'), neuralGroups(engine));
 }
 
 // ── The system voices, to try ──────────────────────────────────────────────────────────────
@@ -662,10 +815,8 @@ function refreshSystemVoices(answering) {
  * Kokoro's when Kokoro answers, the offered system voices otherwise.
  */
 async function voiceChoices() {
-  if ((await answeringEngine()).engine === 'kokoro') {
-    return VOICE_GROUPS.map((accent) => ({ accent, voices: voicesIn(accent) }));
-  }
-  return systemVoiceGroups();
+  const { engine } = await answeringEngine();
+  return engine === 'system' ? systemVoiceGroups() : neuralGroups(engine);
 }
 
 /**
@@ -1007,8 +1158,8 @@ async function refreshRoster() {
 
     // ── Its voice ──────────────────────────────────────────────────────────────────────
     //
-    // **Only the voices this agent's answers can actually be spoken in**: Kokoro's when Kokoro
-    // answers, the offered system voices otherwise. It used to list Kokoro's 28 whether or not
+    // **Only the voices this agent's answers can actually be spoken in**: Supertonic's or Kokoro's
+    // when one of them answers, the offered system voices otherwise. It used to list Kokoro's 28 whether or not
     // they were installed, and picking one without them silently gave the agent some unrelated
     // system voice. Empty is a real choice rather than an absence: it hands the agent back to
     // the accent heuristic, which keeps every agent sounding different as the roster grows.
