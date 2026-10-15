@@ -20,6 +20,12 @@ export const SEPARATOR = ' · ';
 /** How long `done` stays when nobody looks at the tab: long enough to find the tab by it. */
 export const DONE_MS = 90_000;
 
+/**
+ * How long `done` stays on a tab that is already in view when the answer arrives. Long enough to
+ * see the turn finish; nobody needs a marker to find the tab they are looking at.
+ */
+export const DONE_IN_VIEW_MS = 5_000;
+
 const PREFIXES = Object.values(STATES).map((word) => word + SEPARATOR);
 
 /** The title with one OpenPosse prefix removed, if it has one. Any other title is left alone. */

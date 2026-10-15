@@ -25,7 +25,7 @@ import {
 } from './recorder.js';
 import { tell } from './tell.js';
 import { graceWindow } from './grace.js';
-import { DONE_MS, original, STATES, withState } from './title.js';
+import { DONE_IN_VIEW_MS, DONE_MS, original, STATES, withState } from './title.js';
 
 /** Error codes this script can originate, unchanged from the Mac app's wire protocol. */
 const ERROR = {
@@ -636,7 +636,12 @@ function showTurnState({ state, clearAfterMs }) {
 
   clearTimeout(turnTitle.timer);
   // A missing ceiling would be `setTimeout(…, undefined)`, which fires at once.
-  const ceiling = Number.isFinite(clearAfterMs) && clearAfterMs > 0 ? clearAfterMs : DONE_MS;
+  let ceiling = Number.isFinite(clearAfterMs) && clearAfterMs > 0 ? clearAfterMs : DONE_MS;
+  // A tab already in view never becomes visible, so the listener below would never clear `done`
+  // there and it sat for the whole 90 s. In view, it only has to show that the turn finished.
+  if (state === 'done' && document.visibilityState === 'visible') {
+    ceiling = Math.min(ceiling, DONE_IN_VIEW_MS);
+  }
   turnTitle.timer = setTimeout(restoreTitle, ceiling);
 
   if (turnTitle.onVisible) {

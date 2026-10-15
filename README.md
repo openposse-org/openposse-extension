@@ -123,7 +123,8 @@ question without a name, such as *"and what about next quarter?"*, goes straight
 
 OpenPosse works with each assistant's page in the background, so your current tab stays in front
 while you ask. That tab's title shows how the question is going: `typing…`, then `answering…`,
-then `done`, until you look at the tab or for up to 90 seconds, after which it reads as usual. When
+then `done`, until you look at the tab or for up to 90 seconds (a few seconds if you are already
+looking at it), after which it reads as usual. When
 you would like to see the answer where it lives, just ask:
 
 | You say | What happens |

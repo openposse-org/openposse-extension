@@ -58,7 +58,7 @@ content script's own moments, not to the panel's:
 |---|---|---|
 | `typing…` | The content script begins putting the prompt into the input (after it has opened the box, if the recipe opens by click or shortcut) | The prompt is submitted |
 | `answering…` | Submit | The answer loop reports the response finished (`finished()` seen-then-left, or the settle passes end) |
-| `done` | The response is captured and sent back | The first of: the person looks at the tab; the next question goes to the same tab; 90 s |
+| `done` | The response is captured and sent back | The first of: the person looks at the tab; the next question goes to the same tab; 90 s. On a tab already in view when the answer arrives, 5 s |
 | *(restored)* | Any failure (`result.type !== 'response'`: no box found, timed out, not signed in…) | – |
 
 `typing…` and `answering…` also end by themselves after the recipe's response timeout plus 30 s,
@@ -160,7 +160,9 @@ Once this ships, two small things in `openposse-website`:
 
 ## 8. Open questions
 
-1. ~~**`done` lifetime.**~~ Settled: until the tab is looked at, and at most 90 s.
+1. ~~**`done` lifetime.**~~ Settled: until the tab is looked at, and at most 90 s. A tab already
+   in view never becomes visible, so there `done` lasts 5 s (found on Notion, 2026-10-15: asked
+   from its own tab, `done` sat for the full 90 s).
 2. ~~**Recipes that open the box by shortcut.**~~ Settled: `typing` is reported after the box is
    open, by either route, and the content script is already in the tab by then.
 3. **Streaming assistants that rewrite the title while answering** (§4.4 handles it, but the
