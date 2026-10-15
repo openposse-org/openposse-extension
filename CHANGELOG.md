@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/openposse-org/openposse-extension/compare/v0.4.0...v0.4.1) (2026-10-15)
+
+
+### Fixes
+
+* Settings opens by itself on first install ([#15](https://github.com/openposse-org/openposse-extension/issues/15)) ([aa3621e](https://github.com/openposse-org/openposse-extension/commit/aa3621e9519defa57927759b5f1717a03a144542))
+
 ## [0.4.0](https://github.com/openposse-org/openposse-extension/compare/v0.3.1...v0.4.0) (2026-10-15)
 
 
