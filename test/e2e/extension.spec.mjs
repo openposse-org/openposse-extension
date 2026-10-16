@@ -155,3 +155,71 @@ test('a page that renames itself mid-turn keeps its new title', async ({ context
   await expect.poll(titles, { timeout: 5_000 }).toContain('done · Pipeline review');
   expect(await titles()).toContain('answering… · Pipeline review');
 });
+
+test('the same shared file twice is recognised, not added again', async ({ context, extensionId }) => {
+  const settings = await context.newPage();
+  await settings.goto(`chrome-extension://${extensionId}/setup.html`);
+  await settings.fill('#import-text', RECIPE);
+  await settings.click('#import-add');
+  await expect(settings.locator('#import-status')).toHaveText('Added Acme.');
+
+  await settings.fill('#import-text', RECIPE);
+
+  await expect(settings.locator('#import-status')).toHaveText('You already have this one, as Acme.');
+  await expect(settings.locator('#import-add')).toBeDisabled();
+  await expect(settings.locator('#import-choice')).toBeHidden();
+});
+
+test('a newer version of a shared assistant replaces its recipe and keeps the assistant', async ({ context, extensionId }) => {
+  const settings = await context.newPage();
+  await settings.goto(`chrome-extension://${extensionId}/setup.html`);
+  await settings.fill('#import-text', RECIPE);
+  await settings.click('#import-add');
+  await expect(settings.locator('#import-status')).toHaveText('Added Acme.');
+  // A voice chosen after adding it, which a replacement must not take away.
+  const roster = () => settings.evaluate(async () => {
+    const { agents } = await chrome.storage.local.get('agents');
+    const recipes = await chrome.storage.local.get(agents.map((a) => `recipe:${a.recipeID}`));
+    return agents.map((a) => ({ ...a, recipe: recipes[`recipe:${a.recipeID}`] }));
+  });
+  await settings.evaluate(async () => {
+    const { agents } = await chrome.storage.local.get('agents');
+    await chrome.storage.local.set({ agents: agents.map((a) => ({ ...a, voice: 'bf_emma' })) });
+  });
+  const before = (await roster())[0];
+
+  const newer = JSON.parse(RECIPE);
+  newer.recordedOn = '2026-10-16';
+  newer.recipe.quietPeriodMs = 700;
+  await settings.fill('#import-text', JSON.stringify(newer));
+
+  await expect(settings.locator('#import-question'))
+    .toHaveText('Acme already has a recipe for fixture.test. Replace it with this one, recorded 16 October?');
+  await expect(settings.locator('#import-add')).toBeDisabled();
+  await settings.click('#import-replace');
+  await expect(settings.locator('#import-status')).toHaveText('Replaced Acme’s recipe.');
+
+  const after = await roster();
+  expect(after).toHaveLength(1);
+  expect(after[0]).toMatchObject({ id: before.id, name: 'Acme', voice: 'bf_emma', channel: before.channel });
+  expect(after[0].recipe).toMatchObject({ quietPeriodMs: 700, recordedOn: '2026-10-16' });
+});
+
+test('when the page no longer has what the recipe clicks, the turn says the recipe is out of date', async ({ context, extensionId }) => {
+  // Acme as recorded before the fake vendor renamed its button.
+  const stale = JSON.parse(RECIPE);
+  stale.recipe.openSelector = 'button[data-testid="open-assistant-old"]';
+  const settings = await context.newPage();
+  await settings.goto(`chrome-extension://${extensionId}/setup.html`);
+  expect(await settings.evaluate((text) => chrome.runtime.sendMessage({ kind: 'openposse.agent.import', text }),
+    JSON.stringify(stale))).toMatchObject({ ok: true, name: 'Acme' });
+  const vendor = await context.newPage();
+  await vendor.goto(VENDOR_URL);
+  const panel = await openPanel(context, extensionId);
+
+  await ask(panel, 'What is the pipeline total?');
+
+  await expect(panel.locator('body')).toContainText(
+    'Acme’s recipe no longer matches Fixture’s page, which has changed. Record it again from Settings.',
+    { timeout: 10_000 });
+});
