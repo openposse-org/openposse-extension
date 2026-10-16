@@ -187,9 +187,15 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
   // time this was measured, and it silently skipped the thing under test.
   let input = deepQuerySelectorVisible(recipe.inputSelector);
 
+  // What the page no longer has, for a recipe that opens by click: the button it clicks, or the
+  // box that should have appeared. That is the sign the page has changed since the recording, and
+  // the worker says so with the recipe's date. A shortcut that opened nothing is more likely the
+  // page ignoring synthetic keys, which its own message below explains.
+  let missing = null;
   if (!input) {
     openedBy = await openAssistant(recipe);
     input = await waitForElement(recipe.inputSelector, { timeoutMs: 3000 });
+    if (!input && recipe.openMethod === 'click') missing = openedBy ? 'input' : 'open';
     if (!input) openedBy = null;
   }
 
@@ -210,7 +216,7 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
         : 'this AI assistant ignores keyboard shortcuts it did not get from a person. '
           + 'Re-record it from Settings and open the AI assistant by clicking its button '
           + 'instead of using the shortcut.',
-      { openedBy: null }
+      { openedBy: null, missing }
     );
   }
 
