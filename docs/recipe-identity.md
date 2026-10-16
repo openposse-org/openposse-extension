@@ -75,15 +75,29 @@ the recipe is the same.
 
 ### 4.2 Import
 
+**One site, one assistant** (the user's rule, 2026-10-16). A site never has two recipes, so a
+recipe for a site that already has an assistant can only replace that assistant's recipe.
+
 `unpack` returns the three fields alongside `name` and `recipe`. Before adding, Settings looks
-for an agent with the same `id`; failing that, one whose recipe is for the same site and whose
-name matches the file's. Then:
+for the agent whose recipe is for the same site, whatever either is called. Failing that, it
+looks for one with the same `id`, which finds an assistant whose site has moved (Notion's did, to
+`app.notion.com`). Then:
 
 - Same `hash`: "You already have this one, as Ivan." Nothing to add.
-- Different `hash`: "Ivan already has a recipe for notion.com, recorded 1 Oct. Replace it with
-  this one, recorded 16 Oct?" with **Replace** and **Add as another assistant**. Replace swaps
-  the recipe and the origin fields; the agent keeps its name, voice, colour and position.
+- Different `hash`: "Ivan already has a recipe for notion.com, recorded 1 October. Replace it with
+  this one, recorded 16 October?" with **Replace** as the only button. Replace swaps the recipe
+  and the lineage; the agent keeps its name, voice, colour and position.
 - No match: added as today. The agent stores `origin: { id }` from the file.
+
+The worker enforces the same rule, so no sender can add a second assistant for a site, or replace
+a different one than the match.
+
+**Recording** follows it too: "Record this tab" on a site that already has an assistant
+re-records that assistant, and says so when it is done: "Ivan already worked on this site, so
+this recording replaced Ivan's recipe."
+
+An install from before this rule may already hold two assistants for one site. Nothing merges
+them; matching takes the first, and deleting the other in Settings is the person's call.
 
 **As built, each fact is stored once.**
 - **The date lives in the stored recipe,** where the recorder writes it too, and `pack` lifts it
@@ -149,7 +163,7 @@ Answered 2026-10-16:
 
 1. ~~**A recording shared before it was ever published.**~~ It carries no `id`. Import matches it
    by its site and name, and only the website hands out ids.
-2. ~~**The default button.**~~ Replace, because most people importing a match are updating. The
-   assistant keeps its name, voice, colour and place.
+2. ~~**The default button.**~~ Replace is the only button: one site has one assistant, so there
+   is no "Add as another assistant". The assistant keeps its name, voice, colour and place.
 3. ~~**Naming the website in the staleness message.**~~ Yes, for imported assistants, as plain
    text.

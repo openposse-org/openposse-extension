@@ -188,7 +188,9 @@ test('a newer version of a shared assistant replaces its recipe and keeps the as
   });
   const before = (await roster())[0];
 
+  // Another name, the same site: one site has one assistant, whatever either is called.
   const newer = JSON.parse(RECIPE);
+  newer.name = 'Acme CRM';
   newer.recordedOn = '2026-10-16';
   newer.recipe.quietPeriodMs = 700;
   await settings.fill('#import-text', JSON.stringify(newer));
@@ -196,6 +198,12 @@ test('a newer version of a shared assistant replaces its recipe and keeps the as
   await expect(settings.locator('#import-question'))
     .toHaveText('Acme already has a recipe for fixture.test. Replace it with this one, recorded 16 October?');
   await expect(settings.locator('#import-add')).toBeDisabled();
+  await expect(settings.locator('#import-choice button')).toHaveText(['Replace']);
+  // Asked directly to add it instead, the worker refuses too.
+  expect(await settings.evaluate((text) => chrome.runtime.sendMessage({ kind: 'openposse.agent.import', text }),
+    JSON.stringify(newer))).toEqual({
+    ok: false, reason: 'Acme already has a recipe for fixture.test. Replace it instead.',
+  });
   await settings.click('#import-replace');
   await expect(settings.locator('#import-status')).toHaveText('Replaced Acme’s recipe.');
 

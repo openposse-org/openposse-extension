@@ -277,18 +277,18 @@ export function unpack(text) {
 /**
  * The agent a shared file is a version of, or null. `entries` is `[{ agent, recipe }]`.
  *
- * The same lineage first. Failing that, the same site under the same name, which is how a
- * recording that never had an `id`, or an agent imported before ids existed, is still found.
+ * **One site, one assistant** (the user's rule, 2026-10-16): a recipe for a site that already
+ * has an assistant can only replace that assistant's recipe, never add a second. So the same site
+ * comes first, whatever either is called. Failing that, the same lineage, which finds the agent
+ * when the assistant has moved to a new address (Notion's did, to `app.notion.com`); replacing it
+ * then moves the agent too, to a site nobody else has.
  */
-export function matchFor(entries, { id, name, recipe }) {
+export function matchFor(entries, { id, recipe }) {
   const list = entries ?? [];
-  if (id) {
-    const same = list.find((entry) => entry.agent?.origin?.id === id);
-    if (same) return same;
-  }
-  const wanted = String(name ?? '').trim().toLowerCase();
-  return list.find((entry) => entry.recipe?.domainPattern === recipe?.domainPattern
-    && String(entry.agent?.name ?? '').trim().toLowerCase() === wanted) ?? null;
+  const site = list.find((entry) => entry.recipe?.domainPattern === recipe?.domainPattern);
+  if (site) return site;
+  if (!id) return null;
+  return list.find((entry) => entry.agent?.origin?.id === id) ?? null;
 }
 
 // ── Dates, as people say them ──────────────────────────────────────────────────────────────

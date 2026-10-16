@@ -1237,21 +1237,32 @@ async function importShared(text, { replace = null } = {}) {
   const recipe = read.recordedOn ? { ...read.recipe, recordedOn: read.recordedOn } : read.recipe;
   const origin = read.id ? { id: read.id } : null;
 
-  if (replace) {
-    // A newer version of an agent already here: the recipe changes, the agent does not. Its name,
-    // voice, colour and place in the roster stay, as they do on a re-recording.
-    const agent = await findAgent2(replace);
-    if (!agent) return { ok: false, reason: 'that AI assistant is no longer here' };
-    if (await hashOf(await recipeFor(agent) ?? {}) === await hashOf(recipe)) {
-      return { ok: false, reason: `${agent.name} already has this recipe.` };
-    }
-    await replaceRecipe(agent.id, recipe, { origin });
-    await reconcileRegistrations();
-    return { ok: true, name: agent.name, replaced: true };
+  // **One site, one assistant.** A file for a site that already has one can only replace that
+  // one's recipe, and only when the page asked for exactly that – checked here as well, so no
+  // sender can add a second assistant for a site, or replace a different one.
+  const found = matchFor(await rosterWithRecipes(), read);
+  if (found && replace !== found.agent.id) {
+    return {
+      ok: false,
+      reason: `${found.agent.name} already has a recipe for `
+        + `${String(found.recipe.domainPattern).replace(/^\*\./, '')}. Replace it instead.`,
+    };
   }
 
-  // A second Notion must not fail because the first is called Notion. `freeName` numbers it,
-  // visibly, and the name is editable in the row that appears.
+  if (found) {
+    // A newer version of an agent already here: the recipe changes, the agent does not. Its name,
+    // voice, colour and place in the roster stay, as they do on a re-recording.
+    if (await hashOf(found.recipe) === await hashOf(recipe)) {
+      return { ok: false, reason: `${found.agent.name} already has this recipe.` };
+    }
+    await replaceRecipe(found.agent.id, recipe, { origin });
+    await reconcileRegistrations();
+    return { ok: true, name: found.agent.name, replaced: true };
+  }
+  if (replace) return { ok: false, reason: 'that AI assistant is no longer here' };
+
+  // A second assistant called Notion, on another site, must not fail because the first is called
+  // Notion. `freeName` numbers it, visibly, and the name is editable in the row that appears.
   const { agents } = await loadRoster();
   const name = freeName(agents, read.name);
 
@@ -1260,6 +1271,13 @@ async function importShared(text, { replace = null } = {}) {
   const agent = await addAgent({ name, voice: null, recipe, origin });
   await reconcileRegistrations();
   return { ok: true, name: agent.name, renamed: agent.name !== read.name };
+}
+
+/** Every agent with its recipe, leaving out any whose recipe is missing. */
+async function rosterWithRecipes() {
+  const { agents } = await loadRoster();
+  const entries = await Promise.all(agents.map(async (agent) => ({ agent, recipe: await recipeFor(agent) })));
+  return entries.filter((entry) => entry.recipe);
 }
 
 /**
@@ -1272,9 +1290,7 @@ async function matchShared(text) {
   const read = unpack(text);
   if (!read.ok) return { ok: false, reason: read.problems.join(' ') };
 
-  const { agents } = await loadRoster();
-  const entries = await Promise.all(agents.map(async (agent) => ({ agent, recipe: await recipeFor(agent) })));
-  const found = matchFor(entries.filter((entry) => entry.recipe), read);
+  const found = matchFor(await rosterWithRecipes(), read);
   if (!found) return { ok: true, match: null, recordedOn: read.recordedOn };
 
   return {
@@ -1343,6 +1359,17 @@ async function rerecord(agentId) {
 async function beginWizard({ tabId, pattern, agentId = null }) {
   if (!pattern) throw new Error('no domain pattern');
 
+  // **One site, one assistant.** Recording a site that already has one re-records it: same name,
+  // voice and colour, new recipe. Said when it finishes, in `save()`.
+  let replacing = null;
+  if (!agentId) {
+    const owner = (await rosterWithRecipes()).find((entry) => entry.recipe.domainPattern === pattern);
+    if (owner) {
+      agentId = owner.agent.id;
+      replacing = owner.agent.name;
+    }
+  }
+
   // Registered for every *future* load of this site; `armRecording` handles the one tab already
   // in front of the user, which has no content script because it was open before the grant.
   await registerFor(pattern);
@@ -1354,8 +1381,12 @@ async function beginWizard({ tabId, pattern, agentId = null }) {
     // Cleared before the dry run. See `stopCapturing`.
     capturing: true,
     // Re-recording an existing agent keeps its name and voice and replaces only the recipe, so
-    // the naming beat is skipped for it. The popup's "needs re-recording" is what leads here.
+    // the naming beat is skipped for it. The popup's "needs re-recording" is what leads here,
+    // and so does recording a site that already has an assistant.
     agentId,
+    // That assistant's name when this started as a new recording, so the end can say whose
+    // recipe it replaced; null for a re-record asked for by name.
+    replacing,
     alreadyOpen: false,
   };
 
@@ -1523,6 +1554,22 @@ async function save() {
 
   if (wizard.agentId) {
     await replaceRecipe(wizard.agentId, recipe);
+    if (wizard.replacing) {
+      // Started as a new recording, so the person may not know an assistant was already here.
+      const name = wizard.replacing;
+      await panel({
+        phase: 'recording',
+        coach: {
+          label: 'SETTING UP · DONE',
+          instruction: `${name} already worked on this site, so this recording replaced `
+            + `${name}’s recipe. Each site has one AI assistant; its name and voice stay.`,
+          captures: captures(wizard.draft),
+          naming: false,
+        },
+      });
+      await endWizard();
+      return;
+    }
     await endWizard();
     await panel({ phase: 'idle', visible: false });
     return;

@@ -288,16 +288,20 @@ test('a file from before ids, dates and hashes still imports', () => {
   assert.deepEqual(read.recipe, notion());
 });
 
-test('a file is matched to an agent by its id first, then by site and name', () => {
+test('a file is matched to the assistant for its site, whatever either is called, then by its id', () => {
   const entries = [
     { agent: { id: 'a', name: 'Ivan', origin: { id: 'notion-ai' } }, recipe: { domainPattern: '*.notion.so' } },
     { agent: { id: 'b', name: 'Andy' }, recipe: { domainPattern: '*.leanix.net' } },
   ];
-  // The lineage wins even when the site moved, which is exactly when a re-recording happens.
-  assert.equal(matchFor(entries, { id: 'notion-ai', name: 'Notion', recipe: { domainPattern: '*.notion.com' } })?.agent.id, 'a');
-  assert.equal(matchFor(entries, { id: null, name: 'andy', recipe: { domainPattern: '*.leanix.net' } })?.agent.id, 'b');
-  assert.equal(matchFor(entries, { id: null, name: 'Andy', recipe: { domainPattern: '*.notion.so' } }), null);
-  assert.equal(matchFor(entries, { id: 'other', name: 'Priya', recipe: { domainPattern: '*.leanix.net' } }), null);
+  // One site, one assistant: the name does not matter.
+  assert.equal(matchFor(entries, { id: null, name: 'Priya', recipe: { domainPattern: '*.leanix.net' } })?.agent.id, 'b');
+  // The site wins over a lineage pointing elsewhere, so a replacement can never leave two
+  // assistants on one site.
+  assert.equal(matchFor(entries, { id: 'notion-ai', recipe: { domainPattern: '*.leanix.net' } })?.agent.id, 'b');
+  // The lineage finds an assistant whose site moved, which is when a re-recording happens.
+  assert.equal(matchFor(entries, { id: 'notion-ai', recipe: { domainPattern: '*.notion.com' } })?.agent.id, 'a');
+  assert.equal(matchFor(entries, { id: null, recipe: { domainPattern: '*.notion.com' } }), null);
+  assert.equal(matchFor(entries, { id: 'other', recipe: { domainPattern: '*.example.com' } }), null);
 });
 
 test('a stale recipe says how old it is, and where a newer one might be', () => {

@@ -1681,7 +1681,8 @@ function offer(text) {
  * quick click cannot add a second copy of something that should have been a replacement.
  *
  * - The same recipe: there is nothing to add, and the line says which assistant has it.
- * - A different version: Replace or Add as another assistant, Replace first.
+ * - A different version, or any recipe for a site that already has an assistant: Replace, and
+ *   only Replace. One site has one assistant (the user's rule, 2026-10-16).
  * - Neither: added as a new assistant, as before.
  */
 async function lookForMatch(waiting) {
@@ -1769,7 +1770,6 @@ el('import-text').addEventListener('input', (event) => offer(event.target.value)
 el('import-pick').addEventListener('click', () => el('import-file').click());
 
 el('import-add').addEventListener('click', () => addPending());
-el('import-another').addEventListener('click', () => addPending());
 el('import-replace').addEventListener('click', () => addPending({ replace: pending?.match?.agentId }));
 
 /**
