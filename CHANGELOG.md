@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/openposse-org/openposse-extension/compare/v0.5.0...v0.5.1) (2026-10-16)
+
+
+### Fixes
+
+* **recipes:** Notion AI re-recorded for app.notion.com as Ivan, sending with the send button, stored as a bare recording like the rest of recipes/; the hooks demo's Acme AI as an example; the old notion.so recipe removed ([db46c69](https://github.com/openposse-org/openposse-extension/commit/db46c69a63519266811cebb4401dbcc33e1a11c4))
+* **recipes:** Notion AI re-recorded for app.notion.com; the hooks demo's Acme AI as an example ([#22](https://github.com/openposse-org/openposse-extension/issues/22)) ([c6c5b96](https://github.com/openposse-org/openposse-extension/commit/c6c5b96e017448127b287f36ea393490ad77a204))
+
 ## [0.5.0](https://github.com/openposse-org/openposse-extension/compare/v0.4.2...v0.5.0) (2026-10-15)
 
 
