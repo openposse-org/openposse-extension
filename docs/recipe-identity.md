@@ -1,6 +1,6 @@
 # Recipe identity and revisions
 
-**Status:** Draft 0.1, 2026-10-16 · **Decided:** recipes need an identity that survives leaving git, and a way to tell old from new (2026-10-16) · **Scope:** three optional fields in the shared file, replace-on-import in Settings, a date from the recorder; the website publishes the fields
+**Status:** Implemented in the extension, 2026-10-16 (§3 to §6; §7 follows; §5 is the website's) · **Decided:** recipes need an identity that survives leaving git, and a way to tell old from new (2026-10-16) · **Scope:** three optional fields in the shared file, replace-on-import in Settings, a date from the recorder; the website publishes the fields
 
 ## 1. Summary
 
@@ -83,7 +83,16 @@ name matches the file's. Then:
 - Different `hash`: "Ivan already has a recipe for notion.com, recorded 1 Oct. Replace it with
   this one, recorded 16 Oct?" with **Replace** and **Add as another assistant**. Replace swaps
   the recipe and the origin fields; the agent keeps its name, voice, colour and position.
-- No match: added as today. The agent stores `origin: { id, recordedOn, hash }` from the file.
+- No match: added as today. The agent stores `origin: { id }` from the file.
+
+**As built, each fact is stored once.**
+- **The date lives in the stored recipe,** where the recorder writes it too, and `pack` lifts it
+  into the envelope.
+- **The hash is always computed, never stored.** A stored copy would go stale on the first
+  re-record, and a file's own `hash` is a stranger's claim: `unpack` ignores it, and `hashOf`
+  decides "same" and "different".
+- **The agent keeps only the lineage, `origin.id`.** It keeps it across a re-record, since the
+  recipe is still for that assistant.
 
 The preview sentence gains the date: "…, recorded 16 October 2026".
 
@@ -93,6 +102,11 @@ When a turn fails because the recipe's open or input selector matched nothing, t
 message names what the person has: "Ivan's recipe is from 1 October and Notion's page has
 changed. There may be a newer one on openposse.org/recipes." for an imported agent, and "…Record
 it again from Settings." for a local recording. Text only, no network.
+
+As built, this applies to recipes that open the assistant by click: the button it clicks is
+missing, or the box that should appear after the click. A recipe that opens by shortcut keeps its
+own message, because a shortcut that opens nothing usually means the page ignores synthetic keys,
+not that it changed. A recipe with no date says it "no longer matches" the page.
 
 ### 4.4 Fetching from the domain (still parked)
 
@@ -131,10 +145,11 @@ Independent of §3 to §6; worth doing with them.
 
 ## 8. Open questions
 
-1. **A recording shared before it was ever published** has no `id`. Leave it without one, or
-   derive a provisional `local-<domain-slug>` so two such files from two machines can still be
-   told apart?
-2. **The default button** when a match is found: Replace (most people are updating) or Add
-   (never destructive)?
-3. **Naming the website in the staleness message**: it is plain text and sends nothing, but it is
-   the first place the product points at the site.
+Answered 2026-10-16:
+
+1. ~~**A recording shared before it was ever published.**~~ It carries no `id`. Import matches it
+   by its site and name, and only the website hands out ids.
+2. ~~**The default button.**~~ Replace, because most people importing a match are updating. The
+   assistant keeps its name, voice, colour and place.
+3. ~~**Naming the website in the staleness message.**~~ Yes, for imported assistants, as plain
+   text.

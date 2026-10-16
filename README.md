@@ -179,6 +179,10 @@ file you can send to a colleague. They add it under **Add a shared AI assistant*
 Chrome asks them to allow the assistant's site, and it is ready to use. A recipe holds the assistant's name and how to use its page, and never anything from
 your conversations. The [`recipes/`](recipes) folder has an example.
 
+Each file says when the recipe was recorded. Adding a newer version of an assistant you already
+have offers to replace its recipe, keeping the assistant's name, voice and colour; adding the same
+one again simply says you have it.
+
 ### Voices
 
 Answers can be read by three kinds of voice, chosen in Settings:
