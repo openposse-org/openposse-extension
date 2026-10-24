@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import {
   newDraft, applyCapture, problems, isComplete, outstanding, finish,
 } from '../src/draft.js';
-import { derive, stepLabel, isCancellable, captures, keycaps, PATIENCE_MS } from '../src/coaching.js';
+import { derive, stepLabel, heading, isCancellable, captures, keycaps, PATIENCE_MS } from '../src/coaching.js';
 
 const sel = (css) => ({ css });
 
@@ -297,4 +297,12 @@ test('the checklist skips what was not captured that way', () => {
   const rows = captures(draft);
   assert.equal(rows.find((r) => r.id === 'open').label, 'Opens from');
   assert.equal(rows.find((r) => r.id === 'submit').detail, '↩');
+});
+
+test('the heading names the product while it is caught, and says when it has been', () => {
+  assert.equal(heading('await-open', 'Notion'), 'Lassoing Notion…');
+  assert.equal(heading('failed', 'Notion'), 'Lassoing Notion…');
+  assert.equal(heading('done', 'Notion'), 'Lassoed Notion');
+  // A site `productLabel` cannot name still gets a sentence rather than `Lassoing …`.
+  assert.equal(heading('await-open', ''), 'Lassoing an AI assistant…');
 });

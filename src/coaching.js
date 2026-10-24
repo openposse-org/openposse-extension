@@ -104,6 +104,17 @@ export function stepLabel(state) {
   }
 }
 
+/**
+ * `Lassoing Notion…`, the side panel's heading for the whole recording.
+ *
+ * `product` is `productLabel` of the site being recorded, passed in so this stays pure. Past
+ * tense once it is saved, because the ellipsis promises something still happening.
+ */
+export function heading(step, product) {
+  const what = product || 'an AI assistant';
+  return step === 'done' ? `Lassoed ${what}` : `Lassoing ${what}…`;
+}
+
 /** Whether this can still be abandoned. `done` is already leaving. */
 export function isCancellable(state) {
   return state.step !== 'done';

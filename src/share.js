@@ -331,7 +331,7 @@ export function staleness({ name, product, recordedOn, published }) {
     : `${name}’s lasso no longer matches ${page}, which has changed.`;
   return published
     ? `${what} There may be a newer one on openposse.org/lassos.`
-    : `${what} Record it again from Settings.`;
+    : `${what} Lasso it again from Settings.`;
 }
 
 // ── The preview, in a sentence ─────────────────────────────────────────────────────────────

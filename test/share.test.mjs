@@ -329,9 +329,9 @@ test('a stale lasso says how old it is, and where a newer one might be', () => {
   assert.equal(staleness({ name: 'Ivan', product: 'Notion', recordedOn: '2026-10-01', published: true }),
     'Ivan’s lasso is from 1 October and Notion’s page has changed. There may be a newer one on openposse.org/lassos.');
   assert.equal(staleness({ name: 'Ivan', product: 'Notion', recordedOn: '2026-10-01', published: false }),
-    'Ivan’s lasso is from 1 October and Notion’s page has changed. Record it again from Settings.');
+    'Ivan’s lasso is from 1 October and Notion’s page has changed. Lasso it again from Settings.');
   assert.equal(staleness({ name: 'Ivan', product: 'Notion', recordedOn: null, published: false }),
-    'Ivan’s lasso no longer matches Notion’s page, which has changed. Record it again from Settings.');
+    'Ivan’s lasso no longer matches Notion’s page, which has changed. Lasso it again from Settings.');
 });
 
 test('dates read the way people say them, on the day they were recorded', () => {

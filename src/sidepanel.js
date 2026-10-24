@@ -35,6 +35,7 @@ import { FLOOR_OVERRIDE_KEY, floorWindow, productLabel } from './routing.js';
 import { patternForHost, matchPattern } from './domain.js';
 import { drawSphere, drawWave, modeFor } from './sphere.js';
 import { bindThemeKey, watchTheme } from './theme.js';
+import { startRope } from './rope.js';
 import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
 
@@ -197,6 +198,9 @@ window.addEventListener('resize', () => {
   fitAnswer();
 });
 
+/** Stops the rope loader, while a recording has it running. */
+let stopRope = null;
+
 function renderTurn() {
   // **Recording takes the whole panel**, because it is a different activity rather than a
   // different turn state: there is no transcript, no roster to re-route to, and the person is
@@ -208,6 +212,13 @@ function renderTurn() {
   el('desk').hidden = recording;
   el('dock').hidden = recording;
   el('coach').hidden = !recording;
+  // The rope runs only while it can be seen. A loop left going behind a hidden card would cost a
+  // frame of drawing sixty times a second for as long as the panel is open.
+  if (recording && !stopRope) stopRope = startRope(el('coach-rope'));
+  if (!recording && stopRope) {
+    stopRope();
+    stopRope = null;
+  }
   if (recording) return renderCoach();
 
   // Committed white, the tail the recogniser is still revising dimmed, and a caret only while
@@ -284,6 +295,8 @@ function renderTurn() {
 function renderCoach() {
   const coach = state.coach ?? {};
 
+  el('coach-heading').textContent = coach.heading ?? '';
+  el('coach-heading').hidden = !coach.heading;
   el('coach-step').textContent = coach.label ?? '';
 
   const say = el('coach-say');
@@ -389,7 +402,7 @@ async function drawRoster() {
   empty.classList.toggle('problem', Boolean(problem));
   if (agents.length === 0) {
     empty.textContent = problem
-      ?? 'No AI assistants yet. Open a page with an AI assistant on it, then record it.';
+      ?? 'No AI assistants yet. Open a page with an AI assistant on it, then lasso it.';
   }
 
   const target = el('avatars');
@@ -704,7 +717,7 @@ async function paintSite() {
   el('dock-note').hidden = true;
 
   el('record').disabled = !site.pattern;
-  label(el('record'), site.pattern ? `Record the AI assistant on ${site.host}` : site.why);
+  label(el('record'), site.pattern ? `Lasso the AI assistant on ${site.host}` : site.why);
 }
 
 /**

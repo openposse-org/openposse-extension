@@ -238,9 +238,9 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
   // Only https. A `chrome://` page, a local file or the Web Store can never be driven, and a
   // button that starts a flow which cannot finish is worse than one that is plainly disabled.
   if (!host || !tab?.url?.startsWith('https://')) {
-    whyNot = 'this page can’t be recorded';
+    whyNot = 'this page can’t be lassoed';
     el('record').disabled = true;
-    el('record').title = 'This page can’t be recorded';
+    el('record').title = 'This page can’t be lassoed';
     return;
   }
   recordable = { tabId: tab.id, pattern: patternForHost(host) };
@@ -250,7 +250,7 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
   whyNot = error?.message ?? String(error);
   console.warn('[openposse] this tab cannot be recorded –', whyNot);
   el('record').disabled = true;
-  el('record').title = `Can’t record this tab – ${whyNot}`;
+  el('record').title = `Can’t lasso this tab – ${whyNot}`;
 });
 
 el('record').addEventListener('click', async () => {
@@ -265,7 +265,7 @@ el('record').addEventListener('click', async () => {
   const granted = await chrome.permissions.request({ origins: [matchPattern(pattern)] });
   if (!granted) {
     // Declining is an answer, not a failure – the popup simply stays put and says so.
-    el('record').textContent = 'Site access is needed to record';
+    el('record').textContent = 'Site access is needed to lasso it';
     return;
   }
 

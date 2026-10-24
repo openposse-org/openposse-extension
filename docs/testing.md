@@ -41,7 +41,7 @@ What they check:
   of it offers only Replace, which keeps the assistant's name, voice and colour, and asked
   directly, the worker refuses to add a second assistant for the site.
 - **An out-of-date lasso says so:** when the page no longer has the button the lasso clicks,
-  the turn says how old the lasso is and to record it again.
+  the turn says how old the lasso is and to lasso it again.
 - **A typed question reaches the vendor and its answer comes back to the panel.**
 - **With no vendor tab open, a turn says "No Fixture tab is open." and opens nothing.**
 - **The vendor's tab title follows the turn:** `typing…`, `answering…`, then `done`. A turn that

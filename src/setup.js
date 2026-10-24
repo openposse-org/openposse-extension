@@ -993,7 +993,7 @@ async function refreshRoster() {
   if (problem || agents.length === 0) {
     if (drawing !== rosterDrawn) return;
     target.className = problem ? 'card bad' : 'card';
-    target.textContent = problem ?? 'none yet – record one from the toolbar button';
+    target.textContent = problem ?? 'none yet – lasso one from the toolbar button';
     el('sort-roster').hidden = true;
     search.hidden = true;
     search.value = '';
@@ -1364,7 +1364,7 @@ async function refreshRoster() {
     });
 
     // **Re-record** – same wizard, keeping this agent's name and voice.
-    const again = tool('rotate-ccw', `Record ${agent.name} again`);
+    const again = tool('rotate-ccw', `Lasso ${agent.name} again`);
     again.addEventListener('click', async () => {
       again.disabled = true;
       say('opening the page…');

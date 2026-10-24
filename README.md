@@ -519,7 +519,7 @@ src/                     The extension's code, pages and manifest (plain JavaScr
   supertonic/              Supertonic's browser helper, its licence, and the model's licence
   weights.js               the voice downloads: fixed versions, SHA-256 checks
 public/                  Files copied as they are: icons, the pronunciation dictionary, and vendor/
-lassos/                 Example assistants, as shareable lasso files
+lassos/                  Example assistants, as shareable lasso files
 test/                    Unit tests; e2e/ browser tests, with a sample assistant in fixtures/
 tools/                   The build script and developer helpers
 docs/                    Testing, releasing, and design notes

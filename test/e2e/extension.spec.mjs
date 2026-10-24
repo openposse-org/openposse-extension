@@ -243,6 +243,6 @@ test('when the page no longer has what the lasso clicks, the turn says the lasso
   await ask(panel, 'What is the pipeline total?');
 
   await expect(panel.locator('body')).toContainText(
-    'Acme’s lasso no longer matches Fixture’s page, which has changed. Record it again from Settings.',
+    'Acme’s lasso no longer matches Fixture’s page, which has changed. Lasso it again from Settings.',
     { timeout: 10_000 });
 });

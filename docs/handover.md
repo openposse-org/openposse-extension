@@ -33,7 +33,11 @@ Owed, and worth reminding the maintainer about when the area comes up:
 
 - Lasso identity (steps in `docs/testing.md`, Sharing row): share an assistant and paste it back
   ("You already have this one, as …"); change one selector and only Replace is offered; Replace
-  keeps the voice; Record this tab on a site that has an assistant re-records it.
+  keeps the voice; Lasso this tab on a site that has an assistant re-records it.
+- The recording view in the side panel: "Lassoing Notion…" above the steps, the rope loader under
+  the instruction in both themes and with Reduce Motion on (one still frame), and "Lassoed Notion"
+  at the end. Also that a profile with assistants saved before the rename to lassos still has
+  them all after updating.
 - Tab titles seen from **another** tab on real Notion (`docs/tab-titles.md` §8 Q3–Q4).
 - On a new tab the shortcut opens the panel saying the page can't be driven, and the assistant
   still answers. With Notion in its own window, asking from another window lands the answer in the

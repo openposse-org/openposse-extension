@@ -26,6 +26,10 @@ has and that the site may have a newer one.
   `pack`/`unpack`). `version` is the format's. `unpack` reads only those four keys, keeps anything
   else, and accepts a higher `version` with a note, so optional fields can be added without a
   format bump.
+- Lassos were called recipes until 2026-10-24. `unpack` still reads the old
+  `{ format: "openposse.recipe", recipe }` files, and `loadRoster` moves a roster saved under
+  `recipe:<uuid>` and `recipeID` onto the new keys the first time it reads one. Neither is ever
+  written. Hashes did not change, because only the content inside the envelope is hashed.
 - `lassos/` in this repo holds bare recordings (`agentName` plus the fields); its test packs each
   one and unpacks it. Git history is the only versioning the files have.
 - The website's `/lassos/` index gives each entry an `id` (the product slug) and a `recordedOn`
@@ -114,7 +118,7 @@ The preview sentence gains the date: "…, recorded 16 October 2026".
 
 When a turn fails because the lasso's open or input selector matched nothing, the panel's
 message names what the person has: "Ivan's lasso is from 1 October and Notion's page has
-changed. There may be a newer one on openposse.org/lassos." for an imported agent, and "…Record
+changed. There may be a newer one on openposse.org/lassos." for an imported agent, and "…Lasso
 it again from Settings." for a local recording. Text only, no network.
 
 As built, this applies to lassos that open the assistant by click: the button it clicks is

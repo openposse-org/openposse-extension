@@ -35,7 +35,7 @@ import { DONE_MS } from './title.js';
 import { hashOf, matchFor, staleness, today, unpack } from './share.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
 import {
-  derive, stepLabel, instruction, captures, PATIENCE_MS,
+  derive, stepLabel, heading, instruction, captures, PATIENCE_MS,
 } from './coaching.js';
 import { panel, hidePanel, primePanel } from './panel.js';
 import {
@@ -166,7 +166,7 @@ async function holdFloor(name) {
  */
 const ROUTING_COPY = {
   'heard-nothing': "Didn't catch that.",
-  'no-agents': 'No AI assistants yet – record one first.',
+  'no-agents': 'No AI assistants yet – lasso one first.',
   'unknown-agent': "Didn't catch who you meant. Start with an AI assistant's name.",
 };
 
@@ -1410,6 +1410,9 @@ async function beginWizard({ tabId, pattern, agentId = null }) {
   return { ok: true };
 }
 
+/** `Lassoing Notion…` for the recording under way. Every coaching patch carries it. */
+const headingNow = (step) => heading(step, productLabel(wizard?.draft?.domainPattern));
+
 /** Pushes whatever `coaching.js` decided into the orb. */
 async function showCoaching() {
   if (!wizard) return;
@@ -1423,6 +1426,7 @@ async function showCoaching() {
     visible: true,
     coach: {
       step: state.step,
+      heading: headingNow(state.step),
       label: stepLabel(state),
       instruction: instruction(state, wizard.draft),
       captures: captures(wizard.draft),
@@ -1487,7 +1491,7 @@ async function dryRun() {
   // while we type text into somebody's assistant.
   await stopCapturing();
 
-  await panel({ phase: 'recording', coach: { label: 'SETTING UP · CHECKING', instruction: 'Checking it works – asking it two questions…', captures: captures(wizard.draft), naming: false } });
+  await panel({ phase: 'recording', coach: { heading: headingNow('checking'), label: 'SETTING UP · CHECKING', instruction: 'Checking it works – asking it two questions…', captures: captures(wizard.draft), naming: false } });
 
   const questions = ['Hello.', 'What can you help me with?'];
   const answers = [];
@@ -1503,6 +1507,7 @@ async function dryRun() {
       await panel({
         phase: 'recording',
         coach: {
+          heading: headingNow('failed'),
           label: 'SETTING UP · DIDN’T WORK',
           instruction: 'We recorded it, but driving it ourselves didn’t work. That usually means '
             + 'this AI assistant ignores clicks it didn’t get from a person. Nothing has been saved.',
@@ -1526,6 +1531,7 @@ async function dryRun() {
     await panel({
       phase: 'recording',
       coach: {
+        heading: headingNow('failed'),
         label: 'SETTING UP · DIDN’T WORK',
         instruction: 'We read the same answer twice, so we wouldn’t be able to tell one reply '
           + 'from the next. This AI assistant may not be one we can drive yet.',
@@ -1564,6 +1570,7 @@ async function save() {
       await panel({
         phase: 'recording',
         coach: {
+          heading: headingNow('done'),
           label: 'SETTING UP · DONE',
           instruction: `${name} already worked on this site, so this recording replaced `
             + `${name}’s lasso. Each site has one AI assistant; its name and voice stay.`,
@@ -1609,6 +1616,7 @@ async function save() {
   await panel({
     phase: 'recording',
     coach: {
+      heading: headingNow('done'),
       label: 'SETTING UP · DONE',
       instruction: `Saved as ${name}. You can rename it in Settings, or just say `
         + `“${name}, …” to talk to it.${caution}`,
