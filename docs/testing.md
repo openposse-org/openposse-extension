@@ -29,7 +29,7 @@ Chrome's dialog, which automation cannot reach. It is never loaded by hand and n
 
 What they check:
 
-- **Every extension page opens without an error.** Settings, the side panel, the popup, and the
+- **Every extension page opens without an error.** Settings, the side panel, and the
   offscreen page that speaks, opened as a tab because Chrome's own offscreen document is not a page
   Playwright watches. It carries ONNX Runtime for Supertonic, so a load-time throw there would
   otherwise only show as a voice that never speaks.

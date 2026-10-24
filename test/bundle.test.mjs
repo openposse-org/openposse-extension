@@ -1,9 +1,9 @@
 // The only test here that *runs* a bundle, and the only one that could have caught the backtick.
 //
-// Everything else under `tools/` tests a pure module. That left the two files which actually get
-// injected into a page – `content.js` and `orb.js` – covered by nothing: a comment written with
-// real backticks inside orb.js's CSS template became ``MARK_CSS.keys`…` ``, a *valid*
-// tagged-template call, so esbuild built it, ESLint passed it and 118 tests stayed green while
+// Everything else under `tools/` tests a pure module. That left the files which actually get
+// injected into a page – `content.js`, and the in-page orb until it was retired on 2026-10-24 –
+// covered by nothing: a comment written with real backticks inside orb.js's CSS template
+// became ``MARK_CSS.keys`…` ``, a *valid* tagged-template call, so esbuild built it, ESLint passed it and 118 tests stayed green while
 // the orb threw on load and neither ⌥V nor the recorder had anywhere to draw.
 //
 // This bundles from source rather than reading `dist/`, so it cannot pass against a stale build,
@@ -53,8 +53,9 @@ const stub = (thenable = true) => new Proxy(function stubbed() {}, {
  * Evaluates `code` with **only** the named globals present.
  *
  * The enumeration is the load-bearing part, and getting it wrong cost a round here. A sandbox
- * that answers every name – a `has: () => true` Proxy – makes `globalThis.__openposseOrb`
- * truthy, so `if (!globalThis.__openposseOrb)` is false and the entire orb body is skipped. The
+ * that answers every name – a `has: () => true` Proxy – makes a re-injection guard such as
+ * `globalThis.__openposseContentScript` truthy, so the guard is false and the entire body is
+ * skipped. The
  * harness then reports the broken bundle as clean, which is worse than having no harness: it is
  * a green tick for code that never ran.
  */
@@ -74,33 +75,26 @@ async function bundled(entry) {
   return result.outputFiles[0].text;
 }
 
-test('orb.js survives being loaded, and its body actually runs', async () => {
-  const sandbox = evaluate(await bundled('src/orb.js'), ['document', 'chrome']);
-  // Without this the test passes vacuously the moment the re-injection guard stops matching:
-  // the file would load, skip everything, and throw nothing.
-  assert.equal(sandbox.__openposseOrb, true, 'the guarded block was skipped, so nothing was tested');
-});
-
 test('content.js survives being loaded, and its body actually runs', async () => {
   const sandbox = evaluate(await bundled('src/content.js'), ['chrome']);
+  // Without this the test passes vacuously the moment the re-injection guard stops matching:
+  // the file would load, skip everything, and throw nothing.
   assert.equal(sandbox.__openposseContentScript, true, 'the guarded block was skipped');
 });
 
 test('sidepanel.js survives being loaded, and runs to its last statement', async () => {
-  // **E14 makes this the only surface** when the switch is flipped, so a module-load throw here
-  // is the whole product doing nothing – the exact symptom this file exists for, and now with no
-  // orb behind it to notice.
+  // **This is the only surface**, so a module-load throw here is the whole product doing
+  // nothing – the exact symptom this file exists for.
   //
   // The assertion is `requestAnimationFrame` having been reached, because it is the file's last
   // statement: a throw anywhere above it leaves `frame` null, which is precisely the failure the
-  // stray backtick produced four hundred lines into orb.js.
+  // stray backtick produced four hundred lines into the since-retired orb.js.
   //
   // **It schedules a frame and does not draw one**, deliberately. Invoking the callback would run
   // `drawSphere`, which wants a canvas with real dimensions and a 2D context – and `stub` cannot
   // give it either, because a chaining Proxy has no primitive conversion, so `window
   // .devicePixelRatio` fails at `Math.min`. Mocking fifteen canvas methods to execute drawing
-  // code that has been on screen for weeks is not what this harness is for. `orb.js` above draws
-  // no frame either, for the same reason.
+  // code that has been on screen for weeks is not what this harness is for.
   let frame = null;
   const sandbox = {
     window: stub(), document: stub(), chrome: stub(), navigator: stub(), console: stub(),

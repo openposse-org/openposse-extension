@@ -51,19 +51,16 @@ if (store && e2e) {
 const MODULES = {
   'service-worker': 'src/service-worker.js',
   setup: 'src/setup.js',
-  popup: 'src/popup.js',
   sidepanel: 'src/sidepanel.js',
   offscreen: 'src/offscreen.js',
   spike: 'src/spike.js',
 };
 
 /**
- * Classic scripts. `content` and `orb` are injected into vendors' pages, where a module cannot
- * go; `theme-boot` runs before a page paints; `capture` is pasted into DevTools by hand.
+ * Classic scripts. `content` is injected into vendors' pages, where a module cannot go; `theme-boot` runs before a page paints; `capture` is pasted into DevTools by hand.
  */
 const SCRIPTS = {
   content: 'src/content.js',
-  orb: 'src/orb.js',
   'theme-boot': 'src/theme-boot.js',
   capture: 'tools/capture.js',
 };

@@ -11,7 +11,7 @@
 
 import { loadRoster, micGranted, voiceSpeed, engineSettings } from './storage.js';
 import { channelOf, initialFor } from './channels.js';
-import { panel, panelLevel, panelSpeaking } from './panel.js';
+import { panel, panelLevel } from './panel.js';
 import { beginTurn, trace } from './trace.js';
 
 /**
@@ -198,7 +198,7 @@ export async function startListening({ reply = false } = {}) {
     // The design's dead-mic state, driven by a real signal rather than a synthetic one: an
     // ungranted microphone shows as dead, never as a healthy idle orb.
     await panel({
-      phase: 'not-capturing', visible: true, transcript: '', volatile: '', answer: '',
+      phase: 'not-capturing', transcript: '', volatile: '', answer: '',
       message: '', agentName: null, channel: null,
     }, { create: true });
     await broadcastState();
@@ -213,16 +213,15 @@ export async function startListening({ reply = false } = {}) {
   await tell('openposse.hush');
   await chrome.storage.session.set({ [LISTENING]: true });
   await setBadge('listening');
-  // Before the panel, not after. The panel's injection can take a moment, and until this runs
-  // an open popup still shows the *previous* turn's outcome – so the two surfaces disagree,
+  // Before the panel's state, not after, so the listening state and the turn never disagree,
   // one saying "Didn't hear anything" while the other says "Listening".
   await broadcastState();
-  // `create` injects the panel into whatever tab is in front. Everything after this is a merge
-  // onto that state, so a turn never has to restate the roster or the shortcut.
+  // `create` gives the panel the roster and the shortcut. Everything after this is a merge onto
+  // that state, so a turn never has to restate them.
   await panel(reply
     ? { phase: 'listening', transcript: '', volatile: '', message: '' }
     : {
-      phase: 'listening', visible: true,
+      phase: 'listening',
       transcript: '', volatile: '', answer: '', sub: '', message: '',
       agentName: null, channel: null,
     }, { create: !reply });
@@ -565,15 +564,13 @@ export function handleOffscreenMessage(message) {
       // it renders straight to the device and exposes no audio node, so all it can offer is a
       // word boundary – speech *rate* – which the orb eases between into something that at
       // least moves with the words.
-      if (message.started) panelSpeaking(true);
       if (typeof message.level === 'number') panelLevel(message.level);
       else panelLevel(message.pulse ? 0.85 : 0.4);
       return true;
 
     case 'openposse.spoke':
       if (message.preview) return true;           // see `openposse.speaking` above
-      // Releases the panel's dismiss timer, which was held open so it could not fade out
-      // mid-sentence, and drops the orb back to rest.
+      // Drops the orb back to rest.
       // The breakdown the previous version could not show, because it happens in the offscreen
       // document and its console is a different window. Load, synthesis and playback answer
       // three different questions: a cold model, a slow engine, or simply a long answer.
@@ -613,7 +610,6 @@ export function handleOffscreenMessage(message) {
           + (message.ok ? '' : ` · ${message.reason ?? 'failed'}`)
         : `${message.voice ? `${message.voice} (${message.engine ?? '?'}) · ` : ''}`
           + (message.ok ? 'spoken' : (message.reason ?? 'failed')));
-      panelSpeaking(false);
       panelLevel(0);
       // A voice that failed or was cancelled before making a sound never sent `audible`.
       panel({ warming: false });

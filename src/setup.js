@@ -17,7 +17,6 @@ import { pack, unpack, toFile, filenameFor, summarise, spokenDay } from './share
 import { matchPattern, patternForHost } from './domain.js';
 import { FLOOR_MS, FLOOR_OVERRIDE_KEY, FLOOR_RANGE, floorWindow, productLabel } from './routing.js';
 import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from './grace.js';
-import { setSurface } from './surface.js';
 import { MOCK_SIZES } from './mocks.js';
 import {
   chooseEngine, describeEngine, hasWebGPU, agreedToSupertonic, SUPERTONIC_LANGUAGES, supertonicLanguage,
@@ -153,48 +152,6 @@ async function refreshShortcut() {
 
 el('open-shortcuts').addEventListener('click', async () => {
   await chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
-});
-
-// ── 4. Where the panel may appear ──────────────────────────────────────────────────────────
-//
-// **A global shortcut and `activeTab` are mutually exclusive**, which is why this exists.
-// Chrome grants an extension temporary access to the current tab when the user presses its
-// shortcut – but not when that shortcut is marked `global`, because such a command can fire
-// while Chrome is in the background and there is no tab the gesture belongs to. Measured, after
-// two wrong explanations: the same keypress that works on a vendor's page fails on every other
-// with "Cannot access contents of url".
-//
-// Vendor pages work without this, because a recorded assistant already has a host permission of
-// its own. Everything else needs the broad grant or nothing.
-//
-// Offered rather than asked for at install. The prompt Chrome shows is alarming and it should
-// be – this is the biggest thing the extension can ask for – so it belongs behind a sentence
-// explaining what it buys and a choice the user makes knowingly.
-
-const ALL_SITES = { origins: ['https://*/*'] };
-
-async function refreshPanelAccess() {
-  const granted = await chrome.permissions.contains(ALL_SITES);
-  // Off is not a problem to fix – the step is optional – so it is neutral rather than amber.
-  setStatus('panel-status', granted
-    ? 'on – the orb appears on any page'
-    : "off – the orb appears on AI assistants' pages only", granted ? 'good' : '');
-  markDone('step-panel', granted);
-  el('grant-panel').setAttribute('aria-checked', String(granted));
-  return granted;
-}
-
-el('grant-panel').addEventListener('click', async () => {
-  // Read first, act on the answer: this is a toggle, and `request()` on an already-granted
-  // permission resolves true without showing anything, which would make the button dead.
-  if (await chrome.permissions.contains(ALL_SITES)) {
-    await chrome.permissions.remove(ALL_SITES);
-  } else {
-    // Not awaited-then-checked before the request: the prompt needs this click to still be
-    // Chrome's idea of a user gesture, and the `contains` above is the only hop it can afford.
-    await chrome.permissions.request(ALL_SITES);
-  }
-  await refreshPanelAccess();
 });
 
 // ── Which engine speaks ────────────────────────────────────────────────────────────────────
@@ -1823,7 +1780,7 @@ async function addPending({ replace = null } = {}) {
 // keeps only what a turn needs. Of what the Mac app's menu and sliders carried, only the
 // follow-up window is still a guess this extension makes; the answer settle wait is here because
 // it is the other clock a turn still waits on. The rest is this extension's own scaffolding:
-// E14's surface switch, the voice diagnostics, the mock roster and the site-icon loader. The demo
+// the voice diagnostics, the mock roster and the site-icon loader. The demo
 // went back to the panel the same day, top right over the orb, because that is where it plays.
 //
 // The panel's site line did not come with them. It described the tab in front of the panel, and
@@ -1913,27 +1870,6 @@ for (const knob of KNOBS) {
     });
   });
 }
-
-/**
- * E14's switch, and it is temporary by decision: when user testing picks a surface, the other is
- * deleted along with everything that exists to defend it.
- */
-async function paintSurface() {
-  const { surface } = await chrome.storage.local.get('surface');
-  // Nothing stored, or nothing valid, is the panel – `surface.js`'s default.
-  const onPanel = surface !== 'orb';
-  // The icon is where a click takes you, not where you are – the same reading as the label.
-  glyph(el('surface'), onPanel ? 'orbit' : 'panel-right', 16);
-  label(el('surface'), onPanel
-    ? 'Use the orb – show turns over the page instead'
-    : 'Use the side panel – it also works on pages the orb cannot reach');
-}
-
-el('surface').addEventListener('click', async () => {
-  const { surface } = await chrome.storage.local.get('surface');
-  await setSurface(surface === 'orb' ? 'panel' : 'orb');
-  await paintSurface();
-});
 
 // Kokoro's layer-by-layer check, `spike.js`, in a tab of its own.
 el('diagnostics').addEventListener('click', () => {
@@ -2088,11 +2024,10 @@ function whyNoIcon(tab, pattern) {
   return 'its icon arrived but was not picked up';
 }
 
-// A slider moved in another window, the surface was switched elsewhere, or the roster changed.
+// A slider moved in another window or the roster changed.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'session' && KNOBS.some((k) => changes[k.key])) paintKnobs();
   if (area !== 'local') return;
-  if (changes.surface) paintSurface();
   if (changes.agents) paintMocks();
 });
 
@@ -2292,7 +2227,6 @@ for (const [name, refresh] of Object.entries({
   microphone: refreshMic,
   'speech model': refreshModel,
   shortcut: refreshShortcut,
-  'panel access': refreshPanelAccess,
   'voice engine': refreshEngine,
   weights: refreshWeights,
   pace: loadPace,
@@ -2302,7 +2236,6 @@ for (const [name, refresh] of Object.entries({
   'site icons': refreshIcons,
   'orb style': paintOrbStyle,
   'size by number': paintAvatarSizing,
-  'surface switch': paintSurface,
   'debug timings': paintKnobs,
   'mock roster': paintMocks,
   'all-sites note': paintBroadNote,

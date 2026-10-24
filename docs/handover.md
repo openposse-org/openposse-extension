@@ -79,7 +79,7 @@ against a SHA-256 baked into the build; a mismatch throws the file away.
 Asking does not switch tabs either; navigation is something the user asks for ("show me").
 
 **No vendor in `manifest.json`.** Sites are granted one origin at a time through
-`permissions.request()` from a button in the popup, and registered with
+`permissions.request()` from a button in the side panel, and registered with
 `chrome.scripting.registerContentScripts`. A vendor is a recorded lasso in storage, never code:
 no files named after a company, no hardcoded selectors.
 
@@ -97,7 +97,7 @@ early return that can be mistaken for a different failure says which one it is.
 
 ## Traps that cost real time
 
-- **A backtick inside a CSS template literal** (`orb.js`) closes it and still builds, lints and
+- **A backtick inside a CSS template literal** (the since-retired `orb.js`) closes it and still builds, lints and
   tests green; it throws when the content script loads. Escape every backtick. When the extension
   "does nothing", `chrome://extensions` → Errors is the only place that says why. No test runs a
   bundle.
@@ -117,8 +117,9 @@ early return that can be mistaken for a different failure says which one it is.
   `input` event; prefer clicking the send button over synthetic Enter (`isTrusted`); find the
   frame that owns the assistant before messaging it; a busy signal is an element replaced, not an
   attribute changed, so diff `data-testid`s from a baseline and require sustained absence.
-- **The orb may show and instruct, never ask for typing**: pages take focus back. Naming lives in
-  Settings.
+- **Nothing drawn inside a vendor's page may ask for typing**: pages take focus back. Naming lives
+  in Settings. (The in-page orb that taught this was retired on 2026-10-24; the extension is side
+  panel only.)
 - **Gemini Nano is off by enterprise policy** on many work machines. Nothing uses it now; if it
   comes back, treat it as absent by default.
 - **Do not click Remove** on an installed extension while testing: it deletes the roster, lassos

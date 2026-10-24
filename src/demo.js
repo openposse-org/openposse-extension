@@ -1,4 +1,4 @@
-// A scripted turn, so both surfaces can be looked at without spending a vendor query.
+// A scripted turn, so the side panel can be looked at without spending a vendor query.
 //
 // The need is ordinary and the reason it is worth a file: **judging the UI needs a turn, and a
 // turn costs a real question against somebody's Notion quota, needs a granted site, needs the
@@ -10,7 +10,7 @@
 //
 // **Every patch goes through the real `panel()`, and the answer is spoken by the real `say()`.**
 // Nothing here renders anything, nothing here knows what a surface looks like, and there is no
-// second code path for the panel or the orb to fall out of step with. What is faked is exactly
+// second code path for the panel to fall out of step with. What is faked is exactly
 // one thing: the vendor. The recogniser, the router and the content script are not involved
 // because they are not being demonstrated – but everything downstream of a turn is the genuine
 // article, which is what makes this worth looking at rather than a mockup that agrees with
@@ -26,12 +26,11 @@
 //   selection, the Kokoro/system-voice routing and the `UNSPOKEN_COPY` failure path. That is
 //   most of what "test the voice without calling Notion" has to mean.
 //
-// **Scaffolding, with the same expiry as the surface switch.** It is reachable from a quiet
-// button and nothing else. If it survives to a Web Store listing it should survive as a product
-// feature – a "show me what a turn looks like" for the empty roster, which is a real first-run
-// gap – and not as a dev tool somebody forgot to take out.
+// **Kept as a product feature, by decision of 2026-10-24.** It is reachable from a quiet button
+// and nothing else for now; it is to become a "show me what a turn looks like" for the empty
+// roster, which is a real first-run gap, rather than a dev tool somebody forgot to take out.
 
-import { panel, panelLevel, hidePanel } from './panel.js';
+import { panel, panelLevel } from './panel.js';
 import { beginTurn, trace } from './trace.js';
 import {
   markThinking, markDone, VOLATILE_TAIL, hush, pauseVoice, resumeVoice,
@@ -296,10 +295,10 @@ async function playTurn(step, who, token, readAloud) {
   const what = step.show ? 'a tab switch' : `${step.answer.length} chars to speak`;
   trace('scripted turn', `${who.name}${who.id ? '' : ' (stand-in)'} · ${what}`);
 
-  // Exactly `startListening`'s opening patch, including `create` – so the orb gets injected on
-  // this path too and the demo is a test of both surfaces rather than only the one in front.
+  // Exactly `startListening`'s opening patch, including `create` – so the panel gets the roster
+  // and the shortcut the same way a real turn gives them.
   await panel({
-    phase: 'listening', visible: true,
+    phase: 'listening',
     transcript: '', volatile: '', answer: '', sub: '', message: '',
     agentName: null, channel: null,
   }, { create: true });
@@ -331,8 +330,7 @@ async function playTurn(step, who, token, readAloud) {
   if (!alive()) return;
 
   if (step.show) {
-    // `goToAgent`'s steps in its order: the agent's open tab found, the orb hidden, the tab made
-    // active, its window raised, then the panel left at rest on the agent. The floor stays where
+    // `goToAgent`'s steps in its order: the agent's open tab found, the tab made active, its window raised, then the panel left at rest on the agent. The floor stays where
     // it was, as it does for every scripted turn, and there is no answer, because a real one
     // gives none.
     //
@@ -346,8 +344,6 @@ async function playTurn(step, who, token, readAloud) {
       panel({ phase: 'needs-attention', message: `No ${who.product ?? 'assistant'} tab is open.` });
       return;
     }
-    await hidePanel();
-    if (!alive()) return;
     await chrome.tabs.update(tab.id, { active: true });
     await chrome.windows.update(tab.windowId, { focused: true });
     // Stop's resting panel must not be overwritten by a switch that was already under way.
@@ -360,7 +356,7 @@ async function playTurn(step, who, token, readAloud) {
   markThinking(who.name, who.channel);
   panel({
     phase: 'thinking', agentName: who.name, channel: who.channel,
-    transcript: utterance, volatile: '', answer: '', message: '', visible: true,
+    transcript: utterance, volatile: '', answer: '', message: '',
   });
 
   await wait(TIMING.thinking);
