@@ -2,8 +2,8 @@
 //
 // From supertone-oss-archive/supertonic, `web/helper.js` at 912c54b4. MIT, Supertone Inc.; the
 // licence is beside this file, and the build copies it into the package. The project is archived
-// upstream, so nothing here will be fixed there. Everything below is the original except the two
-// lines marked "OpenPosse patch".
+// upstream, so nothing here will be fixed there. Everything below is the original except the
+// places marked "OpenPosse patch".
 //
 // Text goes in as characters, not phonemes: `UnicodeProcessor` normalises it and looks every code
 // point up in `unicode_indexer.json`. There is no phonemizer and so no eSpeak, which is why this
@@ -16,6 +16,12 @@ import * as ort from 'onnxruntime-web/webgpu';
 
 // Available languages for multilingual TTS
 export const AVAILABLE_LANGS = ['en', 'ko', 'ja', 'ar', 'bg', 'cs', 'da', 'de', 'el', 'es', 'et', 'fi', 'fr', 'hi', 'hr', 'hu', 'id', 'it', 'lt', 'lv', 'nl', 'pl', 'pt', 'ro', 'ru', 'sk', 'sl', 'sv', 'tr', 'uk', 'vi', 'na'];
+
+// OpenPosse patch: seconds added to every predicted duration. Upstream sizes the latent, and so
+// the audio, to exactly the duration predictor's estimate, and that estimate ends inside the last
+// sound, so every utterance lost its final phoneme (its last 50 ms were still above about -35 dB).
+// The margin lets the model finish the sound; what it adds past the end is near silence.
+export const TAIL_MARGIN_S = 0.15;
 
 export function isValidLang(lang) {
     return AVAILABLE_LANGS.includes(lang);
@@ -198,6 +204,7 @@ export class TextToSpeech {
         // Apply speed factor to duration
         for (let i = 0; i < duration.length; i++) {
             duration[i] /= speed;
+            duration[i] += TAIL_MARGIN_S; // OpenPosse patch: see TAIL_MARGIN_S
         }
         
         // Encode text
