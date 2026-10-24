@@ -25,7 +25,7 @@ import {
 } from './demo.js';
 import { needsShortening, spokenForm } from './saying.js';
 import {
-  route, navigationTarget, replyToOffer, productName, productLabel, floorWindow,
+  route, navigationTarget, replyToOffer, productName, productLabel, floorWindow, withoutAddress,
   FLOOR_OVERRIDE_KEY,
 } from './routing.js';
 import { GRACE_OVERRIDE_KEY } from './grace.js';
@@ -1091,11 +1091,15 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
     // A real turn always wins, typed as well as spoken.
     stopDemo();
     warmVoice();
+    // "Matt, what is on this list?" typed to Matt is asked without the "Matt," – see
+    // `withoutAddress` for why typing needs its own version of what `route` does.
     loadRoster()
-      .then(({ agents }) => findAgent(agents, request.agentName))
-      .then((agent) => (agent
-        ? putQuestion(agent, request.prompt, 'typed')
-        : panel({ phase: 'needs-attention', message: `No agent called ${request.agentName}.` })))
+      .then(({ agents }) => {
+        const agent = findAgent(agents, request.agentName);
+        return agent
+          ? putQuestion(agent, withoutAddress(request.prompt, agent, agents), 'typed')
+          : panel({ phase: 'needs-attention', message: `No agent called ${request.agentName}.` });
+      })
       // As the spoken path's handler, so a failure here does not leave "is thinking…" on screen
       // with nothing logged. Labelled apart, so the console says which door the turn came in by.
       .catch((error) => {

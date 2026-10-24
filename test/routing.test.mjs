@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 
 import {
   route, bestMatch, normalise, editDistance, soundKey, navigationTarget, replyToOffer, productName,
-  productLabel, floorWindow, FLOOR_MS, FLOOR_RANGE,
+  productLabel, floorWindow, withoutAddress, FLOOR_MS, FLOOR_RANGE,
 } from '../src/routing.js';
 
 const ROSTER = [
@@ -317,4 +317,50 @@ test('the floor window takes a debug override only when it is a usable number', 
   assert.equal(floorWindow(0), FLOOR_MS);
   assert.equal(floorWindow('soon'), FLOOR_MS);
   assert.equal(floorWindow(FLOOR_RANGE.max + 1), FLOOR_MS);
+});
+
+// ── Typed questions ───────────────────────────────────────────────────────────────────────
+
+const MATT = { id: '5', name: 'Matt' };
+
+test("a typed question loses the agent's name and keeps the rest as typed", () => {
+  // The turn that found this: the vendor was asked the whole sentence, name and all.
+  assert.equal(withoutAddress('Matt, what is on this to-do list?', MATT),
+    'what is on this to-do list?');
+  assert.equal(withoutAddress('matt what is on this to-do list?', MATT),
+    'what is on this to-do list?');
+  assert.equal(withoutAddress('Matt: what is due?', MATT), 'what is due?');
+  assert.equal(withoutAddress('Matt – what is due?', MATT), 'what is due?');
+  assert.equal(withoutAddress('Hey Matt, what is due?', MATT), 'what is due?');
+});
+
+test('a typed question that does not start with the name is left alone', () => {
+  assert.equal(withoutAddress('What did Matt say?', MATT), 'What did Matt say?');
+  assert.equal(withoutAddress('Mattress prices this year?', MATT), 'Mattress prices this year?');
+  // A typo is not a name. Nothing mishears a keyboard, so nothing is guessed.
+  assert.equal(withoutAddress('Mat, what is due?', MATT), 'Mat, what is due?');
+});
+
+test('a typed name with nothing after it is not turned into an empty question', () => {
+  assert.equal(withoutAddress('Matt', MATT), 'Matt');
+  assert.equal(withoutAddress('Matt?', MATT), 'Matt?');
+});
+
+test("a typed question addressed to another agent is sent as typed", () => {
+  // The box says where it sends. Taking Ivan's name off a question going to Matt would hide that
+  // the person meant someone else.
+  const roster = [MATT, ...ROSTER];
+  assert.equal(withoutAddress('Ivan, tell me a joke', MATT, roster), 'Ivan, tell me a joke');
+});
+
+test("a longer agent's name is not cut down to the target's", () => {
+  const data = { id: '6', name: 'Data' };
+  const roster = [data, { id: '7', name: 'Data Team' }];
+  assert.equal(withoutAddress('Data Team, who is on call?', data, roster), 'Data Team, who is on call?');
+  assert.equal(withoutAddress('Data, who is on call?', data, roster), 'who is on call?');
+  assert.equal(withoutAddress('Data Team, who is on call?', roster[1], roster), 'who is on call?');
+});
+
+test('a question that opens with a quotation keeps its quotation mark', () => {
+  assert.equal(withoutAddress('Matt, "done" means what here?', MATT), '"done" means what here?');
 });
