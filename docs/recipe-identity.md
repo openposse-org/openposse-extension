@@ -1,6 +1,6 @@
 # Recipe identity and revisions
 
-**Status:** Implemented in the extension, 2026-10-16 (§3 to §6; §7 follows; §5 is the website's) · **Decided:** recipes need an identity that survives leaving git, and a way to tell old from new (2026-10-16) · **Scope:** three optional fields in the shared file, replace-on-import in Settings, a date from the recorder; the website publishes the fields
+**Status:** Implemented in the extension, 2026-10-16 (§3 to §6; §7 on 2026-10-24; §5 is the website's) · **Decided:** recipes need an identity that survives leaving git, and a way to tell old from new (2026-10-16) · **Scope:** three optional fields in the shared file, replace-on-import in Settings, a date from the recorder; the website publishes the fields
 
 ## 1. Summary
 
@@ -149,9 +149,12 @@ identical to what Settings would share for it.
   Replace; the same hash says "already have"; Replace keeps the agent's name and voice.
 - The recorder's test: a saved recipe carries today's `recordedOn`.
 
-## 7. One shape in `recipes/` (recommended, separate PR)
+## 7. One shape in `recipes/` (done 2026-10-24)
 
-Today `recipes/` holds bare recordings and Settings refuses a bare file, so a file copied from
+Done: `recipes/` now holds shared files with the website's ids (`notion-ai`, `acme-ai`), and
+the test unpacks them directly and checks each stored hash. What follows is the reasoning.
+
+Before this, `recipes/` held bare recordings and Settings refuses a bare file, so a file copied from
 GitHub cannot be pasted. Storing the shared file in `recipes/` instead, with the test unpacking it
 directly rather than packing first, makes the repo's files usable as they are and gives them an
 `id`, a date and a hash in the open. The bare shape stays the extension's internal storage only.

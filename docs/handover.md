@@ -17,12 +17,11 @@ like working code.
 
 ## Next work, in order
 
-1. **Recipe identity §7** (`docs/recipe-identity.md`). `recipes/*.json` are still bare
-   recordings. Rewrite them as shared files carrying `id`, `recordedOn` and `hash`; make the repo
-   test unpack them directly; update `recipes/README.md`. Its own PR, `feat:` or `fix:` as the
-   change warrants. The code it builds on is in `src/share.js` (`canonical`, `hashOf`,
-   `matchFor`, `staleness`; `pack` is async). `hash` is 12 hex of SHA-256 over the canonical
-   JSON, is never stored and is never trusted from a file.
+1. **Recipe identity §7** is done: `recipes/*.json` are shared files carrying `id` (the
+   website's slugs, `notion-ai` and `acme-ai`), `recordedOn` and `hash`, and the repo test
+   unpacks them directly. Change a selector there and regenerate the file with `pack`; the test
+   fails on a stale hash. `hash` is 12 hex of SHA-256 over the canonical JSON and is never
+   trusted from a file.
 2. **The website's §5**, in the separate `openposse-website` repo: the sync mirrors `canonical`
    and `hashOf` (the fixture `test/fixtures/fixture-crm.json` hashes to `49cd0c15178f`),
    publishes `id`, `recordedOn` and `hash`, and the recipes page shows the revision. Also there:

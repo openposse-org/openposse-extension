@@ -1,8 +1,24 @@
 # Recipes
 
-Each file is one vendor's recorded selectors, matching the `Recipe` shape the Mac app defined.
-**Every value here was captured from a live page with `tools/capture.js` – nothing is guessed**, which is the rule that keeps selector
-literals out of extension source. M3 replaces this directory with the recorder's output.
+Each file is one vendor's recorded selectors, stored as the shared file Settings imports and
+writes (`pack` in `src/share.js`). Copy one from GitHub and paste it into Settings as it is.
+**Every value here was captured from a live page with `tools/capture.js` – nothing is guessed**,
+which is the rule that keeps selector literals out of extension source. M3 replaces this
+directory with the recorder's output.
+
+The envelope around `recipe` says which recipe it is (`docs/recipe-identity.md`):
+
+| Field | What it is |
+|---|---|
+| `id` | The lineage, the slug the website gives the product (`notion-ai`, `acme-ai`). The filename is `openposse-<id>.json` |
+| `name` | The name the recording suggests for the AI assistant. The importer may pick another |
+| `recordedOn` | The day the recipe was recorded |
+| `hash` | 12 hex characters of SHA-256 over canonical JSON of `recipe`, from `hashOf`. Importers recompute it and never trust the file's |
+
+**Change a selector and the hash changes with it.** `test/share.test.mjs` unpacks every file
+here exactly as Settings would and fails when the stored hash or the layout is not what `pack`
+writes, so regenerate the file with `pack` rather than editing the hash by hand. The bare
+recording shape stays the extension's own storage and is not used here.
 
 ## Andy — LeanIX EA Assistant *(recipe removed 2026-10-01)*
 
