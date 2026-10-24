@@ -132,19 +132,30 @@ test('a recipe with no openMethod, opening by shortcut, is accepted', () => {
   assert.equal(result.recipe.openMethod, null, 'the absent field survives rather than being filled in');
 });
 
-test('the recipes/ directory imports, openMethod or not', async () => {
-  // Every recipe this repo ships is checked against its own importer, so a recording the
-  // validator would refuse cannot reach a user.
+test('the recipes/ directory imports as it is, and says what it is', async () => {
+  // Every file this repo ships is the shared file itself, unpacked exactly as Settings reads one
+  // pasted from GitHub, so a file the importer would refuse cannot reach a user. Each carries an
+  // id and a date, its hash is the one `hashOf` gives, and it is byte for byte what `pack` would
+  // write, so an edit to a selector that forgets the hash fails here rather than on the website.
   const { readdir, readFile } = await import('node:fs/promises');
   const dir = new URL('../recipes/', import.meta.url);
   const files = (await readdir(dir)).filter((f) => f.endsWith('.json'));
   assert.ok(files.length > 0, 'recipes/ should still hold at least one recorded vendor');
 
   for (const file of files) {
-    const recipe = JSON.parse(await readFile(new URL(file, dir), 'utf8'));
-    const result = unpack(toFile(await pack({ name: recipe.agentName ?? 'Assistant', recipe })));
+    const text = await readFile(new URL(file, dir), 'utf8');
+    const result = unpack(text);
     assert.equal(result.ok, true, `${file}: ${result.problems?.join(' ')}`);
-    assert.equal(result.recipe.domainPattern, recipe.domainPattern);
+    assert.match(result.id ?? '', /^[a-z0-9-]+$/, `${file}: needs an id`);
+    assert.equal(file, `openposse-${result.id}.json`, `${file}: the filename follows the id`);
+    assert.match(result.recordedOn ?? '', /^\d{4}-\d{2}-\d{2}$/, `${file}: needs a recordedOn`);
+
+    const { hash } = JSON.parse(text);
+    assert.equal(hash, await hashOf(result.recipe), `${file}: hash is stale`);
+    const repacked = await pack({
+      name: result.name, id: result.id, recipe: { ...result.recipe, recordedOn: result.recordedOn },
+    });
+    assert.equal(text, toFile(repacked), `${file}: not in the shape pack writes`);
   }
 });
 

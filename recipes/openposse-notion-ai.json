@@ -1,14 +1,21 @@
 {
-  "agentName": "Ivan",
-  "domainPattern": "*.notion.com",
-  "openMethod": "click",
-  "openSelector": "div[aria-label=\"ai\"]",
-  "inputSelector": "div[placeholder=\"Ask Notion AI\"]",
-  "submitMethod": "click",
-  "submitSelector": "div[data-testid=\"agent-chat-send-button\"]",
-  "responseContainerSelector": "div[data-agent-service-find-row]:has(+ div[data-agent-service-find-row] [aria-label=\"Copy response\"])",
-  "quietPeriodMs": 900,
-  "responseTimeoutMs": 60000,
-  "shortcut": null,
-  "triggerMethod": "synthetic"
+  "format": "openposse.recipe",
+  "version": 1,
+  "id": "notion-ai",
+  "name": "Ivan",
+  "recordedOn": "2026-10-16",
+  "hash": "5610c3bc4a69",
+  "recipe": {
+    "domainPattern": "*.notion.com",
+    "openMethod": "click",
+    "openSelector": "div[aria-label=\"ai\"]",
+    "inputSelector": "div[placeholder=\"Ask Notion AI\"]",
+    "submitMethod": "click",
+    "submitSelector": "div[data-testid=\"agent-chat-send-button\"]",
+    "responseContainerSelector": "div[data-agent-service-find-row]:has(+ div[data-agent-service-find-row] [aria-label=\"Copy response\"])",
+    "quietPeriodMs": 900,
+    "responseTimeoutMs": 60000,
+    "shortcut": null,
+    "triggerMethod": "synthetic"
+  }
 }
