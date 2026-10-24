@@ -565,5 +565,5 @@ function afterWords(text, count) {
   }
   // Only what can sit between a name and a sentence, so a question that opens with a quotation
   // mark or a bracket keeps it. The dashes are a hyphen, an en-dash and an em-dash.
-  return text.slice(end).replace(/^[\s,.:;!?\-–—]+/u, '');
+  return text.slice(end).replace(/^[\s,.:;!?\-\u2013\u2014]+/u, '');
 }
