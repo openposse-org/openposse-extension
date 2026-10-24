@@ -4,7 +4,8 @@
 # release – each pull request's title becomes its merge commit's message, so that is what it
 # reads – and updates one pull request that bumps the version in package.json,
 # package-lock.json and src/manifest.json and adds the changelog. Merging that pull request
-# tags the release and publishes it on GitHub. `wip:` commits are not conventional and are
+# tags the release and publishes it on GitHub, and the zip job then attaches the store zip
+# (openposse-<version>.zip, the same build CI checks) to that release. `wip:` commits are not conventional and are
 # ignored; `feat` and `fix` decide the bump. Configured in release-please-config.json.
 #
 # It uses a token of its own, RELEASE_PLEASE_TOKEN, rather than the built-in one: a pull
@@ -35,7 +36,44 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+
+  zip:
+    name: Attach the store zip to the release
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the store zip
+        run: npm run package
+
+      - name: Check the store zip
+        run: bash tools/check-zip.sh "openposse-$(node -p "require('./package.json').version").zip"
+
+      - name: Upload it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release upload "$TAG" "openposse-$(node -p "require('./package.json').version").zip" --repo "$GITHUB_REPOSITORY"
