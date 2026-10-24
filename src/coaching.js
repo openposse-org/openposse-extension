@@ -131,7 +131,12 @@ export function instruction(state, draft) {
 
   switch (state.step) {
     case 'await-open':
-      return says('open') ?? 'Open the AI assistant the way you normally do.';
+      // An ask, not `says('open')`: that sentence reports a missing step ("We didn’t see the AI
+      // assistant open"), and it is always true here, so it greeted every recording as though
+      // something had already gone wrong. The click preference stays, for the reason `problems()`
+      // gives.
+      return 'Open the AI assistant. Click its button if it has one – we can’t always press a '
+        + 'keyboard shortcut on your behalf.';
     case 'already-open':
       return 'The AI assistant is already open. Close it first – the shortcut usually toggles, so '
         + 'pressing it now would shut it and we’d record the wrong thing.';
