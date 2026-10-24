@@ -10,7 +10,8 @@ OpenPosse reaches people through two Chrome Web Store items:
 Version numbers, the changelog and GitHub releases come from **release-please**. After every merge
 to `main` it keeps one release pull request up to date; merging that pull request bumps the
 version in `package.json`, `package-lock.json` and `src/manifest.json`, tags the commit and
-publishes a GitHub release. Pull request titles become the changelog, so write them as
+publishes a GitHub release, with the store zip (`openposse-<version>.zip`, built from the tag
+and checked by `tools/check-zip.sh`) attached to it. Pull request titles become the changelog, so write them as
 Conventional Commits (`feat: …`, `fix: …`); `docs:`, `chore:`, `test:`, `build:` and `ci:` are
 left out of it.
 
