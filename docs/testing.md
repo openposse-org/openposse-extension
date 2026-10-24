@@ -37,6 +37,11 @@ What they check:
   ticked; ticking stores the agreement, unticking withdraws it, and the full licence it links to is
   in the package. Nothing is downloaded.
 - **A shared assistant is added from Settings**, through the same box a person pastes into.
+  The same file a second time says "You already have this one" and adds nothing. A newer version
+  of it offers only Replace, which keeps the assistant's name, voice and colour, and asked
+  directly, the worker refuses to add a second assistant for the site.
+- **An out-of-date recipe says so:** when the page no longer has the button the recipe clicks,
+  the turn says how old the recipe is and to record it again.
 - **A typed question reaches the vendor and its answer comes back to the panel.**
 - **With no vendor tab open, a turn says "No Fixture tab is open." and opens nothing.**
 - **The vendor's tab title follows the turn:** `typing…`, `answering…`, then `done`. A turn that
@@ -77,7 +82,7 @@ assistant with Share first.
 | **Supertonic.** Its Download stays disabled until "I agree" is ticked; it downloads 401 MB with a moving percentage and verifies; answers are spoken in Supertonic; with Kokoro too, "Which one speaks" switches between them; unticking "I agree", or removing Supertonic, returns answers to Kokoro | ☐ | ☐ | ☐ |
 | **Another language.** With Supertonic answering, choose German under the pace; a German sentence in the sample box is read in German, and a German question typed to an assistant is answered and read in German | ☐ | ☐ | ☐ |
 | **The side panel.** Opens from the icon and the shortcut, survives a click elsewhere, and nothing clips with the panel on the left at about 320px | ☐ | ☐ | ☐ |
-| **Sharing.** Share an assistant, import the file into a second profile, ask it something | ☐ | ☐ | ☐ |
+| **Sharing.** Share an assistant, import the file into a second profile, ask it something; importing it again says "You already have this one"; a copy with one selector changed offers only Replace, and Replace keeps the assistant's voice; Record this tab on a site that already has an assistant re-records it and says so | ☐ | ☐ | ☐ |
 | **Nothing leaves the machine.** With a network monitor running, a whole turn makes no connection; only setup's downloads do | ☐ | ☐ | ☐ |
 
 What differs by system, so a difference is not mistaken for a fault:

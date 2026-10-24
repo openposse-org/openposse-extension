@@ -97,6 +97,12 @@ test('a complete draft has no problems and finishes', () => {
   const result = finish(draft, { triggerMethod: 'synthetic' });
   assert.ok(result.ok);
   assert.equal(result.recipe.triggerMethod, 'synthetic');
+  assert.equal('recordedOn' in result.recipe, false, 'no date was given, so none is invented');
+});
+
+test('a saved recording carries the day it was recorded', () => {
+  const { recipe } = finish(complete(), { triggerMethod: 'synthetic', recordedOn: '2026-10-16' });
+  assert.equal(recipe.recordedOn, '2026-10-16');
 });
 
 test('a finished recipe carries plain CSS strings, not selector objects', () => {

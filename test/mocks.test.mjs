@@ -55,11 +55,11 @@ test('mocks fill the roster to each size and come out again, leaving the real ag
   assert.equal((await setMockRoster(15)).ok, false, 'a size nobody offered is refused');
 });
 
-test('every made-up recipe is one Settings can show and share', () => {
+test('every made-up recipe is one Settings can show and share', async () => {
   const all = mockRecordings(0, Math.max(...MOCK_SIZES));
   assert.equal(all.length, Math.max(...MOCK_SIZES), 'not enough made-up recordings for the largest size');
   for (const { name, recipe } of all) {
-    const read = unpack(JSON.stringify(pack({ name, recipe })));
+    const read = unpack(JSON.stringify(await pack({ name, recipe })));
     assert.ok(read.ok, `${name}: ${read.problems?.join(' ')}`);
   }
   assert.equal(new Set(all.map((m) => m.recipe.domainPattern)).size, all.length, 'two mocks share a site');

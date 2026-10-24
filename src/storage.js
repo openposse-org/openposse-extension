@@ -363,7 +363,7 @@ export async function renameAgent(agentID, name) {
   return { ok: true, name: wanted };
 }
 
-export async function addAgent({ name, voice, recipe }) {
+export async function addAgent({ name, voice, recipe, origin = null }) {
   const recipeID = newID();
   const stored = { ...recipe, agentName: name };
 
@@ -373,6 +373,9 @@ export async function addAgent({ name, voice, recipe }) {
   // Chosen now and kept, so no later rename or deletion can recolour it – or anybody else.
   const channel = pickChannel(agents.map((a) => a.channel));
   const agent = { id: newID(), name, voice, recipeID, connection: 'browser', channel };
+  // The lineage of a recipe that came from the website (`docs/recipe-identity.md`), so a newer
+  // version of it can be recognised as this agent's. The date and the hash live in the recipe.
+  if (origin?.id) agent.origin = { id: origin.id };
   await chrome.storage.local.set({ [AGENTS_KEY]: [...agents, agent] });
   return agent;
 }
@@ -399,15 +402,22 @@ export async function setAgentChannel(agentID, channel) {
  * Replaces an agent's recipe, keeping its id, name and voice.
  *
  * This is what re-recording a drifted vendor does, and the reason recipes are stored apart
- * from the roster in the first place.
+ * from the roster in the first place. Importing a newer version of the agent's recipe does the
+ * same, and gives the agent the file's lineage with `origin`; a re-recording passes none and the
+ * agent keeps the one it has.
  */
-export async function replaceRecipe(agentID, recipe) {
+export async function replaceRecipe(agentID, recipe, { origin = null } = {}) {
   const { agents } = await loadRoster();
   const agent = agents.find((a) => a.id === agentID);
   if (!agent) return false;
   await chrome.storage.local.set({
     [recipeKey(agent.recipeID)]: { ...recipe, agentName: agent.name },
   });
+  if (origin?.id && agent.origin?.id !== origin.id) {
+    await chrome.storage.local.set({
+      [AGENTS_KEY]: agents.map((a) => (a.id === agentID ? { ...a, origin: { id: origin.id } } : a)),
+    });
+  }
   return true;
 }
 

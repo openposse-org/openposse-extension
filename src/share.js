@@ -94,17 +94,83 @@ export function patternIsDerivable(pattern) {
   return patternForHost(pattern) === pattern;
 }
 
+// ── Which recipe this is ───────────────────────────────────────────────────────────────────
+//
+// Three optional envelope fields, so a recipe can be told apart from an older or newer one of
+// the same assistant once it has left the machine it was recorded on. See
+// `docs/recipe-identity.md`.
+//
+// - `id`: the lineage, a slug such as `notion-ai`. Only the website hands one out; a recording
+//   that was never published has none, and is matched by its site and name instead.
+// - `recordedOn`: the day it was recorded, `YYYY-MM-DD`. Stored inside the recipe on this
+//   machine and lifted into the envelope by `pack`.
+// - `hash`: what the recipe does, as 12 hex characters. Always computed here and never taken
+//   from a file, which is a stranger's claim.
+
+const LINEAGE = /^[a-z0-9-]+$/;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+const lineageOf = (value) => (typeof value === 'string' && LINEAGE.test(value) ? value : null);
+const dayOf = (value) => (typeof value === 'string' && DAY.test(value) ? value : null);
+
+/** The recipe minus what is not its content: this machine's fields, and the date. */
+function contentOf(recipe) {
+  const content = { ...recipe };
+  for (const key of LOCAL_ONLY) delete content[key];
+  delete content.recordedOn;
+  return content;
+}
+
+/**
+ * JSON with keys sorted at every depth and no whitespace, so two files that say the same thing
+ * hash the same however they were written. The website's sync mirrors this exactly; the test pins
+ * a fixture's hash so the two cannot drift apart unnoticed.
+ */
+export function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map((item) => canonical(item ?? null)).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort()
+      .filter((key) => value[key] !== undefined)
+      .map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+/**
+ * The recipe's revision: SHA-256 over its canonical content, first 12 hex characters. The name,
+ * the id and the date are left out, so renaming Ivan or publishing on another day changes nothing,
+ * while one changed selector does.
+ */
+export async function hashOf(recipe) {
+  const bytes = new TextEncoder().encode(canonical(contentOf(recipe)));
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return [...digest.slice(0, 6)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 /**
  * A recipe as a plain object ready to be written to a file.
  *
  * `name` is a *suggestion*. The importer's roster may already hold a Notion, and `freeName`
  * settles that on the other side – so this carries what the sender called it without asserting
  * the recipient must use it.
+ *
+ * `id` is the agent's lineage, when it has one (it was imported from the website). The date
+ * comes out of the recipe into the envelope, and the hash is always written.
  */
-export function pack({ name, recipe }) {
+export async function pack({ name, recipe, id = null }) {
   const shared = { ...recipe };
   for (const key of LOCAL_ONLY) delete shared[key];
-  return { format: FORMAT, version: VERSION, name: String(name ?? '').trim() || 'Assistant', recipe: shared };
+  const recordedOn = dayOf(shared.recordedOn);
+  delete shared.recordedOn;
+
+  const packed = { format: FORMAT, version: VERSION };
+  if (lineageOf(id)) packed.id = id;
+  packed.name = String(name ?? '').trim() || 'Assistant';
+  if (recordedOn) packed.recordedOn = recordedOn;
+  packed.hash = await hashOf(shared);
+  packed.recipe = shared;
+  return packed;
 }
 
 /** `pack`, as the text that goes in the file. Indented because it is meant to be read. */
@@ -127,7 +193,11 @@ export function filenameFor(name) {
  * than refused, because refusing would make every future addition a breaking change. Only a
  * missing load-bearing field, or a domain that could not have been derived, is fatal.
  *
- * @returns `{ ok: true, name, recipe, notes }` or `{ ok: false, problems }`
+ * The identity fields are optional and never fatal: an `id` or a date in the wrong shape is
+ * dropped, and the file's `hash` is not returned at all, because `hashOf` is the only judge of
+ * what a recipe says.
+ *
+ * @returns `{ ok: true, name, id, recordedOn, recipe, notes }` or `{ ok: false, problems }`
  */
 export function unpack(text) {
   const problems = [];
@@ -189,12 +259,70 @@ export function unpack(text) {
 
   if (problems.length > 0) return { ok: false, problems };
 
+  // The envelope's date first; a recipe carrying its own (a recording that was never packed)
+  // second. Either way it leaves the recipe, which is where the caller puts it back.
+  const { recordedOn: own, ...content } = recipe;
   return {
     ok: true,
     name: isText(parsed.name) ? parsed.name.trim() : 'Assistant',
-    recipe,
+    id: lineageOf(parsed.id),
+    recordedOn: dayOf(parsed.recordedOn) ?? dayOf(own),
+    recipe: content,
     notes,
   };
+}
+
+// ── Matching a file to an assistant already here ───────────────────────────────────────────
+
+/**
+ * The agent a shared file is a version of, or null. `entries` is `[{ agent, recipe }]`.
+ *
+ * **One site, one assistant** (the user's rule, 2026-10-16): a recipe for a site that already
+ * has an assistant can only replace that assistant's recipe, never add a second. So the same site
+ * comes first, whatever either is called. Failing that, the same lineage, which finds the agent
+ * when the assistant has moved to a new address (Notion's did, to `app.notion.com`); replacing it
+ * then moves the agent too, to a site nobody else has.
+ */
+export function matchFor(entries, { id, recipe }) {
+  const list = entries ?? [];
+  const site = list.find((entry) => entry.recipe?.domainPattern === recipe?.domainPattern);
+  if (site) return site;
+  if (!id) return null;
+  return list.find((entry) => entry.agent?.origin?.id === id) ?? null;
+}
+
+// ── Dates, as people say them ──────────────────────────────────────────────────────────────
+
+/** Today on this machine, `YYYY-MM-DD` – the day a person would say they recorded it. */
+export function today(now = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** "1 October", or with `year`, "1 October 2026". Read as UTC, so the day never shifts. */
+export function spokenDay(day, { year = false } = {}) {
+  if (!dayOf(day)) return '';
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric', month: 'long', ...(year ? { year: 'numeric' } : {}), timeZone: 'UTC',
+  }).format(new Date(`${day}T00:00:00Z`));
+}
+
+/**
+ * What a turn says when the assistant's page no longer has what the recipe looks for. Text only:
+ * it names where a newer recipe might be and fetches nothing.
+ *
+ * `published` is whether the agent came from the website (it has an `id`), which decides where
+ * to send the person: back to the site, or to record it again.
+ */
+export function staleness({ name, product, recordedOn, published }) {
+  const page = product ? `${product}’s page` : 'its page';
+  const date = spokenDay(recordedOn);
+  const what = date
+    ? `${name}’s recipe is from ${date} and ${page} has changed.`
+    : `${name}’s recipe no longer matches ${page}, which has changed.`;
+  return published
+    ? `${what} There may be a newer one on openposse.org/recipes.`
+    : `${what} Record it again from Settings.`;
 }
 
 // ── The preview, in a sentence ─────────────────────────────────────────────────────────────
@@ -240,8 +368,11 @@ export function labelIn(selector) {
  * Every quoted word came from a stranger's file. `labelIn` cuts them short, and the site comes
  * from `domainPattern`, which `unpack` has already checked – so a label can make the sentence
  * odd, never change which site it names. Chrome's own prompt names that site again.
+ *
+ * With `recordedOn`, the sentence ends with the day it was recorded, so two versions of the same
+ * assistant can be told apart before either is added.
  */
-export function summarise(name, recipe) {
+export function summarise(name, recipe, recordedOn = null) {
   const site = String(recipe.domainPattern ?? '').replace(/^\*\./, '') || 'its site';
   const product = productLabel(recipe.domainPattern) || site;
   const quoted = (words) => `‘${words}’`;
@@ -264,5 +395,7 @@ export function summarise(name, recipe) {
     ? `reads the answer once ${product} shows it has finished`
     : 'reads the answer once it stops changing';
 
-  return `On ${site}, ${name} ${[open, type, send].filter(Boolean).join(', ')}, and ${read}.`;
+  const when = spokenDay(recordedOn, { year: true });
+  return `On ${site}, ${name} ${[open, type, send].filter(Boolean).join(', ')}, and ${read}`
+    + `${when ? `, recorded ${when}` : ''}.`;
 }

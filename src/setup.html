@@ -530,6 +530,12 @@
         color: var(--text-dim);
         overflow-wrap: anywhere;
       }
+      /* Replace, under the sentence that asks. One site has one assistant, so there is no
+         "keep both". */
+      #import-choice:not([hidden]) {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px;
+      }
+      #import-question { flex-basis: 100%; margin: 0; overflow-wrap: anywhere; }
 
       /* ── The roster, three across ───────────────────────────────────────────────────────
          The voice list's shape, for the same reason: thirty-odd in one column is a scroll
@@ -1404,6 +1410,12 @@
                   aria-label="Add this AI assistant" disabled></button>
         </div>
         <p id="import-preview" hidden></p>
+        <!-- A different version of the assistant already on that site. One site has one
+             assistant, so replacing its recipe is the only way in. -->
+        <div id="import-choice" hidden>
+          <p id="import-question"></p>
+          <button type="button" id="import-replace">Replace</button>
+        </div>
         <span class="status tech" id="import-status">nothing to add yet</span>
       </section>
 

@@ -13,7 +13,7 @@ import {
 import { mountThemeToggle, segmented } from './appearance.js';
 import { channelOf, colourName, initialFor, PALETTE } from './channels.js';
 import { sortedIDs } from './order.js';
-import { pack, unpack, toFile, filenameFor, summarise } from './share.js';
+import { pack, unpack, toFile, filenameFor, summarise, spokenDay } from './share.js';
 import { matchPattern, patternForHost } from './domain.js';
 import { FLOOR_MS, FLOOR_OVERRIDE_KEY, FLOOR_RANGE, floorWindow, productLabel } from './routing.js';
 import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from './grace.js';
@@ -1269,7 +1269,7 @@ async function refreshRoster() {
           return;
         }
         sheet.textContent = '';
-        fill(sheet, result.recipe);
+        await fill(sheet, result.recipe);
       });
       return sheet;
     };
@@ -1328,8 +1328,10 @@ async function refreshRoster() {
     // between an imported recipe and a bad host permission. The other half is Chrome's own
     // prompt, on the far side.
     const share = tool('share', `Share ${agent.name}`);
-    const sharing = sheetFor(share, (sheet, recipe) => {
-      const text = toFile(pack({ name: agent.name, recipe }));
+    const sharing = sheetFor(share, async (sheet, recipe) => {
+      // With the agent's lineage when it came from the website, so the file is the same one the
+      // website publishes for this recipe; `pack` adds the date and the hash.
+      const text = toFile(await pack({ name: agent.name, recipe, id: agent.origin?.id }));
       const file = filenameFor(agent.name);
 
       const title = document.createElement('h3');
@@ -1646,6 +1648,7 @@ function offer(text) {
   const preview = el('import-preview');
   pending = null;
   el('import-add').disabled = true;
+  el('import-choice').hidden = true;
 
   if (!String(text ?? '').trim()) {
     preview.hidden = true;
@@ -1662,16 +1665,59 @@ function offer(text) {
 
   // What it will do, in a sentence – the selectors themselves were too technical for the person
   // deciding. The site it names is the one Chrome's prompt will name too.
-  preview.textContent = summarise(read.name, read.recipe);
+  preview.textContent = summarise(read.name, read.recipe, read.recordedOn);
   preview.hidden = false;
 
   // **The raw text is kept, not just the parsed result.** The worker re-validates on the bytes
   // rather than trusting this page, so it needs exactly what was read here – re-serialising the
   // parsed object would hand it something this page had already touched.
-  pending = { ...read, raw: String(text) };
-  el('import-add').disabled = false;
-  if (read.notes.length) showImport(read.notes.join(' '));
-  else sayAccess(pending);
+  pending = { ...read, raw: String(text), match: null };
+  lookForMatch(pending);
+}
+
+/**
+ * Whether the file is a version of an assistant already here (`docs/recipe-identity.md`), asked
+ * of the worker, which reads the roster's recipes. Adding stays disabled until it answers, so a
+ * quick click cannot add a second copy of something that should have been a replacement.
+ *
+ * - The same recipe: there is nothing to add, and the line says which assistant has it.
+ * - A different version, or any recipe for a site that already has an assistant: Replace, and
+ *   only Replace. One site has one assistant (the user's rule, 2026-10-16).
+ * - Neither: added as a new assistant, as before.
+ */
+async function lookForMatch(waiting) {
+  showImport('checking your AI assistants…');
+  const answer = await chrome.runtime
+    .sendMessage({ kind: 'openposse.agent.match', text: waiting.raw })
+    .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+  // Something else was pasted or picked meanwhile; that one asks for itself.
+  if (pending !== waiting) return;
+
+  if (!answer?.ok) {
+    // Not knowing is not the same as no match, so the reason is said, and adding still works.
+    showImport(`ready – could not compare it with your AI assistants (${answer?.reason ?? 'no answer'}), `
+      + 'so it will be added as a new one');
+    el('import-add').disabled = false;
+    return;
+  }
+
+  const match = answer.match;
+  waiting.match = match;
+  if (match?.same) {
+    showImport(`You already have this one, as ${match.name}.`);
+    return;
+  }
+  if (match) {
+    const had = match.recordedOn ? `, recorded ${spokenDay(match.recordedOn)}` : '';
+    const now = waiting.recordedOn ? `, recorded ${spokenDay(waiting.recordedOn)}` : '';
+    el('import-question').textContent = `${match.name} already has a recipe for ${match.site}${had}. `
+      + `Replace it with this one${now}?`;
+    el('import-choice').hidden = false;
+  } else {
+    el('import-add').disabled = false;
+  }
+  if (waiting.notes.length) showImport(waiting.notes.join(' '));
+  else sayAccess(waiting);
 }
 
 /**
@@ -1699,7 +1745,10 @@ async function sayAccess(waiting) {
 
 // Access changing while a file waits here – granted by recording on that site, or switched in
 // Chrome's own Site access menu – changes whether Chrome will ask, so the line is checked again.
-const recheckAccess = () => { if (pending && !pending.notes.length) sayAccess(pending); };
+const recheckAccess = () => {
+  // Not over "You already have this one": there is nothing to add, so access does not matter.
+  if (pending && !pending.notes.length && !pending.match?.same) sayAccess(pending);
+};
 chrome.permissions.onAdded.addListener(recheckAccess);
 chrome.permissions.onRemoved.addListener(recheckAccess);
 
@@ -1720,10 +1769,18 @@ el('import-text').addEventListener('input', (event) => offer(event.target.value)
 // The file input is hidden – Chrome's own "Choose File" cannot be restyled – and this opens it.
 el('import-pick').addEventListener('click', () => el('import-file').click());
 
-el('import-add').addEventListener('click', async () => {
-  if (!pending) return;                       // the button is disabled; this is belt and braces
+el('import-add').addEventListener('click', () => addPending());
+el('import-replace').addEventListener('click', () => addPending({ replace: pending?.match?.agentId }));
 
-  // **First statement, nothing awaited before it.** See the note above this section.
+/**
+ * Adds what is waiting, or with `replace`, gives that agent its recipe. Called straight from a
+ * click, so everything up to the first `await` below still runs inside the gesture.
+ */
+async function addPending({ replace = null } = {}) {
+  if (!pending) return;                       // the buttons are disabled; this is belt and braces
+
+  // **First statement, nothing awaited before it.** See the note above this section. A
+  // replacement asks too: a newer recipe can be for a site the old one was not.
   const granted = await chrome.permissions.request({
     origins: [matchPattern(pending.recipe.domainPattern)],
   });
@@ -1737,22 +1794,26 @@ el('import-add').addEventListener('click', async () => {
   // The *text* crosses, not the parsed recipe: the worker makes the trust decision itself, on
   // the bytes, so this page is not the only thing standing between a forged file and a grant.
   const result = await chrome.runtime
-    .sendMessage({ kind: 'openposse.agent.import', text: pending.raw })
+    .sendMessage({ kind: 'openposse.agent.import', text: pending.raw, replace })
     .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
 
   if (!result?.ok) { showImport(result?.reason ?? 'could not add it', true); return; }
 
-  showImport(result.renamed
-    ? `Added as ${result.name} – you already had one by that name.`
-    : `Added ${result.name}.`);
+  if (result.replaced) showImport(`Replaced ${result.name}’s recipe.`);
+  else {
+    showImport(result.renamed
+      ? `Added as ${result.name} – you already had one by that name.`
+      : `Added ${result.name}.`);
+  }
 
   el('import-text').value = '';
   el('import-file').value = '';
   el('import-preview').hidden = true;
+  el('import-choice').hidden = true;
   el('import-add').disabled = true;
   pending = null;
   await refreshRoster();
-});
+}
 
 // ── Debug tools ────────────────────────────────────────────────────────────────────────────
 //

@@ -9,6 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   pack, unpack, toFile, filenameFor, patternIsDerivable, summarise, labelIn, FORMAT, VERSION,
+  canonical, hashOf, matchFor, staleness, spokenDay, today,
 } from '../src/share.js';
 
 /** A complete, legitimate recipe, shaped as `draft.js:finish()` emits one. */
@@ -66,8 +67,8 @@ test('a bare registrable domain is refused, because the recorder would have wild
 
 // ── Packing ────────────────────────────────────────────────────────────────────────────────
 
-test('what is this machine’s business does not travel', () => {
-  const packed = pack({
+test('what is this machine’s business does not travel', async () => {
+  const packed = await pack({
     name: 'Ivan',
     recipe: { ...notion(), agentName: 'Ivan', recipeID: 'ABC', voice: 'bm_george', id: 'XYZ' },
   });
@@ -80,8 +81,8 @@ test('what is this machine’s business does not travel', () => {
   assert.equal(packed.name, 'Ivan');
 });
 
-test('a round trip preserves every field the runtime reads', () => {
-  const result = unpack(toFile(pack({ name: 'Ivan', recipe: notion() })));
+test('a round trip preserves every field the runtime reads', async () => {
+  const result = unpack(toFile(await pack({ name: 'Ivan', recipe: notion() })));
   assert.equal(result.ok, true);
   assert.deepEqual(result.recipe, notion());
   assert.equal(result.name, 'Ivan');
@@ -141,7 +142,7 @@ test('the recipes/ directory imports, openMethod or not', async () => {
 
   for (const file of files) {
     const recipe = JSON.parse(await readFile(new URL(file, dir), 'utf8'));
-    const result = unpack(toFile(pack({ name: recipe.agentName ?? 'Assistant', recipe })));
+    const result = unpack(toFile(await pack({ name: recipe.agentName ?? 'Assistant', recipe })));
     assert.equal(result.ok, true, `${file}: ${result.problems?.join(' ')}`);
     assert.equal(result.recipe.domainPattern, recipe.domainPattern);
   }
@@ -226,4 +227,97 @@ test('a label from a stranger’s file is cut short, and the site still comes fr
   assert.ok(sentence.startsWith('On notion.so, Ivan clicks ‘'), sentence);
   assert.ok(sentence.includes('…’'), 'the label is visibly cut');
   assert.ok(!sentence.includes('everywhere'), sentence);
+});
+
+// ── Which recipe this is: id, recordedOn, hash ─────────────────────────────────────────────
+
+test('the hash depends on what the recipe does, not on how the file was written', async () => {
+  const reordered = Object.fromEntries(Object.entries(notion()).reverse());
+  assert.equal(await hashOf(reordered), await hashOf(notion()), 'key order changed the hash');
+  assert.equal(await hashOf(JSON.parse(JSON.stringify(notion(), null, 4))), await hashOf(notion()));
+  assert.equal(canonical({ b: 1, a: { d: [1, { z: 2, y: null }], c: 'x' } }),
+    '{"a":{"c":"x","d":[1,{"y":null,"z":2}]},"b":1}');
+});
+
+test('the hash changes with one selector and ignores the name, the date and local fields', async () => {
+  const base = await hashOf(notion());
+  assert.match(base, /^[0-9a-f]{12}$/);
+  assert.notEqual(await hashOf({ ...notion(), inputSelector: 'textarea' }), base);
+  assert.equal(await hashOf({ ...notion(), recordedOn: '2026-10-16', agentName: 'Ivan', voice: 'x' }), base);
+});
+
+test('the fixture’s hash is pinned, so the website’s copy of hashOf can check itself against it', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const file = JSON.parse(await readFile(new URL('./fixtures/fixture-crm.json', import.meta.url), 'utf8'));
+  assert.equal(await hashOf(file.recipe), '49cd0c15178f');
+});
+
+test('pack lifts the date into the envelope, writes an id only when given, and always a hash', async () => {
+  const recorded = { ...notion(), recordedOn: '2026-10-01' };
+  const local = await pack({ name: 'Ivan', recipe: recorded });
+  assert.equal(local.recordedOn, '2026-10-01');
+  assert.equal('recordedOn' in local.recipe, false, 'the date belongs to the envelope');
+  assert.equal('id' in local, false, 'a recording never published has no id');
+  assert.equal(local.hash, await hashOf(notion()));
+  assert.deepEqual(Object.keys(local), ['format', 'version', 'name', 'recordedOn', 'hash', 'recipe']);
+
+  const published = await pack({ name: 'Ivan', recipe: recorded, id: 'notion-ai' });
+  assert.equal(published.id, 'notion-ai');
+  assert.deepEqual(Object.keys(published), ['format', 'version', 'id', 'name', 'recordedOn', 'hash', 'recipe']);
+  assert.equal('id' in await pack({ name: 'Ivan', recipe: notion(), id: 'Not A Slug' }), false);
+});
+
+test('unpack returns the id and the date, and drops either when it is malformed', async () => {
+  const read = unpack(toFile(await pack({ name: 'Ivan', recipe: { ...notion(), recordedOn: '2026-10-16' }, id: 'notion-ai' })));
+  assert.equal(read.ok, true);
+  assert.equal(read.id, 'notion-ai');
+  assert.equal(read.recordedOn, '2026-10-16');
+  assert.equal('recordedOn' in read.recipe, false);
+
+  const odd = unpack(toFile({ format: FORMAT, version: 1, id: '../etc', recordedOn: 'yesterday', name: 'Ivan', recipe: notion() }));
+  assert.equal(odd.ok, true, 'a malformed id or date is never fatal');
+  assert.equal(odd.id, null);
+  assert.equal(odd.recordedOn, null);
+});
+
+test('a file from before ids, dates and hashes still imports', () => {
+  const read = unpack(toFile({ format: FORMAT, version: 1, name: 'Ivan', recipe: notion() }));
+  assert.equal(read.ok, true);
+  assert.equal(read.id, null);
+  assert.equal(read.recordedOn, null);
+  assert.deepEqual(read.recipe, notion());
+});
+
+test('a file is matched to the assistant for its site, whatever either is called, then by its id', () => {
+  const entries = [
+    { agent: { id: 'a', name: 'Ivan', origin: { id: 'notion-ai' } }, recipe: { domainPattern: '*.notion.so' } },
+    { agent: { id: 'b', name: 'Andy' }, recipe: { domainPattern: '*.leanix.net' } },
+  ];
+  // One site, one assistant: the name does not matter.
+  assert.equal(matchFor(entries, { id: null, name: 'Priya', recipe: { domainPattern: '*.leanix.net' } })?.agent.id, 'b');
+  // The site wins over a lineage pointing elsewhere, so a replacement can never leave two
+  // assistants on one site.
+  assert.equal(matchFor(entries, { id: 'notion-ai', recipe: { domainPattern: '*.leanix.net' } })?.agent.id, 'b');
+  // The lineage finds an assistant whose site moved, which is when a re-recording happens.
+  assert.equal(matchFor(entries, { id: 'notion-ai', recipe: { domainPattern: '*.notion.com' } })?.agent.id, 'a');
+  assert.equal(matchFor(entries, { id: null, recipe: { domainPattern: '*.notion.com' } }), null);
+  assert.equal(matchFor(entries, { id: 'other', recipe: { domainPattern: '*.example.com' } }), null);
+});
+
+test('a stale recipe says how old it is, and where a newer one might be', () => {
+  assert.equal(staleness({ name: 'Ivan', product: 'Notion', recordedOn: '2026-10-01', published: true }),
+    'Ivan’s recipe is from 1 October and Notion’s page has changed. There may be a newer one on openposse.org/recipes.');
+  assert.equal(staleness({ name: 'Ivan', product: 'Notion', recordedOn: '2026-10-01', published: false }),
+    'Ivan’s recipe is from 1 October and Notion’s page has changed. Record it again from Settings.');
+  assert.equal(staleness({ name: 'Ivan', product: 'Notion', recordedOn: null, published: false }),
+    'Ivan’s recipe no longer matches Notion’s page, which has changed. Record it again from Settings.');
+});
+
+test('dates read the way people say them, on the day they were recorded', () => {
+  assert.equal(spokenDay('2026-10-01'), '1 October');
+  assert.equal(spokenDay('2026-10-16', { year: true }), '16 October 2026');
+  assert.equal(spokenDay('soon'), '');
+  assert.equal(today(new Date(2026, 9, 6, 23, 59)), '2026-10-06');
+  assert.match(summarise('Ivan', notion(), '2026-10-16'), /, recorded 16 October 2026\.$/);
+  assert.doesNotMatch(summarise('Ivan', notion()), /recorded/);
 });

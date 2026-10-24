@@ -233,7 +233,7 @@ export function outstanding(draft) {
  *
  * @returns `{ ok: true, recipe }` or `{ ok: false, problems }`
  */
-export function finish(draft, { triggerMethod }) {
+export function finish(draft, { triggerMethod, recordedOn = null }) {
   const found = problems(draft);
   if (found.length > 0) return { ok: false, problems: found };
 
@@ -262,6 +262,9 @@ export function finish(draft, { triggerMethod }) {
       triggerMethod,
       quietPeriodMs: draft.quietPeriodMs,
       responseTimeoutMs: draft.responseTimeoutMs,
+      // The day it was recorded, so a shared copy can be told from an older or newer one.
+      // Passed in rather than read from the clock here, which keeps this function pure.
+      ...(recordedOn ? { recordedOn } : {}),
     },
   };
 }
