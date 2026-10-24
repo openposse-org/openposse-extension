@@ -471,7 +471,7 @@ What is stored, what uses the network and what never does is described in plain 
 | `storage` | Your assistants, their recipes and your settings |
 | `sidePanel` | OpenPosse's main window |
 | `tabs`, `scripting` | Finding an assistant's tab and working with its page |
-| `activeTab`, `alarms` | Starting a recording on the current tab, and keeping OpenPosse awake while you record |
+| `activeTab` | Starting a recording on the current tab |
 | `favicon` *(optional)* | Showing your assistants' site icons, if you turn that on |
 | Site access *(optional)* | Requested **one site at a time**, when you add an assistant there |
 

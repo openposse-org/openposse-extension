@@ -199,7 +199,6 @@ and reads its answer aloud.
 | `offscreen` | Hosts the microphone, on-device speech recognition and speech synthesis in a hidden extension page, so listening carries on across tab switches. |
 | `storage` | Keeps the user's assistants, their recipes and their settings on the device. |
 | `tabs` | Finds the tab where the user's assistant is already open, so a question goes to that tab and "show me" can switch to it. |
-| `alarms` | Keeps the extension's background worker running while the user records a new assistant. |
 | `scripting` | Registers and injects the script that types into the assistant and reads its answer, on sites the user has granted. |
 | `sidePanel` | OpenPosse's main window, opened from the toolbar or the keyboard shortcut. |
 | `favicon` (optional) | Shows the icons of the user's assistants' sites, when the user turns that setting on. |
