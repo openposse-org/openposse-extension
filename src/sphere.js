@@ -11,8 +11,9 @@
 //
 // The milestone's corollary is explicit: **do not build one state model feeding two renderers**,
 // because that is the right architecture for two permanent surfaces and the wrong one for a
-// fallback with a scheduled death. That rule is intact – `orb.js` and `sidepanel.js` each keep
-// their own state, their own DOM and their own render pass, and they duplicate each other freely.
+// fallback with a scheduled death. That rule held – `orb.js` and `sidepanel.js` each kept
+// their own state, their own DOM and their own render pass, so the orb was deleted whole on
+// 2026-10-24 and this stayed with the panel.
 //
 // This is not that. It is a function of `(canvas, time, mode, tint, level)` with no DOM beyond
 // the canvas it is handed and no knowledge of which surface called it. It is artwork, not

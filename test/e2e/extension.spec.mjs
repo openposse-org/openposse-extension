@@ -11,7 +11,7 @@ test('every extension page opens without an error', async ({ context, extensionI
   // `offscreen.html` too, opened as a tab: Chrome's own offscreen document is not a page these
   // tests watch, so a module that throws as it loads there (it carries ONNX Runtime for
   // Supertonic) would otherwise only ever show up as a voice that never speaks.
-  for (const name of ['setup.html', 'sidepanel.html', 'popup.html', 'offscreen.html']) {
+  for (const name of ['setup.html', 'sidepanel.html', 'offscreen.html']) {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/${name}`);
     // Long enough for each page's startup work to finish, so an error in it is caught too.

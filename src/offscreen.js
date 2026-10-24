@@ -87,7 +87,7 @@ async function startMeter() {
 
     meter = { ctx, stream, timer };
   } catch (error) {
-    // No meter. `orb.js` falls back to the synthetic amplitude, which is where it started – but
+    // No meter. The panel falls back to the synthetic amplitude, which is where it started – but
     // **the fallback is invisible**, so without this "the orb does not follow my voice" has
     // four possible causes and no way to tell them apart: a refused second capture, a blocked
     // AudioContext, an autoplay policy, or the orb simply being wrong.

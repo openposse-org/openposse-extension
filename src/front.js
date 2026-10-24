@@ -22,8 +22,8 @@
 //
 // MV3 kills an idle worker in ~30 s and a global shortcut is the most likely thing to wake one,
 // so a cache filled at startup is exactly the kind of thing that sounds racy. It measured warm:
-// `surface.js` does the same and its cold-path line never printed once across a dozen presses,
-// including the first after an install. Chrome evaluates the worker's script and lets a storage
+// the retired `surface.js` did the same and its cold-path line never printed once across a dozen
+// presses, including the first after an install. Chrome evaluates the worker's script and lets a storage
 // read settle before dispatching the queued event.
 //
 // So this is filled the same way — a query at startup, kept current by focus events — and the

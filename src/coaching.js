@@ -1,16 +1,11 @@
-// What the orb says while you are over in the vendor's page.
+// What the side panel says while you are over in the vendor's page.
 //
 // Ported from `Sources/OpenPosseUI/CoachingState.swift`, pure and already tested there.
 //
-// **The overlay does the coaching because it is the only surface that can.** The recording
-// happens in the vendor's own tab, and the popup closes the moment focus leaves it – someone
-// standing in a page with nothing telling them what to do. The orb floats above that page and
-// stays.
-//
-// One inversion worth noting, because the Mac comment says the opposite: the summon panel could
-// not host a text field, since it was never key by construction (D16) and a coaching window
-// that could take focus would swallow the very shortcut it was asking for. A closed shadow root
-// has no such problem, so the naming step lives here too rather than in a separate window.
+// **The side panel does the coaching because it stays beside the page.** The recording happens
+// in the vendor's own tab, and a popup closes the moment focus leaves it – someone standing in a
+// page with nothing telling them what to do. Until 2026-10-24 the in-page orb could do it too;
+// it was retired and the panel is the only surface. Naming happens in Settings.
 //
 // Free of any view, deliberately. This is the part with rules in it.
 

@@ -7,8 +7,8 @@
 // reported `Uncaught Error: Extension context invalidated` on its next event and abandoned
 // whatever callback it was in the middle of – a recording's `emit`, or an answer mid-stream.
 //
-// Only pages can be orphaned this way. The popup and the offscreen document die with the
-// extension, and the service worker is the extension, so this is for `content.js` and `orb.js`.
+// Only pages can be orphaned this way. The extension's own pages die with the extension, and
+// the service worker is the extension, so this is for `content.js`.
 
 /**
  * Whether anyone is left to say it to, said once per page.

@@ -1,118 +1,20 @@
-// Putting the orb on screen, and keeping it told.
+// Keeping the side panel told.
 //
-// The panel belongs over the tab you are **looking at**, which is usually not a vendor's tab
-// and therefore not an origin we hold a permission for. So it is injected per turn rather than
-// registered: pressing the shortcut grants `activeTab` for that one tab, which is exactly the
-// scope and exactly the duration this needs. No new origin is requested and nothing persists.
-//
-// Some tabs can never host it – `chrome://` pages, the Web Store, a PDF viewer, a tab that has
-// gone. That is not a failure worth reporting: the badge already carries the state, and the
-// alternative is asking for host permission over every site the user visits, which is the one
-// thing this extension's permission model exists to avoid.
+// The side panel is the only surface. Until 2026-10-24 this file also injected a floating orb
+// into the page in front, per turn, on the `activeTab` grant a keypress made; that surface was
+// retired and this is what is left of the file: one state channel and one level channel.
 
 import { loadRoster } from './storage.js';
 import { channelOf, initialFor } from './channels.js';
-import { surfaceNow } from './surface.js';
-
-/** Where the panel currently is, so state updates go to one tab rather than being broadcast. */
-let panelTabId = null;
 
 /**
- * The injection this turn is waiting on.
+ * Sends state to the side panel.
  *
- * **It has to be shared, because the two halves of a turn start at the same moment.** The
- * command handler fires `primePanel` without awaiting it – it cannot await, the whole point is
- * that nothing comes between the keypress and `executeScript` – and then starts the listening
- * path, which reaches `panel({ create })` while that injection is still in the air. Without
- * this, that call found `panelTabId` still null and dropped the state message on the floor: the
- * orb was injected, rendered, and never told to become visible.
- *
- * The symptom was "it doesn't work the first time", because the *second* attempt found the id
- * left behind by the first.
- */
-let injection = null;
-
-/**
- * Injects the panel, and **must be called before anything is awaited.**
- *
- * This is the whole reason the orb appeared on Notion and nowhere else. Notion has a standing
- * host permission, so it needs no gesture; every other tab relies on `activeTab`, which is
- * granted *by the keypress* and does not survive being spent. The first version reached
- * `executeScript` through six awaits – a storage read, a session write, a badge update, a
- * `commands.getAll()` and a `tabs.query()` – and by then the grant was gone. The symptom was a
- * panel that worked on one site, which reads as the panel being broken rather than as a
- * permission being lost.
- *
- * So the command handler calls this first, with the tab **the event itself carries**: no query,
- * no storage, nothing between the keypress and the injection.
- *
- * @param tabId the tab from `chrome.commands.onCommand`, when there is one.
- */
-export function primePanel(tabId) {
-  injection = place(tabId);
-  return injection;
-}
-
-async function place(tabId) {
-  if (tabId != null) return injectInto(tabId);
-  // **No tab on the event, and the comment that used to be here was wrong.** It said this was the
-  // background case – "a global shortcut fired while Chrome was in the background" – and that it
-  // would usually and correctly fail. Measured 2026-10-01: a command marked `global` carries no
-  // tab *ever*, focused or not, so this is the only path the shortcut takes. The query below is
-  // therefore not a rare fallback, it is how the orb is injected, and its `await` is what spends
-  // the `activeTab` grant the keypress just made.
-  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (tab?.id == null) {
-    // Said out loud, because this returned null silently and is the third such return found in
-    // two days. "No tab to put the orb on" and "the orb was refused by that tab" are different
-    // stories with different fixes, and both looked like nothing happening.
-    console.warn('[openposse] no tab to put the orb on – no Chrome window has an active tab');
-    return null;
-  }
-  return injectInto(tab.id);
-}
-
-async function injectInto(tabId) {
-  const tab = { id: tabId };
-  if (!tab?.id) return null;
-  try {
-    // Idempotent by a guard inside `orb.js`, so re-injecting after a navigation rebuilds the
-    // panel and re-injecting into a live one does nothing.
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['orb.js'] });
-    panelTabId = tab.id;
-    // **Success is logged too, which is unusual here and is the point.** Everything else in this
-    // file reports only failure, so "the orb went in" and "the orb is still deciding" looked the
-    // same from outside – and the question being asked right now is exactly which of those a
-    // shortcut press produces. One line, no page content, and it makes the console answer the
-    // question without anybody having to say what they saw on screen.
-    console.info('[openposse] orb injected into tab', tab.id);
-    return tab.id;
-  } catch (error) {
-    // **Said out loud, not swallowed.** The first version caught this silently, and the
-    // symptom was "the orb appears on Notion and nowhere else" with nothing to explain it –
-    // which is indistinguishable from the panel being broken. The message tells the two apart:
-    // "Cannot access contents of url" means we hold no permission for that tab, anything else
-    // means the injection itself failed. A URL is not page content; it is the one fact needed
-    // to know which of those happened.
-    // Says "orb", not "panel". This file predates the side panel and called the orb "the panel"
-    // throughout; there are now two of those and a log line naming the wrong one sends somebody
-    // to read the wrong file.
-    console.warn('[openposse] orb could not be injected:', error?.message ?? error);
-    panelTabId = null;
-    return null;
-  }
-}
-
-/**
- * The same state, sent to the side panel instead of injected into the page.
- *
- * **This surface cannot be summoned from here, and that is a real difference rather than an
- * omission.** `chrome.sidePanel.open()` needs a live user gesture, and by the time a turn is
- * producing state every gesture is long spent — so the panel is opened by the shortcut handler
- * or by the toolbar icon, and this only ever talks to one that is already open. When it is not,
- * the state is dropped: the next press has a gesture and will open it.
- *
- * The orb's opposite property — that it can be injected mid-turn — is why it needed `create`.
+ * **The panel cannot be summoned from here, and that is a real limit rather than an omission.**
+ * `chrome.sidePanel.open()` needs a live user gesture, and by the time a turn is producing state
+ * every gesture is long spent – so the panel is opened by the shortcut handler or by the toolbar
+ * icon, and this only ever talks to one that is already open. When it is not, the state is
+ * dropped: the next press has a gesture and will open it.
  */
 async function toSidePanel(patch) {
   try {
@@ -133,7 +35,7 @@ async function rosterForPanel() {
 }
 
 /**
- * Pushes state to the panel, injecting it first if this is the start of a turn.
+ * Pushes state to the panel, with the roster and the shortcut if this is the start of a turn.
  *
  * Every field is optional and merged, so a caller says only what changed – an interim
  * transcript does not have to restate the roster, and a phase change does not clear the text.
@@ -143,79 +45,18 @@ export async function panel(patch, { create = false } = {}) {
     const shortcut = (await chrome.commands.getAll()).find((c) => c.name === 'summon')?.shortcut;
     patch = { agents: await rosterForPanel(), shortcut: shortcut ?? '', ...patch };
   }
-
-  // **The surface is decided here, not only in the command handler.** Guarding the handler alone
-  // was not enough and the symptom was exact: with the panel selected, ⌥V opened the panel *and*
-  // the orb, because `create` below reaches `primePanel()` by itself. This is the state channel,
-  // so this is where the two surfaces diverge.
-  if (surfaceNow() === 'panel') {
-    injection = null;             // a turn on the other surface may have left one pending
-    return toSidePanel(patch);
-  }
-
-  if (create) {
-    // Wait for the gesture path's injection rather than racing it, and start one here only for
-    // the routes that have no gesture – the popup's button, a typed question.
-    panelTabId = await (injection ?? primePanel());
-    injection = null;             // consumed; the next turn primes its own
-  }
-  if (panelTabId === null) return;
-
-  try {
-    await chrome.tabs.sendMessage(panelTabId, { kind: 'openposse.orb', state: patch });
-  } catch (error) {
-    // The tab navigated, closed, or the grant lapsed. Forget it rather than retrying into
-    // nothing; the next turn injects again.
-    //
-    // Logged despite being routine, because those three are not the same story – a lapsed
-    // grant means the panel will keep failing and a closed tab means nothing at all. It fires
-    // at most once per turn, since the next call returns early on the null below.
-    console.warn('[openposse] panel unreachable –', error?.message ?? error);
-    panelTabId = null;
-  }
+  return toSidePanel(patch);
 }
 
 /**
  * The microphone level, on its own channel.
  *
- * **Deliberately not routed through `panel()`.** That merges into the panel's state and the orb
- * re-renders its DOM on every one – rebuilding avatars, status and answer twenty times a second
- * to move a sphere's radius. This is a number the renderer eases toward between frames and
- * nothing else reads, so it gets its own message and touches no state.
+ * **Deliberately not routed through `panel()`.** That merges into the panel's state and
+ * re-renders the status line and the answer on every one – twenty times a second, to move a
+ * sphere's radius. This is a number the renderer eases toward between frames and nothing else
+ * reads, so it gets its own message and touches no state. Broadcast rather than targeted,
+ * because a side panel has no tab id.
  */
 export function panelLevel(value) {
-  if (surfaceNow() === 'panel') {
-    // Broadcast rather than targeted, because a side panel has no tab id. It reaches every
-    // extension context twenty times a second, which is why it stays off the state channel: a
-    // patch here would make each of them re-render to move a sphere's radius.
-    chrome.runtime.sendMessage({ kind: 'openposse.orb.level', level: value }).catch(() => {});
-    return;
-  }
-  if (panelTabId === null) return;
-  chrome.tabs.sendMessage(panelTabId, { kind: 'openposse.orb.level', level: value })
-    .catch(() => { /* the tab went; the next turn re-injects */ });
-}
-
-/**
- * Whether an agent is currently talking.
- *
- * Its own message for the same reason the level is: it must not re-render, and it must not be
- * merged into the state the dismiss timer reads from. What it buys is a panel that does not
- * fade out mid-sentence.
- */
-export function panelSpeaking(speaking) {
-  // **Not routed to the side panel, and that is deliberate.** What this buys the orb is a panel
-  // that does not fade out mid-sentence – it holds off a dismiss timer. The side panel has no
-  // dismiss timer, because it is the user's own column rather than furniture on somebody else's
-  // page, so there is nothing there for this to hold off. Broadcasting it anyway would put a
-  // message on the wire that nothing reads.
-  if (surfaceNow() === 'panel') return;
-  if (panelTabId === null) return;
-  chrome.tabs.sendMessage(panelTabId, { kind: 'openposse.orb.speaking', speaking })
-    .catch(() => {});
-}
-
-/** Fades the panel out. The content script stays – re-showing it is then free. */
-export async function hidePanel() {
-  await panel({ visible: false });
+  chrome.runtime.sendMessage({ kind: 'openposse.orb.level', level: value }).catch(() => {});
 }

@@ -37,10 +37,7 @@ import { newDraft, applyCapture, isComplete, finish } from './draft.js';
 import {
   derive, stepLabel, heading, instruction, captures, PATIENCE_MS,
 } from './coaching.js';
-import { panel, hidePanel, primePanel } from './panel.js';
-import {
-  surfaceNow, surfaceWarm, hydrate as hydrateSurface, watchSurface,
-} from './surface.js';
+import { panel } from './panel.js';
 import { frontWindowNow, hydrate as hydrateFront, watchFront } from './front.js';
 import { trace } from './trace.js';
 import { channelOf } from './channels.js';
@@ -177,8 +174,8 @@ const ROUTING_COPY = {
  * "switch to the agent's tab", inherited from the Mac app, where driving a page meant posting
  * real keystrokes and therefore meant focusing it. The content script drives the DOM directly,
  * which works in a background tab on another window – measured, not assumed. So switching would
- * take somebody away from what they were doing to no purpose. The orb at E4 is how the answer
- * arrives; until then it is in the tab where it belongs.
+ * take somebody away from what they were doing to no purpose. The side panel is how the answer
+ * arrives.
  */
 /**
  * The roster, plus what each agent's vendor is called out loud.
@@ -221,17 +218,13 @@ async function goToAgent(nav) {
     return;
   }
 
-  // Hidden before the switch, not after: the panel is injected into the tab being left, and
-  // leaving it up there means it is still on screen when that tab is next looked at.
-  await hidePanel();
   await focusTab({ tabId: tab.id });
   // Being shown an agent's tab is as much a reason to expect a follow-up as being answered by
   // it, so the floor moves here too – "show me Notion", then "what changed last week".
   await holdFloor(agent.name);
-  // The side panel has to be told separately, because the hide above means nothing to it:
-  // `visible` is the orb's alone. Until 2026-10-06 nothing told it, and it went on saying
-  // "Working out who that's for…" until the next turn. Left at rest on the agent, its name in
-  // its colour, the same as the minute after an answer. The hidden orb stays hidden.
+  // Until 2026-10-06 nothing told the side panel, and it went on saying "Working out who that's
+  // for…" until the next turn. Left at rest on the agent, its name in its colour, the same as
+  // the minute after an answer.
   panel({ phase: 'idle', agentName: agent.name, channel: channelOf(agent) });
   markDone(null);
 }
@@ -296,7 +289,7 @@ async function putQuestion(agent, prompt, matched, { spoken = false } = {}) {
   // answer's "Shortened" would otherwise sit under this one.
   panel({
     phase: 'thinking', agentName: agent.name, channel: channelOf(agent),
-    transcript: prompt, volatile: '', answer: '', sub: '', message: '', visible: true,
+    transcript: prompt, volatile: '', answer: '', sub: '', message: '',
   }, { create: true });
 
   trace('asking the vendor');
@@ -1086,8 +1079,8 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   }
 
   if (request?.kind === 'openposse.ask') {
-    // The typed path, through the same door as the spoken one – so the answer lands on the orb
-    // rather than in a popup that closes the moment you look away.
+    // The typed path, through the same door as the spoken one – so the answer lands in the side
+    // panel the same way.
     // A real turn always wins, typed as well as spoken.
     stopDemo();
     warmVoice();
@@ -1313,12 +1306,12 @@ async function matchShared(text) {
 // ── The wizard (E8) ────────────────────────────────────────────────────────────────────────
 //
 // Four beats: **grant → record (coached) → dry run → name.** The grant already happened in the
-// popup, because that is where the user gesture is – see `popup.js`.
+// side panel, because that is where the user gesture is – see `sidepanel.js`.
 //
 // The rules live elsewhere on purpose. `draft.js` decides what has been captured and what is
 // still wrong with it, `coaching.js` decides what to say about that, and both are pure and
 // tested without a browser. This file is the part that cannot be: permissions, tabs, timers and
-// the orb.
+// the panel.
 
 /** The wizard in progress, or null. `{ draft, tabId, armedAt, agentId, alreadyOpen }`. */
 let wizard = null;
@@ -1397,10 +1390,6 @@ async function beginWizard({ tabId, pattern, agentId = null }) {
   const id = crypto.randomUUID();
   await armRecording({ tabId }, { id, agent: agentId });
 
-  // The orb goes over the tab being recorded rather than whatever is in front – that is where
-  // the person is about to be working, and it is an origin we now hold a permission for, so it
-  // persists for the whole recording instead of being spent like `activeTab`.
-  await primePanel(tabId);
   await showCoaching();
 
   // The open step is the only one with a deadline, so it is the only one that needs a tick. It
@@ -1413,7 +1402,7 @@ async function beginWizard({ tabId, pattern, agentId = null }) {
 /** `Lassoing Notion…` for the recording under way. Every coaching patch carries it. */
 const headingNow = (step) => heading(step, productLabel(wizard?.draft?.domainPattern));
 
-/** Pushes whatever `coaching.js` decided into the orb. */
+/** Pushes whatever `coaching.js` decided into the side panel. */
 async function showCoaching() {
   if (!wizard) return;
   const state = derive(wizard.draft, {
@@ -1423,7 +1412,6 @@ async function showCoaching() {
 
   await panel({
     phase: 'recording',
-    visible: true,
     coach: {
       step: state.step,
       heading: headingNow(state.step),
@@ -1582,7 +1570,7 @@ async function save() {
       return;
     }
     await endWizard();
-    await panel({ phase: 'idle', visible: false });
+    await panel({ phase: 'idle' });
     return;
   }
 
@@ -1714,41 +1702,22 @@ async function registerFor(pattern) {
  */
 chrome.commands.onCommand.addListener((command, tab) => {
   if (command !== 'summon') return;
-  // **First, before any await**, and now for two reasons rather than one. `activeTab` is granted
-  // by this keypress and is spent by the time an async chain gets around to using it – which is
-  // why the orb only ever appeared on Notion, the one site with a standing host permission.
-  // `chrome.sidePanel.open()` has the identical rule and the identical failure. So the surface is
-  // read from a synchronous cache (`surface.js`) rather than from storage: a read here would
-  // spend the very gesture it is deciding how to use.
-  showSurface(tab);
+  // **First, before any await.** `chrome.sidePanel.open()` needs the gesture this keypress just
+  // made, and an await spends it.
+  showPanel(tab);
   // A real turn always wins, from the keyboard as from the panel's Listen button.
   stopDemo();
   toggleListening();
 });
 
 /**
- * Opens whichever surface the user has chosen, synchronously.
+ * Opens the side panel, synchronously.
  *
- * Neither branch may await. A global shortcut pressed while Chrome is in the background carries
- * no tab, and then neither surface has anywhere to go – the orb falls back to a query that
- * usually fails (correctly: nobody is looking at a window), and the panel simply cannot open,
- * because a side panel belongs to a window and there is no focused one.
+ * It may not await. A global shortcut pressed while Chrome is in the background carries no tab,
+ * and then the panel simply cannot open, because a side panel belongs to a window and there is
+ * no focused one.
  */
-function showSurface(tab) {
-  if (surfaceNow() !== 'panel') {
-    // `warm` says whether this is the user's choice or merely the default: MV3 kills an idle
-    // worker in ~30 s and a global shortcut is the most likely thing to wake it, so the cache can
-    // be cold on exactly the event it exists for. Measured 2026-10-01: it is not, in practice.
-    if (!surfaceWarm()) console.info('[openposse] surface is the default, not a choice – hydrate lost the race');
-    // **The orb has the same missing-tab problem as the panel below, and it is worse there.**
-    // With no tab id, `place()` falls back to `chrome.tabs.query()` – an await, which spends the
-    // `activeTab` grant this keypress just made. So the orb reaches only sites we hold a standing
-    // permission for, which is precisely the symptom `panel.js` documents as fixed. It was fixed
-    // for the popup's button and never for the shortcut; a broad host grant hid the difference.
-    if (tab?.id == null) console.warn('[openposse] the shortcut carried no tab, so the orb falls back to a query – which spends the activeTab grant. Expect the orb on already-granted sites only.');
-    primePanel(tab?.id);
-    return;
-  }
+function showPanel(tab) {
   if (tab?.windowId != null) { openPanelIn(tab.windowId, 'the event'); return; }
 
   // **A command marked `global` does not carry a tab**, so this is the *normal* path for ⌥V and
@@ -1779,24 +1748,16 @@ function openPanelIn(windowId, via) {
   );
 }
 
-/**
- * Points the toolbar icon at the chosen surface.
- *
- * `openPanelOnActionClick: true` makes Chrome open the panel itself on a click, which bypasses
- * both `default_popup` **and** `chrome.action.onClicked` – no code of ours runs in between, so
- * there is no gesture to lose. Setting it false restores the popup. There is no manifest field
- * for this; it only exists as a call.
- */
-function pointActionAt(surface) {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: surface === 'panel' })
-    .catch((error) => console.warn('[openposse] setPanelBehavior –', error?.message));
-}
+// Points the toolbar icon at the side panel. `openPanelOnActionClick` makes Chrome open the panel
+// itself on a click, so no code of ours runs in between and there is no gesture to lose. There
+// is no manifest field for this; it only exists as a call. It runs on every worker start, so
+// anyone who had chosen the orb, which turned it off, is moved back onto the panel.
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
+  .catch((error) => console.warn('[openposse] setPanelBehavior –', error?.message ?? error));
 
-// Top level, not awaited by anything: both caches have to be warm before a shortcut arrives, and
-// `surface.js` has a default precisely because they sometimes will not be. Measured warm in
-// practice – Chrome lets a storage read settle before dispatching the event that woke the worker.
-hydrateSurface().then(pointActionAt);
-watchSurface(pointActionAt);
+// Top level, not awaited by anything: the cache has to be warm before a shortcut arrives.
+// Measured warm in practice – Chrome lets a storage read settle before dispatching the event that
+// woke the worker.
 hydrateFront();
 watchFront();
 

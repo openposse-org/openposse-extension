@@ -39,9 +39,8 @@ export default [
         // padding, and whether the header is holding at the top.
         ResizeObserver: 'readonly',
         IntersectionObserver: 'readonly',
-        // The orb's frame loop. It runs inside a vendor's page, so it has to stop when the
-        // panel is hidden rather than burning 60fps on somebody else's tab — which is what
-        // `cancelAnimationFrame` is doing there.
+        // The panel's sphere and the rope loader. The loader stops its loop when its card hides
+        // rather than burning 60fps on nothing, which is what `cancelAnimationFrame` is for.
         requestAnimationFrame: 'readonly',
         cancelAnimationFrame: 'readonly',
         // The loudness meter in the offscreen document. `SpeechRecognition` reports no level,
@@ -50,9 +49,6 @@ export default [
         // Supertonic hands back samples, which the offscreen document wraps for the player.
         AudioBuffer: 'readonly',
         Float32Array: 'readonly',
-        // The orb registers Inter on the *vendor's* document, because a font face declared
-        // inside a shadow root is not reliably honoured. See `ensureFont` in `orb.js`.
-        FontFace: 'readonly',
         // Speaking, also in the offscreen document — a service worker has no DOM and so no
         // speech synthesis, and an utterance started in a tab dies when that tab navigates.
         speechSynthesis: 'readonly',

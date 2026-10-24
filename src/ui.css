@@ -89,8 +89,7 @@
   --radius-control: 7px;
 }
 
-/* Light, for the side panel and Settings only: theme.js sets `data-theme` on those two pages and
- * nowhere else, so the popup and the in-page orb stay dark whatever the system says.
+/* Light, for the side panel and Settings: theme.js sets `data-theme` on those two pages.
  *
  * The stage is white, on trial since 2026-10-13. It was #f6f4f1, the light lockup's own baked
  * background, so on white the logo shows its edge. The colours are Apple's light-mode system

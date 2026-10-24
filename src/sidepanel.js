@@ -73,10 +73,8 @@ window.addEventListener('unhandledrejection', (e) => fatal(e.reason?.message ?? 
 /**
  * The turn, merged from the patches `panel()` sends.
  *
- * Deliberately a second copy of the orb's state rather than a shared model: E14's corollary says
- * not to build one state model feeding two renderers, because that is the right architecture for
- * two permanent surfaces and the wrong one for a fallback with a scheduled death. When testing
- * picks a surface, one of these two files is deleted whole.
+ * Started as a second copy of the orb's state rather than a shared model, so that whichever
+ * surface testing did not pick could be deleted whole. The orb's copy went on 2026-10-24.
  */
 let state = {
   phase: 'idle', agentName: null, channel: null,
@@ -783,11 +781,9 @@ chrome.runtime.onMessage.addListener((message) => {
 
   const patch = message.state ?? {};
 
-  // **`visible` is ignored here, and that is the milestone rather than an oversight.** It means
-  // "take the orb off the screen", and the orb needs it for two reasons a panel does not have:
-  // it fades out after an idle beat because it sits over somebody else's application, and
-  // `hidePanel()` strips it from a tab the user is about to be navigated away from. A panel is
-  // the user's own column and belongs to no tab, so there is nothing to take away.
+  // **Nothing here hides the panel.** The retired in-page orb faded out after an idle beat and
+  // was stripped from a tab before a switch, because it sat over somebody else's application. A
+  // panel is the user's own column and belongs to no tab, so there is nothing to take away.
   //
   // What falls out is the thing the popup could never do: **the last answer stays on screen.**
   // Clearing it after a turn would reproduce the popup's whole failure inside a surface built to

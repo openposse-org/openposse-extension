@@ -394,8 +394,8 @@ export function icon(name, { size = 16, className = '', strokeWidth = 2 } = {}) 
 /**
  * The same icon as markup, for the surfaces that build their DOM as strings.
  *
- * `orb.js` and the panel assemble whole templates in one literal, and handing those an element
- * would mean a second pass to insert it. Same table, same attributes, so the two cannot drift –
+ * The panel assembles whole templates in one literal, and handing those an element would mean a
+ * second pass to insert it. Same table, same attributes, so the two cannot drift –
  * which is the only reason it is worth having a second entry point at all.
  *
  * The geometry is looked up rather than interpolated, so an unknown `name` throws instead of

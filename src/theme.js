@@ -9,8 +9,7 @@
 // `theme-boot.js` applies it from a blocking script in each page's head; this module does the
 // rest once the page's own script runs: the toggle, the T key, and keeping up with changes.
 //
-// The popup and the in-page orb never set `data-theme`, so they stay dark. Only `[data-theme="light"]`
-// changes anything in ui.css.
+// Only `[data-theme="light"]` changes anything in ui.css.
 
 const KEY = 'openposse.theme';
 const SYSTEM_DARK = '(prefers-color-scheme: dark)';
