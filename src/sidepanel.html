@@ -250,10 +250,14 @@
         margin: 0 0 12px; font-size: 18px; font-weight: 600; line-height: 1.3;
         overflow-wrap: anywhere;
       }
-      /* The design's 2:1 frame, as wide as the card allows and no wider than the design drew it. */
+      /* The whole height of the panel, so the rope below the checklist can sit in the middle of
+         whatever space is left. `:not([hidden])` because a display here would beat `hidden`. */
+      .coach:not([hidden]) { display: flex; flex-direction: column; min-height: 100%; }
+      /* The design's 2:1 frame, as wide as the card allows and no wider than the design drew it.
+         Auto margins centre it vertically in the space under the checklist. */
       .coach .rope {
         display: block; width: 100%; max-width: 280px; aspect-ratio: 2 / 1;
-        margin: 10px auto 0;
+        margin: auto; flex: none;
       }
       .coach .step {
         font-size: 9.5px; font-weight: 600;
@@ -261,7 +265,7 @@
       }
       .coach .say { font-size: 14px; line-height: 1.45; }
       .coach .say.bad { color: var(--error); }
-      .coach .list { margin-top: 14px; display: flex; flex-direction: column; gap: 7px; }
+      .coach .list { margin: 14px 0 16px; display: flex; flex-direction: column; gap: 7px; }
       .coach .row { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
       .coach .row .tick { color: var(--green); font-size: 11px; }
       .coach .row .tick.none { color: var(--text-faint); }
@@ -447,9 +451,9 @@
         <h2 class="heading" id="coach-heading"></h2>
         <div class="step" id="coach-step"></div>
         <div class="say" id="coach-say"></div>
+        <div class="list" id="coach-list"></div>
         <!-- Decoration: the instruction above says everything this does. -->
         <canvas class="rope" id="coach-rope" aria-hidden="true"></canvas>
-        <div class="list" id="coach-list"></div>
       </section>
 
       <section id="desk">
