@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/openposse-org/openposse-extension/compare/v0.6.4...v0.7.0) (2026-10-24)
+
+
+### Features
+
+* rename recipes to lassos and add the rope loader to recording ([#40](https://github.com/openposse-org/openposse-extension/issues/40)) ([3d2cec3](https://github.com/openposse-org/openposse-extension/commit/3d2cec3f660e4045de5bea59cc1eb3008dd95666))
+* retire the orb and the popup, the extension is side panel only ([#43](https://github.com/openposse-org/openposse-extension/issues/43)) ([d23fb21](https://github.com/openposse-org/openposse-extension/commit/d23fb217ea1c2ff1cc12a1d93aec098e4397dda2))
+
+
+### Fixes
+
+* the first recording step asks for the assistant to be opened ([#42](https://github.com/openposse-org/openposse-extension/issues/42)) ([70c8070](https://github.com/openposse-org/openposse-extension/commit/70c80700ba99bacf08fdfa5340e487f834c8f870))
+
 ## [0.6.4](https://github.com/openposse-org/openposse-extension/compare/v0.6.3...v0.6.4) (2026-10-24)
 
 
