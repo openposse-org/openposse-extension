@@ -30,7 +30,7 @@ test('Bare counters and UUIDs are rejected', () => {
 });
 
 test('Per-message handles are rejected', () => {
-  // Recorded live against Notion on 2026-09-20. The recipe named one message, so the next
+  // Recorded live against Notion on 2026-09-20. The lasso named one message, so the next
   // question would have matched nothing — and the reply's own before/after check passed it,
   // because 0→1 is what a real per-reply container looks like on a conversation with one
   // reply in it. Nothing else in the pipeline catches this.

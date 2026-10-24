@@ -205,7 +205,7 @@ const NODES = {
     ],
   },
   // Settings' setup sheet and its import row, taken the same day. Lucide has removed its brand
-  // icons, `github` among them, so getting a recipe from GitHub is drawn as a cloud.
+  // icons, `github` among them, so getting a lasso from GitHub is drawn as a cloud.
   'list-checks': {
     nodes: [
       ['path', { d: 'M13 5h8' }],
@@ -400,7 +400,7 @@ export function icon(name, { size = 16, className = '', strokeWidth = 2 } = {}) 
  *
  * The geometry is looked up rather than interpolated, so an unknown `name` throws instead of
  * reaching the output. `className` is interpolated, so it is for literals in our own source –
- * never for anything read from a page, a recipe or a file.
+ * never for anything read from a page, a lasso or a file.
  */
 export function iconMarkup(name, { size = 16, className = '', strokeWidth = 2 } = {}) {
   const { nodes, filled } = spec(name);

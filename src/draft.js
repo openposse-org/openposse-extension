@@ -71,7 +71,7 @@ export function applyCapture(draft, event) {
     case 'open':
       next.openMethod = event.openMethod ?? null;
       // **Cleared, not left stale.** Someone who first tried a shortcut and then opened it by
-      // clicking must not leave a recipe claiming both, where the runtime would send a key
+      // clicking must not leave a lasso claiming both, where the runtime would send a key
       // combination that does nothing and then report that the assistant never opened.
       next.shortcut = event.openMethod === 'shortcut' ? (event.shortcut ?? null) : null;
       next.openSelector = event.openMethod === 'click' ? (event.selector ?? null) : null;
@@ -84,7 +84,7 @@ export function applyCapture(draft, event) {
     case 'submit':
       next.submitMethod = event.submitMethod ?? null;
       // Cleared for the same reason: switching from a button to Enter must not leave the
-      // previous button's selector behind, or the recipe claims a submit path never recorded.
+      // previous button's selector behind, or the lasso claims a submit path never recorded.
       next.submitSelector = event.submitMethod === 'click' ? (event.selector ?? null) : null;
       break;
 
@@ -224,14 +224,14 @@ export function outstanding(draft) {
 }
 
 /**
- * Turns a complete draft into the recipe the runtime executes.
+ * Turns a complete draft into the lasso the runtime executes.
  *
  * `triggerMethod` is a parameter rather than a recorded field because **the recorder cannot
  * know it.** It watched a real keypress, which always works. Whether a *synthetic* event opens
  * the same panel is a different question with a different answer per vendor, and the only way
  * to find out is to try – which is the dry run's job.
  *
- * @returns `{ ok: true, recipe }` or `{ ok: false, problems }`
+ * @returns `{ ok: true, lasso }` or `{ ok: false, problems }`
  */
 export function finish(draft, { triggerMethod, recordedOn = null }) {
   const found = problems(draft);
@@ -240,14 +240,14 @@ export function finish(draft, { triggerMethod, recordedOn = null }) {
   // **Selectors flatten to plain CSS strings here**, and this is the one conversion in the
   // file. A draft holds `selectorFor`'s full result – `{ css, via, isStable, matchCount }`,
   // which is what the wizard's checklist and the two-sample comparison need – while the runtime
-  // passes `recipe.inputSelector` straight into `deepQuerySelectorAll`. Handing it the object
+  // passes `lasso.inputSelector` straight into `deepQuerySelectorAll`. Handing it the object
   // would stringify to `[object Object]`, match nothing, and report `ELEMENT_NOT_FOUND` on a
-  // recipe that had just been recorded and verified.
+  // lasso that had just been recorded and verified.
   const css = (selector) => selector?.css ?? null;
 
   return {
     ok: true,
-    recipe: {
+    lasso: {
       domainPattern: draft.domainPattern,
       openMethod: draft.openMethod,
       shortcut: draft.shortcut,

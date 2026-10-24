@@ -34,7 +34,7 @@
  * decoration: a font that fails to load must leave readable text, not a serif default.
  *
  * **There is one family now.** A `--code` token held `ui-monospace, SFMono-Regular, …` for the
- * status readouts, step numbers, badges, keycaps and the recipe dump, so those slots were the
+ * status readouts, step numbers, badges, keycaps and the lasso dump, so those slots were the
  * only things on any surface not set in Inter. They are Inter too as of 2026-09-30, which left
  * the token holding the same value as `--ui` — so it is gone rather than duplicated, because
  * two names for one value is the shape everything else here has had to be collapsed out of.
@@ -325,7 +325,7 @@ input[type="text"]::placeholder { color: var(--text-faint); }
  * They used to fade in on hover, on the reasoning that a roster is read more often than it is
  * edited. That reasoning was about noise and ignored discoverability: a control that only
  * exists once the pointer is over it cannot be found by anyone who does not already know it is
- * there, and "See" is the only way to look at a recipe while "Re-record" is the fix for the
+ * there, and "See" is the only way to look at a lasso while "Re-record" is the fix for the
  * commonest failure there is. Hover is also not a thing that reliably happens — a trackpad
  * user tabbing through, or any touch input, never triggers it.
  *
@@ -348,7 +348,7 @@ input[type="text"]::placeholder { color: var(--text-faint); }
 .agent .ghost.bad:hover { color: var(--error); border-color: var(--error); }
 .agent .ghost:disabled { opacity: 0.4; cursor: default; }
 
-.agent .recipe {
+.agent .lasso {
   margin: 7px 0 2px;
   padding: 9px 11px;
   border-radius: 8px;

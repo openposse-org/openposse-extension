@@ -24,8 +24,8 @@ keeps no record of what you say.
 
 In Chrome's storage for the extension, on your computer only:
 
-- **Your assistants**: the names you gave them, their voices and colours, and each one's recipe,
-  meaning which site it is on and which buttons and boxes to use. A recipe contains nothing from
+- **Your assistants**: the names you gave them, their voices and colours, and each one's lasso,
+  meaning which site it is on and which buttons and boxes to use. A lasso contains nothing from
   your conversations.
 - **Your settings**, such as speaking pace, the language answers are read in, and appearance.
 - **Whether you agreed to the Supertonic voice's licence**, which version, and when.
@@ -62,7 +62,7 @@ can use them later. It does not record what you type.
 
 ## Sharing an assistant
 
-Share makes a file that you choose to send to someone. It holds the assistant's name and recipe,
+Share makes a file that you choose to send to someone. It holds the assistant's name and lasso,
 and nothing from your conversations.
 
 ## Changes

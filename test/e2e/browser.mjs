@@ -15,8 +15,8 @@ import { fileURLToPath } from 'node:url';
 const EXTENSION = fileURLToPath(new URL('../../dist-e2e', import.meta.url));
 const VENDOR = await readFile(new URL('../fixtures/vendor.html', import.meta.url), 'utf8');
 
-/** The fake vendor's assistant as a shared-recipe file, exactly as the Share button writes one. */
-export const RECIPE = await readFile(new URL('../fixtures/fixture-crm.json', import.meta.url), 'utf8');
+/** The fake vendor's assistant as a shared-lasso file, exactly as the Share button writes one. */
+export const LASSO = await readFile(new URL('../fixtures/fixture-crm.json', import.meta.url), 'utf8');
 export const VENDOR_URL = 'https://fixture.test/';
 /** The start of the one answer the fake vendor gives. */
 export const ANSWER = 'The pipeline total is 4.2 million dollars';
@@ -73,7 +73,7 @@ export async function addAcme(context, extensionId) {
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/setup.html`);
   const result = await page.evaluate(
-    (text) => chrome.runtime.sendMessage({ kind: 'openposse.agent.import', text }), RECIPE);
+    (text) => chrome.runtime.sendMessage({ kind: 'openposse.agent.import', text }), LASSO);
   expect(result).toMatchObject({ ok: true, name: 'Acme' });
   await page.close();
 }

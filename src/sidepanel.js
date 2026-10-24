@@ -27,7 +27,7 @@
 // API to set it, reopens at roughly 360px, and lets the user put it left or right.
 
 import {
-  loadRoster, findAgent, micGranted, recipeFor, orbStyle, orbStyleOf, ORB_STYLE_KEY,
+  loadRoster, findAgent, micGranted, lassoFor, orbStyle, orbStyleOf, ORB_STYLE_KEY,
   avatarsByCount, avatarsByCountOf, AVATAR_SIZING_KEY,
 } from './storage.js';
 import { channelOf, initialFor } from './channels.js';
@@ -331,7 +331,7 @@ function renderCoach() {
  * The roster, read once and drawn many times.
  *
  * **Split in two because the vendor names cost a storage read each.** The status line says
- * `Ivan · Notion`, and that product name comes from the agent's recipe – so a render that fetched
+ * `Ivan · Notion`, and that product name comes from the agent's lasso – so a render that fetched
  * it would hit storage per agent on every phase change, six times a turn, to draw the same four
  * strings. `load()` fetches; `draw()` is synchronous and cheap and runs whenever the turn moves.
  */
@@ -362,7 +362,7 @@ async function loadRosterData() {
   const products = {};
   const patterns = {};
   await Promise.all(agents.map(async (agent) => {
-    patterns[agent.id] = (await recipeFor(agent))?.domainPattern;
+    patterns[agent.id] = (await lassoFor(agent))?.domainPattern;
     // `productLabel` turns `*.notion.so` into "Notion" – the same derivation E3b's navigation
     // matches against, so "take me to Notion" and the label here cannot drift apart. The label
     // rather than `productName`, which is lowercase because it is for matching, not for reading.
@@ -849,9 +849,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
     return;
   }
   if (area !== 'local') return;
-  // The whole roster, not just the names: a re-record replaces a recipe, and the vendor label in
+  // The whole roster, not just the names: a re-record replaces a lasso, and the vendor label in
   // the status line comes from it.
-  if (changes.agents || changes.rosterOrder || Object.keys(changes).some((k) => k.startsWith('recipe:'))) {
+  if (changes.agents || changes.rosterOrder || Object.keys(changes).some((k) => k.startsWith('lasso:'))) {
     loadRosterData();
   }
   if (changes.micGranted) checkMic();

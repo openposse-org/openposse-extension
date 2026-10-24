@@ -29,7 +29,7 @@ const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 
  * The ids of `agents` sorted `how` – `name`, `site`, `newest` or `oldest` – for Settings' Sort menu.
  *
  * `agents` must be in stored order, because the order they were added is the only record of age
- * there is. `siteOf(agent)` is what it drives ("Notion"); an assistant without one – its recipe
+ * there is. `siteOf(agent)` is what it drives ("Notion"); an assistant without one – its lasso
  * is missing – goes after those with one, rather than first, where an empty name would sort it.
  */
 export function sortedIDs(agents, how, siteOf = () => '') {

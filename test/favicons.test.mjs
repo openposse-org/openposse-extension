@@ -1,5 +1,5 @@
 // Which page an agent's site icon is looked up by. Chrome's favicon store is keyed by host while a
-// recipe holds only a pattern, and Chrome answers a site it has no icon for with a grey globe – so
+// lasso holds only a pattern, and Chrome answers a site it has no icon for with a grey globe – so
 // a wrong pick here is either an icon that never appears or a globe where a letter should be.
 
 import test from 'node:test';

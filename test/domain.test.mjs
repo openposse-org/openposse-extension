@@ -11,7 +11,7 @@ import { patternForHost, matchPattern } from '../src/domain.js';
 
 test('an ordinary vendor host wildcards to its registrable domain', () => {
   // The case the whole thing is for: vendors put each customer on their own subdomain, so a
-  // recipe pinned to one workspace would look broken the moment somebody switched.
+  // lasso pinned to one workspace would look broken the moment somebody switched.
   assert.equal(patternForHost('demo-au.leanix.net'), '*.leanix.net');
   assert.equal(patternForHost('acme.leanix.net'), '*.leanix.net');
   assert.equal(patternForHost('www.notion.so'), '*.notion.so');

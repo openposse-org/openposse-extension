@@ -4,7 +4,7 @@ Three layers, each catching what the one before it cannot.
 
 | Layer | Run with | Where it runs | What it proves |
 |---|---|---|---|
-| Unit tests | `npm test` | every push and pull request (`ci.yml`) | the pure modules: routing, selectors, recipes, voices, weights, sharing |
+| Unit tests | `npm test` | every push and pull request (`ci.yml`) | the pure modules: routing, selectors, lassos, voices, weights, sharing |
 | Browser tests | `npm run test:e2e` | Ubuntu on pull requests; Ubuntu, Windows and macOS on `main` (`e2e.yml`) | the built extension loads and drives a page |
 | The checklist below | by hand | each system, before a release | what no automation can reach |
 
@@ -21,7 +21,7 @@ Chromium in headless mode. Run `npx playwright install chromium` once first.
 The fake vendor is `test/fixtures/vendor.html`, a small CRM with an assistant that opens from a
 button, a composer, Send replaced by Stop while it answers, and an answer written a word at a
 time. Playwright serves it at `https://fixture.test` from the test itself, so nothing reaches
-the network. `test/fixtures/fixture-crm.json` is its assistant, Acme, as a shared-recipe file.
+the network. `test/fixtures/fixture-crm.json` is its assistant, Acme, as a shared-lasso file.
 
 `dist-e2e/` is a development build with one difference: its manifest grants
 `https://*.fixture.test/*`. A real build is granted a site by the person clicking Allow in
@@ -40,8 +40,8 @@ What they check:
   The same file a second time says "You already have this one" and adds nothing. A newer version
   of it offers only Replace, which keeps the assistant's name, voice and colour, and asked
   directly, the worker refuses to add a second assistant for the site.
-- **An out-of-date recipe says so:** when the page no longer has the button the recipe clicks,
-  the turn says how old the recipe is and to record it again.
+- **An out-of-date lasso says so:** when the page no longer has the button the lasso clicks,
+  the turn says how old the lasso is and to record it again.
 - **A typed question reaches the vendor and its answer comes back to the panel.**
 - **With no vendor tab open, a turn says "No Fixture tab is open." and opens nothing.**
 - **The vendor's tab title follows the turn:** `typing…`, `answering…`, then `done`. A turn that
@@ -64,7 +64,7 @@ use, has no on-device speech recognition, so the voice half of the product is on
 here. Use Google Chrome, and a profile you do not mind changing.
 
 **Never click Remove on an installed OpenPosse to load a different build** – it deletes the
-assistants, the recipes and the downloaded voice. Load the new folder over it, or export each
+assistants, the lassos and the downloaded voice. Load the new folder over it, or export each
 assistant with Share first.
 
 | Check | macOS | Windows | Linux |

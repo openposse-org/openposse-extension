@@ -6,7 +6,7 @@
 // Taking them out removes the flagged agents and nothing else – see `setMockRoster`.
 //
 // They cannot answer. The selectors name nothing on any real page, so asking one fails the way a
-// broken recipe does, which is worth being able to see too.
+// broken lasso does, which is worth being able to see too.
 
 export const MOCK_SIZES = [10, 20, 30];
 
@@ -22,7 +22,7 @@ export const MOCK_SIZES = [10, 20, 30];
  * cannot match the page it loads to the mock and the avatar keeps its letter. On 2026-10-06
  * zoom.us, freshdesk.com and greenhouse.io went to zoom.com, freshworks.com and greenhouse.com,
  * and miro.com was blocked by the development network's DNS filter, so they were swapped for
- * ClickUp, HubSpot, Box and Loom from the recipe library's top-50 list.
+ * ClickUp, HubSpot, Box and Loom from the lasso library's top-50 list.
  *
  * **The site's icon has to show on a dark avatar, too.** zendesk.com's is an SVG drawn in
  * `currentColor`, which comes out black as an image, so its avatar looked empty. The same day it
@@ -41,8 +41,8 @@ const CAST = [
   ['Leila', 'box.com'], ['Oskar', 'typeform.com'], ['Amara', 'trello.com'],
 ];
 
-/** A recipe that passes every check Settings runs, on selectors no page has. */
-const mockRecipe = (domain) => ({
+/** A lasso that passes every check Settings runs, on selectors no page has. */
+const mockLasso = (domain) => ({
   domainPattern: `*.${domain}`,
   openMethod: 'click',
   openSelector: '[data-openposse-mock="open"]',
@@ -55,5 +55,5 @@ const mockRecipe = (domain) => ({
 /** The recordings that fill a roster of `real` agents up to `size` – none if it is already there. */
 export function mockRecordings(real, size) {
   return CAST.slice(0, Math.max(0, size - real))
-    .map(([name, domain]) => ({ name, recipe: mockRecipe(domain) }));
+    .map(([name, domain]) => ({ name, lasso: mockLasso(domain) }));
 }

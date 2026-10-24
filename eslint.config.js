@@ -82,7 +82,7 @@ export default [
         getComputedStyle: 'readonly',
         structuredClone: 'readonly',
         URL: 'readonly',
-        // Sharing a recipe. The file is built in memory on the Settings page and handed to an
+        // Sharing a lasso. The file is built in memory on the Settings page and handed to an
         // `<a download>`, so no `downloads` permission is needed and nothing reaches the disk
         // that the user did not click for.
         Blob: 'readonly',

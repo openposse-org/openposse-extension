@@ -1,11 +1,11 @@
 {
-  "format": "openposse.recipe",
+  "format": "openposse.lasso",
   "version": 1,
   "id": "acme-ai",
   "name": "Acme AI",
   "recordedOn": "2026-10-16",
   "hash": "0428acd933b8",
-  "recipe": {
+  "lasso": {
     "domainPattern": "*.openposse.org",
     "openMethod": "click",
     "openSelector": "button[data-testid=\"assistant-launcher\"]",

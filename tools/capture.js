@@ -1,7 +1,7 @@
 // OpenPosse selector capture — the manual counterpart to the recorder.
 //
 // Build it (`npm run build`) and paste `dist/capture.js` into DevTools on a vendor's assistant
-// page. It reports the fields of a `Recipe` (`Sources/OpenPosseShared/Recipe.swift`) by
+// page. It reports the fields of a `Lasso` (`Sources/OpenPosseShared/Lasso.swift`) by
 // inspecting a live page.
 //
 // **It shares its selector computation with the recorder** — `src/selector.js` — rather than
@@ -132,7 +132,7 @@ globalThis.openposseDiff = function openposseDiff() {
       // Whether this element is NEW rather than merely longer. This is the property that
       // matters: `responseContainerSelector` must gain a match per answer, because the runtime
       // waits for the count to increase. An element that only grew is the transcript, and a
-      // recipe built on it times out on every question. See `RecordedReply`.
+      // lasso built on it times out on every question. See `RecordedReply`.
       isNewSinceSnapshot: !snapshot.has(el),
       // How deep this sits inside the growth chain.
       ancestorsThatAlsoGrew: grew.filter((g) => g.el !== el && g.el.contains(el)).length,
@@ -141,7 +141,7 @@ globalThis.openposseDiff = function openposseDiff() {
 };
 
 /**
- * Captures the next key combination as `Recipe.Shortcut`.
+ * Captures the next key combination as `Lasso.Shortcut`.
  *
  * Field names match the JavaScript `KeyboardEvent` properties exactly, so the extension needs
  * no translation layer. Capture phase, so it is recorded even when the page stops propagation —

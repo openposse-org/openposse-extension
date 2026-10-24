@@ -6,7 +6,7 @@ like working code.
 
 ## Where things stand
 
-- **v0.6.0 is the Latest release** (recipe identity, #25). Since then only non-release changes
+- **v0.6.0 is the Latest release** (lasso identity, #25). Since then only non-release changes
   have landed: #27, the rope loader pages in `src/assets/`, which the build does not copy into
   `dist/`, and #28, this file. `git log` and `gh pr list` give anything newer.
 - **Chrome Web Store, step 5 of going public, is blocked on the maintainer**: Google's account
@@ -17,21 +17,21 @@ like working code.
 
 ## Next work, in order
 
-1. **Recipe identity §7** is done: `recipes/*.json` are shared files carrying `id` (the
+1. **Lasso identity §7** is done: `lassos/*.json` are shared files carrying `id` (the
    website's slugs, `notion-ai` and `acme-ai`), `recordedOn` and `hash`, and the repo test
    unpacks them directly. Change a selector there and regenerate the file with `pack`; the test
    fails on a stale hash. `hash` is 12 hex of SHA-256 over the canonical JSON and is never
    trusted from a file.
 2. **The website's §5**, in the separate `openposse-website` repo: the sync mirrors `canonical`
    and `hashOf` (the fixture `test/fixtures/fixture-crm.json` hashes to `49cd0c15178f`),
-   publishes `id`, `recordedOn` and `hash`, and the recipes page shows the revision. Also there:
+   publishes `id`, `recordedOn` and `hash`, and the lassos page shows the revision. Also there:
    the hero's tab badge sits after the name, the product puts it before (`typing… · Q3 plan`).
 
 ## Checks only a person in Chrome can run
 
 Owed, and worth reminding the maintainer about when the area comes up:
 
-- Recipe identity (steps in `docs/testing.md`, Sharing row): share an assistant and paste it back
+- Lasso identity (steps in `docs/testing.md`, Sharing row): share an assistant and paste it back
   ("You already have this one, as …"); change one selector and only Replace is offered; Replace
   keeps the voice; Record this tab on a site that has an assistant re-records it.
 - Tab titles seen from **another** tab on real Notion (`docs/tab-titles.md` §8 Q3–Q4).
@@ -76,7 +76,7 @@ Asking does not switch tabs either; navigation is something the user asks for ("
 
 **No vendor in `manifest.json`.** Sites are granted one origin at a time through
 `permissions.request()` from a button in the popup, and registered with
-`chrome.scripting.registerContentScripts`. A vendor is a recorded recipe in storage, never code:
+`chrome.scripting.registerContentScripts`. A vendor is a recorded lasso in storage, never code:
 no files named after a company, no hardcoded selectors.
 
 **High-level intents only** (`ask_assistant`, `get_last_response`, `invoke_via_shortcut`). No
@@ -117,7 +117,7 @@ early return that can be mistaken for a different failure says which one it is.
   Settings.
 - **Gemini Nano is off by enterprise policy** on many work machines. Nothing uses it now; if it
   comes back, treat it as absent by default.
-- **Do not click Remove** on an installed extension while testing: it deletes the roster, recipes
+- **Do not click Remove** on an installed extension while testing: it deletes the roster, lassos
   and downloaded voices.
 
 ## Known and open, not bugs

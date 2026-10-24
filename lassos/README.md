@@ -1,4 +1,4 @@
-# Recipes
+# Lassos
 
 Each file is one vendor's recorded selectors, stored as the shared file Settings imports and
 writes (`pack` in `src/share.js`). Copy one from GitHub and paste it into Settings as it is.
@@ -6,29 +6,29 @@ writes (`pack` in `src/share.js`). Copy one from GitHub and paste it into Settin
 which is the rule that keeps selector literals out of extension source. M3 replaces this
 directory with the recorder's output.
 
-The envelope around `recipe` says which recipe it is (`docs/recipe-identity.md`):
+The envelope around `lasso` says which lasso it is (`docs/lasso-identity.md`):
 
 | Field | What it is |
 |---|---|
 | `id` | The lineage, the slug the website gives the product (`notion-ai`, `acme-ai`). The filename is `openposse-<id>.json` |
 | `name` | The name the recording suggests for the AI assistant. The importer may pick another |
-| `recordedOn` | The day the recipe was recorded |
-| `hash` | 12 hex characters of SHA-256 over canonical JSON of `recipe`, from `hashOf`. Importers recompute it and never trust the file's |
+| `recordedOn` | The day the lasso was recorded |
+| `hash` | 12 hex characters of SHA-256 over canonical JSON of `lasso`, from `hashOf`. Importers recompute it and never trust the file's |
 
 **Change a selector and the hash changes with it.** `test/share.test.mjs` unpacks every file
 here exactly as Settings would and fails when the stored hash or the layout is not what `pack`
 writes, so regenerate the file with `pack` rather than editing the hash by hand. The bare
 recording shape stays the extension's own storage and is not used here.
 
-## Andy — LeanIX EA Assistant *(recipe removed 2026-10-01)*
+## Andy — LeanIX EA Assistant *(lasso removed 2026-10-01)*
 
 Captured 2026-09-06 against `demo-au.leanix.net`, and the test vendor through E8–E11.
 
-**The recipe file is gone; everything below stays.** Almost none of it is about the file — the
+**The lasso file is gone; everything below stays.** Almost none of it is about the file — the
 latency measurements, the cold-tab explanation for the original timeout, the state-persistence
 trap and the synthetic-trigger result are findings about driving *a* vendor, and the next one
 will meet them. LeanIX is also enterprise-only with no self-serve signup, so nobody outside a
-customer could have used the recipe anyway.
+customer could have used the lasso anyway.
 
 The recorded values, for reference:
 
@@ -37,7 +37,7 @@ The recorded values, for reference:
 | `inputSelector` | `textarea[name="message"]` | Unique on a `name` attribute, and in the **light DOM** — the page has 100+ shadow roots but the chat panel is not behind one |
 | `submitSelector` | `button[aria-label="Submit Message"]` | Unique on its accessible name. A click is preferred over synthetic Enter, which is far more likely to be gated on `isTrusted` |
 | `responseContainerSelector` | `lx-agentic-chat-assistant-message` | The custom element wrapping one assistant turn |
-| `usesStructuralSelector` | `false` | Nothing fell back to an `nth-of-type` path, so this recipe should survive ordinary CSS churn |
+| `usesStructuralSelector` | `false` | Nothing fell back to an `nth-of-type` path, so this lasso should survive ordinary CSS churn |
 | `triggerMethod` | `synthetic` | **Measured** on a fresh tab — a `isTrusted: false` event opens the assistant. See below |
 
 ### The send button lags a freshly opened panel
@@ -90,7 +90,7 @@ first coherent chunk, and that is still right — it is the whole latency argume
 for driving a browser instead of calling an API. It simply does not pay off here, because
 there is no partial answer to speak. The user waits for the generation either way.
 
-This is a property of the vendor, not a defect in the recipe or the streaming code. The
+This is a property of the vendor, not a defect in the lasso or the streaming code. The
 `streamResponse` path is unchanged and will stream for a vendor that renders incrementally.
 Do not "fix" it by lowering the quiet period.
 
@@ -114,7 +114,7 @@ out sometimes" — not a flaky vendor, not a network blip, but a limit chosen ag
 measurement and then met by the cold-start path with ~200 ms to spare. A warm tab passed every
 time, which is exactly what made it look intermittent.
 
-The ceiling is now `responseTimeoutMs: 60000`, a recipe field with a debug slider behind it.
+The ceiling is now `responseTimeoutMs: 60000`, a lasso field with a debug slider behind it.
 
 ### Possible tuning, not yet done
 
@@ -201,7 +201,7 @@ Consequences accepted with it:
 - A long-running conversation grows without bound. If a vendor degrades or drifts on very long
   threads, the remedy is the user starting a new chat themselves, not OpenPosse doing it for
   them.
-- No "new chat" selector is needed in the recipe, so the format is unchanged.
+- No "new chat" selector is needed in the lasso, so the format is unchanged.
 
 ### `triggerMethod: synthetic` is now MEASURED — S1 is closed for this vendor
 
@@ -218,7 +218,7 @@ which also means the app's Accessibility permission is not required to drive And
 
 This is per-vendor evidence, not a general result. Another vendor may still reject untrusted
 events on a security-sensitive shortcut, silently and with no error to catch, which is exactly
-why `Recipe.triggerMethod` is recorded per recipe rather than assumed globally. The
+why `Lasso.triggerMethod` is recorded per lasso rather than assumed globally. The
 `CGEventPost` fallback stays built and stays unexercised.
 
 Note what made this measurable: the state persistence above. Three earlier attempts ran on

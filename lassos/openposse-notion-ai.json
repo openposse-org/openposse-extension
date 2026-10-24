@@ -1,11 +1,11 @@
 {
-  "format": "openposse.recipe",
+  "format": "openposse.lasso",
   "version": 1,
   "id": "notion-ai",
   "name": "Ivan",
   "recordedOn": "2026-10-16",
   "hash": "5610c3bc4a69",
-  "recipe": {
+  "lasso": {
     "domainPattern": "*.notion.com",
     "openMethod": "click",
     "openSelector": "div[aria-label=\"ai\"]",
