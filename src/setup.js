@@ -1363,8 +1363,10 @@ async function refreshRoster() {
       );
     });
 
-    // **Re-record** – same wizard, keeping this agent's name and voice.
-    const again = tool('rotate-ccw', `Lasso ${agent.name} again`);
+    // **Re-record** – same wizard, keeping this agent's name and voice. Named by the product
+    // rather than the agent ("Lasso Notion again"), because what gets caught is the product's
+    // assistant; the agent's name is only what you call it.
+    const again = tool('rotate-ccw', `Lasso ${productLabel(patterns[agent.id]) || agent.name} again`);
     again.addEventListener('click', async () => {
       again.disabled = true;
       say('opening the page…');
