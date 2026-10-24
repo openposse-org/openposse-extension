@@ -17,6 +17,10 @@ test('a first open starts at the welcome card', () => {
   assert.equal(Object.values(done).some(Boolean), false);
 });
 
+test('a speech model Chrome already had does not skip the welcome card', () => {
+  assert.equal(progress({ ...NOTHING, model: 'ready' }).current, 'welcome');
+});
+
 test('"Get started" moves on to the microphone', () => {
   assert.equal(progress({ ...NOTHING, started: true }).current, 'mic');
 });

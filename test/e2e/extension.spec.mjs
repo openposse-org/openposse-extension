@@ -11,7 +11,7 @@ test('every extension page opens without an error', async ({ context, extensionI
   // `offscreen.html` too, opened as a tab: Chrome's own offscreen document is not a page these
   // tests watch, so a module that throws as it loads there (it carries ONNX Runtime for
   // Supertonic) would otherwise only ever show up as a voice that never speaks.
-  for (const name of ['setup.html', 'sidepanel.html', 'offscreen.html']) {
+  for (const name of ['setup.html', 'welcome.html', 'sidepanel.html', 'offscreen.html']) {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/${name}`);
     // Long enough for each page's startup work to finish, so an error in it is caught too.
@@ -245,4 +245,119 @@ test('when the page no longer has what the lasso clicks, the turn says the lasso
   await expect(panel.locator('body')).toContainText(
     'Acme’s lasso no longer matches Fixture’s page, which has changed. Lasso it again from Settings.',
     { timeout: 10_000 });
+});
+
+// ── First run ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The welcome page the install opened, with the two things automation cannot do stubbed: Chrome's
+ * microphone prompt, answered with a silent track, and the speech model, reported as `model`
+ * without a download. Everything after them – recording the grant, ticking – is the real code.
+ */
+async function welcomePage(context, extensionId, { model = 'available' } = {}) {
+  const page = context.pages().find((p) => p.url() === `chrome-extension://${extensionId}/welcome.html`);
+  await page.addInitScript((state) => {
+    navigator.mediaDevices.getUserMedia = async () => new AudioContext().createMediaStreamDestination().stream;
+    const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
+    if (SR) SR.available = async () => state;
+  }, model);
+  await page.reload();
+  return page;
+}
+
+/** Through the cards before the first assistant, the way somebody would. */
+async function toFirstAssistant(page) {
+  await page.click('#start');
+  await page.click('#allow-mic');
+  // Not pinned in a test browser, so the optional card waits until it is skipped.
+  await page.click('#skip-pin');
+  await expect(page.locator('#card-assistant')).toHaveClass(/open/);
+}
+
+test('the welcome page walks from Get started to the first assistant, ticking each card', async ({ context, extensionId }) => {
+  const page = await welcomePage(context, extensionId);
+  const card = (step) => page.locator(`#card-${step}`);
+
+  await expect(card('welcome')).toHaveClass(/open/);
+  await page.click('#start');
+  await expect(card('welcome')).toHaveClass(/done/);
+  await expect(card('mic')).toHaveClass(/open/);
+
+  await page.click('#allow-mic');
+  await expect(card('mic')).toHaveClass(/done/);
+  await expect(page.locator('#mic-summary')).toHaveText('allowed');
+  // The model is reported ready, so it ticks without a press.
+  await expect(card('model')).toHaveClass(/done/);
+
+  await expect(card('pin')).toHaveClass(/open/);
+  await page.click('#skip-pin');
+  await expect(page.locator('#pin-summary')).toHaveText('skipped');
+
+  // The shortcut comes from Chrome, never from the page: the manifest suggests one, so it ticks.
+  const key = await page.evaluate(async () =>
+    (await chrome.commands.getAll()).find((c) => c.name === 'summon')?.shortcut ?? '');
+  expect(key, 'the manifest suggests a shortcut').not.toBe('');
+  await expect(card('shortcut')).toHaveClass(/done/);
+  await expect(page.locator('#shortcut-summary')).toHaveText(key);
+  await expect(card('assistant')).toHaveClass(/open/);
+  await expect(page.locator('.tile')).toHaveCount(6);
+
+  // A done card opens again on a click.
+  await page.click('#card-mic .line');
+  await expect(card('mic')).toHaveClass(/open/);
+});
+
+test('a Chrome without on-device speech is told so, and can go on without voice', async ({ context, extensionId }) => {
+  const page = await welcomePage(context, extensionId, { model: 'unavailable' });
+  await page.click('#start');
+  await page.click('#allow-mic');
+  await expect(page.locator('#model-note')).toContainText('switched off in this Chrome');
+  await expect(page.locator('#get-model')).toHaveText('Continue without voice');
+  await page.click('#get-model');
+  await expect(page.locator('#card-pin')).toHaveClass(/open/);
+});
+
+test('a site tile opens that site in a new tab, and only on a click', async ({ context, extensionId }) => {
+  // Served from here, so the test reaches no real vendor.
+  await context.route('https://app.notion.com/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'text/html', body: '<title>Notion</title>' }));
+  const page = await welcomePage(context, extensionId);
+  await toFirstAssistant(page);
+  const before = context.pages().length;
+
+  const opened = context.waitForEvent('page');
+  await page.getByRole('button', { name: 'Open Notion in a new tab' }).click();
+  const notion = await opened;
+  await expect.poll(() => notion.url()).toBe('https://app.notion.com/');
+  expect(context.pages().length).toBe(before + 1);
+});
+
+test('the first assistant ticks the welcome page wherever it was added', async ({ context, extensionId }) => {
+  const page = await welcomePage(context, extensionId);
+  await page.click('#start');
+  await addAcme(context, extensionId);
+  await expect(page.locator('#card-assistant')).toHaveClass(/done/);
+  await expect(page.locator('#assistant-summary')).toHaveText('Acme');
+});
+
+test('an empty side panel offers the demo turn, and says where to go on a page it cannot lasso', async ({ context, extensionId }) => {
+  const panel = await openPanel(context, extensionId);
+  // The panel's own page is in front, which nothing can drive.
+  await expect(panel.locator('#empty-text')).toHaveText('No AI assistants yet. Open the site where your AI assistant lives.');
+  await expect(panel.locator('#empty-lasso')).toBeHidden();
+  await expect(panel.locator('#empty-demo')).toBeVisible();
+  // Setup is not finished in a fresh profile, so the way back to it is offered.
+  await expect(panel.locator('#finish-setup')).toBeVisible();
+
+  await addAcme(context, extensionId);
+  await expect(panel.locator('#empty')).toBeHidden();
+});
+
+test('Finish setting up reopens the welcome page', async ({ context, extensionId }) => {
+  const panel = await openPanel(context, extensionId);
+  const welcome = `chrome-extension://${extensionId}/welcome.html`;
+  const count = () => context.pages().filter((p) => p.url() === welcome).length;
+  const before = count();
+  await panel.click('#finish-setup');
+  await expect.poll(count).toBe(before + 1);
 });

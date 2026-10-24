@@ -150,7 +150,8 @@ export const STEPS = [
  */
 export function progress(facts) {
   const { mic, model, pin, shortcut, assistant, skipped = [] } = facts;
-  const later = mic === 'granted' || model === 'ready' || Boolean(assistant);
+  // Not the model: Chrome may have it already, for its own captions, before anyone pressed anything.
+  const later = mic === 'granted' || Boolean(assistant);
   const done = {
     welcome: Boolean(facts.started) || later,
     mic: mic === 'granted',
