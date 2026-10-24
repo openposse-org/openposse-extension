@@ -2222,10 +2222,9 @@ async function paintAvatarSizing() {
 
 // ── GitHub, and the footer's links ─────────────────────────────────────────────────────────
 //
-// A placeholder until the repository exists: it opens github.com itself. Change the one URL,
-// and the header's icon and every repository link in the footer follow. The website's pages
-// and both social accounts are placeholders too.
-const GITHUB_URL = 'https://github.com';
+// The one repository URL: the header's icon and every repository link in the footer follow it.
+// Both social accounts and the sponsor page are still placeholders.
+const GITHUB_URL = 'https://github.com/openposse-org/openposse-extension';
 const WEBSITE_URL = 'https://openposse.org';
 const SOCIAL_URLS = {
   x: 'https://x.com',
