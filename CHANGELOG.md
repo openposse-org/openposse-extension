@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/openposse-org/openposse-extension/compare/v0.6.0...v0.6.1) (2026-10-24)
+
+
+### Fixes
+
+* typed questions no longer send the assistant's name to the vendor ([#30](https://github.com/openposse-org/openposse-extension/issues/30)) ([335f331](https://github.com/openposse-org/openposse-extension/commit/335f331d15efda3a519db9d0f6ea4f449060311f))
+
 ## [0.6.0](https://github.com/openposse-org/openposse-extension/compare/v0.5.1...v0.6.0) (2026-10-24)
 
 
