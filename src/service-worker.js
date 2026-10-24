@@ -1036,7 +1036,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
     return true;
   }
   if (request?.kind === 'openposse.demo') {
-    // Scaffolding, reachable only from the panel's own quiet button. See `demo.js`.
+    // The panel's play button and the empty roster's "Show me what a turn looks like". See `demo.js`.
     warmVoice();
     runDemo(readAloud).then(respond, (error) => {
       console.warn('[openposse] the demo turn failed –', error?.message ?? error);
