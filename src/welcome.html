@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Welcome to OpenPosse</title>
+    <!-- Blocking, before the stylesheet, so the first frame is already light or dark. -->
+    <script src="theme-boot.js"></script>
+    <link rel="stylesheet" href="ui.css" />
+    <style>
+      body { padding: 40px 24px 60px; }
+      main { max-width: 620px; margin: 0 auto; }
+
+      /* The same lockup Settings uses, and the same light-mode swap. See setup.html. */
+      .lockup { display: block; width: 198px; height: auto; margin: 0 0 28px;
+                object-view-box: inset(26.74% 26.22% 23.91% 26.58%); }
+      :root[data-theme="light"] .lockup { content: url("icons/openposse-lockup-white.png"); }
+
+      /* The progress row: one dot per card, so "how much is left" is answered without reading. */
+      .dots { display: flex; gap: 6px; margin: 0 0 18px; padding: 0; list-style: none; }
+      .dots li { width: 22px; height: 4px; border-radius: 2px; background: rgb(var(--ink) / 0.14); }
+      .dots li.done { background: var(--green); }
+      .dots li.current { background: var(--blue); }
+
+      /* A card is a ticked line until it is the one being done, or somebody goes back to it. */
+      .card-step { margin-bottom: 8px; border-radius: var(--radius-card);
+                   border: 1px solid var(--line); background: var(--sunk); }
+      .card-step > .line { display: flex; align-items: center; gap: 10px; width: 100%;
+                           padding: 11px 14px; background: none; color: var(--text-dim);
+                           font-weight: 500; text-align: left; border-radius: var(--radius-card); }
+      .card-step > .line .tick { width: 16px; color: var(--text-faint); flex: none; }
+      .card-step.done > .line .tick { color: var(--green); }
+      .card-step > .line .summary { margin-left: auto; color: var(--text-faint); font-weight: 400;
+                                    font-feature-settings: var(--figures); }
+      .card-step .body { padding: 2px 18px 18px 40px; }
+      .card-step.open > .line { color: var(--text); }
+      .card-step:not(.open) .body { display: none; }
+      .card-step.later > .line { cursor: default; }
+
+      .body h2 { font-size: 20px; margin: 0 0 8px; color: var(--text); }
+      .body p { margin: 0 0 14px; color: var(--text-dim); line-height: 1.5; }
+      .body .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      .body .note { margin: 12px 0 0; font-size: 13px; }
+      .body .note[data-tone="bad"] { color: var(--error); }
+      .link { background: none; padding: 8px 4px; color: var(--text-dim); font-weight: 400;
+              text-decoration: underline; text-underline-offset: 3px; }
+      kbd { font: inherit; font-feature-settings: var(--figures); padding: 1px 6px;
+            border-radius: 5px; border: 1px solid var(--line); background: var(--well); }
+
+      /* No numbers, and no bar that pretends to know them: the recogniser reports only
+         "downloading" until it is "available", so this moves without claiming a percentage. */
+      .progress { height: 4px; border-radius: 2px; margin: 14px 0 0; overflow: hidden;
+                  background: rgb(var(--ink) / 0.1); }
+      .progress::after { content: ""; display: block; width: 30%; height: 100%;
+                         background: var(--blue); animation: slide 1.4s ease-in-out infinite; }
+      @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+      @media (prefers-reduced-motion: reduce) { .progress::after { animation: none; width: 100%; opacity: 0.5; } }
+
+      /* The six sites. A monogram in a colour, bundled – never a favicon looked up by domain,
+         which would be a network call nobody asked for. */
+      .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 0 0 12px; }
+      @media (max-width: 480px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+      .tile { display: flex; flex-direction: column; align-items: center; gap: 8px;
+              padding: 16px 8px; background: var(--well); color: var(--text);
+              border: 1px solid var(--line); border-radius: var(--radius-card); font-weight: 500; }
+      .tile:hover { border-color: rgb(var(--ink) / 0.3); }
+      .tile .mono { width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center;
+                    font-weight: 700; font-size: 17px; color: #fff; background: var(--tile); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img class="lockup" src="icons/openposse-lockup-dark.png" alt="OpenPosse" width="3040" height="920" />
+      <ol class="dots" id="dots" aria-hidden="true"></ol>
+
+      <section class="card-step" id="card-welcome" data-step="welcome">
+        <button class="line" aria-expanded="false"><span class="tick"></span>Welcome</button>
+        <div class="body">
+          <h2>Talk to your AI assistants</h2>
+          <p>
+            OpenPosse lets you talk to the AI assistants in the tools you already use, by voice.
+            Everything it hears and says stays on this device.
+          </p>
+          <div class="actions"><button id="start">Get started</button></div>
+        </div>
+      </section>
+
+      <section class="card-step" id="card-mic" data-step="mic">
+        <button class="line" aria-expanded="false"><span class="tick"></span>Let it hear you<span class="summary" id="mic-summary"></span></button>
+        <div class="body">
+          <h2>Let it hear you</h2>
+          <p>
+            Chrome will ask once, in this tab. The microphone is given to OpenPosse itself, not to
+            any website.
+          </p>
+          <div class="actions"><button id="allow-mic">Allow microphone</button></div>
+          <p class="note" id="mic-note" hidden></p>
+        </div>
+      </section>
+
+      <section class="card-step" id="card-model" data-step="model">
+        <button class="line" aria-expanded="false"><span class="tick"></span>Download the speech model<span class="summary" id="model-summary"></span></button>
+        <div class="body">
+          <h2>Download the speech model</h2>
+          <p>
+            Chrome turns what you say into words on this device, so it needs its speech model.
+            It downloads once.
+          </p>
+          <div class="actions"><button id="get-model">Download</button></div>
+          <div class="progress" id="model-progress" hidden></div>
+          <p class="note" id="model-note" hidden></p>
+        </div>
+      </section>
+
+      <section class="card-step" id="card-pin" data-step="pin">
+        <button class="line" aria-expanded="false"><span class="tick"></span>Pin OpenPosse<span class="summary" id="pin-summary"></span></button>
+        <div class="body">
+          <h2>Pin OpenPosse</h2>
+          <p>
+            Pin it so it's one click away: open the puzzle piece next to the address bar and press
+            the pin beside OpenPosse. This ticks itself when you do.
+          </p>
+          <div class="actions"><button class="link" id="skip-pin">Skip</button></div>
+        </div>
+      </section>
+
+      <section class="card-step" id="card-shortcut" data-step="shortcut">
+        <button class="line" aria-expanded="false"><span class="tick"></span>Your shortcut<span class="summary" id="shortcut-summary"></span></button>
+        <div class="body">
+          <h2>Your shortcut</h2>
+          <p id="shortcut-text"></p>
+          <div class="actions"><button class="secondary" id="change-shortcut">Change</button></div>
+          <p class="note">
+            Many people pick <kbd>⌥V</kbd> and tick Global, so it works even when Chrome is in
+            the background.
+          </p>
+        </div>
+      </section>
+
+      <section class="card-step" id="card-assistant" data-step="assistant">
+        <button class="line" aria-expanded="false"><span class="tick"></span>Add your first assistant<span class="summary" id="assistant-summary"></span></button>
+        <div class="body">
+          <h2>Add your first assistant</h2>
+          <p>We suggest starting with one of these:</p>
+          <div class="tiles" id="tiles"></div>
+          <p>
+            Or open any site with an AI assistant on it. Sign in if you need to, then press
+            <strong>Lasso this tab</strong> in the side panel.
+          </p>
+          <div class="actions"><button class="secondary" id="open-panel">Open OpenPosse</button></div>
+          <p class="note" id="assistant-note" hidden></p>
+        </div>
+      </section>
+
+      <section class="card-step" id="card-done" data-step="done">
+        <button class="line" aria-expanded="false"><span class="tick"></span>Done</button>
+        <div class="body">
+          <h2>You're all set</h2>
+          <p id="done-text"></p>
+          <p>
+            Want a more natural voice? <button class="link" id="better-voices">Better voices</button>
+            are optional, in Settings.
+          </p>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="welcome.js"></script>
+  </body>
+</html>

@@ -32,6 +32,19 @@ const MAY_OPEN = new Map([
   // Its own links, Chrome's shortcuts page, the spike page, and "Load icons", which opens each
   // vendor's home page in a minimised window to read its icon, on a button press, then closes it.
   ['setup.js', 'the Settings page'],
+  // The one exception to the rule, the owner's call of 2026-10-25: first-run onboarding may open
+  // a site, and only when one of its six tiles is clicked. Also Chrome's shortcuts page and
+  // Settings' Better voices. Nothing on a turn's path, and the page is never opened by a turn.
+  ['welcome.js', 'the welcome page'],
+]);
+
+/**
+ * Single calls allowed in a file that is otherwise held to the rule, written out in full. The
+ * worker is on every turn's path, so it is not allowlisted: it may open the welcome page, by
+ * that literal, on install and for the side panel's "Finish setting up", and nothing else.
+ */
+const MAY_CALL = new Map([
+  ['service-worker.js', "chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') })"],
 ]);
 
 const OPENS = [
@@ -49,8 +62,17 @@ test('nothing outside Settings opens a tab or a window', () => {
   const offenders = readdirSync(src)
     .filter((file) => file.endsWith('.js') && !MAY_OPEN.has(file))
     .flatMap((file) => {
-      const body = code(readFileSync(new URL(file, src), 'utf8'));
+      const body = code(readFileSync(new URL(file, src), 'utf8')).replaceAll(MAY_CALL.get(file) ?? '\0', '');
       return OPENS.filter((pattern) => pattern.test(body)).map((pattern) => `${file}: ${pattern}`);
     });
   assert.deepEqual(offenders, [], 'only switch to a tab that is already open');
+});
+
+test('the single calls allowed are still there, word for word', () => {
+  // Otherwise a reworded call would fail the test above for the wrong reason, or a removed one
+  // would leave an exception nobody needs.
+  for (const [file, call] of MAY_CALL) {
+    const body = code(readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8'));
+    assert.equal(body.split(call).length - 1, 1, `${file} makes \`${call}\` exactly once`);
+  }
 });

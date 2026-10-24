@@ -46,6 +46,13 @@ test('only optional steps can be skipped', () => {
   assert.equal(progress({ ...at, skipped: ['mic', 'model'] }).current, 'mic');
 });
 
+test('a speech model this Chrome cannot have can be passed over, and only then', () => {
+  const at = { ...NOTHING, started: true, mic: 'granted', skipped: ['model'] };
+  assert.equal(progress({ ...at, model: 'unavailable' }).current, 'pin');
+  assert.equal(progress({ ...at, model: 'unsupported' }).current, 'pin');
+  assert.equal(progress({ ...at, model: 'downloadable' }).current, 'model');
+});
+
 test('an assigned shortcut ticks itself, so the next card is the first assistant', () => {
   const at = { ...NOTHING, started: true, mic: 'granted', model: 'ready', pin: true, shortcut: '⌘⇧9' };
   assert.equal(progress(at).current, 'assistant');

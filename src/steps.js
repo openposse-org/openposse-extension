@@ -159,7 +159,11 @@ export function progress(facts) {
     shortcut: Boolean(shortcut),
     assistant: Boolean(assistant),
   };
-  const passed = (step) => done[step.id] || (step.optional && skipped.includes(step.id));
+  // A speech model this Chrome cannot have may be passed over too: typing in the side panel still
+  // works, and a card that can never tick would be the end of the page.
+  const impossible = model === 'unavailable' || model === 'unsupported';
+  const skippable = (step) => step.optional || (step.id === 'model' && impossible);
+  const passed = (step) => done[step.id] || (skippable(step) && skipped.includes(step.id));
   const current = STEPS.find((step) => step.id !== 'done' && !passed(step))?.id ?? 'done';
   done.done = current === 'done';
   return { done, current };

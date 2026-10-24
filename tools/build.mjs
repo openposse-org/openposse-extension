@@ -51,6 +51,7 @@ if (store && e2e) {
 const MODULES = {
   'service-worker': 'src/service-worker.js',
   setup: 'src/setup.js',
+  welcome: 'src/welcome.js',
   sidepanel: 'src/sidepanel.js',
   offscreen: 'src/offscreen.js',
   spike: 'src/spike.js',
