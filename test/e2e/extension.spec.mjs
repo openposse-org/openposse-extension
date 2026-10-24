@@ -74,6 +74,21 @@ test('a typed question reaches the vendor, and its answer comes back to the pane
   await expect(panel.locator('body')).toContainText(ANSWER, { timeout: 20_000 });
 });
 
+test("a typed question that starts with the assistant's name reaches the vendor without it", async ({ context, extensionId }) => {
+  // People type the way they speak: "Matt, what is on this to-do list?" once reached the vendor
+  // with "Matt," still in it, because the typed path went straight to the agent the box was
+  // pointed at and never looked at how the sentence began.
+  await addAcme(context, extensionId);
+  const vendor = await context.newPage();
+  await vendor.goto(VENDOR_URL);
+  const panel = await openPanel(context, extensionId);
+
+  await ask(panel, 'Acme, what is the pipeline total?');
+
+  await expect(vendor.locator('[data-testid="question"]')).toHaveText('what is the pipeline total?');
+  await expect(panel.locator('body')).toContainText(ANSWER, { timeout: 20_000 });
+});
+
 test('with no vendor tab open, a turn says so and opens nothing', async ({ context, extensionId }) => {
   await addAcme(context, extensionId);
   const panel = await openPanel(context, extensionId);
