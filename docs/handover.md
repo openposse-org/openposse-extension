@@ -6,10 +6,9 @@ like working code.
 
 ## Where things stand
 
-- `main` is at `f6572f4`. No open PRs. The remote branches `feat/recipe-identity` and
-  `chore/rope-loader-assets` are already merged and can be deleted.
-- **v0.6.0 is the Latest release** (recipe identity, #25). Since then only #27 landed: the rope
-  loader pages in `src/assets/`, which the build does not copy into `dist/`.
+- **v0.6.0 is the Latest release** (recipe identity, #25). Since then only non-release changes
+  have landed: #27, the rope loader pages in `src/assets/`, which the build does not copy into
+  `dist/`, and #28, this file. `git log` and `gh pr list` give anything newer.
 - **Chrome Web Store, step 5 of going public, is blocked on the maintainer**: Google's account
   check stopped the creation of the beta item. Once it exists, the zip is uploaded by hand, the
   listing and Privacy tabs are filled from `docs/releasing.md`, the item ID goes into the repo
