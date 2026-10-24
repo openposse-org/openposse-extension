@@ -197,7 +197,7 @@ and reads its answer aloud.
 |---|---|
 | `activeTab` | Starts a recording on the tab the user is on when they choose "Record this tab". |
 | `offscreen` | Hosts the microphone, on-device speech recognition and speech synthesis in a hidden extension page, so listening carries on across tab switches. |
-| `storage` | Keeps the user's assistants, their recipes and their settings on the device. |
+| `storage` | Keeps the user's assistants, their lassos and their settings on the device. |
 | `tabs` | Finds the tab where the user's assistant is already open, so a question goes to that tab and "show me" can switch to it. |
 | `scripting` | Registers and injects the script that types into the assistant and reads its answer, on sites the user has granted. |
 | `sidePanel` | OpenPosse's main window, opened from the toolbar or the keyboard shortcut. |

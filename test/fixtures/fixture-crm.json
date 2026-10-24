@@ -1,8 +1,8 @@
 {
-  "format": "openposse.recipe",
+  "format": "openposse.lasso",
   "version": 1,
   "name": "Acme",
-  "recipe": {
+  "lasso": {
     "domainPattern": "*.fixture.test",
     "openMethod": "click",
     "shortcut": null,

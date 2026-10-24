@@ -27,7 +27,7 @@
 // API to set it, reopens at roughly 360px, and lets the user put it left or right.
 
 import {
-  loadRoster, findAgent, micGranted, recipeFor, orbStyle, orbStyleOf, ORB_STYLE_KEY,
+  loadRoster, findAgent, micGranted, lassoFor, orbStyle, orbStyleOf, ORB_STYLE_KEY,
   avatarsByCount, avatarsByCountOf, AVATAR_SIZING_KEY,
 } from './storage.js';
 import { channelOf, initialFor } from './channels.js';
@@ -35,6 +35,7 @@ import { FLOOR_OVERRIDE_KEY, floorWindow, productLabel } from './routing.js';
 import { patternForHost, matchPattern } from './domain.js';
 import { drawSphere, drawWave, modeFor } from './sphere.js';
 import { bindThemeKey, watchTheme } from './theme.js';
+import { startRope } from './rope.js';
 import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
 
@@ -197,6 +198,9 @@ window.addEventListener('resize', () => {
   fitAnswer();
 });
 
+/** Stops the rope loader, while a recording has it running. */
+let stopRope = null;
+
 function renderTurn() {
   // **Recording takes the whole panel**, because it is a different activity rather than a
   // different turn state: there is no transcript, no roster to re-route to, and the person is
@@ -208,6 +212,13 @@ function renderTurn() {
   el('desk').hidden = recording;
   el('dock').hidden = recording;
   el('coach').hidden = !recording;
+  // The rope runs only while it can be seen. A loop left going behind a hidden card would cost a
+  // frame of drawing sixty times a second for as long as the panel is open.
+  if (recording && !stopRope) stopRope = startRope(el('coach-rope'));
+  if (!recording && stopRope) {
+    stopRope();
+    stopRope = null;
+  }
   if (recording) return renderCoach();
 
   // Committed white, the tail the recogniser is still revising dimmed, and a caret only while
@@ -284,6 +295,8 @@ function renderTurn() {
 function renderCoach() {
   const coach = state.coach ?? {};
 
+  el('coach-heading').textContent = coach.heading ?? '';
+  el('coach-heading').hidden = !coach.heading;
   el('coach-step').textContent = coach.label ?? '';
 
   const say = el('coach-say');
@@ -331,7 +344,7 @@ function renderCoach() {
  * The roster, read once and drawn many times.
  *
  * **Split in two because the vendor names cost a storage read each.** The status line says
- * `Ivan · Notion`, and that product name comes from the agent's recipe – so a render that fetched
+ * `Ivan · Notion`, and that product name comes from the agent's lasso – so a render that fetched
  * it would hit storage per agent on every phase change, six times a turn, to draw the same four
  * strings. `load()` fetches; `draw()` is synchronous and cheap and runs whenever the turn moves.
  */
@@ -362,7 +375,7 @@ async function loadRosterData() {
   const products = {};
   const patterns = {};
   await Promise.all(agents.map(async (agent) => {
-    patterns[agent.id] = (await recipeFor(agent))?.domainPattern;
+    patterns[agent.id] = (await lassoFor(agent))?.domainPattern;
     // `productLabel` turns `*.notion.so` into "Notion" – the same derivation E3b's navigation
     // matches against, so "take me to Notion" and the label here cannot drift apart. The label
     // rather than `productName`, which is lowercase because it is for matching, not for reading.
@@ -389,7 +402,7 @@ async function drawRoster() {
   empty.classList.toggle('problem', Boolean(problem));
   if (agents.length === 0) {
     empty.textContent = problem
-      ?? 'No AI assistants yet. Open a page with an AI assistant on it, then record it.';
+      ?? 'No AI assistants yet. Open a page with an AI assistant on it, then lasso it.';
   }
 
   const target = el('avatars');
@@ -704,7 +717,7 @@ async function paintSite() {
   el('dock-note').hidden = true;
 
   el('record').disabled = !site.pattern;
-  label(el('record'), site.pattern ? `Record the AI assistant on ${site.host}` : site.why);
+  label(el('record'), site.pattern ? `Lasso the AI assistant on ${site.host}` : site.why);
 }
 
 /**
@@ -849,9 +862,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
     return;
   }
   if (area !== 'local') return;
-  // The whole roster, not just the names: a re-record replaces a recipe, and the vendor label in
+  // The whole roster, not just the names: a re-record replaces a lasso, and the vendor label in
   // the status line comes from it.
-  if (changes.agents || changes.rosterOrder || Object.keys(changes).some((k) => k.startsWith('recipe:'))) {
+  if (changes.agents || changes.rosterOrder || Object.keys(changes).some((k) => k.startsWith('lasso:'))) {
     loadRosterData();
   }
   if (changes.micGranted) checkMic();

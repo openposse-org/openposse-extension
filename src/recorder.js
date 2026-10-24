@@ -40,9 +40,9 @@ const REPLY_WINDOW_MS = 120_000;
  * structurally perfect (`matches 0→1`) named the wrong thing, and the measured timing that the
  * response ceiling is derived from was nonsense.
  *
- * Longer than `Recipe.quietPeriodMs` (~900ms) on purpose. That one decides when an answer has
+ * Longer than `Lasso.quietPeriodMs` (~900ms) on purpose. That one decides when an answer has
  * *finished* during a recording we already trust; this one decides *what the answer was*, from
- * nothing, once. Being slow here costs a second at setup; being wrong costs the recipe.
+ * nothing, once. Being slow here costs a second at setup; being wrong costs the lasso.
  */
 const SETTLE_MS = 2500;
 
@@ -487,7 +487,7 @@ function watchForReply() {
     // **Everything that was considered, not only what was chosen.** Four attempts at this
     // capture were spent reasoning about why a mechanism found nothing, when the list it built
     // would have said so immediately. A candidate is only recorded if both exchanges produce
-    // it, so a selector appearing here once and not in the recipe is the ordinary case rather
+    // it, so a selector appearing here once and not in the lasso is the ordinary case rather
     // than a fault – and an empty list on both exchanges is the answer to "why is there no
     // indicator?".
     note('busy candidates', vanished.length === 0
@@ -701,7 +701,7 @@ function chooseReplyElement(added) {
  * **Two, because one cannot distinguish an answer from where answers appear.** Both attempts
  * against Notion named a single message – first a per-message id, then a seventeen-segment
  * positional path – and both looked healthy: `0→1 PER-REPLY`, a selector that resolved, a
- * recipe that validated. The next question matched nothing in each case. No test applied to one
+ * lasso that validated. The next question matched nothing in each case. No test applied to one
  * element can separate the two, because on a page holding one answer they are the same element.
  *
  * With two, the constraint does the work: a selector matching both cannot be naming either.
@@ -952,7 +952,7 @@ function emitReply(selector, element, firstSeenAt, busySelector = null, busyFrom
       selector,
       matchesBefore,
       matchesAfter: matches.length,
-      // How long the vendor took, so the recipe's response ceiling is measured rather than
+      // How long the vendor took, so the lasso's response ceiling is measured rather than
       // guessed. Guessing it is how M2 shipped a 15s ceiling against a cold path that needed
       // 14.8s, which passed on every warm tab and looked intermittent.
       //

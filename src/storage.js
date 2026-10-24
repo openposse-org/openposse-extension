@@ -4,12 +4,12 @@
 // decisions rather than re-deriving them – each one was made for a reason that has not changed
 // just because the host has.
 //
-// **Agents and recipes are stored separately**, under `agents` and `recipe:<id>` keys. Same
-// argument as the two files on disk: an `Agent` refers to its recipe by id, so re-recording a
+// **Agents and lassos are stored separately**, under `agents` and `lasso:<id>` keys. Same
+// argument as the two files on disk: an `Agent` refers to its lasso by id, so re-recording a
 // vendor whose UI drifted must not disturb the name or voice the user chose. One combined
 // blob would rewrite the whole roster on every re-record.
 //
-// The shapes are unchanged from `OpenPosseShared`, so a recipe recorded by the Mac app imports
+// The shapes are unchanged from `OpenPosseShared`, so a lasso recorded by the Mac app imports
 // as-is. That is not sentiment – it is the only reason V1 starts with a working Notion agent
 // instead of an empty list.
 
@@ -22,7 +22,7 @@ const AGENTS_KEY = 'agents';
 const ORDER_KEY = 'rosterOrder';
 const MIC_KEY = 'micGranted';
 const SPEED_KEY = 'voiceSpeed';
-const recipeKey = (id) => `recipe:${id}`;
+const lassoKey = (id) => `lasso:${id}`;
 
 // ── The microphone, remembered rather than predicted ───────────────────────────────────────
 //
@@ -212,7 +212,7 @@ export function newID() {
 /**
  * Every agent, plus which of them cannot work.
  *
- * **An agent whose recipe is missing is listed, not dropped.** It still routes – a name match
+ * **An agent whose lasso is missing is listed, not dropped.** It still routes – a name match
  * will happily decide an utterance was meant for it – and then fails when asked. Naming it is
  * what lets the popup offer a re-record instead of the user discovering it by being answered
  * with an error.
@@ -230,19 +230,45 @@ export async function loadRoster() {
     // first write stores colours for agents that predate them – see `assignChannels`.
     agents = assignChannels(Array.isArray(stored[AGENTS_KEY]) ? stored[AGENTS_KEY] : []);
     order = stored[ORDER_KEY];
+    if (agents.some((a) => a.recipeID)) agents = await fromRecipes(agents);
   } catch {
     // Unreadable storage must not stop the extension starting. An empty roster with an
     // explanation is recoverable; throwing on every service-worker wake is not.
     return { agents: [], arranged: [], broken: [], problem: "Your saved AI assistants couldn't be read." };
   }
 
-  const keys = agents.map((a) => recipeKey(a.recipeID)).filter(Boolean);
-  const recipes = keys.length ? await chrome.storage.local.get(keys) : {};
+  const keys = agents.map((a) => lassoKey(a.lassoID)).filter(Boolean);
+  const lassos = keys.length ? await chrome.storage.local.get(keys) : {};
   const broken = agents
-    .filter((a) => !recipes[recipeKey(a.recipeID)])
+    .filter((a) => !lassos[lassoKey(a.lassoID)])
     .map((a) => a.id);
 
   return { agents, arranged: inOrder(agents, order), broken, problem: null };
+}
+
+/**
+ * Moves a roster saved before lassos were called lassos onto the new keys, once.
+ *
+ * Before the rename an agent pointed at `recipe:<id>` through `recipeID`. The content is the
+ * same, so this only renames: the lassos are written first, then the roster, and the old keys go
+ * last – the order `addAgent` keeps, so an interruption leaves an orphan rather than an agent
+ * pointing at nothing. Running it twice writes the same thing twice.
+ */
+async function fromRecipes(agents) {
+  const old = agents.filter((a) => a.recipeID).map((a) => `recipe:${a.recipeID}`);
+  const stored = await chrome.storage.local.get(old);
+  const lassos = {};
+  const moved = agents.map((agent) => {
+    if (!agent.recipeID) return agent;
+    const { recipeID, ...rest } = agent;
+    const content = stored[`recipe:${recipeID}`];
+    if (content) lassos[lassoKey(recipeID)] = content;
+    return { ...rest, lassoID: recipeID };
+  });
+  await chrome.storage.local.set(lassos);
+  await chrome.storage.local.set({ [AGENTS_KEY]: moved });
+  await chrome.storage.local.remove(old);
+  return moved;
 }
 
 /**
@@ -264,10 +290,10 @@ export async function setRosterOrder(ids) {
   return { ok: true };
 }
 
-export async function recipeFor(agent) {
-  if (!agent?.recipeID) return null;
-  const stored = await chrome.storage.local.get(recipeKey(agent.recipeID));
-  return stored[recipeKey(agent.recipeID)] ?? null;
+export async function lassoFor(agent) {
+  if (!agent?.lassoID) return null;
+  const stored = await chrome.storage.local.get(lassoKey(agent.lassoID));
+  return stored[lassoKey(agent.lassoID)] ?? null;
 }
 
 /**
@@ -296,10 +322,10 @@ export function isNameTaken(agents, name, exceptID = null) {
 // ── Writing ────────────────────────────────────────────────────────────────────────────────
 
 /**
- * Adds an agent and the recipe it drives.
+ * Adds an agent and the lasso it drives.
  *
- * **The recipe is written first.** If this is interrupted between the two writes, an orphan
- * recipe costs a few kilobytes; an agent whose recipe never landed is a roster entry that
+ * **The lasso is written first.** If this is interrupted between the two writes, an orphan
+ * lasso costs a few kilobytes; an agent whose lasso never landed is a roster entry that
  * routes and then fails – the state `broken` exists to describe, and worth not creating.
  */
 /**
@@ -338,7 +364,7 @@ export async function setAgentVoice(agentID, voice) {
   return { ok: true, voice: voice || null };
 }
 
-/** Renames an agent. The recipe keeps its own copy, so both are updated. */
+/** Renames an agent. The lasso keeps its own copy, so both are updated. */
 export async function renameAgent(agentID, name) {
   const { agents } = await loadRoster();
   const agent = agents.find((a) => a.id === agentID);
@@ -352,10 +378,10 @@ export async function renameAgent(agentID, name) {
     [AGENTS_KEY]: agents.map((a) => (a.id === agentID ? { ...a, name: wanted } : a)),
   });
 
-  // `agentName` is denormalised into the recipe, so leaving it would make the two disagree –
-  // and the recipe's copy is what the recorder's own diagnostics read back.
-  if (agent.recipeID) {
-    const key = recipeKey(agent.recipeID);
+  // `agentName` is denormalised into the lasso, so leaving it would make the two disagree –
+  // and the lasso's copy is what the recorder's own diagnostics read back.
+  if (agent.lassoID) {
+    const key = lassoKey(agent.lassoID);
     const stored = (await chrome.storage.local.get(key))[key];
     if (stored) await chrome.storage.local.set({ [key]: { ...stored, agentName: wanted } });
   }
@@ -363,18 +389,18 @@ export async function renameAgent(agentID, name) {
   return { ok: true, name: wanted };
 }
 
-export async function addAgent({ name, voice, recipe, origin = null }) {
-  const recipeID = newID();
-  const stored = { ...recipe, agentName: name };
+export async function addAgent({ name, voice, lasso, origin = null }) {
+  const lassoID = newID();
+  const stored = { ...lasso, agentName: name };
 
-  await chrome.storage.local.set({ [recipeKey(recipeID)]: stored });
+  await chrome.storage.local.set({ [lassoKey(lassoID)]: stored });
 
   const { agents } = await loadRoster();
   // Chosen now and kept, so no later rename or deletion can recolour it – or anybody else.
   const channel = pickChannel(agents.map((a) => a.channel));
-  const agent = { id: newID(), name, voice, recipeID, connection: 'browser', channel };
-  // The lineage of a recipe that came from the website (`docs/recipe-identity.md`), so a newer
-  // version of it can be recognised as this agent's. The date and the hash live in the recipe.
+  const agent = { id: newID(), name, voice, lassoID, connection: 'browser', channel };
+  // The lineage of a lasso that came from the website (`docs/lasso-identity.md`), so a newer
+  // version of it can be recognised as this agent's. The date and the hash live in the lasso.
   if (origin?.id) agent.origin = { id: origin.id };
   await chrome.storage.local.set({ [AGENTS_KEY]: [...agents, agent] });
   return agent;
@@ -399,19 +425,19 @@ export async function setAgentChannel(agentID, channel) {
 }
 
 /**
- * Replaces an agent's recipe, keeping its id, name and voice.
+ * Replaces an agent's lasso, keeping its id, name and voice.
  *
- * This is what re-recording a drifted vendor does, and the reason recipes are stored apart
- * from the roster in the first place. Importing a newer version of the agent's recipe does the
+ * This is what re-recording a drifted vendor does, and the reason lassos are stored apart
+ * from the roster in the first place. Importing a newer version of the agent's lasso does the
  * same, and gives the agent the file's lineage with `origin`; a re-recording passes none and the
  * agent keeps the one it has.
  */
-export async function replaceRecipe(agentID, recipe, { origin = null } = {}) {
+export async function replaceLasso(agentID, lasso, { origin = null } = {}) {
   const { agents } = await loadRoster();
   const agent = agents.find((a) => a.id === agentID);
   if (!agent) return false;
   await chrome.storage.local.set({
-    [recipeKey(agent.recipeID)]: { ...recipe, agentName: agent.name },
+    [lassoKey(agent.lassoID)]: { ...lasso, agentName: agent.name },
   });
   if (origin?.id && agent.origin?.id !== origin.id) {
     await chrome.storage.local.set({
@@ -426,10 +452,10 @@ export async function removeAgent(agentID) {
   const agent = agents.find((a) => a.id === agentID);
   if (!agent) return false;
 
-  // Roster first. A recipe deleted before a failed roster write would leave an agent pointing
+  // Roster first. A lasso deleted before a failed roster write would leave an agent pointing
   // at nothing.
   await chrome.storage.local.set({ [AGENTS_KEY]: agents.filter((a) => a.id !== agentID) });
-  await chrome.storage.local.remove(recipeKey(agent.recipeID));
+  await chrome.storage.local.remove(lassoKey(agent.lassoID));
   return true;
 }
 
@@ -449,22 +475,22 @@ export async function setMockRoster(size) {
   if (problem) return { ok: false, reason: problem };
 
   const real = agents.filter((a) => !a.mock);
-  const gone = agents.filter((a) => a.mock).map((a) => recipeKey(a.recipeID));
+  const gone = agents.filter((a) => a.mock).map((a) => lassoKey(a.lassoID));
   const mocks = [];
-  const recipes = {};
-  for (const { name, recipe } of mockRecordings(real.length, size)) {
+  const lassos = {};
+  for (const { name, lasso } of mockRecordings(real.length, size)) {
     const taken = [...real, ...mocks];
     const agent = {
-      id: newID(), name: freeName(taken, name), voice: null, recipeID: newID(),
+      id: newID(), name: freeName(taken, name), voice: null, lassoID: newID(),
       connection: 'browser', channel: pickChannel(taken.map((a) => a.channel)), mock: true,
     };
-    recipes[recipeKey(agent.recipeID)] = { ...recipe, agentName: agent.name };
+    lassos[lassoKey(agent.lassoID)] = { ...lasso, agentName: agent.name };
     mocks.push(agent);
   }
 
-  // The order `addAgent` and `removeAgent` keep: new recipes before the roster that points at
+  // The order `addAgent` and `removeAgent` keep: new lassos before the roster that points at
   // them, old ones only once nothing does.
-  if (mocks.length) await chrome.storage.local.set(recipes);
+  if (mocks.length) await chrome.storage.local.set(lassos);
   await chrome.storage.local.set({ [AGENTS_KEY]: [...real, ...mocks] });
   if (gone.length) await chrome.storage.local.remove(gone);
   return { ok: true, total: real.length + mocks.length, mocks: mocks.length };

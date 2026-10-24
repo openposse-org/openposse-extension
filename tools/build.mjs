@@ -9,7 +9,7 @@
 //
 //   node tools/build.mjs            a development build. It keeps the manifest's `key`, so the
 //                                   unpacked extension keeps its ID, and with it its storage:
-//                                   the roster, the recipes and the downloaded voice.
+//                                   the roster, the lassos and the downloaded voice.
 //   node tools/build.mjs --watch    the same, rebuilt on every change.
 //   node tools/build.mjs --store    what goes to the Chrome Web Store: no `key`, which the store
 //                                   refuses outright, and none of the developer-only files.

@@ -255,7 +255,7 @@ if (!globalThis.__openposseOrb) {
     .coach .row .detail {
       font: 11px/1.4 var(--ui);
       /* Selectors, so the disambiguated glyphs earn their place here exactly as they do in the
-         roster's recipe dump: I, l and 1 are one bar in Inter's default set. */
+         roster's lasso dump: I, l and 1 are one bar in Inter's default set. */
       font-feature-settings: var(--figures);
       color: rgba(255,255,255,.75); flex: 1 1 auto;
       white-space: normal; overflow-wrap: anywhere;

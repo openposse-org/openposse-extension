@@ -158,8 +158,8 @@ particular message. A short guide in the panel ticks off each step as it is capt
 finish, OpenPosse replays the recording by itself to make sure it works before the assistant is
 added.
 
-The result is a **recipe**: a short description of how to use the assistant's page. Anyone adding
-a shared recipe sees its steps before granting anything, along these lines:
+The result is a **lasso**: a short description of how to use the assistant's page. Anyone adding
+a shared lasso sees its steps before granting anything, along these lines:
 
 | Step | Example |
 |---|---|
@@ -174,13 +174,13 @@ a shared recipe sees its steps before granting anything, along these lines:
 
 ### Sharing an assistant
 
-Once an assistant works for you, **Share** in Settings shows its recipe and saves it as a small
+Once an assistant works for you, **Share** in Settings shows its lasso and saves it as a small
 file you can send to a colleague. They add it under **Add a shared AI assistant** in Settings,
-Chrome asks them to allow the assistant's site, and it is ready to use. A recipe holds the assistant's name and how to use its page, and never anything from
-your conversations. The [`recipes/`](recipes) folder has an example.
+Chrome asks them to allow the assistant's site, and it is ready to use. A lasso holds the assistant's name and how to use its page, and never anything from
+your conversations. The [`lassos/`](lassos) folder has an example.
 
-Each site has one assistant. Each file says when its recipe was recorded, and adding one for a
-site that already has an assistant offers to replace that assistant's recipe, keeping its name,
+Each site has one assistant. Each file says when its lasso was recorded, and adding one for a
+site that already has an assistant offers to replace that assistant's lasso, keeping its name,
 voice and colour; adding the same one again simply says you have it. Recording a site that already
 has an assistant re-records it in the same way.
 
@@ -236,7 +236,7 @@ sequenceDiagram
     SW->>SW: name by spelling → name by sound → whoever answered last
     end
 
-    SW->>CS: ask the assistant (recipe, question)
+    SW->>CS: ask the assistant (lasso, question)
     Note over CS: opens the assistant, types into<br/>its box, presses its button
     CS->>CS: waits for the answer
     CS-->>SW: the answer as it arrives, then in full
@@ -269,11 +269,11 @@ flowchart TB
         end
 
         subgraph tab["An assistant's tab (allowed one site at a time)"]
-            CS["<b>Content script</b><br/>uses the page<br/>through its recipe"]
+            CS["<b>Content script</b><br/>uses the page<br/>through its lasso"]
         end
     end
 
-    STORE[("chrome.storage<br/>assistants · recipes · settings")]
+    STORE[("chrome.storage<br/>assistants · lassos · settings")]
     CACHE[("Cache Storage<br/>Supertonic and Kokoro<br/>checked by SHA-256")]
 
     SW <--> OFF
@@ -452,10 +452,10 @@ designed around what real pages do:
   any "stop" control has stayed gone before treating an answer as finished.
 - **Assistants often live in frames**, so OpenPosse finds the frame that holds the assistant and
   talks to that frame directly.
-- **Questions and answers can look identical** in a page's markup, so the recipe identifies the
+- **Questions and answers can look identical** in a page's markup, so the lasso identifies the
   conversation and OpenPosse picks the answer at runtime, skipping the echo of your own question.
 
-When a page changes in a way the recipe no longer matches, OpenPosse reports that clearly rather
+When a page changes in a way the lasso no longer matches, OpenPosse reports that clearly rather
 than guessing, and recording the assistant again brings it up to date.
 
 ---
@@ -468,7 +468,7 @@ What is stored, what uses the network and what never does is described in plain 
 | Permission | Used for |
 |---|---|
 | `offscreen` | The microphone, speech recognition and voices |
-| `storage` | Your assistants, their recipes and your settings |
+| `storage` | Your assistants, their lassos and your settings |
 | `sidePanel` | OpenPosse's main window |
 | `tabs`, `scripting` | Finding an assistant's tab and working with its page |
 | `activeTab` | Starting a recording on the current tab |
@@ -511,7 +511,7 @@ src/                     The extension's code, pages and manifest (plain JavaScr
   sidepanel.js             the main window
   setup.js                 Settings
   content.js               works with an assistant's page
-  recorder.js              captures a recipe
+  recorder.js              captures a lasso
   selector.js  dom.js      finding the right elements on a page
   routing.js  domain.js    choosing an assistant, and site access
   supertonic.js kokoro.js  the two downloadable voices
@@ -519,7 +519,7 @@ src/                     The extension's code, pages and manifest (plain JavaScr
   supertonic/              Supertonic's browser helper, its licence, and the model's licence
   weights.js               the voice downloads: fixed versions, SHA-256 checks
 public/                  Files copied as they are: icons, the pronunciation dictionary, and vendor/
-recipes/                 Example assistants, as shareable recipe files
+lassos/                  Example assistants, as shareable lasso files
 test/                    Unit tests; e2e/ browser tests, with a sample assistant in fixtures/
 tools/                   The build script and developer helpers
 docs/                    Testing, releasing, and design notes

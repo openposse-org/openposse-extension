@@ -2,7 +2,7 @@
 //
 // It is deliberately close to empty at M2. The job of this milestone is to prove the
 // transport: extension → native host → Unix socket → OpenPosse, and back. Vendor modules and
-// intent dispatch arrive at M3, once there is a recorded recipe to dispatch.
+// intent dispatch arrive at M3, once there is a recorded lasso to dispatch.
 //
 // Note the lifecycle constraint that shapes everything here: an MV3 service worker is
 // **not** persistent. Chrome terminates it after roughly 30 seconds of inactivity, and a
@@ -12,7 +12,7 @@
 // set on one event still exists on the next.
 
 import {
-  loadRoster, recipeFor, findAgent, addAgent, replaceRecipe, freeName, renameAgent, removeAgent,
+  loadRoster, lassoFor, findAgent, addAgent, replaceLasso, freeName, renameAgent, removeAgent,
   setAgentVoice, setAgentChannel, setMockRoster, setRosterOrder,
 } from './storage.js';
 import {
@@ -35,7 +35,7 @@ import { DONE_MS } from './title.js';
 import { hashOf, matchFor, staleness, today, unpack } from './share.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
 import {
-  derive, stepLabel, instruction, captures, PATIENCE_MS,
+  derive, stepLabel, heading, instruction, captures, PATIENCE_MS,
 } from './coaching.js';
 import { panel, hidePanel, primePanel } from './panel.js';
 import {
@@ -93,7 +93,7 @@ function replyTo(id) {
  * Puts a question to an agent and returns its answer.
  *
  * The entry point everything user-facing goes through – the popup's text box today, the voice
- * loop at E3. It loads the recipe the recorder produced, finds the tab that recipe is for, and
+ * loop at E3. It loads the lasso the recorder produced, finds the tab that lasso is for, and
  * hands the work to `dispatchIntent`.
  *
  * `onPartial` receives text as it streams. Speech can start on the first chunk rather than the
@@ -105,9 +105,9 @@ export async function ask(agentName, prompt, { onPartial } = {}) {
   const agent = findAgent(agents, agentName);
   if (!agent) return { type: 'error', payload: { code: ERROR.unsupportedIntent, message: `no agent called ${agentName}` } };
 
-  const recipe = await recipeFor(agent);
-  if (!recipe) {
-    // The `broken` state made concrete. The agent exists and routes; its recipe does not.
+  const lasso = await lassoFor(agent);
+  if (!lasso) {
+    // The `broken` state made concrete. The agent exists and routes; its lasso does not.
     return {
       type: 'error',
       payload: { code: ERROR.elementNotFound, message: `${agent.name} needs re-recording` },
@@ -120,7 +120,7 @@ export async function ask(agentName, prompt, { onPartial } = {}) {
     pending.set(id, { resolve, onEvent: (event) => onPartial?.(event?.text ?? '') });
   });
 
-  dispatchIntent({ id, agent: agent.name, payload: { intent: 'ask_assistant', recipe, prompt, graceMs } });
+  dispatchIntent({ id, agent: agent.name, payload: { intent: 'ask_assistant', lasso, prompt, graceMs } });
   return answer;
 }
 
@@ -166,7 +166,7 @@ async function holdFloor(name) {
  */
 const ROUTING_COPY = {
   'heard-nothing': "Didn't catch that.",
-  'no-agents': 'No AI assistants yet – record one first.',
+  'no-agents': 'No AI assistants yet – lasso one first.',
   'unknown-agent': "Didn't catch who you meant. Start with an AI assistant's name.",
 };
 
@@ -190,7 +190,7 @@ async function rosterWithProducts() {
   const { agents } = await loadRoster();
   return Promise.all(agents.map(async (agent) => ({
     ...agent,
-    product: productName((await recipeFor(agent))?.domainPattern),
+    product: productName((await lassoFor(agent))?.domainPattern),
   })));
 }
 
@@ -209,14 +209,14 @@ async function goToAgent(nav) {
   }
 
   const agent = nav.agent;
-  const recipe = await recipeFor(agent);
+  const lasso = await lassoFor(agent);
   // An open tab or nothing: "show me" switches to what you have and never opens the site.
-  const tab = await vendorTab(recipe?.domainPattern);
+  const tab = await vendorTab(lasso?.domainPattern);
 
   if (!tab) {
     markDone('tab-not-found');
     // `agent.product` is the lowercase one, for matching what was said. This is shown.
-    const vendor = productLabel(recipe?.domainPattern) || agent.name;
+    const vendor = productLabel(lasso?.domainPattern) || agent.name;
     panel({ phase: 'needs-attention', message: `No ${vendor} tab is open.` });
     return;
   }
@@ -334,15 +334,15 @@ async function putQuestion(agent, prompt, matched, { spoken = false } = {}) {
 }
 
 /**
- * The sentence for a turn that failed because the assistant's page no longer has what the recipe
- * looks for: how old the recipe is, and where a newer one may be. See `staleness` in `share.js`.
+ * The sentence for a turn that failed because the assistant's page no longer has what the lasso
+ * looks for: how old the lasso is, and where a newer one may be. See `staleness` in `share.js`.
  */
 async function stalenessFor(agent) {
-  const recipe = await recipeFor(agent);
+  const lasso = await lassoFor(agent);
   return staleness({
     name: agent.name,
-    product: productLabel(recipe?.domainPattern),
-    recordedOn: recipe?.recordedOn ?? null,
+    product: productLabel(lasso?.domainPattern),
+    recordedOn: lasso?.recordedOn ?? null,
     published: Boolean(agent.origin?.id),
   });
 }
@@ -725,7 +725,7 @@ async function runReconcile() {
   // query on every tab, forever, to drive assistants that are not there.
   //
   // The panel does not need it: it is injected per turn by `executeScript`, which the host
-  // permission is what makes possible. The driver stays where a recipe says an assistant is.
+  // permission is what makes possible. The driver stays where a lasso says an assistant is.
   const wanted = origins.filter((origin) => !covered.has(origin) && origin !== 'https://*/*');
   const toAdd = wanted
     .filter((origin) => !already.has(registrationID(origin)))
@@ -833,10 +833,10 @@ const WORKER_INTENTS = {
 };
 
 /**
- * Turns a recipe's domain pattern into a Chrome match pattern.
+ * Turns a lasso's domain pattern into a Chrome match pattern.
  *
  * Note this is *not* the security boundary – the content script's `matches` in the manifest
- * is, and it is static. This only decides which already-permitted tab to talk to, so a recipe
+ * is, and it is static. This only decides which already-permitted tab to talk to, so a lasso
  * naming a domain we were not built for finds no tab rather than injecting anywhere.
  */
 // **Moved to `domain.js` and imported**, so the tab query, the content-script registration and
@@ -865,17 +865,17 @@ function showTurnState(tabId, state, clearAfterMs) {
  * Every failure is a specific wire error rather than a generic one, because they need
  * different responses from a user: `TAB_NOT_FOUND` means "open LeanIX", while
  * `ELEMENT_NOT_FOUND` from the content script means the vendor changed their UI and the
- * recipe needs re-recording.
+ * lasso needs re-recording.
  */
 async function dispatchIntent(request) {
   const { id, agent, payload } = request;
-  const recipe = payload?.recipe;
+  const lasso = payload?.lasso;
 
   const reply = replyTo(id);
 
-  // Recording intents are browser-level and carry no recipe – there is not one yet. Checked
-  // before the recipe guard below, which would otherwise reject every one of them as
-  // "intent carried no recipe".
+  // Recording intents are browser-level and carry no lasso – there is not one yet. Checked
+  // before the lasso guard below, which would otherwise reject every one of them as
+  // "intent carried no lasso".
   const workerHandler = WORKER_INTENTS[payload?.intent];
   if (workerHandler) {
     try {
@@ -892,18 +892,18 @@ async function dispatchIntent(request) {
     return;
   }
 
-  if (!recipe?.domainPattern) {
-    reply('error', { code: ERROR.unsupportedIntent, message: 'intent carried no recipe' });
+  if (!lasso?.domainPattern) {
+    reply('error', { code: ERROR.unsupportedIntent, message: 'intent carried no lasso' });
     return;
   }
 
-  const tab = await vendorTab(recipe.domainPattern);
+  const tab = await vendorTab(lasso.domainPattern);
   if (!tab) {
     reply('error', {
       code: ERROR.tabNotFound,
       // The panel shows this as it is, so it is the same sentence "show me" uses rather than
       // the match pattern, which no person asking a question should have to read.
-      message: `No ${productLabel(recipe.domainPattern) || 'matching'} tab is open.`,
+      message: `No ${productLabel(lasso.domainPattern) || 'matching'} tab is open.`,
     });
     return;
   }
@@ -912,7 +912,7 @@ async function dispatchIntent(request) {
   // assistant that answers instantly cannot beat the listener into place.
   // `typing…` and `answering…` end on their own after the vendor's response timeout and a margin,
   // so an extension reloaded mid-answer cannot leave one in the tab's title for good.
-  const titleCeiling = (recipe.responseTimeoutMs ?? 60000) + 30000;
+  const titleCeiling = (lasso.responseTimeoutMs ?? 60000) + 30000;
   let titled = false;
   const onStream = (note) => {
     if (note?.kind !== 'openposse.stream' || note.id !== id) return;
@@ -937,17 +937,17 @@ async function dispatchIntent(request) {
     // unless it is named here too. `test/grace.test.mjs` checks this line against what
     // `askAssistant` reads, because the failure is silent: the default simply applies.
     const message = {
-      intent: payload.intent, recipe, prompt: payload.prompt, graceMs: payload.graceMs, id,
+      intent: payload.intent, lasso, prompt: payload.prompt, graceMs: payload.graceMs, id,
     };
 
-    let frameId = await frameOwningAssistant(tab.id, recipe.inputSelector);
+    let frameId = await frameOwningAssistant(tab.id, lasso.inputSelector);
     let result = await chrome.tabs.sendMessage(tab.id, message, { frameId: frameId ?? 0 });
 
     // The assistant was shut, so nobody owned it and the top frame took the shortcut – but
     // the panel may have opened in an iframe, where the top frame cannot see it. Re-locate
     // once and let whoever has it now finish the job.
     if (!result?.ok && frameId === undefined) {
-      frameId = await frameOwningAssistant(tab.id, recipe.inputSelector);
+      frameId = await frameOwningAssistant(tab.id, lasso.inputSelector);
       if (frameId !== undefined && frameId !== 0) {
         result = await chrome.tabs.sendMessage(tab.id, message, { frameId });
       }
@@ -970,7 +970,7 @@ async function dispatchIntent(request) {
         code: result?.code ?? ERROR.timeout,
         message: result?.message ?? 'failed',
         openedBy: result?.openedBy,
-        // Which part of the page the recipe could not find, when the page seems to have changed.
+        // Which part of the page the lasso could not find, when the page seems to have changed.
         missing: result?.missing,
       });
     }
@@ -1121,11 +1121,11 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   // Renaming is an edit to an agent that already exists, from Settings. It is deliberately not
   // part of recording any more: a recording that cannot finish without a name is a recording
   // held hostage by whatever the vendor's page does about focus.
-  if (request?.kind === 'openposse.agent.recipe') {
+  if (request?.kind === 'openposse.agent.lasso') {
     // What a recording actually captured, for the Settings page to show. Read straight from
     // storage rather than reconstructed, so what is displayed is what the runtime will use.
     findAgent2(request.agentId).then(
-      async (agent) => respond({ ok: Boolean(agent), recipe: agent ? await recipeFor(agent) : null }),
+      async (agent) => respond({ ok: Boolean(agent), lasso: agent ? await lassoFor(agent) : null }),
       (error) => respond({ ok: false, reason: String(error?.message ?? error) }),
     );
     return true;
@@ -1213,7 +1213,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
  *
  * **Validated here as well as in the page, deliberately.** The Settings page unpacks the file to
  * show a preview and to know which origin to ask for, and it would be easy to let this handler
- * take the recipe the page already parsed. That would make the worker a hole around the check:
+ * take the lasso the page already parsed. That would make the worker a hole around the check:
  * every other sender of this message – a future surface, a mistake, anything – would skip the
  * domain round-trip that is the whole control. So the *text* crosses, and the trust decision is
  * made once, here, on the bytes.
@@ -1229,37 +1229,37 @@ async function importShared(text, { replace = null } = {}) {
   const read = unpack(text);
   if (!read.ok) return { ok: false, reason: read.problems.join(' ') };
 
-  const pattern = matchPattern(read.recipe.domainPattern);
+  const pattern = matchPattern(read.lasso.domainPattern);
   if (!(await chrome.permissions.contains({ origins: [pattern] }))) {
     // Reached when the page's own request was declined, or when something other than the page
     // sent this. Either way it is not a failure to report as broken – nothing was granted, so
     // nothing is added.
-    return { ok: false, reason: `OpenPosse has no access to ${read.recipe.domainPattern} yet.` };
+    return { ok: false, reason: `OpenPosse has no access to ${read.lasso.domainPattern} yet.` };
   }
 
-  // The date goes back into the recipe, where a recording keeps its own; `pack` lifts it out again.
-  const recipe = read.recordedOn ? { ...read.recipe, recordedOn: read.recordedOn } : read.recipe;
+  // The date goes back into the lasso, where a recording keeps its own; `pack` lifts it out again.
+  const lasso = read.recordedOn ? { ...read.lasso, recordedOn: read.recordedOn } : read.lasso;
   const origin = read.id ? { id: read.id } : null;
 
   // **One site, one assistant.** A file for a site that already has one can only replace that
-  // one's recipe, and only when the page asked for exactly that – checked here as well, so no
+  // one's lasso, and only when the page asked for exactly that – checked here as well, so no
   // sender can add a second assistant for a site, or replace a different one.
-  const found = matchFor(await rosterWithRecipes(), read);
+  const found = matchFor(await rosterWithLassos(), read);
   if (found && replace !== found.agent.id) {
     return {
       ok: false,
-      reason: `${found.agent.name} already has a recipe for `
-        + `${String(found.recipe.domainPattern).replace(/^\*\./, '')}. Replace it instead.`,
+      reason: `${found.agent.name} already has a lasso for `
+        + `${String(found.lasso.domainPattern).replace(/^\*\./, '')}. Replace it instead.`,
     };
   }
 
   if (found) {
-    // A newer version of an agent already here: the recipe changes, the agent does not. Its name,
+    // A newer version of an agent already here: the lasso changes, the agent does not. Its name,
     // voice, colour and place in the roster stay, as they do on a re-recording.
-    if (await hashOf(found.recipe) === await hashOf(recipe)) {
-      return { ok: false, reason: `${found.agent.name} already has this recipe.` };
+    if (await hashOf(found.lasso) === await hashOf(lasso)) {
+      return { ok: false, reason: `${found.agent.name} already has this lasso.` };
     }
-    await replaceRecipe(found.agent.id, recipe, { origin });
+    await replaceLasso(found.agent.id, lasso, { origin });
     await reconcileRegistrations();
     return { ok: true, name: found.agent.name, replaced: true };
   }
@@ -1270,31 +1270,31 @@ async function importShared(text, { replace = null } = {}) {
   const { agents } = await loadRoster();
   const name = freeName(agents, read.name);
 
-  // No voice: a shared recipe carries none, so the agent falls under the accent heuristic and
+  // No voice: a shared lasso carries none, so the agent falls under the accent heuristic and
   // sounds different from whatever else is in this roster.
-  const agent = await addAgent({ name, voice: null, recipe, origin });
+  const agent = await addAgent({ name, voice: null, lasso, origin });
   await reconcileRegistrations();
   return { ok: true, name: agent.name, renamed: agent.name !== read.name };
 }
 
-/** Every agent with its recipe, leaving out any whose recipe is missing. */
-async function rosterWithRecipes() {
+/** Every agent with its lasso, leaving out any whose lasso is missing. */
+async function rosterWithLassos() {
   const { agents } = await loadRoster();
-  const entries = await Promise.all(agents.map(async (agent) => ({ agent, recipe: await recipeFor(agent) })));
-  return entries.filter((entry) => entry.recipe);
+  const entries = await Promise.all(agents.map(async (agent) => ({ agent, lasso: await lassoFor(agent) })));
+  return entries.filter((entry) => entry.lasso);
 }
 
 /**
  * Which agent here a shared file is a version of, for Settings to offer Replace rather than a
  * second copy. Read-only: it checks the file the way `importShared` will, and adds nothing.
  *
- * `same` compares what the two recipes do (`hashOf`), never the hash the file claims.
+ * `same` compares what the two lassos do (`hashOf`), never the hash the file claims.
  */
 async function matchShared(text) {
   const read = unpack(text);
   if (!read.ok) return { ok: false, reason: read.problems.join(' ') };
 
-  const found = matchFor(await rosterWithRecipes(), read);
+  const found = matchFor(await rosterWithLassos(), read);
   if (!found) return { ok: true, match: null, recordedOn: read.recordedOn };
 
   return {
@@ -1303,9 +1303,9 @@ async function matchShared(text) {
     match: {
       agentId: found.agent.id,
       name: found.agent.name,
-      same: await hashOf(found.recipe) === await hashOf(read.recipe),
-      site: String(found.recipe.domainPattern ?? '').replace(/^\*\./, ''),
-      recordedOn: found.recipe.recordedOn ?? null,
+      same: await hashOf(found.lasso) === await hashOf(read.lasso),
+      site: String(found.lasso.domainPattern ?? '').replace(/^\*\./, ''),
+      recordedOn: found.lasso.recordedOn ?? null,
     },
   };
 }
@@ -1330,7 +1330,7 @@ async function findAgent2(agentId) {
 }
 
 /**
- * Re-records an existing agent, replacing its recipe and keeping its name and voice.
+ * Re-records an existing agent, replacing its lasso and keeping its name and voice.
  *
  * **No permission prompt and no user gesture**, which is why this can be driven from Settings
  * at all: the origin was granted when the agent was first recorded, and a grant does not need
@@ -1342,9 +1342,9 @@ async function rerecord(agentId) {
   const agent = await findAgent2(agentId);
   if (!agent) return { ok: false, reason: 'no such agent' };
 
-  const recipe = await recipeFor(agent);
-  const pattern = recipe?.domainPattern;
-  if (!pattern) return { ok: false, reason: `${agent.name} has no recipe to re-record` };
+  const lasso = await lassoFor(agent);
+  const pattern = lasso?.domainPattern;
+  if (!pattern) return { ok: false, reason: `${agent.name} has no lasso to re-record` };
 
   const [tab] = await chrome.tabs.query({ url: matchPattern(pattern) });
   if (!tab) {
@@ -1364,10 +1364,10 @@ async function beginWizard({ tabId, pattern, agentId = null }) {
   if (!pattern) throw new Error('no domain pattern');
 
   // **One site, one assistant.** Recording a site that already has one re-records it: same name,
-  // voice and colour, new recipe. Said when it finishes, in `save()`.
+  // voice and colour, new lasso. Said when it finishes, in `save()`.
   let replacing = null;
   if (!agentId) {
-    const owner = (await rosterWithRecipes()).find((entry) => entry.recipe.domainPattern === pattern);
+    const owner = (await rosterWithLassos()).find((entry) => entry.lasso.domainPattern === pattern);
     if (owner) {
       agentId = owner.agent.id;
       replacing = owner.agent.name;
@@ -1384,12 +1384,12 @@ async function beginWizard({ tabId, pattern, agentId = null }) {
     armedAt: Date.now(),
     // Cleared before the dry run. See `stopCapturing`.
     capturing: true,
-    // Re-recording an existing agent keeps its name and voice and replaces only the recipe, so
+    // Re-recording an existing agent keeps its name and voice and replaces only the lasso, so
     // the naming beat is skipped for it. The popup's "needs re-recording" is what leads here,
     // and so does recording a site that already has an assistant.
     agentId,
     // That assistant's name when this started as a new recording, so the end can say whose
-    // recipe it replaced; null for a re-record asked for by name.
+    // lasso it replaced; null for a re-record asked for by name.
     replacing,
     alreadyOpen: false,
   };
@@ -1410,6 +1410,9 @@ async function beginWizard({ tabId, pattern, agentId = null }) {
   return { ok: true };
 }
 
+/** `Lassoing Notion…` for the recording under way. Every coaching patch carries it. */
+const headingNow = (step) => heading(step, productLabel(wizard?.draft?.domainPattern));
+
 /** Pushes whatever `coaching.js` decided into the orb. */
 async function showCoaching() {
   if (!wizard) return;
@@ -1423,6 +1426,7 @@ async function showCoaching() {
     visible: true,
     coach: {
       step: state.step,
+      heading: headingNow(state.step),
       label: stepLabel(state),
       instruction: instruction(state, wizard.draft),
       captures: captures(wizard.draft),
@@ -1453,10 +1457,10 @@ async function onCapture(event) {
 }
 
 /**
- * Executes the fresh recipe twice, before anyone is asked to name it.
+ * Executes the fresh lasso twice, before anyone is asked to name it.
  *
  * **The dry run is not the two-answer recording**, and conflating them is easy. The recorder
- * needs two answers to find a selector describing *both*; this executes the finished recipe on
+ * needs two answers to find a selector describing *both*; this executes the finished lasso on
  * exchanges it did not witness, and it is the only place two things can be settled, because
  * both are questions about what *we* can do rather than what the user did:
  *
@@ -1464,7 +1468,7 @@ async function onCapture(event) {
  *   works. Whether a dispatched event opens the same panel is a different question with a
  *   different answer per vendor, and the only way to find out is to try.
  * - **Whether the reply selector names one answer repeatedly.** Notion broke this once: a
- *   per-message id made the recipe name *one message*, and the recorder's own 0→1 count passed
+ *   per-message id made the lasso name *one message*, and the recorder's own 0→1 count passed
  *   it, because 0→1 is exactly what a genuine per-reply container looks like on a conversation
  *   holding one reply.
  *
@@ -1487,7 +1491,7 @@ async function dryRun() {
   // while we type text into somebody's assistant.
   await stopCapturing();
 
-  await panel({ phase: 'recording', coach: { label: 'SETTING UP · CHECKING', instruction: 'Checking it works – asking it two questions…', captures: captures(wizard.draft), naming: false } });
+  await panel({ phase: 'recording', coach: { heading: headingNow('checking'), label: 'SETTING UP · CHECKING', instruction: 'Checking it works – asking it two questions…', captures: captures(wizard.draft), naming: false } });
 
   const questions = ['Hello.', 'What can you help me with?'];
   const answers = [];
@@ -1495,7 +1499,7 @@ async function dryRun() {
     // Sequential on purpose: two at once would race the same composer, and the second answer
     // has to *follow* the first to prove the selector finds a new one rather than re-reading
     // the old one.
-    const result = await askOnce(wizard.tabId, built.recipe, prompt)
+    const result = await askOnce(wizard.tabId, built.lasso, prompt)
       .catch((e) => ({ error: e }));
     if (!result || result.error || !result.text) {
       wizard.verifying = false;
@@ -1503,6 +1507,7 @@ async function dryRun() {
       await panel({
         phase: 'recording',
         coach: {
+          heading: headingNow('failed'),
           label: 'SETTING UP · DIDN’T WORK',
           instruction: 'We recorded it, but driving it ourselves didn’t work. That usually means '
             + 'this AI assistant ignores clicks it didn’t get from a person. Nothing has been saved.',
@@ -1520,12 +1525,13 @@ async function dryRun() {
   // finding the new one – the failure the second question exists to catch.
   wizard.verified = answers[0] !== answers[1];
   wizard.verifying = false;
-  wizard.recipe = built.recipe;
+  wizard.lasso = built.lasso;
 
   if (!wizard.verified) {
     await panel({
       phase: 'recording',
       coach: {
+        heading: headingNow('failed'),
         label: 'SETTING UP · DIDN’T WORK',
         instruction: 'We read the same answer twice, so we wouldn’t be able to tell one reply '
           + 'from the next. This AI assistant may not be one we can drive yet.',
@@ -1551,22 +1557,23 @@ async function dryRun() {
   await save();
 }
 
-/** Writes the verified recipe out, as a new agent or over the one being re-recorded. */
+/** Writes the verified lasso out, as a new agent or over the one being re-recorded. */
 async function save() {
-  const recipe = wizard?.recipe;
-  if (!recipe) return;
+  const lasso = wizard?.lasso;
+  if (!lasso) return;
 
   if (wizard.agentId) {
-    await replaceRecipe(wizard.agentId, recipe);
+    await replaceLasso(wizard.agentId, lasso);
     if (wizard.replacing) {
       // Started as a new recording, so the person may not know an assistant was already here.
       const name = wizard.replacing;
       await panel({
         phase: 'recording',
         coach: {
+          heading: headingNow('done'),
           label: 'SETTING UP · DONE',
           instruction: `${name} already worked on this site, so this recording replaced `
-            + `${name}’s recipe. Each site has one AI assistant; its name and voice stay.`,
+            + `${name}’s lasso. Each site has one AI assistant; its name and voice stay.`,
           captures: captures(wizard.draft),
           naming: false,
         },
@@ -1584,17 +1591,17 @@ async function save() {
   // The product as a person writes it – see `productLabel` for how it is cased. When that is
   // still wrong for a brand nobody has written down, renaming takes one click in Settings, which
   // is the whole reason naming moved there.
-  const suggested = productLabel(recipe.domainPattern) || 'Assistant';
+  const suggested = productLabel(lasso.domainPattern) || 'Assistant';
   const name = freeName(agents, suggested);
   // The voice comes from `assignVoices`' accent heuristic rather than being chosen here, and
   // Settings has the picker with previews for anyone who wants a different one.
-  await addAgent({ name, voice: null, recipe });
+  await addAgent({ name, voice: null, lasso });
 
   // **The one thing the dry run cannot check, said out loud.**
   //
   // Verification runs immediately after a recording, so the assistant is still open – which
   // means `askAssistant` never has to trigger it and the opening step is the one part of the
-  // recipe that goes untested. A vendor that ignores scripted keystrokes then passes the dry
+  // lasso that goes untested. A vendor that ignores scripted keystrokes then passes the dry
   // run and fails at the first real question, minutes later, reading as a broken agent.
   //
   // Saying so here is not a substitute for testing it, and it is not marked as a failure –
@@ -1609,6 +1616,7 @@ async function save() {
   await panel({
     phase: 'recording',
     coach: {
+      heading: headingNow('done'),
       label: 'SETTING UP · DONE',
       instruction: `Saved as ${name}. You can rename it in Settings, or just say `
         + `“${name}, …” to talk to it.${caution}`,
@@ -1619,18 +1627,18 @@ async function save() {
   await endWizard();
 }
 
-/** One exchange through the recorded recipe, in the tab it was recorded in. */
-async function askOnce(tabId, recipe, prompt) {
-  // The *input* selector, not the recipe: `frameOwningAssistant` runs one probe per frame and
+/** One exchange through the recorded lasso, in the tab it was recorded in. */
+async function askOnce(tabId, lasso, prompt) {
+  // The *input* selector, not the lasso: `frameOwningAssistant` runs one probe per frame and
   // asks each whether it can see that element. Notion has two frames and only one holds the
   // composer, and without this the promise resolves with whichever answers first.
-  const frameId = await frameOwningAssistant(tabId, recipe.inputSelector);
-  // The same grace a real turn would get, so a recipe is verified under the timing it will run
+  const frameId = await frameOwningAssistant(tabId, lasso.inputSelector);
+  // The same grace a real turn would get, so a lasso is verified under the timing it will run
   // with rather than passing here and misbehaving in a turn.
   const graceMs = await storedGrace();
   return chrome.tabs.sendMessage(
     tabId,
-    { intent: 'ask_assistant', recipe, prompt, graceMs },
+    { intent: 'ask_assistant', lasso, prompt, graceMs },
     frameId == null ? undefined : { frameId },
   );
 }

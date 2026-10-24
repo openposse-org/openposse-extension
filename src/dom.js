@@ -168,7 +168,7 @@ export function deepQuerySelectorAll(selector, root = document, seen = new Set()
  * **It does not resolve on the first new match**, and that cost a working setup. Notion adds a
  * *status* row — "Working on your request", "Connecting a few dots" — before it adds the answer
  * row. Resolving instantly locked onto the status row, streamed its text until it went quiet,
- * and the agent read the progress indicator aloud instead of the joke. The recipe, the routing
+ * and the agent read the progress indicator aloud instead of the joke. The lasso, the routing
  * and the trigger were all correct; only the element was wrong.
  *
  * So once a new match appears, it waits `settleMs` for *further* matches and takes the last —
@@ -396,7 +396,7 @@ export function waitForEnabled(element, { timeoutMs = 3000, reapply } = {}) {
  * the rejection directly — the only signal is that nothing happened — so the caller must time
  * out and report `TIMEOUT`, which the app answers by posting a real event via `CGEventPost`.
  *
- * Do not "fix" this by retrying with different keys. The recipe records which method actually
+ * Do not "fix" this by retrying with different keys. The lasso records which method actually
  * worked for this vendor during setup, so the runtime never has to guess.
  */
 export function pressShortcut(shortcut, target = document) {

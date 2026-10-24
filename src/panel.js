@@ -122,7 +122,7 @@ async function toSidePanel(patch) {
   }
 }
 
-/** The roster as the panel draws it: a name, a letter and a colour. Never a recipe. */
+/** The roster as the panel draws it: a name, a letter and a colour. Never a lasso. */
 async function rosterForPanel() {
   const { agents } = await loadRoster();
   return agents.map((agent) => ({

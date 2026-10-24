@@ -1,0 +1,228 @@
+// The rope loader: a lasso drawn, swung and cast around the assistant's tile, on a 4 s loop.
+//
+// Drawn under the recording's instructions in the side panel, where it says what recording is in
+// one picture: you are catching an AI assistant. **The geometry is the design's own, copied from
+// `src/assets/openposse-rope-loader-*-transparent.html` rather than redrawn**, so the pages there
+// stay the reference for how it should look. What changed is only the wrapping: an extension
+// page cannot run an inline script, so it is a module here, and it follows the page's theme
+// instead of being built once per colour.
+
+const LOOP = 4;   // seconds
+const THEMES = {
+  black: { rope: '#f08a2c', tileFill: '#1f1f24', tileEdge: '#ffaf3b', spark: '#ffaf3b', glint: '#fff1d0' },
+  white: { rope: '#d9661a', tileFill: '#fff4e8', tileEdge: '#e8761f', spark: '#f08a2c', glint: '#ffffff' }
+};
+const ANCHOR = { x: 14, y: 50 }, JEWEL = { x: 160, y: 50 }, SPIN = { x: 46, y: 26 };
+const TILE = 13;  // half-size of the rounded tile
+
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const lerp = (a, b, p) => a + (b - a) * p;
+const ease = u => u < .5 ? 4*u*u*u : 1 - Math.pow(-2*u + 2, 3) / 2;
+const easeOut = u => 1 - Math.pow(1 - u, 3);
+const noise = (s, x) => Math.sin(x*1.7 + s*12.9)*.5 + Math.sin(x*.63 + s*4.1)*.35 + Math.sin(x*3.1 + s*7.7)*.15;
+
+const quad = (a, c, b, n) => Array.from({length: n + 1}, (_, i) => {
+  const t = i / n, u = 1 - t;
+  return { x: u*u*a.x + 2*u*t*c.x + t*t*b.x, y: u*u*a.y + 2*u*t*c.y + t*t*b.y };
+});
+const arc = (c, rx, ry, a0, sweep, n) => Array.from({length: n + 1}, (_, i) => {
+  const a = a0 + sweep * i / n; return { x: c.x + rx*Math.cos(a), y: c.y + ry*Math.sin(a) };
+});
+const squiggle = (a, b, amp, n) => Array.from({length: n + 1}, (_, i) => {
+  const t = i / n; return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) + amp*Math.sin(t*Math.PI*3.2) * Math.sin(t*Math.PI) };
+});
+
+// One thin, slightly uneven line: the hand-drawn feel comes from a gentle fixed wobble, not shimmer.
+function line(ctx, pts, seed, w, color, alpha = 1, amp = .45) {
+  if (pts.length < 2) return;
+  ctx.globalAlpha = alpha; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  pts.forEach((p, i) => {
+    const x = p.x + noise(seed, i * .3) * amp, y = p.y + noise(seed + 1, i * .3) * amp;
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  ctx.strokeStyle = color; ctx.lineWidth = w; ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+function knot(ctx, p, w, color, alpha) {
+  ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = 'round';
+  for (let k = 0; k < 2; k++) {
+    ctx.beginPath();
+    for (let i = 0; i <= 12; i++) {
+      const a = i / 12 * Math.PI * 2 + k * 1.3, r = 2 + k * .9 + noise(k + 4, i) * .3;
+      const x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r * .75;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function star(ctx, c, R, fill) {
+  ctx.beginPath(); ctx.moveTo(c.x, c.y - R);
+  [[R, 0], [0, R], [-R, 0], [0, -R]].reduce((prev, p) => {
+    ctx.quadraticCurveTo(c.x + (prev[0] + p[0]) * .1, c.y + (prev[1] + p[1]) * .1, c.x + p[0], c.y + p[1]);
+    return p;
+  }, [0, -R]);
+  ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+}
+
+function roundedTile(c, h, r, n = 72) {
+  // perimeter of a rounded square, sampled so it can carry the same hand-drawn wobble as the rope
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const a = i / n * Math.PI * 2, cs = Math.cos(a), sn = Math.sin(a);
+    const k = 4.5;  // superellipse exponent: squarish with soft corners
+    const x = Math.sign(cs) * Math.pow(Math.abs(cs), 2 / k) * h;
+    const y = Math.sign(sn) * Math.pow(Math.abs(sn), 2 / k) * h;
+    pts.push({ x: c.x + x, y: c.y + y });
+  }
+  return pts;
+}
+
+function tile(ctx, J, s, th, w, t, caught) {
+  const h = TILE * s;
+  const pts = roundedTile(J, h);
+  ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+  ctx.closePath(); ctx.fillStyle = th.tileFill; ctx.fill();
+  line(ctx, pts, 7, w * .8, th.tileEdge, 1, .3);
+  const tw = caught ? 1 + .12 * Math.sin(t * 9) : 1 + .05 * Math.sin(t * 3);
+  star(ctx, { x: J.x - 1.6 * s, y: J.y + 1.6 * s }, 7 * s * tw, th.spark);
+  star(ctx, { x: J.x + 5.6 * s, y: J.y - 5.6 * s }, 2.8 * s * (caught ? 1 + .25 * Math.sin(t * 9 + 2) : 1 + .15 * Math.sin(t * 3 + 2)), th.spark);
+  // small glint on the big star
+  ctx.strokeStyle = th.glint; ctx.lineWidth = w * .55; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(J.x - 2.6 * s, J.y - 1.8 * s); ctx.lineTo(J.x - 1.9 * s, J.y + .2 * s); ctx.stroke();
+}
+
+function rays(ctx, c, t, th, w) {
+  // a short burst as the lasso closes: eight strokes push out from the tile and fade
+  const p = seg(t, 2.85, 3.3);
+  if (p <= 0 || p >= 1) return;
+  const e = easeOut(p), r0 = lerp(17, 21, e), r1 = lerp(19, 28, e);
+  ctx.globalAlpha = 1 - p; ctx.strokeStyle = th.spark; ctx.lineWidth = w * .85; ctx.lineCap = 'round';
+  for (let i = 0; i < 8; i++) {
+    const a = i / 8 * Math.PI * 2 + Math.PI / 8 + noise(3, i) * .08;
+    const k = i % 2 ? .8 : 1;
+    ctx.beginPath();
+    ctx.moveTo(c.x + Math.cos(a) * r0, c.y + Math.sin(a) * r0);
+    ctx.lineTo(c.x + Math.cos(a) * r1 * k + (1 - k) * Math.cos(a) * r0, c.y + Math.sin(a) * r1 * k + (1 - k) * Math.sin(a) * r0);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function draw(ctx, t, th, w) {
+  ctx.clearRect(0, 0, 200, 100);
+
+  // timeline (s): 0–0.8 draw · 0.8–1.3 curl + knot · 1.3–2.0 swing · 2.0–2.5 cast · 2.5–2.95 drop + cinch · –3.6 hold · –4.0 fade
+  const caught = t >= 2.85 && t < 3.7;
+  const pull = ease(seg(t, 2.9, 3.2)) * (1 - ease(seg(t, 3.55, 3.95)));
+  const J = { x: JEWEL.x - 4 * pull, y: JEWEL.y + (t < 2.5 ? -1.2 * Math.sin(t * 2.4) : 0) };
+  const squeeze = 1 - .06 * Math.sin(Math.PI * seg(t, 2.75, 3.15));
+
+  let loopC = null, rx = 0, ry = 0, ang = 0, sweep = 0, shaft = null, alpha = 1, around = false, sag = 18;
+
+  const SPIN_RATE = 13;                     // rad/s
+  const angC = tt => Math.PI * .8 + SPIN_RATE * (tt - 1.3) * seg(tt, 1.3, 1.5) ** .5;
+  const angCend = angC(2.0);
+  const angTarget = Math.PI + 2 * Math.PI * Math.ceil((angCend - Math.PI) / (2 * Math.PI) + .5);
+
+  if (t < .8) {
+    const p = ease(seg(t, 0, .8));
+    const full = squiggle(ANCHOR, { x: 122, y: 50 }, 3.5, 140);
+    shaft = full.slice(0, Math.max(2, Math.round(full.length * p)));
+  } else if (t < 1.3) {
+    const p = ease(seg(t, .8, 1.3));
+    const end = { x: lerp(122, 92, p), y: 50 };
+    shaft = squiggle(ANCHOR, end, lerp(3.5, 2.5, p), 120);
+    rx = ry = lerp(2, 13, p); ang = Math.PI * .8;
+    loopC = { x: end.x - rx * Math.cos(ang), y: end.y - ry * Math.sin(ang) };
+    sweep = Math.PI * 2 * p;
+  } else if (t < 2.0) {
+    const p = ease(seg(t, 1.3, 1.6));
+    const fromC = { x: 92 - 13 * Math.cos(Math.PI * .8), y: 50 - 13 * Math.sin(Math.PI * .8) };
+    loopC = { x: lerp(fromC.x, SPIN.x, p), y: lerp(fromC.y, SPIN.y, p) };
+    rx = lerp(13, 20, p); ry = lerp(13, 7, p);
+    ang = angC(t); sweep = Math.PI * 2;
+  } else if (t < 2.5) {
+    const p = ease(seg(t, 2.0, 2.5));
+    loopC = { x: lerp(SPIN.x, JEWEL.x, p), y: lerp(SPIN.y, 20, p) - 14 * Math.sin(Math.PI * p) };
+    rx = lerp(20, 21, p); ry = lerp(7, 7.5, p);
+    ang = lerp(angCend, angTarget, easeOut(seg(t, 2.0, 2.5))); sweep = Math.PI * 2;
+  } else {
+    const pd = ease(seg(t, 2.5, 2.75)), pc = ease(seg(t, 2.75, 2.95));
+    loopC = { x: J.x, y: lerp(20, J.y + 1, pd) };
+    rx = lerp(21, TILE * squeeze + 1.6, pc); ry = lerp(7.5, 4, pc);
+    ang = angTarget; sweep = Math.PI * 2; around = pd > .6;
+    sag = lerp(18, 2, seg(t, 2.5, 2.95)) + 1.5 * Math.sin(t * 7) * pull;
+    alpha = 1 - ease(seg(t, 3.6, 3.95));
+  }
+
+  let honda = null;
+  if (loopC) {
+    honda = { x: loopC.x + rx * Math.cos(ang), y: loopC.y + ry * Math.sin(ang) };
+    if (t >= 1.3) shaft = quad(ANCHOR, { x: (ANCHOR.x + honda.x) / 2, y: Math.max(ANCHOR.y, honda.y) + sag - 10 }, honda, 90);
+  }
+
+  if (around) {
+    line(ctx, arc(loopC, rx, ry, Math.PI, Math.PI, 40), 21, w, th.rope, alpha);
+    tile(ctx, J, squeeze, th, w, t, caught);
+    line(ctx, arc(loopC, rx, ry, 0, Math.PI, 40), 22, w, th.rope, alpha);
+  } else {
+    tile(ctx, J, 1, th, w, t, false);
+    if (loopC) line(ctx, arc(loopC, rx, ry, ang, sweep, 80), 20, w, th.rope, alpha);
+  }
+  rays(ctx, J, t, th, w);
+  if (shaft) line(ctx, shaft, 10, w, th.rope, alpha);
+  if (honda && sweep > Math.PI) knot(ctx, honda, w * .8, th.rope, alpha);
+}
+
+
+/** The frame shown instead of the loop when motion is reduced: just caught, with the burst. */
+const STILL = 3.2;
+
+/**
+ * Starts drawing into `canvas` and returns a function that stops it.
+ *
+ * The colours follow `data-theme` on the page each frame, so the theme toggle needs no wiring of
+ * its own: `black` is the dark-mode rope, `white` the light one. The canvas is sized to its
+ * box on every frame it has changed, capped at 2× for a sharp line without a huge buffer.
+ */
+export function startRope(canvas) {
+  const ctx = canvas.getContext('2d');
+  const theme = () => THEMES[document.documentElement.dataset.theme === 'light' ? 'white' : 'black'];
+  let frame = 0;
+
+  const paint = (t) => {
+    const box = canvas.getBoundingClientRect();
+    if (!box.width) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const width = Math.round(box.width * dpr), height = Math.round(box.height * dpr);
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    const k = width / 200;
+    // Keeps the rope about a pixel wide when the canvas is small.
+    const w = Math.max(1.5, 1.1 / (box.width / 200));
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    draw(ctx, t, theme(), w);
+  };
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    // Painted again on the next frame too, in case the canvas had no size yet when this ran.
+    paint(STILL);
+    frame = requestAnimationFrame(() => paint(STILL));
+    return () => cancelAnimationFrame(frame);
+  }
+
+  const t0 = performance.now();
+  const tick = (now) => {
+    paint(((now - t0) / 1000) % LOOP);
+    frame = requestAnimationFrame(tick);
+  };
+  frame = requestAnimationFrame(tick);
+  return () => cancelAnimationFrame(frame);
+}

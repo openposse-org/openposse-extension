@@ -5,7 +5,7 @@
 // recognition, Kokoro, real vendors, Chrome's own Allow dialog, the side panel's frame and the
 // global shortcut.
 
-import { test, expect, addAcme, openPanel, ask, RECIPE, VENDOR_URL, ANSWER } from './browser.mjs';
+import { test, expect, addAcme, openPanel, ask, LASSO, VENDOR_URL, ANSWER } from './browser.mjs';
 
 test('every extension page opens without an error', async ({ context, extensionId }) => {
   // `offscreen.html` too, opened as a tab: Chrome's own offscreen document is not a page these
@@ -53,7 +53,7 @@ test('an assistant shared as a file is added from Settings', async ({ context, e
   const settings = await context.newPage();
   await settings.goto(`chrome-extension://${extensionId}/setup.html`);
 
-  await settings.fill('#import-text', RECIPE);
+  await settings.fill('#import-text', LASSO);
   await expect(settings.locator('#import-add')).toBeEnabled();
   await settings.click('#import-add');
 
@@ -174,28 +174,28 @@ test('a page that renames itself mid-turn keeps its new title', async ({ context
 test('the same shared file twice is recognised, not added again', async ({ context, extensionId }) => {
   const settings = await context.newPage();
   await settings.goto(`chrome-extension://${extensionId}/setup.html`);
-  await settings.fill('#import-text', RECIPE);
+  await settings.fill('#import-text', LASSO);
   await settings.click('#import-add');
   await expect(settings.locator('#import-status')).toHaveText('Added Acme.');
 
-  await settings.fill('#import-text', RECIPE);
+  await settings.fill('#import-text', LASSO);
 
   await expect(settings.locator('#import-status')).toHaveText('You already have this one, as Acme.');
   await expect(settings.locator('#import-add')).toBeDisabled();
   await expect(settings.locator('#import-choice')).toBeHidden();
 });
 
-test('a newer version of a shared assistant replaces its recipe and keeps the assistant', async ({ context, extensionId }) => {
+test('a newer version of a shared assistant replaces its lasso and keeps the assistant', async ({ context, extensionId }) => {
   const settings = await context.newPage();
   await settings.goto(`chrome-extension://${extensionId}/setup.html`);
-  await settings.fill('#import-text', RECIPE);
+  await settings.fill('#import-text', LASSO);
   await settings.click('#import-add');
   await expect(settings.locator('#import-status')).toHaveText('Added Acme.');
   // A voice chosen after adding it, which a replacement must not take away.
   const roster = () => settings.evaluate(async () => {
     const { agents } = await chrome.storage.local.get('agents');
-    const recipes = await chrome.storage.local.get(agents.map((a) => `recipe:${a.recipeID}`));
-    return agents.map((a) => ({ ...a, recipe: recipes[`recipe:${a.recipeID}`] }));
+    const lassos = await chrome.storage.local.get(agents.map((a) => `lasso:${a.lassoID}`));
+    return agents.map((a) => ({ ...a, lasso: lassos[`lasso:${a.lassoID}`] }));
   });
   await settings.evaluate(async () => {
     const { agents } = await chrome.storage.local.get('agents');
@@ -204,34 +204,34 @@ test('a newer version of a shared assistant replaces its recipe and keeps the as
   const before = (await roster())[0];
 
   // Another name, the same site: one site has one assistant, whatever either is called.
-  const newer = JSON.parse(RECIPE);
+  const newer = JSON.parse(LASSO);
   newer.name = 'Acme CRM';
   newer.recordedOn = '2026-10-16';
-  newer.recipe.quietPeriodMs = 700;
+  newer.lasso.quietPeriodMs = 700;
   await settings.fill('#import-text', JSON.stringify(newer));
 
   await expect(settings.locator('#import-question'))
-    .toHaveText('Acme already has a recipe for fixture.test. Replace it with this one, recorded 16 October?');
+    .toHaveText('Acme already has a lasso for fixture.test. Replace it with this one, recorded 16 October?');
   await expect(settings.locator('#import-add')).toBeDisabled();
   await expect(settings.locator('#import-choice button')).toHaveText(['Replace']);
   // Asked directly to add it instead, the worker refuses too.
   expect(await settings.evaluate((text) => chrome.runtime.sendMessage({ kind: 'openposse.agent.import', text }),
     JSON.stringify(newer))).toEqual({
-    ok: false, reason: 'Acme already has a recipe for fixture.test. Replace it instead.',
+    ok: false, reason: 'Acme already has a lasso for fixture.test. Replace it instead.',
   });
   await settings.click('#import-replace');
-  await expect(settings.locator('#import-status')).toHaveText('Replaced Acme’s recipe.');
+  await expect(settings.locator('#import-status')).toHaveText('Replaced Acme’s lasso.');
 
   const after = await roster();
   expect(after).toHaveLength(1);
   expect(after[0]).toMatchObject({ id: before.id, name: 'Acme', voice: 'bf_emma', channel: before.channel });
-  expect(after[0].recipe).toMatchObject({ quietPeriodMs: 700, recordedOn: '2026-10-16' });
+  expect(after[0].lasso).toMatchObject({ quietPeriodMs: 700, recordedOn: '2026-10-16' });
 });
 
-test('when the page no longer has what the recipe clicks, the turn says the recipe is out of date', async ({ context, extensionId }) => {
+test('when the page no longer has what the lasso clicks, the turn says the lasso is out of date', async ({ context, extensionId }) => {
   // Acme as recorded before the fake vendor renamed its button.
-  const stale = JSON.parse(RECIPE);
-  stale.recipe.openSelector = 'button[data-testid="open-assistant-old"]';
+  const stale = JSON.parse(LASSO);
+  stale.lasso.openSelector = 'button[data-testid="open-assistant-old"]';
   const settings = await context.newPage();
   await settings.goto(`chrome-extension://${extensionId}/setup.html`);
   expect(await settings.evaluate((text) => chrome.runtime.sendMessage({ kind: 'openposse.agent.import', text }),
@@ -243,6 +243,6 @@ test('when the page no longer has what the recipe clicks, the turn says the reci
   await ask(panel, 'What is the pipeline total?');
 
   await expect(panel.locator('body')).toContainText(
-    'Acme’s recipe no longer matches Fixture’s page, which has changed. Record it again from Settings.',
+    'Acme’s lasso no longer matches Fixture’s page, which has changed. Lasso it again from Settings.',
     { timeout: 10_000 });
 });

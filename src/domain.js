@@ -1,4 +1,4 @@
-// Turning the host of a recorded page into the pattern a recipe is valid for.
+// Turning the host of a recorded page into the pattern a lasso is valid for.
 //
 // Small, dull code with a security consequence, which is why it is its own file with its own
 // tests. The pattern derived here becomes an optional host permission *and* a content script's
@@ -66,7 +66,7 @@ function isIPLiteral(host) {
  *
  * `*.leanix.net` rather than `demo-au.leanix.net` because vendors put each customer on their
  * own subdomain — a LeanIX user moving between `demo-au` and `acme` is talking to the same
- * assistant, and a recipe pinned to one workspace would look broken the moment they switched.
+ * assistant, and a lasso pinned to one workspace would look broken the moment they switched.
  * Chrome's `*.foo.com` matches `foo.com` itself as well as its subdomains, so the wildcard is a
  * superset of the exact host and never loses the page it was recorded on.
  *
@@ -92,7 +92,7 @@ export function patternForHost(host) {
 }
 
 /**
- * The Chrome match pattern for a recipe's `domainPattern`.
+ * The Chrome match pattern for a lasso's `domainPattern`.
  *
  * **One definition, used by all three of** the optional host-permission request, the dynamic
  * content-script registration, and the tab query. Those three disagreeing is a silent failure

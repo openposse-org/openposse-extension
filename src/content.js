@@ -1,6 +1,6 @@
 // Content script – the only code that touches a vendor's page.
 //
-// It is driven entirely by the recipe the service worker hands it. There are no vendor
+// It is driven entirely by the lasso the service worker hands it. There are no vendor
 // selectors in this file, and there must never be: selectors come from recordings, so a
 // literal `[data-testid=…]` here would mean the recorder is missing a capture step.
 //
@@ -51,22 +51,22 @@ function failure(code, message, extra = {}) {
  * a real control is almost never gated that way. The recorder records what the user did; this
  * just executes it.
  *
- * @returns the method that worked, for `Recipe.triggerMethod`, or null if nothing happened.
+ * @returns the method that worked, for `Lasso.triggerMethod`, or null if nothing happened.
  */
-async function openAssistant(recipe) {
-  if (recipe.openMethod === 'click') {
-    if (!recipe.openSelector) return null;
+async function openAssistant(lasso) {
+  if (lasso.openMethod === 'click') {
+    if (!lasso.openSelector) return null;
     // Wait rather than demand it instantly: the control may be behind a menu that is still
     // rendering, and a page that is working perfectly can fail an immediate lookup.
-    const control = await waitForElement(recipe.openSelector, { timeoutMs: 3000 });
+    const control = await waitForElement(lasso.openSelector, { timeoutMs: 3000 });
     if (!control) return null;
     control.click();
     return 'click';
   }
 
-  if (!recipe.shortcut) return null;
-  pressShortcut(recipe.shortcut, document.activeElement ?? document.body);
-  // Names the route so `Recipe.triggerMethod` never has to guess. A null from the caller is
+  if (!lasso.shortcut) return null;
+  pressShortcut(lasso.shortcut, document.activeElement ?? document.body);
+  // Names the route so `Lasso.triggerMethod` never has to guess. A null from the caller is
   // the `isTrusted` rejection: the browser marks JS-dispatched key events untrusted and some
   // vendors ignore them silently, with no error to catch – the panel not appearing is the
   // only signal there is.
@@ -77,7 +77,7 @@ async function openAssistant(recipe) {
  * Puts a question to the assistant and streams the answer back.
  *
  * Each step reports its own specific failure. A single "couldn't ask the assistant" would be
- * useless here: a missing input means the recipe needs re-recording, while a missing response
+ * useless here: a missing input means the lasso needs re-recording, while a missing response
  * container after a successful submit usually means the vendor renamed one class – different
  * diagnosis, different fix.
  */
@@ -91,12 +91,12 @@ async function openAssistant(recipe) {
  * observer would have to be told about one root at a time.
  *
  * Returns `{ selector, finished(), everSeen(), stop() }` – the same four from both branches,
- * including the one for a recipe with no indicator at all. This comment described a `settled()`
+ * including the one for a lasso with no indicator at all. This comment described a `settled()`
  * that had already been replaced, and the stale name is part of why the no-indicator branch was
  * left returning it for so long.
  *
  * `finished()` is **true only when the indicator was seen and then left.** Never having seen it
- * is not the same claim: a vendor may show nothing, the recipe may predate this, or the selector
+ * is not the same claim: a vendor may show nothing, the lasso may predate this, or the selector
  * may have drifted – and in all three the honest answer is "I don't know", which is what the
  * clock is for.
  */
@@ -107,11 +107,11 @@ function watchBusy(selector, { timeoutMs, steadyMs = 900 }) {
   // `finished()` – the refactor documented below changed the object the other return builds and
   // left this one behind. Nothing calls `settled` any more, and `finished` was simply absent
   // here, so `busy.finished()` at the top of the answer loop threw `busy.finished is not a
-  // function` for **every recipe without a busy indicator**.
+  // function` for **every lasso without a busy indicator**.
   //
   // It went unseen because the vendor recorded at E8 has one, so the path that breaks is the one
-  // a recipe recorded *before* indicators existed takes – and that is the shape every imported
-  // recipe from the `recipes/` directory has. The symptom was a vendor answering normally while
+  // a lasso recorded *before* indicators existed takes – and that is the shape every imported
+  // lasso from the `lassos/` directory has. The symptom was a vendor answering normally while
   // the turn reported TIMEOUT.
   //
   // `finished()` is false rather than true on purpose, per the note above: never having seen an
@@ -174,7 +174,7 @@ function watchBusy(selector, { timeoutMs, steadyMs = 900 }) {
   };
 }
 
-async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
+async function askAssistant({ lasso, prompt, graceMs = null }, emit) {
   // Open the assistant if it is closed, rather than failing.
   //
   // Checking first is what makes the shortcut safe to send at all: these shortcuts are
@@ -185,24 +185,24 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
   // Visible, not merely present. LeanIX keeps the panel mounted when closed, so a presence
   // check reports "already open" for a shut panel – which is exactly what happened the first
   // time this was measured, and it silently skipped the thing under test.
-  let input = deepQuerySelectorVisible(recipe.inputSelector);
+  let input = deepQuerySelectorVisible(lasso.inputSelector);
 
-  // What the page no longer has, for a recipe that opens by click: the button it clicks, or the
+  // What the page no longer has, for a lasso that opens by click: the button it clicks, or the
   // box that should have appeared. That is the sign the page has changed since the recording, and
-  // the worker says so with the recipe's date. A shortcut that opened nothing is more likely the
+  // the worker says so with the lasso's date. A shortcut that opened nothing is more likely the
   // page ignoring synthetic keys, which its own message below explains.
   let missing = null;
   if (!input) {
-    openedBy = await openAssistant(recipe);
-    input = await waitForElement(recipe.inputSelector, { timeoutMs: 3000 });
-    if (!input && recipe.openMethod === 'click') missing = openedBy ? 'input' : 'open';
+    openedBy = await openAssistant(lasso);
+    input = await waitForElement(lasso.inputSelector, { timeoutMs: 3000 });
+    if (!input && lasso.openMethod === 'click') missing = openedBy ? 'input' : 'open';
     if (!input) openedBy = null;
   }
 
   if (!input) {
     return failure(
       ERROR.timeout,
-      recipe.openMethod === 'click'
+      lasso.openMethod === 'click'
         ? 'the AI assistant did not open when its button was clicked'
         // **The old text here told the user to rely on the Mac app**, which is parked – it
         // said "needs the app to post a real event", describing a retry path that no longer
@@ -223,7 +223,7 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
   // Count existing replies BEFORE submitting. On a chat page the previous answers are still
   // in the DOM, so "wait for the response container" would match one of those immediately and
   // we would stream last turn's answer back as though it were this one.
-  const repliesBefore = deepQuerySelectorAll(recipe.responseContainerSelector).length;
+  const repliesBefore = deepQuerySelectorAll(lasso.responseContainerSelector).length;
 
   // Named so it can be re-applied: when the assistant has *just* opened, the framework may
   // not have bound to the input yet, and a value set before that is silently discarded.
@@ -242,12 +242,12 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
 
   // Prefer the button. A click is far less likely to be gated on `isTrusted` than a
   // synthetic Enter, which is why the recorder records the button when one exists.
-  if (recipe.submitMethod === 'click') {
+  if (lasso.submitMethod === 'click') {
     // Wait rather than demand it instantly. A panel that just opened is often still
     // rendering, and some vendors only mount or enable the send control once the input has
     // content – so an immediate lookup fails on a page that is working perfectly.
-    const button = recipe.submitSelector
-      ? await waitForElement(recipe.submitSelector, { timeoutMs: 3000 })
+    const button = lasso.submitSelector
+      ? await waitForElement(lasso.submitSelector, { timeoutMs: 3000 })
       : null;
     if (!button) {
       return failure(ERROR.elementNotFound, 'send button not found', { openedBy });
@@ -271,9 +271,9 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
   }
   emit({ kind: 'tab_state', state: 'answering' });
 
-  // From the recipe, not a constant. The vendor decides how long it thinks for, and a
+  // From the lasso, not a constant. The vendor decides how long it thinks for, and a
   // hardcoded ceiling reports a healthy-but-slow answer as a broken agent.
-  const responseTimeoutMs = recipe.responseTimeoutMs ?? 60000;
+  const responseTimeoutMs = lasso.responseTimeoutMs ?? 60000;
 
   // How long to keep waiting for a row *after* the one we read has gone quiet.
   //
@@ -300,7 +300,7 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
    * strategy it has and `div[data-agent-service-find-row]` was genuinely the tightest thing
    * that described both recorded answers. There is nothing tighter to find.
    *
-   * So the recipe names rows and this decides which row, using the one thing the page cannot
+   * So the lasso names rows and this decides which row, using the one thing the page cannot
    * confuse us about: **we know what we typed.** The row echoing our own prompt is the
    * question, by construction rather than by guess.
    *
@@ -347,9 +347,9 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
   // responses, and only something watching the whole time can tell them apart.
   // `steadyMs` is the vendor's own measured quiet period, so "it has stopped for as long as it
   // ever pauses mid-answer" is the test, rather than a number invented here.
-  const busy = watchBusy(recipe.busySelector, {
+  const busy = watchBusy(lasso.busySelector, {
     timeoutMs: responseTimeoutMs,
-    steadyMs: recipe.quietPeriodMs ?? 900,
+    steadyMs: lasso.quietPeriodMs ?? 900,
   });
 
   // Timed and returned, not logged. This runs in the vendor's page, so a console line lands in
@@ -359,13 +359,13 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
   let passes = 0;
 
   let container = await waitForNewMatch(
-    recipe.responseContainerSelector, repliesBefore,
+    lasso.responseContainerSelector, repliesBefore,
     // `quietPeriodMs` is the vendor's own measured "things have stopped changing", recorded
-    // per recipe rather than guessed – the right order of magnitude for how long to wait in
+    // per lasso rather than guessed – the right order of magnitude for how long to wait in
     // case a status row is about to be followed by the real answer.
     {
       timeoutMs: responseTimeoutMs,
-      settleMs: recipe.quietPeriodMs ?? 900,
+      settleMs: lasso.quietPeriodMs ?? 900,
       choose: withoutOurQuestion,
     }
   );
@@ -376,7 +376,7 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
     // A synthetic Enter is `isTrusted: false` and some vendors ignore it exactly the way they
     // ignore a synthetic shortcut – the text lands in the composer and simply sits there. Both
     // failures time out identically, and they need opposite fixes: one is a slow or broken
-    // assistant, the other means this recipe should have recorded the send *button*.
+    // assistant, the other means this lasso should have recorded the send *button*.
     //
     // Our own prompt, not page content: checking for it reads nothing the user wrote.
     const remaining = (input.value ?? input.textContent ?? '');
@@ -432,8 +432,8 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
       // nothing. A vendor that never adds another pays the grace once and then returns
       // null, ending the loop with the text we already had – which is the right answer for it.
       : await waitForNewMatch(
-        recipe.responseContainerSelector,
-        deepQuerySelectorAll(recipe.responseContainerSelector).length,
+        lasso.responseContainerSelector,
+        deepQuerySelectorAll(lasso.responseContainerSelector).length,
         {
           // **The grace shrinks after the first extra pass.** It exists for the gap between a
           // status row and the answer, which is the model thinking – seconds, and only once.
@@ -445,10 +445,10 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
           // than waited for earlier. While it is still working, this pass is the one that
           // catches the answer row, and shortening it is how a status row got spoken instead.
           timeoutMs: Math.min(
-            pass === 1 && !busy.finished() ? grace : (recipe.quietPeriodMs ?? 900),
+            pass === 1 && !busy.finished() ? grace : (lasso.quietPeriodMs ?? 900),
             responseTimeoutMs,
           ),
-          settleMs: recipe.quietPeriodMs ?? 900,
+          settleMs: lasso.quietPeriodMs ?? 900,
           choose: withoutOurQuestion,
         },
       );
@@ -460,7 +460,7 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
     readFrom = current;
     container = current;
     text = await streamResponse(current, {
-      quietPeriodMs: recipe.quietPeriodMs ?? 900,
+      quietPeriodMs: lasso.quietPeriodMs ?? 900,
       // Partials keep flowing so speech can start early, which is the whole latency argument
       // for driving a page. The cost is that a status row can be spoken before it is known to
       // be one; the app replaces the answer on `.done`, so what is left on screen is right.
@@ -480,7 +480,7 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
     ok: true,
     text,
     repliesBefore,
-    repliesAfter: deepQuerySelectorAll(recipe.responseContainerSelector).length,
+    repliesAfter: deepQuerySelectorAll(lasso.responseContainerSelector).length,
     openedBy,
     // How long the first row took to appear against how long the re-pick loop then spent. The
     // first is the vendor thinking and is not ours to fix; the second is quiet periods and
@@ -494,18 +494,18 @@ async function askAssistant({ recipe, prompt, graceMs = null }, emit) {
       // finished, it has an indicator we never saw, or it has none recorded at all.
       // The selector is included when it did not work, because "there is an indicator recorded
       // and it never cleared" is only actionable if you can see which element was recorded.
-      busy: !recipe.busySelector
+      busy: !lasso.busySelector
         ? 'none'
         : (busy.finished()
           ? 'watched'
-          : `never cleared: ${recipe.busySelector}`),
+          : `never cleared: ${lasso.busySelector}`),
     },
   };
 }
 
 /** Reads the last answer without asking anything – "say that again". */
-function getLastResponse({ recipe }) {
-  const all = deepQuerySelectorAll(recipe.responseContainerSelector);
+function getLastResponse({ lasso }) {
+  const all = deepQuerySelectorAll(lasso.responseContainerSelector);
   // The *last* match. On a chat page the first is the opening reply of the conversation,
   // which is not what "say that again" means.
   const container = all[all.length - 1];
@@ -521,21 +521,21 @@ function getLastResponse({ recipe }) {
  * inherits no TCC permissions from Chrome and the extension cannot post a trusted event at
  * all.
  */
-async function invokeViaShortcut({ recipe }) {
+async function invokeViaShortcut({ lasso }) {
   // Never act blind. These controls are usually *toggles*, so opening one that is already open
   // closes it – turning a working state into a broken one, and looking like the trigger failed.
-  if (deepQuerySelectorVisible(recipe.inputSelector)) {
+  if (deepQuerySelectorVisible(lasso.inputSelector)) {
     return { ok: true, openedBy: 'already-open' };
   }
 
-  const openedBy = await openAssistant(recipe);
+  const openedBy = await openAssistant(lasso);
 
-  const input = await waitForElement(recipe.inputSelector, { timeoutMs: 3000 });
+  const input = await waitForElement(lasso.inputSelector, { timeoutMs: 3000 });
   if (!input) {
     // For a shortcut this is very likely `isTrusted: false` being rejected. There is no
     // fallback: the `CGEventPost` retry belonged to the Mac app, which is parked, and nothing
     // in a browser can post a trusted event. So the honest remedy is a different recording.
-    return failure(ERROR.timeout, recipe.openMethod === 'click'
+    return failure(ERROR.timeout, lasso.openMethod === 'click'
       ? 'the AI assistant did not open when its button was clicked'
       : 'this AI assistant ignores keyboard shortcuts it did not get from a person – '
         + 'record it again, opening the AI assistant by clicking its button');

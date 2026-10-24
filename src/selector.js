@@ -3,7 +3,7 @@
 // Promoted here from `tools/capture.js`, which was the hand-cranked precursor to the recorder
 // and is now built from this module – one implementation, so the selector a user records
 // through the wizard is the same one the DevTools tool reports. Two copies would drift, and the
-// symptom would be a recipe that works when captured by hand and not by the product.
+// symptom would be a lasso that works when captured by hand and not by the product.
 //
 // PRIVACY: everything here reports element *structure* and identifying attributes. It never
 // reads `value`, `textContent`, or any user-entered data. Text is only ever measured by length.
@@ -230,7 +230,7 @@ export function selectorFor(el, { allowMultiple = false, forceStructural = false
   // segments, and on a deeply nested page that cap ended it partway – leaving a *relative*
   // path like `div:nth-of-type(1) > … ×6` that matches anywhere in the document. Measured on
   // Notion: 59 matches, and three different elements producing that identical selector. A
-  // recipe built on it does not fail, which is the problem – `waitForNewMatch` takes the last
+  // lasso built on it does not fail, which is the problem – `waitForNewMatch` takes the last
   // of the 59 and the agent reads out whatever that happens to be.
   //
   // The cap is now a safety limit rather than the usual exit, and anything that hits it is

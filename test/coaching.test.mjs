@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import {
   newDraft, applyCapture, problems, isComplete, outstanding, finish,
 } from '../src/draft.js';
-import { derive, stepLabel, isCancellable, captures, keycaps, PATIENCE_MS } from '../src/coaching.js';
+import { derive, stepLabel, heading, isCancellable, captures, keycaps, PATIENCE_MS } from '../src/coaching.js';
 
 const sel = (css) => ({ css });
 
@@ -40,7 +40,7 @@ test('a correction overwrites rather than being refused', () => {
 });
 
 test('switching how it opens does not leave the other way behind', () => {
-  // The recipe must not claim both. A stale shortcut means the runtime sends a key combination
+  // The lasso must not claim both. A stale shortcut means the runtime sends a key combination
   // that does nothing, then reports the assistant never opened — which reads as a broken agent
   // rather than as a stale field.
   let draft = newDraft('*.notion.so');
@@ -96,33 +96,33 @@ test('a complete draft has no problems and finishes', () => {
 
   const result = finish(draft, { triggerMethod: 'synthetic' });
   assert.ok(result.ok);
-  assert.equal(result.recipe.triggerMethod, 'synthetic');
-  assert.equal('recordedOn' in result.recipe, false, 'no date was given, so none is invented');
+  assert.equal(result.lasso.triggerMethod, 'synthetic');
+  assert.equal('recordedOn' in result.lasso, false, 'no date was given, so none is invented');
 });
 
 test('a saved recording carries the day it was recorded', () => {
-  const { recipe } = finish(complete(), { triggerMethod: 'synthetic', recordedOn: '2026-10-16' });
-  assert.equal(recipe.recordedOn, '2026-10-16');
+  const { lasso } = finish(complete(), { triggerMethod: 'synthetic', recordedOn: '2026-10-16' });
+  assert.equal(lasso.recordedOn, '2026-10-16');
 });
 
-test('a finished recipe carries plain CSS strings, not selector objects', () => {
+test('a finished lasso carries plain CSS strings, not selector objects', () => {
   // The runtime passes these straight into `deepQuerySelectorAll`, while a draft holds
   // `selectorFor`'s full result because the checklist and the two-sample comparison need it.
   // Handing the object through would stringify to "[object Object]", match nothing, and report
-  // ELEMENT_NOT_FOUND on a recipe that had just been recorded *and verified* — a failure that
+  // ELEMENT_NOT_FOUND on a lasso that had just been recorded *and verified* — a failure that
   // would look like vendor drift rather than like a type.
   let draft = complete();
   draft = applyCapture(draft, { kind: 'open', openMethod: 'click', selector: sel('.btn') });
   draft = applyCapture(draft, { kind: 'submit', submitMethod: 'click', selector: sel('.send') });
 
-  const { recipe } = finish(draft, { triggerMethod: 'synthetic' });
+  const { lasso } = finish(draft, { triggerMethod: 'synthetic' });
   for (const key of [
     'openSelector', 'inputSelector', 'submitSelector', 'responseContainerSelector',
   ]) {
-    assert.equal(typeof recipe[key], 'string', `${key} must be a CSS string`);
+    assert.equal(typeof lasso[key], 'string', `${key} must be a CSS string`);
   }
-  assert.equal(recipe.responseContainerSelector, '.reply');
-  assert.equal(recipe.inputSelector, 'div[contenteditable]');
+  assert.equal(lasso.responseContainerSelector, '.reply');
+  assert.equal(lasso.inputSelector, 'div[contenteditable]');
 });
 
 test('an answer container that did not gain a match is the transcript, not a reply', () => {
@@ -297,4 +297,12 @@ test('the checklist skips what was not captured that way', () => {
   const rows = captures(draft);
   assert.equal(rows.find((r) => r.id === 'open').label, 'Opens from');
   assert.equal(rows.find((r) => r.id === 'submit').detail, '↩');
+});
+
+test('the heading names the product while it is caught, and says when it has been', () => {
+  assert.equal(heading('await-open', 'Notion'), 'Lassoing Notion…');
+  assert.equal(heading('failed', 'Notion'), 'Lassoing Notion…');
+  assert.equal(heading('done', 'Notion'), 'Lassoed Notion');
+  // A site `productLabel` cannot name still gets a sentence rather than `Lassoing …`.
+  assert.equal(heading('await-open', ''), 'Lassoing an AI assistant…');
 });

@@ -37,7 +37,7 @@ import {
   markThinking, markDone, VOLATILE_TAIL, hush, pauseVoice, resumeVoice,
 } from './listening.js';
 import { channelOf, pickChannel } from './channels.js';
-import { loadRoster, recipeFor } from './storage.js';
+import { loadRoster, lassoFor } from './storage.js';
 import { productLabel } from './routing.js';
 import { vendorTab } from './tabs.js';
 
@@ -235,7 +235,7 @@ export async function endDemo() {
 async function cast() {
   const { agents } = await loadRoster().catch(() => ({ agents: [] }));
   const real = await Promise.all(agents.slice(0, 2).map(async (agent) => {
-    const pattern = (await recipeFor(agent))?.domainPattern ?? null;
+    const pattern = (await lassoFor(agent))?.domainPattern ?? null;
     return {
       id: agent.id,
       name: agent.name,

@@ -297,7 +297,7 @@ const NAVIGATION_PREFIXES = [
 ];
 
 /**
- * The vendor's name as a person would say it, derived from the recipe's domain.
+ * The vendor's name as a person would say it, derived from the lasso's domain.
  *
  * Nobody says "take me to Ivan" – they say "Notion". The agent's name and its vendor are
  * different strings and only the agent's is in the roster, so the other one has to come from

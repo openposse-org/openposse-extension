@@ -56,12 +56,12 @@ content script's own moments, not to the panel's:
 
 | Title | Starts | Ends |
 |---|---|---|
-| `typing…` | The content script begins putting the prompt into the input (after it has opened the box, if the recipe opens by click or shortcut) | The prompt is submitted |
+| `typing…` | The content script begins putting the prompt into the input (after it has opened the box, if the lasso opens by click or shortcut) | The prompt is submitted |
 | `answering…` | Submit | The answer loop reports the response finished (`finished()` seen-then-left, or the settle passes end) |
 | `done` | The response is captured and sent back | The first of: the person looks at the tab; the next question goes to the same tab; 90 s. On a tab already in view when the answer arrives, 5 s |
 | *(restored)* | Any failure (`result.type !== 'response'`: no box found, timed out, not signed in…) | – |
 
-`typing…` and `answering…` also end by themselves after the recipe's response timeout plus 30 s,
+`typing…` and `answering…` also end by themselves after the lasso's response timeout plus 30 s,
 so a turn that was cut off (the extension reloaded mid-answer) cannot leave one in the strip.
 
 A failure restores the title at once. The panel already explains what went wrong; a tab title
@@ -163,7 +163,7 @@ Once this ships, two small things in `openposse-website`:
 1. ~~**`done` lifetime.**~~ Settled: until the tab is looked at, and at most 90 s. A tab already
    in view never becomes visible, so there `done` lasts 5 s (found on Notion, 2026-10-15: asked
    from its own tab, `done` sat for the full 90 s).
-2. ~~**Recipes that open the box by shortcut.**~~ Settled: `typing` is reported after the box is
+2. ~~**Lassos that open the box by shortcut.**~~ Settled: `typing` is reported after the box is
    open, by either route, and the content script is already in the tab by then.
 3. **Streaming assistants that rewrite the title while answering** (§4.4 handles it, but the
    observer firing on every token is worth measuring once on a real page).

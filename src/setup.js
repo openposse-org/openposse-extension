@@ -6,7 +6,7 @@
 // for tidiness.
 
 import {
-  loadRoster, recipeFor, setMicGranted, micGranted, voiceSpeed, setVoiceSpeed, clampSpeed,
+  loadRoster, lassoFor, setMicGranted, micGranted, voiceSpeed, setVoiceSpeed, clampSpeed,
   orbStyle, setOrbStyle, avatarsByCount, setAvatarsByCount, engineSettings, setVoiceEngine,
   setSupertonicAgreement, clearSupertonicAgreement, setVoiceLanguage,
 } from './storage.js';
@@ -993,7 +993,7 @@ async function refreshRoster() {
   if (problem || agents.length === 0) {
     if (drawing !== rosterDrawn) return;
     target.className = problem ? 'card bad' : 'card';
-    target.textContent = problem ?? 'none yet – record one from the toolbar button';
+    target.textContent = problem ?? 'none yet – lasso one from the toolbar button';
     el('sort-roster').hidden = true;
     search.hidden = true;
     search.value = '';
@@ -1002,7 +1002,7 @@ async function refreshRoster() {
   }
 
   const patterns = Object.fromEntries(await Promise.all(
-    agents.map(async (agent) => [agent.id, (await recipeFor(agent))?.domainPattern])));
+    agents.map(async (agent) => [agent.id, (await lassoFor(agent))?.domainPattern])));
   const icons = await iconPages(patterns);
   const choices = await voiceChoices();
   if (drawing !== rosterDrawn) return;
@@ -1094,7 +1094,7 @@ async function refreshRoster() {
     const isBroken = broken.includes(agent.id);
     kind.className = isBroken ? 'kind bad' : 'kind';
     kind.textContent = isBroken
-      ? 'needs re-recording – its recipe is missing'
+      ? 'needs re-recording – its lasso is missing'
       : productLabel(patterns[agent.id]) || patterns[agent.id] || '';
 
     // A made-up recording from the panel's debug drawer says so, and nothing else about it is
@@ -1244,7 +1244,7 @@ async function refreshRoster() {
     /**
      * A sheet over the list, hung from this row, that `button` opens and closes – the palette's
      * mechanism, so a second click, a click elsewhere and Escape all close it, and opening one
-     * closes any other. The recipe is asked for when it opens, not on every redraw of every row,
+     * closes any other. The lasso is asked for when it opens, not on every redraw of every row,
      * and `fill` writes it in.
      */
     const sheetFor = (button, fill) => {
@@ -1260,16 +1260,16 @@ async function refreshRoster() {
 
         sheet.textContent = 'reading…';
         const result = await chrome.runtime
-          .sendMessage({ kind: 'openposse.agent.recipe', agentId: agent.id })
+          .sendMessage({ kind: 'openposse.agent.lasso', agentId: agent.id })
           .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
 
-        if (!result?.ok || !result.recipe) {
+        if (!result?.ok || !result.lasso) {
           sheet.hidePopover();
-          say(result?.reason ?? 'its recipe is missing', true);
+          say(result?.reason ?? 'its lasso is missing', true);
           return;
         }
         sheet.textContent = '';
-        await fill(sheet, result.recipe);
+        await fill(sheet, result.lasso);
       });
       return sheet;
     };
@@ -1313,7 +1313,7 @@ async function refreshRoster() {
     };
     const block = (text) => {
       const pre = document.createElement('pre');
-      pre.className = 'recipe';
+      pre.className = 'lasso';
       pre.textContent = text;
       return pre;
     };
@@ -1325,13 +1325,13 @@ async function refreshRoster() {
     // Shown before it is saved, because the JSON *is* the review surface. Downloading it silently
     // would make the file the thing you trust without ever having seen it. Shown, it can be read
     // before it is sent and read again by whoever receives it, which is half of what stands
-    // between an imported recipe and a bad host permission. The other half is Chrome's own
+    // between an imported lasso and a bad host permission. The other half is Chrome's own
     // prompt, on the far side.
     const share = tool('share', `Share ${agent.name}`);
-    const sharing = sheetFor(share, async (sheet, recipe) => {
+    const sharing = sheetFor(share, async (sheet, lasso) => {
       // With the agent's lineage when it came from the website, so the file is the same one the
-      // website publishes for this recipe; `pack` adds the date and the hash.
-      const text = toFile(await pack({ name: agent.name, recipe, id: agent.origin?.id }));
+      // website publishes for this lasso; `pack` adds the date and the hash.
+      const text = toFile(await pack({ name: agent.name, lasso, id: agent.origin?.id }));
       const file = filenameFor(agent.name);
 
       const title = document.createElement('h3');
@@ -1363,8 +1363,10 @@ async function refreshRoster() {
       );
     });
 
-    // **Re-record** – same wizard, keeping this agent's name and voice.
-    const again = tool('rotate-ccw', `Record ${agent.name} again`);
+    // **Re-record** – same wizard, keeping this agent's name and voice. Named by the product
+    // rather than the agent ("Lasso Notion again"), because what gets caught is the product's
+    // assistant; the agent's name is only what you call it.
+    const again = tool('rotate-ccw', `Lasso ${productLabel(patterns[agent.id]) || agent.name} again`);
     again.addEventListener('click', async () => {
       again.disabled = true;
       say('opening the page…');
@@ -1582,7 +1584,7 @@ for (const choice of el('sort-menu').querySelectorAll('button[data-sort]')) {
       return;
     }
     const sites = Object.fromEntries(await Promise.all(agents.map(async (agent) => {
-      const pattern = (await recipeFor(agent))?.domainPattern;
+      const pattern = (await lassoFor(agent))?.domainPattern;
       return [agent.id, productLabel(pattern) || pattern || ''];
     })));
     await saveOrder(sortedIDs(agents, choice.dataset.sort, (agent) => sites[agent.id]), 'not sorted');
@@ -1597,7 +1599,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   const keys = Object.keys(changes);
   const watched = ['agents', 'rosterOrder', 'iconSites'];
-  if (!keys.some((key) => watched.includes(key) || key.startsWith('recipe:'))) return;
+  if (!keys.some((key) => watched.includes(key) || key.startsWith('lasso:'))) return;
   redrawRoster();
 });
 
@@ -1629,7 +1631,7 @@ function redrawRoster() {
 // Chrome's prompt says "Read and change your data on notion.so"; this says which assistant that
 // is for, and what it will drive.
 
-/** The recipe waiting to be added, and nothing else. Null whenever the preview is not valid. */
+/** The lasso waiting to be added, and nothing else. Null whenever the preview is not valid. */
 let pending = null;
 
 function showImport(message, bad = false) {
@@ -1665,7 +1667,7 @@ function offer(text) {
 
   // What it will do, in a sentence – the selectors themselves were too technical for the person
   // deciding. The site it names is the one Chrome's prompt will name too.
-  preview.textContent = summarise(read.name, read.recipe, read.recordedOn);
+  preview.textContent = summarise(read.name, read.lasso, read.recordedOn);
   preview.hidden = false;
 
   // **The raw text is kept, not just the parsed result.** The worker re-validates on the bytes
@@ -1676,12 +1678,12 @@ function offer(text) {
 }
 
 /**
- * Whether the file is a version of an assistant already here (`docs/recipe-identity.md`), asked
- * of the worker, which reads the roster's recipes. Adding stays disabled until it answers, so a
+ * Whether the file is a version of an assistant already here (`docs/lasso-identity.md`), asked
+ * of the worker, which reads the roster's lassos. Adding stays disabled until it answers, so a
  * quick click cannot add a second copy of something that should have been a replacement.
  *
- * - The same recipe: there is nothing to add, and the line says which assistant has it.
- * - A different version, or any recipe for a site that already has an assistant: Replace, and
+ * - The same lasso: there is nothing to add, and the line says which assistant has it.
+ * - A different version, or any lasso for a site that already has an assistant: Replace, and
  *   only Replace. One site has one assistant (the user's rule, 2026-10-16).
  * - Neither: added as a new assistant, as before.
  */
@@ -1710,7 +1712,7 @@ async function lookForMatch(waiting) {
   if (match) {
     const had = match.recordedOn ? `, recorded ${spokenDay(match.recordedOn)}` : '';
     const now = waiting.recordedOn ? `, recorded ${spokenDay(waiting.recordedOn)}` : '';
-    el('import-question').textContent = `${match.name} already has a recipe for ${match.site}${had}. `
+    el('import-question').textContent = `${match.name} already has a lasso for ${match.site}${had}. `
       + `Replace it with this one${now}?`;
     el('import-choice').hidden = false;
   } else {
@@ -1728,10 +1730,10 @@ async function lookForMatch(waiting) {
  * or the old step 4. `contains` answers whether the site is *covered*, which is the question.
  */
 async function sayAccess(waiting) {
-  const site = waiting.recipe.domainPattern.replace(/^\*\./, '');
+  const site = waiting.lasso.domainPattern.replace(/^\*\./, '');
   showImport('checking site access…');
   const covered = await chrome.permissions
-    .contains({ origins: [matchPattern(waiting.recipe.domainPattern)] })
+    .contains({ origins: [matchPattern(waiting.lasso.domainPattern)] })
     .catch((error) => {
       console.warn('[openposse] could not check site access –', error?.message ?? error);
       return null;
@@ -1758,7 +1760,7 @@ el('import-file').addEventListener('change', async (event) => {
   try {
     offer(await file.text());
   } catch (error) {
-    // A file that cannot be read is not the same event as a file that is not a recipe, and the
+    // A file that cannot be read is not the same event as a file that is not a lasso, and the
     // person reacts to them differently – one is worth retrying, the other is not.
     showImport(`That file could not be read – ${error?.message ?? error}`, true);
   }
@@ -1773,25 +1775,25 @@ el('import-add').addEventListener('click', () => addPending());
 el('import-replace').addEventListener('click', () => addPending({ replace: pending?.match?.agentId }));
 
 /**
- * Adds what is waiting, or with `replace`, gives that agent its recipe. Called straight from a
+ * Adds what is waiting, or with `replace`, gives that agent its lasso. Called straight from a
  * click, so everything up to the first `await` below still runs inside the gesture.
  */
 async function addPending({ replace = null } = {}) {
   if (!pending) return;                       // the buttons are disabled; this is belt and braces
 
   // **First statement, nothing awaited before it.** See the note above this section. A
-  // replacement asks too: a newer recipe can be for a site the old one was not.
+  // replacement asks too: a newer lasso can be for a site the old one was not.
   const granted = await chrome.permissions.request({
-    origins: [matchPattern(pending.recipe.domainPattern)],
+    origins: [matchPattern(pending.lasso.domainPattern)],
   });
   if (!granted) {
     // Declining is an answer. Nothing is added and the file stays loaded, so the same click
     // works if they change their mind.
-    showImport(`Not added – OpenPosse has no access to ${pending.recipe.domainPattern}.`, true);
+    showImport(`Not added – OpenPosse has no access to ${pending.lasso.domainPattern}.`, true);
     return;
   }
 
-  // The *text* crosses, not the parsed recipe: the worker makes the trust decision itself, on
+  // The *text* crosses, not the parsed lasso: the worker makes the trust decision itself, on
   // the bytes, so this page is not the only thing standing between a forged file and a grant.
   const result = await chrome.runtime
     .sendMessage({ kind: 'openposse.agent.import', text: pending.raw, replace })
@@ -1799,7 +1801,7 @@ async function addPending({ replace = null } = {}) {
 
   if (!result?.ok) { showImport(result?.reason ?? 'could not add it', true); return; }
 
-  if (result.replaced) showImport(`Replaced ${result.name}’s recipe.`);
+  if (result.replaced) showImport(`Replaced ${result.name}’s lasso.`);
   else {
     showImport(result.renamed
       ? `Added as ${result.name} – you already had one by that name.`
@@ -2014,7 +2016,7 @@ const ICON_WAIT_MS = 20_000;
 async function siteIcons() {
   const { agents } = await loadRoster();
   const patterns = Object.fromEntries(await Promise.all(
-    agents.map(async (agent) => [agent.id, (await recipeFor(agent))?.domainPattern])));
+    agents.map(async (agent) => [agent.id, (await lassoFor(agent))?.domainPattern])));
   return { agents, patterns, icons: await iconPages(patterns) };
 }
 

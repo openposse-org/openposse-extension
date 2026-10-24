@@ -12,7 +12,7 @@
 // the permission cannot disagree.
 //
 // **Only sites seen in a tab with an icon are looked up**, for two reasons. The store is keyed by
-// host and a recipe holds only a pattern – `*.leanix.net` names no page anybody visits; their
+// host and a lasso holds only a pattern – `*.leanix.net` names no page anybody visits; their
 // tenant does – so an open tab is where the real host comes from, and it is remembered so the icon
 // outlives the tab. And **Chrome answers a site it has no icon for with its grey globe.** The
 // `forceEmptyDefaultFavicon` option that should send nothing instead did not: a 30-agent mock
