@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.3](https://github.com/openposse-org/openposse-extension/compare/v0.6.2...v0.6.3) (2026-10-24)
+
+
+### Fixes
+
+* **settings:** the GitHub icon and the footer's repository links open the real repository ([725e782](https://github.com/openposse-org/openposse-extension/commit/725e78267e8f568a9b311c0c7eaf1318df0f6c11))
+* **settings:** the GitHub icon and the footer's repository links open the real repository ([#35](https://github.com/openposse-org/openposse-extension/issues/35)) ([e14a0a0](https://github.com/openposse-org/openposse-extension/commit/e14a0a06e1b099618d8aa8b63b6a0382ec91d5bc))
+
 ## [0.6.2](https://github.com/openposse-org/openposse-extension/compare/v0.6.1...v0.6.2) (2026-10-24)
 
 
