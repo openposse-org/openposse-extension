@@ -502,3 +502,68 @@ export function route(utterance, agents, { floorHolder = null } = {}) {
 
   return { problem: 'unknown-agent' };
 }
+
+/**
+ * A typed question with the agent's name taken off the front, the way `route` takes it off a
+ * spoken one: "Matt, what is on this to-do list?" is asked as "what is on this to-do list?".
+ *
+ * **Typing does not go through `route`**, because the text box is already pointed at an agent –
+ * so until 2026-10-24 nothing looked at how a typed sentence began, and people type the way they
+ * speak. The vendor was asked "Matt, what is on this to-do list?" and saw a name it has never
+ * heard of.
+ *
+ * Kept apart from `route` for two reasons:
+ *
+ * - **The rest of the sentence is returned as typed.** `route` hands back normalised words,
+ *   which is harmless for a recogniser's output and wrong for someone's own writing: "to-do"
+ *   would reach the vendor as "to do" and the question mark would go.
+ * - **Exact names only.** Fuzzy matching is a guess that a recogniser misheard, and nothing
+ *   mishears a keyboard. A typo leaves a name in the question; a fuzzy guess could take a real
+ *   word out of it.
+ *
+ * Only the target's own name is taken off. A sentence addressed to a *different* agent is left as
+ * it is, so the box sends where it says it sends, and the longest roster name is matched first so
+ * "Data Team, …" is not cut to "Team, …" for an agent called "Data". A name with nothing after it
+ * is left alone too: an empty question is no better than one with a name in it.
+ *
+ * @param text   what was typed
+ * @param agent  the agent the box is pointed at
+ * @param agents the roster, for telling a longer name apart from the target's
+ */
+export function withoutAddress(text, agent, agents = [agent]) {
+  const words = normalise(text).split(' ').filter(Boolean);
+  const target = normalise(agent?.name);
+  if (!target || words.length === 0) return text;
+  const names = new Set([target, ...agents.map((a) => normalise(a.name))]);
+
+  for (const skip of [0, 1]) {
+    if (skip === 1 && !FILLER.has(words[0])) break;
+    for (let take = Math.min(MAX_NAME_WORDS, words.length - skip); take >= 1; take -= 1) {
+      const fragment = words.slice(skip, skip + take).join(' ');
+      if (!names.has(fragment)) continue;
+      if (fragment !== target) return text;
+      const rest = afterWords(text, skip + take);
+      return rest ? rest : text;
+    }
+  }
+  return text;
+}
+
+/**
+ * What follows the first `count` words of `text`, as written, minus the punctuation that joined
+ * them: "Matt, what…" after one word is "what…". Empty when there is nothing after them.
+ *
+ * A word here is what `normalise` keeps – a run of letters, digits and apostrophes – so the
+ * count lines up with its output word for word.
+ */
+function afterWords(text, count) {
+  const word = /[\p{L}\p{N}']+/gu;
+  let end = 0;
+  for (let i = 0; i < count; i += 1) {
+    if (!word.exec(text)) return '';
+    end = word.lastIndex;
+  }
+  // Only what can sit between a name and a sentence, so a question that opens with a quotation
+  // mark or a bracket keeps it. The dashes are a hyphen, an en-dash and an em-dash.
+  return text.slice(end).replace(/^[\s,.:;!?\-–—]+/u, '');
+}
