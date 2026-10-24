@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import {
   newDraft, applyCapture, problems, isComplete, outstanding, finish,
 } from '../src/draft.js';
-import { derive, stepLabel, heading, isCancellable, captures, keycaps, PATIENCE_MS } from '../src/coaching.js';
+import { derive, stepLabel, heading, instruction, isCancellable, captures, keycaps, PATIENCE_MS } from '../src/coaching.js';
 
 const sel = (css) => ({ css });
 
@@ -168,6 +168,15 @@ test('nothing captured yet means await, and it says which step we are on', () =>
   assert.equal(state.step, 'await-open');
   assert.equal(stepLabel(state), 'SETTING UP · 1 OF 2');
   assert.ok(isCancellable(state));
+});
+
+test('the first step asks for the assistant to be opened, rather than saying it was not', () => {
+  // `problems()` reports the missing open step from the very start, and once greeted every
+  // recording with "We didn't see the AI assistant open" before anyone had tried.
+  const draft = newDraft('*.notion.so');
+  const said = instruction(derive(draft, { sinceArmedMs: 0 }), draft);
+  assert.match(said, /^Open the AI assistant\. Click its button/);
+  assert.doesNotMatch(said, /didn’t see/);
 });
 
 test('an assistant already open is told to close it, not asked to press anything', () => {
