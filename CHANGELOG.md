@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/openposse-org/openposse-extension/compare/v0.6.1...v0.6.2) (2026-10-24)
+
+
+### Fixes
+
+* Supertonic no longer clips the last sound ([#32](https://github.com/openposse-org/openposse-extension/issues/32)) ([c229ba1](https://github.com/openposse-org/openposse-extension/commit/c229ba16877144a1ed3c7a3e23591d61ab33399f))
+
 ## [0.6.1](https://github.com/openposse-org/openposse-extension/compare/v0.6.0...v0.6.1) (2026-10-24)
 
 
