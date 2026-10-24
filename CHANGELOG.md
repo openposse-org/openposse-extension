@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.4](https://github.com/openposse-org/openposse-extension/compare/v0.6.3...v0.6.4) (2026-10-24)
+
+
+### Fixes
+
+* drop the unused alarms permission the Web Store rejected ([#38](https://github.com/openposse-org/openposse-extension/issues/38)) ([97b7061](https://github.com/openposse-org/openposse-extension/commit/97b70613ee878b702c2eae228a9fdd24f7907020))
+
 ## [0.6.3](https://github.com/openposse-org/openposse-extension/compare/v0.6.2...v0.6.3) (2026-10-24)
 
 
