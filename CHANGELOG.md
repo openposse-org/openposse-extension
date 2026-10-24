@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/openposse-org/openposse-extension/compare/v0.5.1...v0.6.0) (2026-10-24)
+
+
+### Features
+
+* recipes carry an id, a date and a hash, and each site has one assistant ([#25](https://github.com/openposse-org/openposse-extension/issues/25)) ([aa15d0e](https://github.com/openposse-org/openposse-extension/commit/aa15d0e6e101875cf63931f68f384bb84732387e))
+
 ## [0.5.1](https://github.com/openposse-org/openposse-extension/compare/v0.5.0...v0.5.1) (2026-10-16)
 
 
