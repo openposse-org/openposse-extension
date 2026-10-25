@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.0](https://github.com/openposse-org/openposse-extension/compare/v0.8.0...v0.9.0) (2026-10-25)
+
+
+### Features
+
+* optional OpenPosse tab group ([#46](https://github.com/openposse-org/openposse-extension/issues/46)) ([43bfd1f](https://github.com/openposse-org/openposse-extension/commit/43bfd1fb5a895c531afa3af7d07721d3489368a7))
+
+
+### Fixes
+
+* welcome page says OpenPosse works with any site's assistant ([#47](https://github.com/openposse-org/openposse-extension/issues/47)) ([1a64a38](https://github.com/openposse-org/openposse-extension/commit/1a64a38006b0eabe75453ed2b088aa53497e8c2e))
+
 ## [0.8.0](https://github.com/openposse-org/openposse-extension/compare/v0.7.0...v0.8.0) (2026-10-25)
 
 
