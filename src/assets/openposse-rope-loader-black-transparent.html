@@ -40,15 +40,24 @@
     const t = i / n; return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) + amp*Math.sin(t*Math.PI*3.2) * Math.sin(t*Math.PI) };
   });
 
-  // One thin, slightly uneven line: the hand-drawn feel comes from a gentle fixed wobble, not shimmer.
-  function line(ctx, pts, seed, w, color, alpha = 1, amp = .45) {
+  // One thin line with a slow, gentle bend: the wobble follows distance along the rope and is drawn
+  // through curve midpoints, so it reads as a fluid hand-drawn stroke rather than a jagged one.
+  function line(ctx, pts, seed, w, color, alpha = 1, amp = .35) {
     if (pts.length < 2) return;
-    ctx.globalAlpha = alpha; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.beginPath();
-    pts.forEach((p, i) => {
-      const x = p.x + noise(seed, i * .3) * amp, y = p.y + noise(seed + 1, i * .3) * amp;
-      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    let d = 0;
+    const q = pts.map((p, i) => {
+      if (i) d += Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y);
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+      const tx = b.x - a.x, ty = b.y - a.y, l = Math.hypot(tx, ty) || 1;
+      const o = amp * Math.sin(d * .09 + seed * 2.3);
+      return { x: p.x - ty / l * o, y: p.y + tx / l * o };
     });
+    ctx.globalAlpha = alpha; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(q[0].x, q[0].y);
+    for (let i = 1; i < q.length - 1; i++) {
+      ctx.quadraticCurveTo(q[i].x, q[i].y, (q[i].x + q[i + 1].x) / 2, (q[i].y + q[i + 1].y) / 2);
+    }
+    ctx.lineTo(q[q.length - 1].x, q[q.length - 1].y);
     ctx.strokeStyle = color; ctx.lineWidth = w; ctx.stroke();
     ctx.globalAlpha = 1;
   }
@@ -57,8 +66,8 @@
     ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = 'round';
     for (let k = 0; k < 2; k++) {
       ctx.beginPath();
-      for (let i = 0; i <= 12; i++) {
-        const a = i / 12 * Math.PI * 2 + k * 1.3, r = 2 + k * .9 + noise(k + 4, i) * .3;
+      for (let i = 0; i <= 32; i++) {
+        const a = i / 32 * Math.PI * 2 + k * 1.3, r = 2 + k * .9 + .2 * Math.sin(a * 2 + k);
         const x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r * .75;
         i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
       }
