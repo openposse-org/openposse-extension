@@ -291,8 +291,18 @@
 
       #desk { margin-top: 20px; }
       #empty { color: var(--text-dim); font-size: 12.5px; margin-bottom: 12px; }
-      /* An unreadable roster is not an empty one, and they must not read the same. */
-      #empty.problem { color: var(--error); }
+      #empty p { margin: 0 0 10px; line-height: 1.45; }
+      #empty #empty-text { color: var(--text); font-size: 13.5px; }
+      #empty .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      #empty .hint { margin: 10px 0 0; color: var(--text-faint); }
+      /* An unreadable roster is not an empty one, and they must not read the same – and nothing
+         is offered on top of it, since it is not an invitation to record a first assistant. */
+      #empty.problem #empty-text { color: var(--error); }
+      #empty.problem .actions, #empty.problem .hint { display: none; }
+      .finish {
+        display: block; width: 100%; margin-bottom: 12px; color: var(--text);
+        font: inherit; font-size: 12.5px; font-weight: 600; text-align: left; cursor: pointer;
+      }
 
       .mic-fix {
         display: block; width: 100%; margin-bottom: 12px;
@@ -425,7 +435,7 @@
         <canvas id="orb"></canvas>
         <div class="dead-mic" id="deadmic" hidden>NOT HEARING ANYTHING – CHECK INPUT</div>
         <!-- A scripted turn, for judging this surface and the voice without spending a vendor
-             query. Scaffolding – see `demo.js`. -->
+             query. Also the empty roster's "Show me what a turn looks like" – see `demo.js`. -->
         <button class="icon demo" id="demo" data-tip-at="end" data-tip-below></button>
         <!-- Ends the demo and clears the panel. Shown only while there is something to stop. -->
         <button class="icon demo-stop" id="demostop" data-tip-at="end" data-tip-below hidden></button>
@@ -457,8 +467,20 @@
       </section>
 
       <section id="desk">
-        <div id="empty" hidden>
-          No AI assistants yet. Open a page with an AI assistant on it, then lasso it.
+        <!-- Setup that is not finished yet, which reopens the welcome page where it left off. -->
+        <button id="finish-setup" class="card finish" hidden>Finish setting up</button>
+
+        <!-- With no assistants, the first one is the only thing worth doing here, so it is a card
+             naming the site in front rather than a sentence. The words are the script's. -->
+        <div id="empty" class="first" hidden>
+          <p id="empty-text">No AI assistants yet. Open a page with an AI assistant on it, then lasso it.</p>
+          <div class="actions" id="empty-actions">
+            <button id="empty-lasso" hidden>Lasso this tab</button>
+            <button class="secondary" id="empty-demo">Show me what a turn looks like</button>
+          </div>
+          <p class="hint" id="empty-hint" hidden>
+            Sign in first if the site asks you to, then press Lasso this tab.
+          </p>
         </div>
 
       </section>

@@ -1036,7 +1036,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
     return true;
   }
   if (request?.kind === 'openposse.demo') {
-    // Scaffolding, reachable only from the panel's own quiet button. See `demo.js`.
+    // The panel's play button and the empty roster's "Show me what a turn looks like". See `demo.js`.
     warmVoice();
     runDemo(readAloud).then(respond, (error) => {
       console.warn('[openposse] the demo turn failed –', error?.message ?? error);
@@ -1055,6 +1055,15 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   if (request?.kind === 'openposse.demo.stop') {
     endDemo().then(() => respond({ ok: true }), (error) => {
       console.warn('[openposse] the demo could not be stopped –', error?.message ?? error);
+      respond({ ok: false, reason: error?.message ?? String(error) });
+    });
+    return true;
+  }
+  if (request?.kind === 'openposse.welcome') {
+    // The side panel's "Finish setting up". Here, because a panel opening a tab itself would put
+    // a second file on the allowlist for the same page.
+    openWelcome().then(() => respond({ ok: true }), (error) => {
+      console.warn('[openposse] could not open the welcome page –', error?.message ?? error);
       respond({ ok: false, reason: error?.message ?? String(error) });
     });
     return true;
@@ -1761,14 +1770,26 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
 hydrateFront();
 watchFront();
 
+/**
+ * Opens the welcome page, OpenPosse's own, in a tab.
+ *
+ * **The one tab this worker may open, and the test holds it to exactly this call.** The worker is
+ * on every turn's path, so `test/tabs.test.mjs` still fails on any other `tabs.create` here; this
+ * one names its own page by a literal and can never open a vendor's site.
+ */
+function openWelcome() {
+  return chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
+}
+
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   console.info('[openposse] extension installed:', reason);
-  // A first install opens Settings, where setup starts: nothing works until the microphone is
-  // allowed and the speech model is in. Only on `install` – an update, which is also what the
-  // reload button in chrome://extensions sends, must not open a tab every time.
+  // A first install opens the welcome page, which walks through setup one card at a time:
+  // nothing works until the microphone is allowed and the speech model is in. Settings stays for
+  // changing things later. Only on `install` – an update, which is also what the reload button
+  // in chrome://extensions sends, must not open a tab every time.
   if (reason === chrome.runtime.OnInstalledReason.INSTALL) {
-    chrome.runtime.openOptionsPage().catch((error) =>
-      console.warn('[openposse] could not open Settings after install:', error?.message ?? error));
+    openWelcome().catch((error) =>
+      console.warn('[openposse] could not open the welcome page after install:', error?.message ?? error));
   }
   // A reload destroys the offscreen document and clears session storage, but the badge is the
   // browser's and survives – so without this the toolbar claims a microphone is open that

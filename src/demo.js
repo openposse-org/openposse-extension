@@ -26,9 +26,9 @@
 //   selection, the Kokoro/system-voice routing and the `UNSPOKEN_COPY` failure path. That is
 //   most of what "test the voice without calling Notion" has to mean.
 //
-// **Kept as a product feature, by decision of 2026-10-24.** It is reachable from a quiet button
-// and nothing else for now; it is to become a "show me what a turn looks like" for the empty
-// roster, which is a real first-run gap, rather than a dev tool somebody forgot to take out.
+// **Kept as a product feature, by decision of 2026-10-24.** It is the empty roster's "Show me
+// what a turn looks like", which fills a real first-run gap, as well as the quiet button over the
+// panel's sphere.
 
 import { panel, panelLevel } from './panel.js';
 import { beginTurn, trace } from './trace.js';

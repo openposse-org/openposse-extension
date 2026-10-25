@@ -77,6 +77,9 @@ against a SHA-256 baked into the build; a mismatch throws the file away.
 `tabs.create`, `windows.create`, `tabs.update` with a `url`, or `window.open`. Find the tab with
 `vendorTab` in `src/tabs.js`. `test/tabs.test.mjs` enforces this; do not widen its allowlist.
 Asking does not switch tabs either; navigation is something the user asks for ("show me").
+**The one exception is first-run onboarding**, decided by the maintainer on 2026-10-25: the
+welcome page (`welcome.js`) may open a site when one of its tiles is clicked. The worker may open
+the welcome page itself by one exact call, which the test spells out, and nothing else.
 
 **No vendor in `manifest.json`.** Sites are granted one origin at a time through
 `permissions.request()` from a button in the side panel, and registered with

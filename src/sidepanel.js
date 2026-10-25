@@ -38,6 +38,7 @@ import { bindThemeKey, watchTheme } from './theme.js';
 import { startRope } from './rope.js';
 import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
+import { micState, modelState, shortcutKey, unfinished } from './steps.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -346,7 +347,7 @@ function renderCoach() {
  * it would hit storage per agent on every phase change, six times a turn, to draw the same four
  * strings. `load()` fetches; `draw()` is synchronous and cheap and runs whenever the turn moves.
  */
-let roster = { agents: [], broken: [], problem: null, products: {}, patterns: {}, icons: {} };
+let roster = { agents: [], broken: [], problem: null, products: {}, patterns: {}, icons: {}, read: false };
 
 /** Whom the text box is currently aimed at. Survives re-renders; the roster does not own it. */
 let aimedAt = null;
@@ -380,12 +381,12 @@ async function loadRosterData() {
     products[agent.id] = productLabel(patterns[agent.id]) || null;
   }));
   // Empty unless site icons are switched on in Settings – see favicons.js.
-  roster = { agents, broken, problem, products, patterns, icons: await iconPages(patterns) };
+  roster = { agents, broken, problem, products, patterns, icons: await iconPages(patterns), read: true };
   drawRoster();
 }
 
 async function drawRoster() {
-  const { agents, broken, problem } = roster;
+  const { agents, broken } = roster;
   // Mid-turn the patch is authoritative and arrives ahead of session storage; between turns
   // storage is the only source. Reading both in that order keeps the lit ring honest either way.
   const active = state.agentName ?? await floorHolderName();
@@ -395,13 +396,7 @@ async function drawRoster() {
   // the popup and the orb destructured past it, so that failure and a genuinely empty roster
   // rendered as the same screen: an invitation to record your first assistant, offered to
   // somebody who already has five. A reason that exists and is not shown is a bug.
-  const empty = el('empty');
-  empty.hidden = agents.length > 0;
-  empty.classList.toggle('problem', Boolean(problem));
-  if (agents.length === 0) {
-    empty.textContent = problem
-      ?? 'No AI assistants yet. Open a page with an AI assistant on it, then lasso it.';
-  }
+  drawEmpty();
 
   const target = el('avatars');
   target.textContent = '';
@@ -716,6 +711,7 @@ async function paintSite() {
 
   el('record').disabled = !site.pattern;
   label(el('record'), site.pattern ? `Lasso the AI assistant on ${site.host}` : site.why);
+  drawEmpty();
 }
 
 /**
@@ -732,6 +728,55 @@ function say(text) {
   note.hidden = false;
 }
 
+// ── The first assistant, and setup left unfinished ─────────────────────────────────────────
+
+/**
+ * The empty roster, as a card about the tab in front: "Is there an AI assistant on notion.com?"
+ * with the same Lasso this tab the dock has, and the scripted turn for seeing what one looks like
+ * before recording anything. On a page nothing can drive, it says where to go instead.
+ *
+ * Drawn from both halves of what it depends on – the roster and the tab in front – and only
+ * once the roster has been read, so a panel with five assistants never flashes an invitation.
+ */
+function drawEmpty() {
+  const { agents, problem, read } = roster;
+  const empty = el('empty');
+  empty.hidden = !read || agents.length > 0;
+  empty.classList.toggle('problem', Boolean(problem));
+  if (empty.hidden) return;
+
+  const recordable = Boolean(site.pattern);
+  el('empty-text').textContent = problem
+    ?? (recordable ? `Is there an AI assistant on ${site.host}?`
+      : 'No AI assistants yet. Open the site where your AI assistant lives.');
+  el('empty-lasso').hidden = !recordable;
+  el('empty-hint').hidden = !recordable;
+}
+
+el('empty-lasso').addEventListener('click', lassoThisTab);
+el('empty-demo').addEventListener('click', () => playDemo());
+
+/**
+ * "Finish setting up", while something OpenPosse needs is still to do. Read from Chrome each time
+ * the panel opens or comes back into view, the way the welcome page reads it – see `steps.js`.
+ */
+async function paintFinish() {
+  try {
+    const [mic, model, shortcut] = await Promise.all([micState(), modelState(), shortcutKey()]);
+    el('finish-setup').hidden = !unfinished({ mic, model, shortcut });
+  } catch (error) {
+    console.warn('[openposse] could not read the setup steps –', error?.message ?? error);
+  }
+}
+
+el('finish-setup').addEventListener('click', () => {
+  chrome.runtime.sendMessage({ kind: 'openposse.welcome' })
+    .then((answer) => {
+      if (!answer?.ok) say(`The setup page didn’t open – ${answer?.reason ?? 'no reason given'}`);
+    })
+    .catch((error) => say(`The setup page didn’t open – ${error?.message ?? error}`));
+});
+
 // **First statement, nothing awaited before it.** See `site` above.
 el('grant').addEventListener('click', () => {
   if (!site.pattern) return;
@@ -739,7 +784,10 @@ el('grant').addEventListener('click', () => {
     .then(paintSite, (error) => say(`Chrome refused the request – ${error?.message ?? error}`));
 });
 
-el('record').addEventListener('click', async () => {
+el('record').addEventListener('click', lassoThisTab);
+
+/** The dock's Lasso button and the empty roster's "Lasso this tab": one path, one gesture rule. */
+async function lassoThisTab() {
   if (!site.pattern) {
     say(site.why);
     console.warn('[openposse] record pressed with no recordable tab –', site.why);
@@ -756,7 +804,7 @@ el('record').addEventListener('click', async () => {
   }
 
   await chrome.runtime.sendMessage({ kind: 'openposse.record', tabId, pattern });
-});
+}
 
 el('settings').addEventListener('click', (event) => {
   event.preventDefault();
@@ -863,7 +911,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.agents || changes.rosterOrder || Object.keys(changes).some((k) => k.startsWith('lasso:'))) {
     loadRosterData();
   }
-  if (changes.micGranted) checkMic();
+  if (changes.micGranted) { checkMic(); paintFinish(); }
   if (changes[ORB_STYLE_KEY]) showOrbStyle(orbStyleOf(changes[ORB_STYLE_KEY].newValue));
   if (changes[AVATAR_SIZING_KEY]) {
     byCount = avatarsByCountOf(changes[AVATAR_SIZING_KEY].newValue);
@@ -925,13 +973,18 @@ function holdDemo(kind, next, what) {
 el('demo').addEventListener('click', () => {
   if (demo === 'playing') { holdDemo('openposse.demo.pause', 'paused', 'paused'); return; }
   if (demo === 'paused') { holdDemo('openposse.demo.resume', 'playing', 'resumed'); return; }
+  playDemo();
+});
+
+/** Starts the scripted turn. Also the empty roster's "Show me what a turn looks like". */
+function playDemo() {
   runs += 1;
   const run = runs;
   showDemo('playing');
   chrome.runtime.sendMessage({ kind: 'openposse.demo' })
     .catch((error) => console.warn('[openposse] the demo could not start –', error?.message ?? error))
     .finally(() => { if (run === runs) showDemo('idle'); });
-});
+}
 
 el('demostop').addEventListener('click', () => {
   // Idle at once, rather than when the stopped run returns: see `runs`.
@@ -1011,4 +1064,8 @@ renderTurn();
 loadRosterData();
 checkMic();
 paintSite();
+paintFinish();
+// The model and the shortcut have no change event the panel can hear, and both are finished on
+// other pages, so they are read again whenever the panel comes back into view.
+document.addEventListener('visibilitychange', () => { if (!document.hidden) paintFinish(); });
 requestAnimationFrame(tick);

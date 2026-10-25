@@ -6,7 +6,7 @@
 // for tidiness.
 
 import {
-  loadRoster, lassoFor, setMicGranted, micGranted, voiceSpeed, setVoiceSpeed, clampSpeed,
+  loadRoster, lassoFor, voiceSpeed, setVoiceSpeed, clampSpeed,
   orbStyle, setOrbStyle, avatarsByCount, setAvatarsByCount, engineSettings, setVoiceEngine,
   setSupertonicAgreement, clearSupertonicAgreement, setVoiceLanguage,
 } from './storage.js';
@@ -27,9 +27,7 @@ import {
 } from './weights.js';
 import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
-
-const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
-const LANGS = { langs: ['en-US'], processLocally: true };
+import { micState, askForMic, modelState, installModel, shortcutKey } from './steps.js';
 
 const el = (id) => document.getElementById(id);
 /**
@@ -54,22 +52,16 @@ for (const button of document.querySelectorAll('[data-icon]')) {
 }
 
 // ── 1. Microphone ──────────────────────────────────────────────────────────────────────────
-
-/** The one state `permissions.query` is unambiguous about, and the one we cannot fix. */
-async function isBlocked() {
-  try {
-    return (await navigator.permissions.query({ name: 'microphone' })).state === 'denied';
-  } catch {
-    return false;
-  }
-}
+//
+// The reading and the asking live in `steps.js`, shared with the welcome page.
 
 async function refreshMic() {
-  const granted = await micGranted();
+  const state = await micState();
+  const granted = state === 'granted';
   if (granted) {
     setStatus('mic-status', 'granted', 'good');
   } else {
-    const blocked = await isBlocked();
+    const blocked = state === 'blocked';
     setStatus('mic-status', blocked
       ? 'blocked by Chrome – allow it in this extension’s site settings'
       : 'not granted', blocked ? 'bad' : 'warn');
@@ -82,17 +74,9 @@ async function refreshMic() {
 el('grant-mic').addEventListener('click', async () => {
   setStatus('mic-status', 'asking…');
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    // Released at once. The *grant* is what persists; holding the device would light the
-    // recording indicator for no reason and worry people.
-    for (const track of stream.getTracks()) track.stop();
-
-    // Recorded here because this is the only place that knows. Everywhere else has to infer
-    // it from an API that answers `prompt` in three different situations – see `storage.js`.
-    await setMicGranted(true);
+    await askForMic();
     await refreshMic();
   } catch (error) {
-    await setMicGranted(false);
     setStatus('mic-status', `${error.name} – ${error.message}`, 'bad');
   }
 });
@@ -100,14 +84,14 @@ el('grant-mic').addEventListener('click', async () => {
 // ── 2. Speech model ────────────────────────────────────────────────────────────────────────
 
 async function refreshModel() {
-  if (!SR?.available) {
+  const state = await modelState();
+  if (state === 'unsupported') {
     setStatus('model-status', 'this browser has no on-device speech recognition', 'bad');
     el('install-model').disabled = true;
     return false;
   }
-  const state = await SR.available(LANGS);
-  const ready = state === 'available';
-  const words = { available: 'ready', downloadable: 'not downloaded yet', downloading: 'downloading…' };
+  const ready = state === 'ready';
+  const words = { ready: 'ready', downloadable: 'not downloaded yet', downloading: 'downloading…' };
   setStatus('model-status', words[state] ?? state, ready ? 'good' : 'warn');
   markDone('step-model', ready);
   el('install-model').disabled = ready || state === 'unavailable';
@@ -124,7 +108,7 @@ async function refreshModel() {
 el('install-model').addEventListener('click', async () => {
   setStatus('model-status', 'downloading…');
   try {
-    await SR.install(LANGS);
+    await installModel();
   } catch (error) {
     setStatus('model-status', `failed: ${error.message}`, 'bad');
     return;
@@ -143,11 +127,11 @@ el('install-model').addEventListener('click', async () => {
 // of ours. `chrome.tabs.create` can.
 
 async function refreshShortcut() {
-  const summon = (await chrome.commands.getAll()).find((c) => c.name === 'summon');
+  const key = await shortcutKey();
   // Deliberately not claiming it is global. Nothing in the API reports that, and saying "press
   // it anywhere" about a Chrome-only binding would be a promise the product cannot keep.
-  setStatus('shortcut-status', summon?.shortcut || 'none assigned', summon?.shortcut ? 'good' : 'warn');
-  markDone('step-shortcut', Boolean(summon?.shortcut));
+  setStatus('shortcut-status', key || 'none assigned', key ? 'good' : 'warn');
+  markDone('step-shortcut', Boolean(key));
 }
 
 el('open-shortcuts').addEventListener('click', async () => {
