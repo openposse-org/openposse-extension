@@ -22,8 +22,9 @@
 
 export const GROUPING = { permissions: ['tabGroups'] };
 export const GROUP_TITLE = 'OpenPosse';
-// Fixed, and not `orange`, which is the colour Claude in Chrome's group uses.
-export const GROUP_COLOUR = 'purple';
+// Fixed. Chrome's nearest to the design system's accent, `--blue` in ui.css (#007aff, #0a84ff
+// dark), the owner's choice of 2026-10-25. Never `orange`, the colour Claude in Chrome's group uses.
+export const GROUP_COLOUR = 'blue';
 
 const KEY = 'grouping';
 const NONE = -1;

@@ -38,7 +38,7 @@ test('a question puts the vendor tab in one OpenPosse group, and the next keeps 
 
   await askAndWait(panel, vendor, 'What is the pipeline total?', 0);
   await expect.poll(async () => (await groups(panel)).groups).toEqual([
-    expect.objectContaining({ title: 'OpenPosse', color: 'purple' }),
+    expect.objectContaining({ title: 'OpenPosse', color: 'blue' }),
   ]);
   const first = await groups(panel);
   expect(first.tabs[0].groupId).toBe(first.groups[0].id);
