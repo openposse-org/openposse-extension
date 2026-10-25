@@ -48,7 +48,7 @@ What they check:
   fails gives the tab its own title back, and a page that renames itself mid-turn keeps the new
   name.
 - **The OpenPosse tab group** (`grouping.spec.mjs`), against Chrome's real `tabGroups` API: a
-  question puts the vendor's tab in one blue group called OpenPosse, and the next keeps it
+  question puts the vendor's tab in one orange group called OpenPosse, and the next keeps it
   there; a tab dragged out rejoins; a tab in a group of the user's own, or pinned, is left where
   it is and still answers; a grouped tab is asked rather than the one in front; a renamed group is
   left alone and the next tab gets a fresh one; a second window gets its own. These tests run a
