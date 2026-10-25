@@ -15,6 +15,11 @@ and checked by `tools/check-zip.sh`) attached to it. Pull request titles become 
 Conventional Commits (`feat: …`, `fix: …`); `docs:`, `chore:`, `test:`, `build:` and `ci:` are
 left out of it.
 
+Until 1.0 every release is a patch: `feat:` and `fix:` both give 0.9.1, 0.9.2 and so on, and a
+breaking change (`feat!:`) gives the next minor, never 1.0.0. That is set by
+`bump-patch-for-minor-pre-major` and `bump-minor-pre-major` in `release-please-config.json`.
+1.0 happens only when asked for: merge a commit whose body has the line `Release-As: 1.0.0`.
+
 ## How a beta reaches testers
 
 1. A pull request merges into `main`.
