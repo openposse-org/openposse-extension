@@ -17,27 +17,13 @@ test('every extension page opens without an error', async ({ context, extensionI
     await test.step(name, async () => {
       const page = await context.newPage();
       const pending = new Set();
-      const seen = [];
-      const start = Date.now();
-      page.on('request', (request) => { pending.add(request); seen.push(`+${Date.now() - start} ${request.resourceType()} ${request.url()}`); });
-      page.on('requestfinished', (request) => { pending.delete(request); seen.push(`=${Date.now() - start} ${request.url()}`); });
-      page.on('requestfailed', (request) => { pending.delete(request); seen.push(`x${Date.now() - start} ${request.url()} ${request.failure()?.errorText}`); });
-      // DIAGNOSTIC (temporary): what Chromium itself reports, beneath Playwright's own tracking.
-      const cdp = await context.newCDPSession(page);
-      const raw = new Map();
-      cdp.on('Network.requestWillBeSent', (e) => raw.set(e.requestId, `${e.type} ${e.request.url}`));
-      cdp.on('Network.loadingFinished', (e) => raw.delete(e.requestId));
-      cdp.on('Network.loadingFailed', (e) => raw.delete(e.requestId));
-      cdp.on('Page.lifecycleEvent', (e) => seen.push(`lifecycle +${Date.now() - start} ${e.name}`));
-      await cdp.send('Network.enable');
-      await cdp.send('Page.enable');
-      await cdp.send('Page.setLifecycleEventsEnabled', { enabled: true });
+      page.on('request', (request) => pending.add(request.url()));
+      page.on('requestfinished', (request) => pending.delete(request.url()));
+      page.on('requestfailed', (request) => pending.delete(request.url()));
       await page.goto(`chrome-extension://${extensionId}/${name}`);
       // Long enough for each page's startup work to finish, so an error in it is caught too.
       await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch((error) => {
-        const waiting = [...pending].map((request) => `${request.resourceType()} ${request.url()}`);
-        throw new Error(`${name} never went quiet; still waiting on: ${waiting.join(', ') || 'nothing Playwright saw'} (${error.message})`
-          + `\nChromium still loading: ${[...raw.values()].join(', ') || 'nothing'}\n${seen.join('\n')}`);
+        throw new Error(`${name} never went quiet; still waiting on: ${[...pending].join(', ') || 'nothing Playwright saw'} (${error.message})`);
       });
       await expect(page).toHaveTitle(/OpenPosse/);
       await page.close();
