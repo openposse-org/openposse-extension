@@ -62,6 +62,9 @@
       .tile { display: flex; flex-direction: column; align-items: center; gap: 8px;
               padding: 16px 8px; background: var(--well); color: var(--text);
               border: 1px solid var(--line); border-radius: var(--radius-card); font-weight: 500; }
+      .beyond { padding: 10px 14px; border-radius: var(--radius-card); background: var(--sunk);
+                border: 1px solid var(--line); }
+      .beyond strong { color: var(--text); font-weight: 600; }
       .tile:hover { border-color: rgb(var(--ink) / 0.3); }
       .tile .mono { width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center;
                     font-weight: 700; font-size: 17px; color: #fff; background: var(--tile); }
@@ -142,8 +145,10 @@
           <h2>Add your first assistant</h2>
           <p>We suggest starting with one of these:</p>
           <div class="tiles" id="tiles"></div>
-          <p>
-            Or open any site with an AI assistant on it. Sign in if you need to, then press
+          <!-- The six are a start, not a list of what works: any site's assistant can be lassoed. -->
+          <p class="beyond">
+            <strong>Not just these six.</strong> OpenPosse works with the AI assistant on almost
+            any website. Open the site, sign in if you need to, then press
             <strong>Lasso this tab</strong> in the side panel.
           </p>
           <div class="actions"><button class="secondary" id="open-panel">Open OpenPosse</button></div>
