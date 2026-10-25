@@ -963,7 +963,7 @@
         padding: 14px 22px; border-top: 1px solid var(--line);
       }
       .ob-foot .spacer { margin-left: auto; }
-      .ob-foot #ob-next { color: #fff; }
+      :is(.ob-foot #ob-next, #open-onboarding) { color: #fff; }
       .ob-foot .ob-note { margin: 0; color: var(--text-dim); }
       #onboarding .link {
         background: none; padding: 8px 4px; color: var(--text-dim); font-weight: 400;
@@ -1052,7 +1052,7 @@
             Everything runs on this machine – speech recognition included.
           </p>
           <!-- Back to onboarding, after "Finish later" or any time. -->
-          <p><button class="secondary" id="open-onboarding">Open the guided setup</button></p>
+          <p><button id="open-onboarding">Open the guided setup</button></p>
 
           <section class="step" id="step-mic">
             <div class="num">1</div>
