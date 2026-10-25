@@ -12,12 +12,22 @@ test('every extension page opens without an error', async ({ context, extensionI
   // tests watch, so a module that throws as it loads there (it carries ONNX Runtime for
   // Supertonic) would otherwise only ever show up as a voice that never speaks.
   for (const name of ['setup.html', 'welcome.html', 'sidepanel.html', 'offscreen.html']) {
-    const page = await context.newPage();
-    await page.goto(`chrome-extension://${extensionId}/${name}`);
-    // Long enough for each page's startup work to finish, so an error in it is caught too.
-    await page.waitForLoadState('networkidle');
-    await expect(page).toHaveTitle(/OpenPosse/);
-    await page.close();
+    // A step per page, so a page that never settles is named in the failure rather than left
+    // to be guessed from a timeout, and so are the requests it was still waiting on.
+    await test.step(name, async () => {
+      const page = await context.newPage();
+      const pending = new Set();
+      page.on('request', (request) => pending.add(request.url()));
+      page.on('requestfinished', (request) => pending.delete(request.url()));
+      page.on('requestfailed', (request) => pending.delete(request.url()));
+      await page.goto(`chrome-extension://${extensionId}/${name}`);
+      // Long enough for each page's startup work to finish, so an error in it is caught too.
+      await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch((error) => {
+        throw new Error(`${name} never went quiet; still waiting on: ${[...pending].join(', ') || 'nothing Playwright saw'} (${error.message})`);
+      });
+      await expect(page).toHaveTitle(/OpenPosse/);
+      await page.close();
+    });
   }
 });
 
