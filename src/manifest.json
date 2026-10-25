@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OpenPosse",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Talk to the AI assistants you already use. It listens, works out who you meant, and asks them.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAntJt/0RYFRcbhoF0gWbeapbOpfU/1Rdx/VBSEM3fJ53Yc5LhSZYbHuQevPzqUhhnBSINuOxxRH5f50r87C17O5VXzzf1bfoKSHHLU4u17vq9w02HAaG4OyJy+AepulSXpFXBr6IdyuE0LAjebDBtcpF9tqC0SM34Q2LmaUX5RcgdVxx1FyloxH3YMKgYvxxoIlXB/ygD2o+bTXdemJ4TDcKiaNHmw+S/h7VsnL/p516zbEda2QiM8/gTlXVSYZRvZYBW9c0MhDYmF8aI1cQllfKOEwZH9lqkaC27owwrwJL37FJCqpuxIzMJWAe0d6Sf84tf+W8rjXmohETUGWc7LwIDAQAB",
   "background": {

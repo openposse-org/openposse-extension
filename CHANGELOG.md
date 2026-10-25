@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/openposse-org/openposse-extension/compare/v0.7.0...v0.8.0) (2026-10-25)
+
+
+### Features
+
+* first-run onboarding with a welcome page, site tiles and an empty-panel card ([00e1be9](https://github.com/openposse-org/openposse-extension/commit/00e1be93272edc266e832089de110c9ef841e3fe))
+
 ## [0.7.0](https://github.com/openposse-org/openposse-extension/compare/v0.6.4...v0.7.0) (2026-10-24)
 
 
