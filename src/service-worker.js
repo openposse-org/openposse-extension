@@ -32,6 +32,7 @@ import { GRACE_OVERRIDE_KEY } from './grace.js';
 import { matchPattern } from './domain.js';
 import { vendorTab } from './tabs.js';
 import { joinGroup, expandGroupOf, leaveGroup, reconcileGroups } from './grouping.js';
+import { requestOnboarding } from './steps.js';
 import { DONE_MS } from './title.js';
 import { hashOf, matchFor, staleness, today, unpack } from './share.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
@@ -1069,11 +1070,10 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
     });
     return true;
   }
-  if (request?.kind === 'openposse.welcome') {
-    // The side panel's "Finish setting up". Here, because a panel opening a tab itself would put
-    // a second file on the allowlist for the same page.
-    openWelcome().then(() => respond({ ok: true }), (error) => {
-      console.warn('[openposse] could not open the welcome page –', error?.message ?? error);
+  if (request?.kind === 'openposse.onboarding') {
+    // The side panel's "Finish setting up": Settings, with onboarding over it.
+    openOnboarding().then(() => respond({ ok: true }), (error) => {
+      console.warn('[openposse] could not open onboarding –', error?.message ?? error);
       respond({ ok: false, reason: error?.message ?? String(error) });
     });
     return true;
@@ -1785,25 +1785,23 @@ hydrateFront();
 watchFront();
 
 /**
- * Opens the welcome page, OpenPosse's own, in a tab.
- *
- * **The one tab this worker may open, and the test holds it to exactly this call.** The worker is
- * on every turn's path, so `test/tabs.test.mjs` still fails on any other `tabs.create` here; this
- * one names its own page by a literal and can never open a vendor's site.
+ * Opens Settings with onboarding over it: the request is left first, so the Settings that loads –
+ * or the one already open, which `openOptionsPage()` only brings to the front – finds it.
  */
-function openWelcome() {
-  return chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
+async function openOnboarding() {
+  await requestOnboarding();
+  await chrome.runtime.openOptionsPage();
 }
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   console.info('[openposse] extension installed:', reason);
-  // A first install opens the welcome page, which walks through setup one card at a time:
-  // nothing works until the microphone is allowed and the speech model is in. Settings stays for
-  // changing things later. Only on `install` – an update, which is also what the reload button
-  // in chrome://extensions sends, must not open a tab every time.
+  // A first install opens onboarding, which walks through setup in three tasks: nothing works
+  // until the microphone is allowed and the speech model is in. Only on `install` – an update,
+  // which is also what the reload button in chrome://extensions sends, must not open a tab
+  // every time.
   if (reason === chrome.runtime.OnInstalledReason.INSTALL) {
-    openWelcome().catch((error) =>
-      console.warn('[openposse] could not open the welcome page after install:', error?.message ?? error));
+    openOnboarding().catch((error) =>
+      console.warn('[openposse] could not open onboarding after install:', error?.message ?? error));
   }
   // A reload destroys the offscreen document and clears session storage, but the badge is the
   // browser's and survives – so without this the toolbar claims a microphone is open that

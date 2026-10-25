@@ -53,8 +53,8 @@ What they check:
   it is and still answers; a grouped tab is asked rather than the one in front; a renamed group is
   left alone and the next tab gets a fresh one; a second window gets its own. These tests run a
   copy of the build that holds `tabGroups` from the start, standing in for Chrome's prompt; the
-  shipped manifest keeps it optional. The welcome page's card is in `extension.spec.mjs`: it starts
-  on, either answer ticks it, and Continue asks Chrome for exactly `tabGroups`.
+  shipped manifest keeps it optional. Onboarding's step is in `extension.spec.mjs`: it starts on,
+  either answer ticks it, and leaving the Permissions task asks Chrome for exactly `tabGroups`.
 
 **A test fails if any page logged an error**, extension pages included. That is the point of
 the layer: a bundle that throws while it loads passes ESLint and every unit test, and has
@@ -77,8 +77,8 @@ assistant with Share first.
 
 | Check | macOS | Windows | Linux |
 |---|---|---|---|
-| **Setup.** Load `dist/` unpacked into a profile without OpenPosse; Settings opens by itself; the microphone grant and the speech-model download both complete. Reloading the extension afterwards does not open it again | ☐ | ☐ | ☐ |
-| **The shortcut.** The default (⌘⇧9 on a Mac, Ctrl+Shift+9 elsewhere) starts a turn with Chrome not in front; a shortcut changed at `chrome://extensions/shortcuts` and ticked Global does too | ☐ | ☐ | ☐ |
+| **Setup.** Load `dist/` unpacked into a profile without OpenPosse; Settings opens by itself with onboarding over it, on the welcome; the microphone grant and the speech-model download both complete in its tasks. Reloading the extension afterwards does not open it again | ☐ | ☐ | ☐ |
+| **The shortcut.** The default (⌥V on a Mac, Ctrl+Shift+9 elsewhere) starts a turn with Chrome in front, and does nothing with it in the background; set to Global at `chrome://extensions/shortcuts`, it starts one with Chrome in the background too | ☐ | ☐ | ☐ |
 | **Site access.** Record this tab on a real vendor: Chrome's dialog names the site, and after Allow, `await chrome.scripting.getRegisteredContentScripts()` in the service worker's console lists it | ☐ | ☐ | ☐ |
 | **Recording.** Record a real assistant (Notion AI): the coaching ticks each step, the dry run passes, the assistant is named in Settings | ☐ | ☐ | ☐ |
 | **A spoken turn.** "Ivan, …" is heard, routed, answered and spoken; a long answer is spoken as its first sentence and asks "Would you like to see it?" | ☐ | ☐ | ☐ |

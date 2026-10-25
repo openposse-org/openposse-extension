@@ -66,6 +66,23 @@ const NODES = {
       ['rect', { x: '9', y: '2', width: '6', height: '13', rx: '3' }],
     ],
   },
+  // Onboarding's welcome cards, from 2026-10-25, with `mic` above: Just ask, Lasso once, Hear it back.
+  lasso: {
+    nodes: [
+      ['path', { d: 'M3.704 14.467a10 8 0 1 1 3.115 2.375' }],
+      ['path', { d: 'M7 22a5 5 0 0 1-2-3.994' }],
+      ['circle', { cx: '5', cy: '16', r: '2' }],
+    ],
+  },
+  'volume-2': {
+    nodes: [
+      ['path', { d: 'M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z' }],
+      ['path', { d: 'M16 9a5 5 0 0 1 0 6' }],
+      ['path', { d: 'M19.364 18.364a9 9 0 0 0 0-12.728' }],
+    ],
+  },
+  // Onboarding's close button. Lucide's `x`, so the X (Twitter) mark below is `x-logo`.
+  x: { nodes: [['path', { d: 'M18 6 6 18' }], ['path', { d: 'm6 6 12 12' }]] },
   square: { filled: true, nodes: [['rect', { width: '18', height: '18', x: '3', y: '3', rx: '2' }]] },
   circle: { filled: true, nodes: [['circle', { cx: '12', cy: '12', r: '10' }]] },
   keyboard: {
@@ -320,7 +337,8 @@ const NODES = {
   // The footer's socials. X's mark is Simple Icons' (CC0), filled with no stroke like GitHub's.
   // Simple Icons dropped LinkedIn's at LinkedIn's request, so that one is Lucide 0.469.0's
   // outline (ISC) filled, which draws the same solid "in" and so matches the other two marks.
-  x: {
+  // Not Lucide, so not under Lucide's name: `x` is Lucide's close icon, above.
+  'x-logo': {
     filled: true,
     nodes: [
       ['path', { stroke: 'none', d: 'M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z' }],

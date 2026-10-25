@@ -29,6 +29,7 @@ import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
 import { GROUPING, groupingOn, markGroupingAsked, turnGroupingOff } from './grouping.js';
 import { micState, askForMic, modelState, installModel, shortcutKey } from './steps.js';
+import { openOnboarding, takeOnboardingRequest, watchOnboardingRequests } from './onboarding.js';
 
 const el = (id) => document.getElementById(id);
 /**
@@ -54,7 +55,7 @@ for (const button of document.querySelectorAll('[data-icon]')) {
 
 // ── 1. Microphone ──────────────────────────────────────────────────────────────────────────
 //
-// The reading and the asking live in `steps.js`, shared with the welcome page.
+// The reading and the asking live in `steps.js`, shared with onboarding and the side panel.
 
 async function refreshMic() {
   const state = await micState();
@@ -933,7 +934,7 @@ el('grant-grouping').addEventListener('click', async () => {
   await refreshGrouping();
 });
 
-// Turned on from the welcome page, or off in chrome://extensions, while this page is open.
+// Turned on from onboarding, or off in chrome://extensions, while this page is open.
 chrome.permissions.onAdded.addListener(refreshGrouping);
 chrome.permissions.onRemoved.addListener(refreshGrouping);
 
@@ -2271,7 +2272,11 @@ el('setup-title').textContent = complete ? 'Setup complete' : 'Set up OpenPosse'
 // Lit while there is something to do, as each step's own next button is.
 el('setup').classList.toggle('primary', !complete);
 label(el('setup'), complete ? 'Setup – done' : 'Set up OpenPosse');
-if (!complete && !el('setup-sheet').matches(':popover-open')) el('setup-sheet').showPopover();
+// Onboarding instead, when the install or the side panel's "Finish setting up" asked for it: it
+// borrows these same steps, so the sheet is not opened under it. See onboarding.js.
+if (await takeOnboardingRequest()) openOnboarding();
+else if (!complete && !el('setup-sheet').matches(':popover-open')) el('setup-sheet').showPopover();
+watchOnboardingRequests();
 
 // Shortcuts are changed on another tab, so this page is stale the moment they leave it. Chrome
 // has no event for a rebinding – re-reading on focus is the only way the status can be true

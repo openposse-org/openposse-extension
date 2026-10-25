@@ -1,6 +1,6 @@
-// The steps that have to happen once, shared by Settings and the welcome page.
+// The steps that have to happen once, shared by Settings, its onboarding and the side panel.
 //
-// **Every status is read from Chrome, never from a stored "done" flag.** The welcome page can be
+// **Every status is read from Chrome, never from a stored "done" flag.** Onboarding can be
 // closed half-way, the worker is killed after ~30 s idle, and Settings can change any of these
 // later – so "how far has this person got" is answered fresh each time, from the things that are
 // actually true. That is what makes resuming free: there is no cursor to save or get wrong.
@@ -9,9 +9,9 @@
 // "never asked" from "granted" from a popup or a panel, so the page that called `getUserMedia`
 // records what happened (see `storage.js`). That record is a fact Chrome reported, not a tick.
 //
-// Nothing here opens a tab. The pages that do – Settings and the welcome page – are the only
-// files `test/tabs.test.mjs` lets do it, and a shared module that could would widen that to
-// every page importing it.
+// Nothing here opens a tab. The files that do – Settings and its onboarding – are the only ones
+// `test/tabs.test.mjs` lets do it, and a shared module that could would widen that to every page
+// importing it.
 
 import { loadRoster, micGranted, setMicGranted } from './storage.js';
 import { groupingOn, groupingState } from './grouping.js';
@@ -119,8 +119,8 @@ export async function shortcutKey() {
 // ── The OpenPosse tab group ────────────────────────────────────────────────────────────────
 
 /**
- * Whether the tab group question has an answer: grouping is on (the permission is held), or the
- * welcome page recorded a no. Switching it on in Settings answers it too.
+ * Whether the tab group question has an answer: grouping is on (the permission is held), or
+ * onboarding recorded a no. Switching it on in Settings answers it too.
  */
 export async function groupingAnswered() {
   return (await groupingOn()) || (await groupingState()).asked;
@@ -134,32 +134,73 @@ export async function firstAssistant() {
   return arranged[0] ?? null;
 }
 
+// ── Asking Settings to show onboarding ─────────────────────────────────────────────────────
+
+/**
+ * The session key a request to show onboarding is left under. Settings opens it when it finds
+ * one, and clears it, so the request is for the next Settings to load or the one already open –
+ * `openOptionsPage()` only brings an open one to the front, and could not say why.
+ */
+export const ONBOARDING_REQUEST = 'onboarding';
+
+/** Leaves the request. For the install and the side panel's "Finish setting up", by the worker. */
+export async function requestOnboarding() {
+  await chrome.storage.session.set({ [ONBOARDING_REQUEST]: Date.now() });
+}
+
 // ── Where somebody has got to ──────────────────────────────────────────────────────────────
 
 /**
- * The welcome page's steps, in order. `optional` ones never hold anybody up: skipping them is
- * allowed, and "Finish setting up" does not nag about them.
+ * Onboarding's steps, in order, each in the task that holds it. `optional` ones never hold
+ * anybody up: skipping them is allowed, and "Finish setting up" does not nag about them.
+ *
+ * The shortcut comes first, by the owner's call of 2026-10-25: it is the one thing people use
+ * every day, and it is already done for most, since the manifest suggests one.
  */
 export const STEPS = [
   { id: 'welcome' },
-  { id: 'mic' },
-  { id: 'model' },
-  { id: 'pin', optional: true },
-  { id: 'shortcut' },
+  { id: 'shortcut', task: 'permissions' },
+  { id: 'mic', task: 'permissions' },
+  { id: 'pin', task: 'permissions', optional: true },
   // Before the first assistant, so its tab can be the first to join the group.
-  { id: 'grouping' },
-  { id: 'assistant' },
+  { id: 'grouping', task: 'permissions' },
+  { id: 'model', task: 'downloads' },
+  { id: 'assistant', task: 'lasso' },
   { id: 'done' },
 ];
 
 /**
- * Which steps are done, and which one to show, from what is true now.
+ * The three tasks onboarding is split into, by the owner's call of 2026-10-25: Chrome's
+ * permissions and the simple toggles, the downloads, and the first lasso. Better voices sit in
+ * Downloads too, but as an option, never a step that could hold it open.
+ */
+export const TASKS = [
+  { id: 'permissions', label: 'Permissions' },
+  { id: 'downloads', label: 'Downloads' },
+  { id: 'lasso', label: 'Your first lasso' },
+];
+
+/**
+ * How far one task has got, as its tab says it: `{ done, of }`, counting its steps that are done.
+ * A skipped optional step is not done, so it still counts against `of`.
+ */
+export function taskProgress(task, done) {
+  const steps = STEPS.filter((step) => step.task === task);
+  return { done: steps.filter((step) => done[step.id]).length, of: steps.length };
+}
+
+/** The task a step belongs to, or `null` for the welcome and the end. */
+export const taskOf = (stepId) => STEPS.find((step) => step.id === stepId)?.task ?? null;
+
+/**
+ * Which steps are done, which one is next, and which task onboarding opens on (`null` for the
+ * welcome screen), from what is true now.
  *
  * `facts` is `{ started, mic, model, pin, shortcut, grouping, assistant, skipped }`: `started` is
- * whether "Get started" was pressed on this page (or anything after it is already done, which
+ * whether "Let's get you set up" was pressed (or anything after it is already done, which
  * means it was, some other time), `grouping` whether the tab group question has an answer –
  * either one, since grouping is a choice rather than a requirement – and `skipped` the optional
- * steps passed over on this page.
+ * steps passed over this time.
  *
  * Pure, so the rules are tested without a browser.
  */
@@ -183,7 +224,13 @@ export function progress(facts) {
   const passed = (step) => done[step.id] || (skippable(step) && skipped.includes(step.id));
   const current = STEPS.find((step) => step.id !== 'done' && !passed(step))?.id ?? 'done';
   done.done = current === 'done';
-  return { done, current };
+  // The task onboarding opens on: the first holding a step OpenPosse needs that can still be
+  // done. An optional step never decides it, so an unpinned icon does not send somebody back to
+  // the first task every time, and nor does a speech model this Chrome cannot have.
+  const needed = STEPS.find((step) => step.task && !step.optional && !done[step.id]
+    && !(step.id === 'model' && impossible));
+  const task = done.welcome ? needed?.task ?? TASKS.at(-1).id : null;
+  return { done, current, task };
 }
 
 /**

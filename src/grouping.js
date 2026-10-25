@@ -39,7 +39,7 @@ export async function groupingOn() {
   }
 }
 
-/** What is stored: whether the question was answered on the welcome page, and the id cache. */
+/** What is stored: whether the question was answered in onboarding, and the id cache. */
 export async function groupingState() {
   const stored = (await chrome.storage.local.get(KEY))[KEY];
   return {
@@ -53,7 +53,7 @@ async function saveState(changes) {
   await chrome.storage.local.set({ [KEY]: { ...state, ...changes } });
 }
 
-/** Records that the welcome page's question was answered, either way. */
+/** Records that onboarding's question was answered, either way. */
 export async function markGroupingAsked() {
   await saveState({ asked: true });
 }
