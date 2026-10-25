@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/openposse-org/openposse-extension/compare/v0.9.0...v0.9.1) (2026-10-25)
+
+
+### Fixes
+
+* smoother rope and knot in the lasso loader ([#50](https://github.com/openposse-org/openposse-extension/issues/50)) ([d1e3bd3](https://github.com/openposse-org/openposse-extension/commit/d1e3bd35169011b36ed3296db6877a1d1f5797b0))
+
 ## [0.9.0](https://github.com/openposse-org/openposse-extension/compare/v0.8.0...v0.9.0) (2026-10-25)
 
 
