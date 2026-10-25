@@ -14,6 +14,7 @@
 // every page importing it.
 
 import { loadRoster, micGranted, setMicGranted } from './storage.js';
+import { groupingOn, groupingState } from './grouping.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const LANGS = { langs: ['en-US'], processLocally: true };
@@ -115,6 +116,16 @@ export async function shortcutKey() {
   return summon?.shortcut ?? '';
 }
 
+// ── The OpenPosse tab group ────────────────────────────────────────────────────────────────
+
+/**
+ * Whether the tab group question has an answer: grouping is on (the permission is held), or the
+ * welcome page recorded a no. Switching it on in Settings answers it too.
+ */
+export async function groupingAnswered() {
+  return (await groupingOn()) || (await groupingState()).asked;
+}
+
 // ── The first assistant ────────────────────────────────────────────────────────────────────
 
 /** The roster's first assistant, as the roster is arranged, or `null` with none yet. */
@@ -135,6 +146,8 @@ export const STEPS = [
   { id: 'model' },
   { id: 'pin', optional: true },
   { id: 'shortcut' },
+  // Before the first assistant, so its tab can be the first to join the group.
+  { id: 'grouping' },
   { id: 'assistant' },
   { id: 'done' },
 ];
@@ -142,14 +155,16 @@ export const STEPS = [
 /**
  * Which steps are done, and which one to show, from what is true now.
  *
- * `facts` is `{ started, mic, model, pin, shortcut, assistant, skipped }`: `started` is whether
- * "Get started" was pressed on this page (or anything after it is already done, which means it
- * was, some other time), `skipped` the optional steps passed over on this page.
+ * `facts` is `{ started, mic, model, pin, shortcut, grouping, assistant, skipped }`: `started` is
+ * whether "Get started" was pressed on this page (or anything after it is already done, which
+ * means it was, some other time), `grouping` whether the tab group question has an answer –
+ * either one, since grouping is a choice rather than a requirement – and `skipped` the optional
+ * steps passed over on this page.
  *
  * Pure, so the rules are tested without a browser.
  */
 export function progress(facts) {
-  const { mic, model, pin, shortcut, assistant, skipped = [] } = facts;
+  const { mic, model, pin, shortcut, grouping, assistant, skipped = [] } = facts;
   // Not the model: Chrome may have it already, for its own captions, before anyone pressed anything.
   const later = mic === 'granted' || Boolean(assistant);
   const done = {
@@ -158,6 +173,7 @@ export function progress(facts) {
     model: model === 'ready',
     pin: pin === true,
     shortcut: Boolean(shortcut),
+    grouping: Boolean(grouping),
     assistant: Boolean(assistant),
   };
   // A speech model this Chrome cannot have may be passed over too: typing in the side panel still

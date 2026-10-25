@@ -31,6 +31,7 @@ import {
 import { GRACE_OVERRIDE_KEY } from './grace.js';
 import { matchPattern } from './domain.js';
 import { vendorTab } from './tabs.js';
+import { joinGroup, expandGroupOf, leaveGroup, reconcileGroups } from './grouping.js';
 import { DONE_MS } from './title.js';
 import { hashOf, matchFor, staleness, today, unpack } from './share.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
@@ -219,6 +220,9 @@ async function goToAgent(nav) {
   }
 
   await focusTab({ tabId: tab.id });
+  // A tab in a collapsed group is hidden behind the group's chip; open the group so it is seen.
+  await expandGroupOf(tab.id).catch((error) =>
+    console.warn('[openposse] could not open the tab’s group –', error?.message ?? error));
   // Being shown an agent's tab is as much a reason to expect a follow-up as being answered by
   // it, so the floor moves here too – "show me Notion", then "what changed last week".
   await holdFloor(agent.name);
@@ -901,6 +905,12 @@ async function dispatchIntent(request) {
     return;
   }
 
+  // With grouping on, the tab a question goes to joins the OpenPosse group – or rejoins it, if it
+  // was dragged out. Not awaited: a turn does not wait on tidying the tab strip, and a refusal
+  // is no reason to stop one.
+  joinGroup(tab.id).catch((error) =>
+    console.warn('[openposse] could not add the tab to the OpenPosse group –', error?.message ?? error));
+
   // Relays this exchange's partial results. Registered before the intent is sent so an
   // assistant that answers instantly cannot beat the listener into place.
   // `typing…` and `answering…` end on their own after the vendor's response timeout and a margin,
@@ -1134,7 +1144,7 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   }
 
   if (request?.kind === 'openposse.agent.remove') {
-    removeAgent(request.agentId).then(
+    removeAgentAndUngroup(request.agentId).then(
       () => respond({ ok: true }),
       (error) => respond({ ok: false, reason: String(error?.message ?? error) }),
     );
@@ -1559,6 +1569,10 @@ async function save() {
   const lasso = wizard?.lasso;
   if (!lasso) return;
 
+  // A lassoed tab joins the OpenPosse group, with grouping on. Saving does not depend on it.
+  await joinGroup(wizard.tabId).catch((error) =>
+    console.warn('[openposse] could not add the lassoed tab to the OpenPosse group –', error?.message ?? error));
+
   if (wizard.agentId) {
     await replaceLasso(wizard.agentId, lasso);
     if (wizard.replacing) {
@@ -1804,6 +1818,44 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
 chrome.runtime.onStartup.addListener(() => {
   reconcileRegistrations();
 });
+
+// The OpenPosse group's cached ids, kept honest. Ids change when Chrome restarts, and a group
+// somebody renamed is theirs now. Every lookup checks the title anyway (see `grouping.js`), so
+// this only tidies the cache. `chrome.tabGroups` exists only while the permission is held, so
+// the listeners are there from the next start after grouping is switched on.
+reconcileGroups().catch((error) =>
+  console.warn('[openposse] could not reconcile the OpenPosse tab groups –', error?.message ?? error));
+if (chrome.tabGroups) {
+  const tidy = () => reconcileGroups().catch((error) =>
+    console.warn('[openposse] could not reconcile the OpenPosse tab groups –', error?.message ?? error));
+  chrome.tabGroups.onRemoved.addListener(tidy);
+  chrome.tabGroups.onUpdated.addListener(tidy);
+}
+
+/**
+ * Removes an assistant, and takes its tab out of the OpenPosse group – unless another assistant
+ * still uses that tab, in which case it stays where it is.
+ */
+async function removeAgentAndUngroup(agentId) {
+  const agent = await findAgent2(agentId);
+  const pattern = agent && (await lassoFor(agent))?.domainPattern;
+  await removeAgent(agentId);
+  if (!pattern) return;
+  try {
+    const { agents } = await loadRoster();
+    const others = (await Promise.all(agents.map(async (a) => (await lassoFor(a))?.domainPattern)))
+      .filter(Boolean);
+    const tabs = await chrome.tabs.query({ url: matchPattern(pattern) });
+    const stillUsed = new Set();
+    for (const other of others) {
+      for (const tab of await chrome.tabs.query({ url: matchPattern(other) })) stillUsed.add(tab.id);
+    }
+    await leaveGroup(tabs.map((tab) => tab.id).filter((id) => !stillUsed.has(id)));
+  } catch (error) {
+    // The assistant is gone either way; a tab left in the group is tidied by hand.
+    console.warn('[openposse] could not take the removed assistant’s tab out of its group –', error?.message ?? error);
+  }
+}
 
 // Console handle for development.
 //

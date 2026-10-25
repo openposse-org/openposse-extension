@@ -1431,9 +1431,25 @@
             </div>
             <button class="switch" id="grant-icons" role="switch" aria-checked="false"
                     aria-labelledby="icons-label"></button>
+            <span class="kind" id="grouping-label">Tab group</span>
+            <div class="about">
+              <button class="info" data-icon="info" data-size="15"
+                      aria-label="About the tab group" aria-describedby="about-grouping"></button>
+              <div class="tip" role="tooltip" id="about-grouping">
+                <p>
+                  Keeps the tabs OpenPosse talks to in one tab group per window, called
+                  OpenPosse. A tab joins when you lasso it or ask it something. It never opens or
+                  closes a tab, and tabs in your own groups stay where they are. Off, the tabs are
+                  ungrouped. Chrome words the request as “View and manage your tab groups”.
+                </p>
+              </div>
+            </div>
+            <button class="switch" id="grant-grouping" role="switch" aria-checked="false"
+                    aria-labelledby="grouping-label"></button>
           </div>
         </div>
         <span class="status kind bad" id="icons-status" hidden></span>
+        <span class="status kind bad" id="grouping-status" hidden></span>
         <span class="status kind bad" id="order-status" hidden></span>
         <div id="roster" class="card">none yet</div>
         <p id="roster-none" hidden></p>

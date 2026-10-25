@@ -27,6 +27,7 @@ import {
 } from './weights.js';
 import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
+import { GROUPING, groupingOn, markGroupingAsked, turnGroupingOff } from './grouping.js';
 import { micState, askForMic, modelState, installModel, shortcutKey } from './steps.js';
 
 const el = (id) => document.getElementById(id);
@@ -909,6 +910,32 @@ el('grant-icons').addEventListener('click', async () => {
   await refreshIcons();
   await refreshRoster();
 });
+
+// ── The OpenPosse tab group ────────────────────────────────────────────────────────────────
+//
+// Holding the `tabGroups` permission is the setting, the same shape as site icons – see
+// grouping.js. Off ungroups the tabs first, while the permission that finds them is still held.
+
+async function refreshGrouping() {
+  el('grant-grouping').setAttribute('aria-checked', String(await groupingOn()));
+}
+
+el('grant-grouping').addEventListener('click', async () => {
+  const status = el('grouping-status');
+  status.hidden = true;
+  try {
+    if (await chrome.permissions.contains(GROUPING)) await turnGroupingOff();
+    else if (await chrome.permissions.request(GROUPING)) await markGroupingAsked();
+  } catch (error) {
+    status.textContent = `tab group not changed – ${error?.message ?? error}`;
+    status.hidden = false;
+  }
+  await refreshGrouping();
+});
+
+// Turned on from the welcome page, or off in chrome://extensions, while this page is open.
+chrome.permissions.onAdded.addListener(refreshGrouping);
+chrome.permissions.onRemoved.addListener(refreshGrouping);
 
 // ── Roster ─────────────────────────────────────────────────────────────────────────────────
 
@@ -2218,6 +2245,7 @@ for (const [name, refresh] of Object.entries({
   voices: refreshVoices,
   roster: refreshRoster,
   'site icons': refreshIcons,
+  'tab group': refreshGrouping,
   'orb style': paintOrbStyle,
   'size by number': paintAvatarSizing,
   'debug timings': paintKnobs,

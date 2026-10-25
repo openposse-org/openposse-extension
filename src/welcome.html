@@ -55,6 +55,21 @@
       @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
       @media (prefers-reduced-motion: reduce) { .progress::after { animation: none; width: 100%; opacity: 0.5; } }
 
+      /* The tab group card's one choice. The switch is Settings' – see setup.html. */
+      .choice { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+                margin: 0 0 14px; padding: 12px 14px; background: var(--well);
+                border: 1px solid var(--line); border-radius: var(--radius-card); color: var(--text); }
+      button.switch { position: relative; flex: 0 0 auto; width: 38px; height: 22px; padding: 0;
+                      border-radius: 11px; background: rgba(120, 120, 128, 0.36);
+                      transition: background-color 0.2s ease; }
+      button.switch::before { content: ''; position: absolute; top: 2px; left: 2px; width: 18px;
+                              height: 18px; border-radius: 50%; background: #fff;
+                              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); transition: transform 0.2s ease; }
+      button.switch[aria-checked="true"] { background: var(--green); }
+      button.switch[aria-checked="true"]::before { transform: translateX(16px); }
+      button.switch:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+      @media (prefers-reduced-motion: reduce) { button.switch, button.switch::before { transition: none; } }
+
       /* The six sites. A monogram in a colour, bundled – never a favicon looked up by domain,
          which would be a network call nobody asked for. */
       .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 0 0 12px; }
@@ -136,6 +151,26 @@
             Many people pick <kbd>⌥V</kbd> and tick Global, so it works even when Chrome is in
             the background.
           </p>
+        </div>
+      </section>
+
+      <section class="card-step" id="card-grouping" data-step="grouping">
+        <button class="line" aria-expanded="false"><span class="tick"></span>Keep its tabs together<span class="summary" id="grouping-summary"></span></button>
+        <div class="body">
+          <h2>Keep its tabs together</h2>
+          <p>
+            OpenPosse can keep the tabs it talks to in one tab group, called OpenPosse, so they're
+            easy to find. It never opens or closes a tab, and leaves tabs in your own groups where
+            they are. You can change this in Settings.
+          </p>
+          <div class="choice">
+            <span id="grouping-label">Group the tabs OpenPosse uses</span>
+            <!-- On to start with, by the owner's decision of 2026-10-25. Continue is what asks. -->
+            <button class="switch" id="grouping-switch" role="switch" aria-checked="true"
+                    aria-labelledby="grouping-label"></button>
+          </div>
+          <div class="actions"><button id="grouping-continue">Continue</button></div>
+          <p class="note" id="grouping-note" hidden></p>
         </div>
       </section>
 

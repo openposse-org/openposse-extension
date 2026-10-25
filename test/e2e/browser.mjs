@@ -9,7 +9,9 @@
 // grants the fake vendor's site, standing in for the Allow click automation cannot reach.
 
 import { test as base, expect, chromium } from '@playwright/test';
-import { readFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const EXTENSION = fileURLToPath(new URL('../../dist-e2e', import.meta.url));
@@ -27,13 +29,35 @@ export const test = base.extend({
   /** Every uncaught error, and every console error, from any page in the browser. */
   errors: async ({}, use) => { await use([]); },
 
-  context: async ({ errors }, use) => {
+  /**
+   * With `test.use({ grouping: true })`, the extension holds `tabGroups` from the start: a copy
+   * of the build lists it as a required permission, standing in for Chrome's Allow dialog the
+   * way the manifest's fixture grant does. The shipped manifest keeps it optional.
+   */
+  grouping: [false, { option: true }],
+
+  extensionPath: async ({ grouping }, use) => {
+    if (!grouping) {
+      await use(EXTENSION);
+      return;
+    }
+    const copy = await mkdtemp(join(tmpdir(), 'openposse-grouping-'));
+    await cp(EXTENSION, copy, { recursive: true });
+    const manifest = JSON.parse(await readFile(join(copy, 'manifest.json'), 'utf8'));
+    manifest.permissions.push('tabGroups');
+    manifest.optional_permissions = manifest.optional_permissions.filter((p) => p !== 'tabGroups');
+    await writeFile(join(copy, 'manifest.json'), JSON.stringify(manifest));
+    await use(copy);
+    await rm(copy, { recursive: true, force: true });
+  },
+
+  context: async ({ errors, extensionPath }, use) => {
     // A fresh profile per test, so no test sees another's assistants or settings.
     const context = await chromium.launchPersistentContext('', {
       // Playwright's own Chromium in its new headless mode, the one that loads extensions.
       channel: 'chromium',
       headless: true,
-      args: [`--disable-extensions-except=${EXTENSION}`, `--load-extension=${EXTENSION}`],
+      args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
     });
     const watch = (page) => {
       page.on('pageerror', (error) => errors.push(`${page.url()}: ${error.message}`));
