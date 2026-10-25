@@ -80,18 +80,18 @@ Then, in Chrome:
 
 1. Open `chrome://extensions` and turn on **Developer mode**.
 2. Choose **Load unpacked** and select the `dist/` folder.
-3. Settings opens. Allow the microphone, download the speech model, and choose a shortcut. If
-   you close it early, OpenPosse offers to finish setup the next time you open it.
+3. Settings opens with a short welcome and three setup tasks: permissions, downloads and your
+   first lasso. If you close it early, the side panel offers to finish setup.
 4. Open the tab with your assistant, open OpenPosse from the toolbar, and choose **Record this
    tab**.
 
 ### The keyboard shortcut
 
-OpenPosse suggests **⌘⇧9** on a Mac and **Ctrl+Shift+9** elsewhere, because Chrome only lets an
-extension suggest a shortcut from that small set. You are free to choose any combination you like
-at `chrome://extensions/shortcuts`; tick **Global** there so it works while Chrome is in the
-background. ⌥V is a comfortable choice. Settings shows your current shortcut and links straight to
-that page.
+OpenPosse suggests **⌥V** on a Mac and **Ctrl+Shift+9** elsewhere. These work while Chrome is in
+front: Chrome lets an extension suggest a shortcut that works from any app only if it is ⌘⇧ (or
+Ctrl+Shift) and a digit, and never lets it make one global itself. To use yours with Chrome in the
+background, set OpenPosse to **Global** at `chrome://extensions/shortcuts`, where you can also pick
+any other keys. Settings shows your current shortcut and links straight to that page.
 
 On a Mac, ⌘⇧3 to ⌘⇧6 already belong to the screenshot tools, so those are best avoided. ChromeOS
 does not support global shortcuts, so there OpenPosse is opened from the toolbar icon.

@@ -11,7 +11,7 @@ test('every extension page opens without an error', async ({ context, extensionI
   // `offscreen.html` too, opened as a tab: Chrome's own offscreen document is not a page these
   // tests watch, so a module that throws as it loads there (it carries ONNX Runtime for
   // Supertonic) would otherwise only ever show up as a voice that never speaks.
-  for (const name of ['setup.html', 'welcome.html', 'sidepanel.html', 'offscreen.html']) {
+  for (const name of ['setup.html', 'sidepanel.html', 'offscreen.html']) {
     // A step per page, so a failure names the page rather than leaving it to a timeout.
     await test.step(name, async () => {
       const page = await context.newPage();
@@ -256,110 +256,120 @@ test('when the page no longer has what the lasso clicks, the turn says the lasso
 // ── First run ──────────────────────────────────────────────────────────────────────────────
 
 /**
- * The welcome page the install opened, with the two things automation cannot do stubbed: Chrome's
+ * The Settings tab the install opened, with the two things automation cannot do stubbed: Chrome's
  * microphone prompt, answered with a silent track, and the speech model, reported as `model`
  * without a download. Everything after them – recording the grant, ticking – is the real code.
+ *
+ * The install's request was taken when the tab first loaded, so the reload asks for onboarding
+ * again, before the page's own script runs, the way the worker asks before opening Settings.
  */
-async function welcomePage(context, extensionId, { model = 'available' } = {}) {
-  const page = context.pages().find((p) => p.url() === `chrome-extension://${extensionId}/welcome.html`);
+async function onboarding(context, extensionId, { model = 'available', before } = {}) {
+  const page = context.pages().find((p) => p.url() === `chrome-extension://${extensionId}/setup.html`);
   await page.addInitScript((state) => {
     navigator.mediaDevices.getUserMedia = async () => new AudioContext().createMediaStreamDestination().stream;
     const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
     if (SR) SR.available = async () => state;
+    chrome.storage.session.set({ onboarding: Date.now() });
   }, model);
+  if (before) await page.addInitScript(before);
   await page.reload();
+  await expect(page.locator('#onboarding')).toHaveAttribute('open', '');
   return page;
 }
 
-/** Through the cards before the first assistant, the way somebody would. */
-async function toFirstAssistant(page) {
-  await page.click('#start');
-  await page.click('#allow-mic');
-  // Not pinned in a test browser, so the optional card waits until it is skipped.
-  await page.click('#skip-pin');
-  // Grouping starts on; off answers the card without Chrome's prompt, which automation cannot reach.
-  await page.click('#grouping-switch');
-  await page.click('#grouping-continue');
-  await expect(page.locator('#card-assistant')).toHaveClass(/open/);
-}
+const tab = (page, name) => page.getByRole('tab', { name: new RegExp(name) });
 
-test('the welcome page walks from Get started to the first assistant, ticking each card', async ({ context, extensionId }) => {
-  const page = await welcomePage(context, extensionId);
-  const card = (step) => page.locator(`#card-${step}`);
+test('onboarding opens on the welcome, then walks the three tasks, each step ticking itself', async ({ context, extensionId }) => {
+  const page = await onboarding(context, extensionId);
+  await expect(page.locator('#ob-welcome')).toBeVisible();
+  await expect(page.locator('#ob-welcome h1')).toHaveText('Talk to the AI assistants you already use.');
+  await page.click('#ob-start');
 
-  await expect(card('welcome')).toHaveClass(/open/);
-  await page.click('#start');
-  await expect(card('welcome')).toHaveClass(/done/);
-  await expect(card('mic')).toHaveClass(/open/);
-
-  await page.click('#allow-mic');
-  await expect(card('mic')).toHaveClass(/done/);
-  await expect(page.locator('#mic-summary')).toHaveText('allowed');
-  // The model is reported ready, so it ticks without a press.
-  await expect(card('model')).toHaveClass(/done/);
-
-  await expect(card('pin')).toHaveClass(/open/);
-  await page.click('#skip-pin');
-  await expect(page.locator('#pin-summary')).toHaveText('skipped');
-
-  // The shortcut comes from Chrome, never from the page: the manifest suggests one, so it ticks.
+  // Permissions, with the shortcut first. It comes from Chrome, never from the page: the
+  // manifest suggests one, so it ticks.
+  await expect(tab(page, 'Permissions')).toHaveAttribute('aria-selected', 'true');
+  const steps = page.locator('#ob-permissions > .step');
+  await expect(steps).toHaveCount(4);
+  await expect(steps.first()).toHaveAttribute('id', 'step-shortcut');
   const key = await page.evaluate(async () =>
     (await chrome.commands.getAll()).find((c) => c.name === 'summon')?.shortcut ?? '');
   expect(key, 'the manifest suggests a shortcut').not.toBe('');
-  await expect(card('shortcut')).toHaveClass(/done/);
-  await expect(page.locator('#shortcut-summary')).toHaveText(key);
+  await expect(page.locator('#step-shortcut')).toHaveClass(/done/);
+  await expect(page.locator('#shortcut-status')).toHaveText(key);
 
-  // The tab group: suggested on, and either answer ticks the card.
-  await expect(card('grouping')).toHaveClass(/open/);
-  await expect(page.locator('#grouping-switch')).toHaveAttribute('aria-checked', 'true');
-  await page.click('#grouping-switch');
-  await page.click('#grouping-continue');
-  await expect(card('grouping')).toHaveClass(/done/);
-  await expect(page.locator('#grouping-summary')).toHaveText('off');
-  await expect(card('assistant')).toHaveClass(/open/);
-  await expect(page.locator('.tile')).toHaveCount(6);
+  // The microphone is Settings' own step, borrowed, and its own button.
+  await page.click('#grant-mic');
+  await expect(page.locator('#step-mic')).toHaveClass(/done/);
+  await expect(page.locator('#mic-status')).toHaveText('granted');
 
-  // A done card opens again on a click.
-  await page.click('#card-mic .line');
-  await expect(card('mic')).toHaveClass(/open/);
+  // Not pinned in a test browser; skipping says so, and is not the same as done.
+  await page.click('#skip-pin');
+  await expect(page.locator('#pin-status')).toHaveText('skipped');
+  await expect(tab(page, 'Permissions')).toContainText('2 of 4 done');
+
+  // The tab group: suggested on, answered by leaving the task. Off is answered without Chrome's
+  // prompt, which automation cannot reach.
+  await expect(page.locator('#ob-grouping')).toHaveAttribute('aria-checked', 'true');
+  await page.click('#ob-grouping');
+  await page.click('#ob-next');
+  await expect(tab(page, 'Downloads')).toHaveAttribute('aria-selected', 'true');
+  await expect(tab(page, 'Permissions')).toContainText('3 of 4 done');
+
+  // The speech model is reported ready, so it ticks without a press; better voices are there too.
+  await expect(page.locator('#ob-downloads > .step').first()).toHaveAttribute('id', 'step-model');
+  await expect(page.locator('#step-model')).toHaveClass(/done/);
+  await expect(page.locator('#ob-downloads #step-weights')).toBeVisible();
+
+  await page.click('#ob-next');
+  await expect(tab(page, 'Your first lasso')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#ob-tiles button')).toHaveCount(6);
+  await expect(page.locator('#ob-next')).toHaveText('Done');
+
+  // Back goes back, and from the first task to the welcome.
+  await tab(page, 'Permissions').click();
+  await expect(page.locator('#step-grouping')).toHaveClass(/done/);
+  await page.click('#ob-back');
+  await expect(page.locator('#ob-welcome')).toBeVisible();
+
+  // Closing puts the borrowed steps back in the setup sheet, numbered as they were.
+  await page.click('#ob-welcome .ob-close');
+  await expect(page.locator('#onboarding')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#setup-sheet > .step')).toHaveCount(5);
+  await expect(page.locator('#setup-sheet #step-shortcut .num')).toHaveText('3');
 });
 
-test('the tab group card asks Chrome on Continue, and a no leaves grouping off', async ({ context, extensionId }) => {
-  const page = await welcomePage(context, extensionId);
+test('leaving Permissions asks Chrome for the tab group, and a no leaves grouping off', async ({ context, extensionId }) => {
   // Chrome's prompt is out of reach, so it answers no here, and says what it was asked for.
-  await page.addInitScript(() => {
-    window.__asked = [];
-    chrome.permissions.request = async (what) => { window.__asked.push(what); return false; };
+  const page = await onboarding(context, extensionId, {
+    before: () => {
+      window.__asked = [];
+      chrome.permissions.request = async (what) => { window.__asked.push(what); return false; };
+    },
   });
-  await page.reload();
-  await page.click('#start');
-  await page.click('#allow-mic');
-  await page.click('#skip-pin');
-  await expect(page.locator('#card-grouping')).toHaveClass(/open/);
-
-  await page.click('#grouping-continue');
-  await expect(page.locator('#card-grouping')).toHaveClass(/done/);
+  await page.click('#ob-start');
+  await tab(page, 'Downloads').click();
+  await tab(page, 'Permissions').click();
+  await expect(page.locator('#step-grouping')).toHaveClass(/done/);
   expect(await page.evaluate(() => window.__asked)).toEqual([{ permissions: ['tabGroups'] }]);
-  await expect(page.locator('#grouping-summary')).toHaveText('off');
+  await expect(page.locator('#ob-grouping')).toHaveAttribute('aria-checked', 'false');
+  await expect(page.locator('#ob-grouping-note')).toContainText('grouping is off');
   expect(await page.evaluate(() => chrome.permissions.contains({ permissions: ['tabGroups'] }))).toBe(false);
 });
 
-test('a Chrome without on-device speech is told so, and can go on without voice', async ({ context, extensionId }) => {
-  const page = await welcomePage(context, extensionId, { model: 'unavailable' });
-  await page.click('#start');
-  await page.click('#allow-mic');
-  await expect(page.locator('#model-note')).toContainText('switched off in this Chrome');
-  await expect(page.locator('#get-model')).toHaveText('Continue without voice');
-  await page.click('#get-model');
-  await expect(page.locator('#card-pin')).toHaveClass(/open/);
+test('a Chrome without on-device speech is told so in Downloads', async ({ context, extensionId }) => {
+  const page = await onboarding(context, extensionId, { model: 'unavailable' });
+  await page.click('#ob-start');
+  await tab(page, 'Downloads').click();
+  await expect(page.locator('#model-status')).toContainText('switched off in this Chrome');
 });
 
 test('a site tile opens that site in a new tab, and only on a click', async ({ context, extensionId }) => {
   // Served from here, so the test reaches no real vendor.
   await context.route('https://app.notion.com/**', (route) =>
     route.fulfill({ status: 200, contentType: 'text/html', body: '<title>Notion</title>' }));
-  const page = await welcomePage(context, extensionId);
-  await toFirstAssistant(page);
+  const page = await onboarding(context, extensionId);
+  await page.click('#ob-start');
+  await tab(page, 'Your first lasso').click();
   const before = context.pages().length;
 
   const opened = context.waitForEvent('page');
@@ -369,12 +379,13 @@ test('a site tile opens that site in a new tab, and only on a click', async ({ c
   expect(context.pages().length).toBe(before + 1);
 });
 
-test('the first assistant ticks the welcome page wherever it was added', async ({ context, extensionId }) => {
-  const page = await welcomePage(context, extensionId);
-  await page.click('#start');
+test('the first assistant ticks onboarding wherever it was added', async ({ context, extensionId }) => {
+  const page = await onboarding(context, extensionId);
+  await page.click('#ob-start');
+  await tab(page, 'Your first lasso').click();
   await addAcme(context, extensionId);
-  await expect(page.locator('#card-assistant')).toHaveClass(/done/);
-  await expect(page.locator('#assistant-summary')).toHaveText('Acme');
+  await expect(page.locator('#ob-assistant-status')).toContainText('Acme is ready');
+  await expect(tab(page, 'Your first lasso')).toContainText('done');
 });
 
 test('an empty side panel offers the demo turn, and says where to go on a page it cannot lasso', async ({ context, extensionId }) => {
@@ -390,11 +401,16 @@ test('an empty side panel offers the demo turn, and says where to go on a page i
   await expect(panel.locator('#empty')).toBeHidden();
 });
 
-test('Finish setting up reopens the welcome page', async ({ context, extensionId }) => {
-  const panel = await openPanel(context, extensionId);
-  const welcome = `chrome-extension://${extensionId}/welcome.html`;
-  const count = () => context.pages().filter((p) => p.url() === welcome).length;
+test('Finish setting up brings onboarding back over the Settings already open', async ({ context, extensionId }) => {
+  const settings = context.pages().find((p) => p.url() === `chrome-extension://${extensionId}/setup.html`);
+  await settings.click('#ob-welcome .ob-close');
+  await expect(settings.locator('#onboarding')).not.toHaveAttribute('open', '');
+  const count = () => context.pages().filter((p) => p.url() === settings.url()).length;
   const before = count();
+
+  const panel = await openPanel(context, extensionId);
   await panel.click('#finish-setup');
-  await expect.poll(count).toBe(before + 1);
+  await expect(settings.locator('#onboarding')).toHaveAttribute('open', '');
+  // `openOptionsPage()` brings the open one to the front rather than opening another.
+  expect(count()).toBe(before);
 });

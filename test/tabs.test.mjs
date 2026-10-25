@@ -49,20 +49,18 @@ const MAY_OPEN = new Map([
   // Its own links, Chrome's shortcuts page, the spike page, and "Load icons", which opens each
   // vendor's home page in a minimised window to read its icon, on a button press, then closes it.
   ['setup.js', 'the Settings page'],
-  // The one exception to the rule, the owner's call of 2026-10-25: first-run onboarding may open
-  // a site, and only when one of its six tiles is clicked. Also Chrome's shortcuts page and
-  // Settings' Better voices. Nothing on a turn's path, and the page is never opened by a turn.
-  ['welcome.js', 'the welcome page'],
+  // The one exception to the rule, the owner's call of 2026-10-25: onboarding, in Settings, may
+  // open a site, and only when one of its six tiles is clicked. Nothing on a turn's path, and
+  // onboarding is never opened by a turn.
+  ['onboarding.js', 'Settings’ onboarding'],
 ]);
 
 /**
- * Single calls allowed in a file that is otherwise held to the rule, written out in full. The
- * worker is on every turn's path, so it is not allowlisted: it may open the welcome page, by
- * that literal, on install and for the side panel's "Finish setting up", and nothing else.
+ * Single calls allowed in a file that is otherwise held to the rule, written out in full. None
+ * since 2026-10-25: the worker opened the welcome page with one, and onboarding now opens with
+ * Settings, through `openOptionsPage()`.
  */
-const MAY_CALL = new Map([
-  ['service-worker.js', "chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') })"],
-]);
+const MAY_CALL = new Map([]);
 
 const OPENS = [
   /\b(?:tabs|windows)\.create\s*\(/,

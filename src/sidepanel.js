@@ -758,7 +758,7 @@ el('empty-demo').addEventListener('click', () => playDemo());
 
 /**
  * "Finish setting up", while something OpenPosse needs is still to do. Read from Chrome each time
- * the panel opens or comes back into view, the way the welcome page reads it – see `steps.js`.
+ * the panel opens or comes back into view, the way onboarding reads it – see `steps.js`.
  */
 async function paintFinish() {
   try {
@@ -770,7 +770,7 @@ async function paintFinish() {
 }
 
 el('finish-setup').addEventListener('click', () => {
-  chrome.runtime.sendMessage({ kind: 'openposse.welcome' })
+  chrome.runtime.sendMessage({ kind: 'openposse.onboarding' })
     .then((answer) => {
       if (!answer?.ok) say(`The setup page didn’t open – ${answer?.reason ?? 'no reason given'}`);
     })

@@ -67,10 +67,10 @@
   "commands": {
     "summon": {
       "suggested_key": {
-        "default": "Ctrl+Shift+9"
+        "default": "Ctrl+Shift+9",
+        "mac": "Alt+V"
       },
-      "description": "Talk to an assistant",
-      "global": true
+      "description": "Talk to an assistant"
     }
   }
 }

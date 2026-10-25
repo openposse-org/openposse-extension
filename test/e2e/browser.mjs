@@ -79,15 +79,18 @@ export const test = base.extend({
   extensionId: async ({ context }, use) => {
     const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
     const id = new URL(worker.url()).host;
-    // A first install opens the welcome page. Waiting for it here keeps that tab from turning up
-    // partway through a test that counts tabs, and fails every test if the install stops opening
-    // it. Polled rather than awaited as an event, because a new tab can report `about:blank`
-    // before it reaches its address.
-    const welcome = `chrome-extension://${id}/welcome.html`;
-    await expect.poll(() => context.pages().some((page) => page.url() === welcome), {
-      message: 'a first install opens the welcome page',
+    // A first install opens Settings with onboarding over it. Waiting for that here keeps the tab
+    // from turning up partway through a test that counts tabs, and keeps its request from being
+    // taken by a Settings a test opens; it fails every test if the install stops opening it.
+    // Polled rather than awaited as an event, because a new tab can report `about:blank` before
+    // it reaches its address.
+    const settings = `chrome-extension://${id}/setup.html`;
+    await expect.poll(() => context.pages().some((page) => page.url() === settings), {
+      message: 'a first install opens Settings',
       timeout: 10_000,
     }).toBe(true);
+    const installed = context.pages().find((page) => page.url() === settings);
+    await expect(installed.locator('#onboarding'), 'with onboarding over it').toHaveAttribute('open', '', { timeout: 10_000 });
     await use(id);
   },
 });
