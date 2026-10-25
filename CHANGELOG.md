@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2](https://github.com/openposse-org/openposse-extension/compare/v0.9.1...v0.9.2) (2026-10-25)
+
+
+### Features
+
+* onboarding as a modal in Settings, with a welcome and three tasks ([#53](https://github.com/openposse-org/openposse-extension/issues/53)) ([019fc08](https://github.com/openposse-org/openposse-extension/commit/019fc08e40d6b22d42debf60f7eae3c6c8a5d137))
+
 ## [0.9.1](https://github.com/openposse-org/openposse-extension/compare/v0.9.0...v0.9.1) (2026-10-25)
 
 
