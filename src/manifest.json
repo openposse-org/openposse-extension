@@ -17,7 +17,8 @@
     "sidePanel"
   ],
   "optional_permissions": [
-    "favicon"
+    "favicon",
+    "tabGroups"
   ],
   "optional_host_permissions": [
     "https://*/*"

@@ -271,6 +271,9 @@ async function toFirstAssistant(page) {
   await page.click('#allow-mic');
   // Not pinned in a test browser, so the optional card waits until it is skipped.
   await page.click('#skip-pin');
+  // Grouping starts on; off answers the card without Chrome's prompt, which automation cannot reach.
+  await page.click('#grouping-switch');
+  await page.click('#grouping-continue');
   await expect(page.locator('#card-assistant')).toHaveClass(/open/);
 }
 
@@ -299,12 +302,40 @@ test('the welcome page walks from Get started to the first assistant, ticking ea
   expect(key, 'the manifest suggests a shortcut').not.toBe('');
   await expect(card('shortcut')).toHaveClass(/done/);
   await expect(page.locator('#shortcut-summary')).toHaveText(key);
+
+  // The tab group: suggested on, and either answer ticks the card.
+  await expect(card('grouping')).toHaveClass(/open/);
+  await expect(page.locator('#grouping-switch')).toHaveAttribute('aria-checked', 'true');
+  await page.click('#grouping-switch');
+  await page.click('#grouping-continue');
+  await expect(card('grouping')).toHaveClass(/done/);
+  await expect(page.locator('#grouping-summary')).toHaveText('off');
   await expect(card('assistant')).toHaveClass(/open/);
   await expect(page.locator('.tile')).toHaveCount(6);
 
   // A done card opens again on a click.
   await page.click('#card-mic .line');
   await expect(card('mic')).toHaveClass(/open/);
+});
+
+test('the tab group card asks Chrome on Continue, and a no leaves grouping off', async ({ context, extensionId }) => {
+  const page = await welcomePage(context, extensionId);
+  // Chrome's prompt is out of reach, so it answers no here, and says what it was asked for.
+  await page.addInitScript(() => {
+    window.__asked = [];
+    chrome.permissions.request = async (what) => { window.__asked.push(what); return false; };
+  });
+  await page.reload();
+  await page.click('#start');
+  await page.click('#allow-mic');
+  await page.click('#skip-pin');
+  await expect(page.locator('#card-grouping')).toHaveClass(/open/);
+
+  await page.click('#grouping-continue');
+  await expect(page.locator('#card-grouping')).toHaveClass(/done/);
+  expect(await page.evaluate(() => window.__asked)).toEqual([{ permissions: ['tabGroups'] }]);
+  await expect(page.locator('#grouping-summary')).toHaveText('off');
+  expect(await page.evaluate(() => chrome.permissions.contains({ permissions: ['tabGroups'] }))).toBe(false);
 });
 
 test('a Chrome without on-device speech is told so, and can go on without voice', async ({ context, extensionId }) => {

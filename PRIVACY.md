@@ -1,6 +1,6 @@
 # OpenPosse privacy policy
 
-Effective 15 October 2026. This covers the OpenPosse extension and OpenPosse Beta.
+Effective 25 October 2026. This covers the OpenPosse extension and OpenPosse Beta.
 
 **In short:** OpenPosse has no servers. It collects nothing, sends nothing to its developers, and
 keeps no record of what you say.
@@ -32,6 +32,8 @@ In Chrome's storage for the extension, on your computer only:
 - **The addresses of the sites your assistants are on**, to show their icons if you turn site
   icons on. Chrome supplies those icons from its own cache; OpenPosse does not download them.
 - **The Supertonic and Kokoro voice files**, if you download them.
+- **Whether you answered the tab group question, and the ids of the OpenPosse tab groups**, if
+  you turn grouping on, so the same group is used again.
 
 Removing the extension deletes all of it.
 
@@ -59,6 +61,14 @@ page. It never reads, stores or sends passwords, cookies or what you type into f
 
 While you record a new assistant, OpenPosse watches which controls you use on that tab so that it
 can use them later. It does not record what you type.
+
+## Tab groups
+
+If you turn it on, OpenPosse keeps the tabs it talks to in a tab group called OpenPosse, one per
+window. Chrome asks you first, in its words "View and manage your tab groups". OpenPosse uses that
+only to put those tabs in its group, to find the group again, and to ungroup them when you turn it
+off. It never opens or closes a tab, and leaves tabs in groups of your own where they are. A tab
+group gives OpenPosse no access to a site: that is still asked for one site at a time.
 
 ## Sharing an assistant
 

@@ -10,15 +10,33 @@
 // rather than by two copies of the same rule agreeing. `test/tabs.test.mjs` fails if any file
 // on a turn's path creates a tab or a window.
 
-import { matchPattern } from './domain.js';
+//
+// With grouping on, a tab in an OpenPosse group is preferred – a preference, not a fence: when
+// none of the vendor's tabs is grouped, any open one is used, as before. See `grouping.js`.
 
-/** The tab in front in its window, else the first one open. Pure, so it can be tested. */
-export function pickTab(tabs) {
-  return tabs?.find((tab) => tab.active) ?? tabs?.[0] ?? null;
+import { matchPattern } from './domain.js';
+import { ourGroupIds } from './grouping.js';
+
+/**
+ * A tab in one of `ours` (OpenPosse group ids) if there is one, then the tab in front in its
+ * window, else the first one open. Pure, so it can be tested.
+ */
+export function pickTab(tabs, ours = new Set()) {
+  const grouped = tabs?.filter((tab) => ours.has(tab.groupId)) ?? [];
+  const from = grouped.length ? grouped : tabs;
+  return from?.find((tab) => tab.active) ?? from?.[0] ?? null;
 }
 
 /** The vendor's open tab, or null. Never opens one. */
 export async function vendorTab(domainPattern) {
   if (!domainPattern) return null;
-  return pickTab(await chrome.tabs.query({ url: matchPattern(domainPattern) }));
+  const [tabs, ours] = await Promise.all([
+    chrome.tabs.query({ url: matchPattern(domainPattern) }),
+    ourGroupIds().catch((error) => {
+      // Grouping is a preference: without the group ids, any open tab still answers.
+      console.warn('[openposse] could not read the OpenPosse tab groups –', error?.message ?? error);
+      return new Set();
+    }),
+  ]);
+  return pickTab(tabs, ours);
 }

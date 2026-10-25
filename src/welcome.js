@@ -10,14 +10,14 @@
 // away, and "Change" opens Chrome's shortcuts page, which no link can reach. Nothing on a turn's
 // path opens anything – the owner's rule – and this page is not on one.
 //
-// Settings is unchanged, for changing these later. The tab-group card in the design waits for
-// the grouping work and is not here yet.
+// Settings is for changing these later, the tab group included.
 
 import { icon } from './icons.js';
 import {
   micState, askForMic, watchMicPermission, modelState, installModel, pinned, shortcutKey,
-  firstAssistant, progress, STEPS,
+  groupingAnswered, firstAssistant, progress, STEPS,
 } from './steps.js';
+import { GROUPING, groupingOn, markGroupingAsked, turnGroupingOff } from './grouping.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -62,10 +62,10 @@ function note(id, text, tone = '') {
 // ── Reading where things stand ─────────────────────────────────────────────────────────────
 
 async function read() {
-  const [mic, model, pin, shortcut, assistant] = await Promise.all([
-    micState(), modelState(), pinned(), shortcutKey(), firstAssistant(),
+  const [mic, model, pin, shortcut, grouping, groupingIsOn, assistant] = await Promise.all([
+    micState(), modelState(), pinned(), shortcutKey(), groupingAnswered(), groupingOn(), firstAssistant(),
   ]);
-  return { ...local, mic, model, pin, shortcut, assistant };
+  return { ...local, mic, model, pin, shortcut, grouping, groupingIsOn, assistant };
 }
 
 async function refresh() {
@@ -91,6 +91,7 @@ const SUMMARY = {
     ?? (local.skipped.includes('model') ? 'not available here' : ''),
   pin: () => (facts.pin ? 'pinned' : local.skipped.includes('pin') ? 'skipped' : ''),
   shortcut: () => facts.shortcut || 'none',
+  grouping: () => (facts.grouping ? (facts.groupingIsOn ? 'on' : 'off') : ''),
   assistant: () => facts.assistant?.name ?? '',
 };
 
@@ -124,7 +125,13 @@ function draw() {
   drawMic();
   drawModel();
   drawShortcut();
+  drawGrouping();
   drawDone();
+}
+
+/** Once answered, the switch shows what Chrome holds; until then it shows the suggested on. */
+function drawGrouping() {
+  if (facts.grouping) el('grouping-switch').setAttribute('aria-checked', String(facts.groupingIsOn));
 }
 
 function drawMic() {
@@ -229,6 +236,32 @@ el('get-model').addEventListener('click', async () => {
   refresh();
 });
 
+// The tab group: the switch is only the answer being chosen; Continue gives it. On, Continue asks
+// Chrome for the permission as its first statement, because a gesture does not survive an
+// await. Either answer ticks the card, and a declined prompt is a no, said as one.
+el('grouping-switch').addEventListener('click', () => {
+  const button = el('grouping-switch');
+  button.setAttribute('aria-checked', String(button.getAttribute('aria-checked') !== 'true'));
+});
+
+el('grouping-continue').addEventListener('click', () => {
+  const wanted = el('grouping-switch').getAttribute('aria-checked') === 'true';
+  // Somebody who came back to this card and switched it off gets the tabs ungrouped too.
+  const asking = wanted ? chrome.permissions.request(GROUPING)
+    : facts?.groupingIsOn ? turnGroupingOff().then(() => false) : Promise.resolve(false);
+  note('grouping-note', '');
+  asking
+    .then(async (granted) => {
+      await markGroupingAsked();
+      if (wanted && !granted) {
+        el('grouping-switch').setAttribute('aria-checked', 'false');
+        note('grouping-note', 'Chrome didn’t get a yes, so grouping is off. You can switch it on in Settings.');
+      }
+    })
+    .catch((error) => note('grouping-note', `Grouping couldn’t be switched on – ${error?.message ?? error}`, 'bad'))
+    .then(refresh);
+});
+
 el('skip-pin').addEventListener('click', () => {
   local.skipped.push('pin');
   refresh();
@@ -289,6 +322,10 @@ el('better-voices').addEventListener('click', () => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && (changes.agents || changes.micGranted)) refresh();
 });
+
+// Grouping switched on or off in Settings, or its permission removed in chrome://extensions.
+chrome.permissions.onAdded.addListener(refresh);
+chrome.permissions.onRemoved.addListener(refresh);
 
 // Unblocking the microphone in Chrome's settings. A grant Chrome now reports is confirmed the
 // way Settings does it – `getUserMedia` succeeds without a prompt – so it is a fact, not a guess.

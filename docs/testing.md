@@ -47,6 +47,14 @@ What they check:
 - **The vendor's tab title follows the turn:** `typing…`, `answering…`, then `done`. A turn that
   fails gives the tab its own title back, and a page that renames itself mid-turn keeps the new
   name.
+- **The OpenPosse tab group** (`grouping.spec.mjs`), against Chrome's real `tabGroups` API: a
+  question puts the vendor's tab in one purple group called OpenPosse, and the next keeps it
+  there; a tab dragged out rejoins; a tab in a group of the user's own, or pinned, is left where
+  it is and still answers; a grouped tab is asked rather than the one in front; a renamed group is
+  left alone and the next tab gets a fresh one; a second window gets its own. These tests run a
+  copy of the build that holds `tabGroups` from the start, standing in for Chrome's prompt; the
+  shipped manifest keeps it optional. The welcome page's card is in `extension.spec.mjs`: it starts
+  on, either answer ticks it, and Continue asks Chrome for exactly `tabGroups`.
 
 **A test fails if any page logged an error**, extension pages included. That is the point of
 the layer: a bundle that throws while it loads passes ESLint and every unit test, and has
@@ -83,6 +91,7 @@ assistant with Share first.
 | **Another language.** With Supertonic answering, choose German under the pace; a German sentence in the sample box is read in German, and a German question typed to an assistant is answered and read in German | ☐ | ☐ | ☐ |
 | **The side panel.** Opens from the icon and the shortcut, survives a click elsewhere, and nothing clips with the panel on the left at about 320px | ☐ | ☐ | ☐ |
 | **Sharing.** Share an assistant, import the file into a second profile, ask it something; importing it again says "You already have this one"; a copy with one selector changed offers only Replace, and Replace keeps the assistant's voice; Record this tab on a site that already has an assistant re-records it and says so | ☐ | ☐ | ☐ |
+| **The tab group.** Welcome card or Settings switch: Chrome asks "View and manage your tab groups" and nothing else; updating from a build without grouping keeps the extension enabled with no new prompt. Then: two assistants share one OpenPosse group; a second window gets its own; ungroup a tab by hand and ask, it rejoins; rename the group, it is left alone; restart Chrome and ask, the same group is used; a pinned tab stays pinned; a tab in your own group stays there; collapse the group and "show me" opens it; Settings off ungroups and closes nothing; deleting an assistant ungroups its tab only when no other assistant uses it | ☐ | ☐ | ☐ |
 | **Nothing leaves the machine.** With a network monitor running, a whole turn makes no connection; only setup's downloads do | ☐ | ☐ | ☐ |
 
 What differs by system, so a difference is not mistaken for a fault:

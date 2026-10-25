@@ -19,6 +19,23 @@ test('the tab in front in its window is used, else the first one open', () => {
   assert.equal(pickTab([a, { id: 3, active: false }]), a);
 });
 
+test('a tab in an OpenPosse group is preferred, wherever it is', () => {
+  const front = { id: 1, active: true, groupId: -1 };
+  const grouped = { id: 2, active: false, groupId: 7 };
+  assert.equal(pickTab([front, grouped], new Set([7])), grouped);
+  // Among grouped tabs, the one in front still wins.
+  const groupedFront = { id: 3, active: true, groupId: 7 };
+  assert.equal(pickTab([grouped, groupedFront, front], new Set([7])), groupedFront);
+});
+
+test('a preference, not a fence: with no grouped tab, any open one is used', () => {
+  const a = { id: 1, active: false, groupId: -1 };
+  const b = { id: 2, active: true, groupId: 9 };
+  // 9 is somebody's own group, not one of ours.
+  assert.equal(pickTab([a, b], new Set([7])), b);
+  assert.equal(pickTab([a, b]), b);
+});
+
 test('with nothing open there is no tab, rather than a new one', () => {
   assert.equal(pickTab([]), null);
   assert.equal(pickTab(undefined), null);

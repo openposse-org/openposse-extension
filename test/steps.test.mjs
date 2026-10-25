@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { progress, unfinished, STEPS } from '../src/steps.js';
 
 const NOTHING = { started: false, mic: 'ask', model: 'downloadable', pin: false, shortcut: '', assistant: null };
-const ALL = { started: true, mic: 'granted', model: 'ready', pin: true, shortcut: '⌘⇧9', assistant: { name: 'Ivan' } };
+const ALL = { started: true, mic: 'granted', model: 'ready', pin: true, shortcut: '⌘⇧9', grouping: true, assistant: { name: 'Ivan' } };
 
 test('a first open starts at the welcome card', () => {
   const { done, current } = progress(NOTHING);
@@ -57,9 +57,17 @@ test('a speech model this Chrome cannot have can be passed over, and only then',
   assert.equal(progress({ ...at, model: 'downloadable' }).current, 'model');
 });
 
-test('an assigned shortcut ticks itself, so the next card is the first assistant', () => {
+test('an assigned shortcut ticks itself, so the next card is the tab group', () => {
   const at = { ...NOTHING, started: true, mic: 'granted', model: 'ready', pin: true, shortcut: '⌘⇧9' };
-  assert.equal(progress(at).current, 'assistant');
+  assert.equal(progress(at).current, 'grouping');
+});
+
+test('either answer to the tab group ticks it, and then comes the first assistant', () => {
+  // `grouping` is "answered": on, or a recorded no. Leaving grouping off is not a step undone.
+  const at = { ...NOTHING, started: true, mic: 'granted', model: 'ready', pin: true, shortcut: '⌘⇧9' };
+  assert.equal(progress({ ...at, grouping: true }).current, 'assistant');
+  assert.equal(progress({ ...at, grouping: true }).done.grouping, true);
+  assert.equal(progress({ ...at, skipped: ['grouping'] }).current, 'grouping', 'it is answered, not skipped');
 });
 
 test('with every step done the page ends on the last card', () => {

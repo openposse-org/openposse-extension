@@ -80,6 +80,10 @@ Asking does not switch tabs either; navigation is something the user asks for ("
 **The one exception is first-run onboarding**, decided by the maintainer on 2026-10-25: the
 welcome page (`welcome.js`) may open a site when one of its tiles is clicked. The worker may open
 the welcome page itself by one exact call, which the test spells out, and nothing else.
+The optional OpenPosse tab group (`src/grouping.js`, 2026-10-25) keeps to the rule: it groups and
+ungroups tabs that are open, never opens or closes one, and `vendorTab` only prefers a grouped tab.
+`tabGroups` stays an optional permission: as a required one it adds an install warning, and an
+update that adds a warning disables the extension until each user approves it again.
 
 **No vendor in `manifest.json`.** Sites are granted one origin at a time through
 `permissions.request()` from a button in the side panel, and registered with
