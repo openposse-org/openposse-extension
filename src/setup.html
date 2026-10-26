@@ -250,6 +250,8 @@
       /* The mock roster's sizes, in the row a slider would take. */
       #debug-tools .sizes { grid-area: slider; display: flex; gap: 8px; }
       #debug-tools .sizes .icon { font-size: 11px; font-weight: 600; font-feature-settings: var(--figures); }
+      /* A word too long for the square, as the voice folder's buttons are. */
+      #debug-tools .sizes .icon.word { width: auto; padding: 0 10px; }
       /* Feedback: what kind, what happened, and an address only if a reply is wanted. The kinds
          are radios drawn as pills, so the choice is one tap and none is made for anybody. */
       #feedback-sheet { position-anchor: --feedback; width: min(360px, 100vw - 32px); padding: 14px 16px 16px; }
@@ -1435,6 +1437,26 @@
           <div class="why">
             Opens each of their sites in a minimized window and closes it once the icons are in.
             These are real page loads, so the sites appear in your history.
+          </div>
+          <!-- Voice files to and from a folder, so another build skips the download – see
+               `weightfolder.js`. -->
+          <div class="knob" role="group" aria-labelledby="voicefolder-name">
+            <span id="voicefolder-name">Voice files folder</span>
+            <output id="voicefolder-value"></output>
+            <div class="sizes">
+              <button class="icon word" id="voicefolder-pick" data-tip-at="start"
+                      aria-label="Choose the folder voice files are copied to and from">Choose</button>
+              <button class="icon word" id="voicefolder-export" data-tip-at="start"
+                      aria-label="Copy the voices downloaded here into the folder">Export</button>
+              <button class="icon word" id="voicefolder-import" data-tip-at="start"
+                      aria-label="Load the voices from the folder, each checked against its pinned hash">Import</button>
+            </div>
+          </div>
+          <div class="why" id="voicefolder-result" hidden></div>
+          <div class="why">
+            Each build has its own storage, so export from one and import in another instead of
+            downloading again. Chrome can't open a typed path, so the folder is picked once and
+            remembered; it asks for access again each session.
           </div>
         </div>
 

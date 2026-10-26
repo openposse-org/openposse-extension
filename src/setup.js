@@ -30,6 +30,7 @@ import { ICONS, iconPages, putIcon } from './favicons.js';
 import { GROUPING, groupingOn, markGroupingAsked, turnGroupingOff } from './grouping.js';
 import { micState, askForMic, modelState, installModel, shortcutKey } from './steps.js';
 import { openOnboarding, takeOnboardingRequest, watchOnboardingRequests } from './onboarding.js';
+import { exportTo, importFrom, rememberFolder, rememberedFolder, mayUse } from './weightfolder.js';
 
 const el = (id) => document.getElementById(id);
 /**
@@ -2074,6 +2075,92 @@ function whyNoIcon(tab, pattern) {
   if (url.protocol !== 'https:' || patternForHost(url.hostname) !== pattern) return `it went to ${url.origin}`;
   return 'its icon arrived but was not picked up';
 }
+
+// ── Voice files folder (debug) ─────────────────────────────────────────────────────────────
+//
+// Export and import of the downloaded voices, so another build can skip the download – see
+// `weightfolder.js`. Each button asks Chrome for the folder first, while its click still counts.
+
+async function paintVoiceFolder() {
+  const folder = await rememberedFolder();
+  el('voicefolder-value').textContent = folder ? folder.name : 'none chosen';
+  el('voicefolder-export').disabled = !folder;
+  el('voicefolder-import').disabled = !folder;
+}
+
+function voiceFolderSays(text) {
+  el('voicefolder-result').textContent = text;
+  el('voicefolder-result').hidden = !text;
+}
+
+el('voicefolder-pick').addEventListener('click', async () => {
+  let folder;
+  try {
+    folder = await window.showDirectoryPicker({ id: 'openposse-voices', mode: 'readwrite' });
+  } catch (error) {
+    // Closing the picker is AbortError, an answer rather than a fault.
+    if (error?.name !== 'AbortError') {
+      console.warn('[openposse] no voice folder was chosen –', error?.message ?? error);
+      voiceFolderSays(`not chosen – ${error?.message ?? error}`);
+    }
+    return;
+  }
+  try {
+    await rememberFolder(folder);
+  } catch (error) {
+    console.warn('[openposse] the voice folder was not remembered –', error?.message ?? error);
+    voiceFolderSays(`chosen, but not remembered – ${error?.message ?? error}`);
+  }
+  await paintVoiceFolder();
+});
+
+/** Runs one folder action with its button held, and says how it went. */
+async function withVoiceFolder(mode, button, work) {
+  const folder = await rememberedFolder();
+  if (!folder) return;
+  try {
+    if (!(await mayUse(folder, mode))) {
+      voiceFolderSays('Chrome was not allowed to use the folder.');
+      return;
+    }
+  } catch (error) {
+    console.warn('[openposse] could not get the voice folder –', error?.message ?? error);
+    voiceFolderSays(`no access – ${error?.message ?? error}`);
+    return;
+  }
+  el(button).disabled = true;
+  voiceFolderSays('working…');
+  try {
+    voiceFolderSays(await work(folder));
+  } catch (error) {
+    console.warn('[openposse] the voice folder action failed –', error?.message ?? error);
+    voiceFolderSays(`failed – ${error?.message ?? error}`);
+  } finally {
+    el(button).disabled = false;
+  }
+}
+
+el('voicefolder-export').addEventListener('click', () => withVoiceFolder('readwrite', 'voicefolder-export', async (folder) => {
+  const { written, missing } = await exportTo(folder);
+  return missing ? `${written} files copied; ${missing} not downloaded here, so not copied` : `${written} files copied`;
+}));
+
+el('voicefolder-import').addEventListener('click', () => withVoiceFolder('read', 'voicefolder-import', async (folder) => {
+  downloading(+1);
+  try {
+    const results = await importFrom(folder);
+    await refreshWeights();
+    return results.map(({ cache, found, ok, failed }) => {
+      const name = cache.replace(/^openposse-|-v\d+$/g, '');
+      if (!found) return `${name}: not in the folder`;
+      return ok ? `${name}: loaded and verified` : `${name}: ${failed.length} files not loaded (${failed[0].reason})`;
+    }).join(' · ');
+  } finally {
+    downloading(-1);
+  }
+}));
+
+if (DEV_TOOLS) paintVoiceFolder();
 
 // A slider moved in another window or the roster changed.
 chrome.storage.onChanged.addListener((changes, area) => {
