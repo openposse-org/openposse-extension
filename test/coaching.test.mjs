@@ -9,7 +9,10 @@ import assert from 'node:assert/strict';
 import {
   newDraft, applyCapture, problems, isComplete, outstanding, finish,
 } from '../src/draft.js';
-import { derive, stepLabel, heading, instruction, isCancellable, captures, keycaps, PATIENCE_MS } from '../src/coaching.js';
+import {
+  derive, stepLabel, heading, instruction, isCancellable, captures, keycaps, PATIENCE_MS,
+  awayInstruction, tabClosedInstruction,
+} from '../src/coaching.js';
 
 const sel = (css) => ({ css });
 
@@ -314,4 +317,17 @@ test('the heading names the product while it is caught, and says when it has bee
   assert.equal(heading('done', 'Notion'), 'Lassoed Notion');
   // A site `productLabel` cannot name still gets a sentence rather than `Lassoing …`.
   assert.equal(heading('await-open', ''), 'Lassoing an AI assistant…');
+});
+
+test('another tab in front is told where the recording is, not asked to record there', () => {
+  assert.match(awayInstruction('Notion'), /the Notion tab it started in/);
+  assert.match(awayInstruction('Notion'), /Go back to it/);
+  // A site `productLabel` cannot name still reads as a sentence.
+  assert.match(awayInstruction(''), /^Lassoing watches the tab it started in/);
+});
+
+test('a closed tab ends the recording and says nothing was saved', () => {
+  assert.match(tabClosedInstruction('Notion'), /^The Notion tab was closed/);
+  assert.match(tabClosedInstruction('Notion'), /Nothing has been saved/);
+  assert.match(tabClosedInstruction(''), /^The tab was closed/);
 });

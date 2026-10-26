@@ -302,6 +302,14 @@ function renderCoach() {
   say.textContent = coach.instruction ?? '';
   say.classList.toggle('bad', coach.bad === true);
 
+  // Stopping throws the recording away and closing only leaves a finished one, so they are named
+  // apart: somebody about to lose a half-made lasso should be told so by the button.
+  label(el('coach-close'), coach.ended ? 'Close' : 'Stop lassoing – nothing is saved');
+
+  // The worker says which tab it is watching when that is not the one in front.
+  el('coach-back').hidden = !coach.away;
+  el('coach-back').textContent = coach.away ? `Back to ${coach.away}` : '';
+
   // **Every capture stays on screen once it is made.** Confirmation is the whole reason the list
   // exists: somebody who cannot see that their shortcut registered will press it again, and on a
   // toggle the second press closes the assistant and records the wrong thing.
@@ -806,6 +814,19 @@ async function lassoThisTab() {
   await chrome.runtime.sendMessage({ kind: 'openposse.record', tabId, pattern });
 }
 
+// The worker owns the recording, so both of these are asks; the panel changes when it answers.
+el('coach-close').addEventListener('click', () => {
+  // Said on the card, not by `say`: the dock it writes to is hidden while recording.
+  chrome.runtime.sendMessage({ kind: 'openposse.record.cancel' }).catch((error) => {
+    el('coach-say').textContent = `Could not stop lassoing – ${error?.message ?? error}`;
+    el('coach-say').classList.add('bad');
+  });
+});
+el('coach-back').addEventListener('click', () => {
+  chrome.runtime.sendMessage({ kind: 'openposse.record.return' }).catch((error) =>
+    console.warn('[openposse] could not go back to the lassoed tab –', error?.message ?? error));
+});
+
 el('settings').addEventListener('click', (event) => {
   event.preventDefault();
   chrome.runtime.openOptionsPage();
@@ -1044,6 +1065,7 @@ setIcon(el('settings'), 'settings', 17);
 setIcon(el('send'), 'send-horizontal', 16);
 setIcon(el('grant'), 'key-round', 16);
 setIcon(el('demostop'), 'square', 11);
+setIcon(el('coach-close'), 'x', 16);
 label(el('demostop'), 'Stop the scripted turn');
 showListening({ listening: false });
 setAsk(false);

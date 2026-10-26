@@ -156,6 +156,23 @@ export function instruction(state, draft) {
   }
 }
 
+/**
+ * Said instead of the step while another tab is in front. The recording stays with the tab it
+ * started in, so this names that tab rather than asking anything of the one now showing.
+ */
+export function awayInstruction(product) {
+  const tab = product ? `the ${product} tab` : 'the tab';
+  return `Lassoing watches ${tab} it started in, so nothing here is being recorded. `
+    + 'Go back to it to carry on.';
+}
+
+/** The lassoed tab was closed, which ends the recording. */
+export function tabClosedInstruction(product) {
+  const tab = product ? `The ${product} tab` : 'The tab';
+  return `${tab} was closed, so there’s nothing left to watch. Nothing has been saved – `
+    + 'lasso it again from a tab that’s open.';
+}
+
 /** A shortcut as the glyphs on the keys, in the order macOS writes them. */
 export function keycaps(shortcut) {
   if (!shortcut) return [];
