@@ -35,6 +35,7 @@ import { joinGroup, expandGroupOf, leaveGroup, reconcileGroups } from './groupin
 import { requestOnboarding } from './steps.js';
 import { DONE_MS } from './title.js';
 import { hashOf, matchFor, staleness, today, unpack } from './share.js';
+import { builtInText } from './builtin.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
 import {
   derive, stepLabel, heading, instruction, captures, PATIENCE_MS,
@@ -1243,6 +1244,19 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
       console.error('[openposse] import failed –', error);
       respond({ ok: false, reason: String(error?.message ?? error) });
     });
+    return true;
+  }
+
+  // A lasso that comes with OpenPosse, from the side panel's offer. The panel sends which file,
+  // never its text: the worker reads it from the package, and only if the index lists it, then
+  // adds it the way a shared file is added – with the same checks, after the same Allow.
+  if (request?.kind === 'openposse.agent.builtin') {
+    builtInText(request.file)
+      .then((text) => importShared(text))
+      .then(respond, (error) => {
+        console.error('[openposse] adding a built-in lasso failed –', error);
+        respond({ ok: false, reason: String(error?.message ?? error) });
+      });
     return true;
   }
 

@@ -25,6 +25,7 @@ import { icon } from './icons.js';
 import { hasWebGPU, agreedToSupertonic } from './tts.js';
 import { KOKORO, SUPERTONIC } from './weights.js';
 import { engineSettings } from './storage.js';
+import { builtInLassos, covers } from './builtin.js';
 
 const el = (id) => document.getElementById(id);
 const dialog = el('onboarding');
@@ -347,6 +348,26 @@ el('ob-tiles').replaceChildren(...SITES.map((site) => {
   });
   return tile;
 }));
+
+/**
+ * "Ready to go" on the tiles whose site has a lasso that comes with OpenPosse: the panel offers
+ * it there, so that first assistant is an Allow rather than a recording. The tile itself still
+ * only opens the site; adding is the panel's, on the site, behind Chrome's Allow.
+ */
+builtInLassos()
+  .then((entries) => {
+    for (const [index, site] of SITES.entries()) {
+      const host = new URL(site.url).hostname;
+      if (!entries.some((entry) => covers(entry.lasso.domainPattern, host))) continue;
+      const tile = el('ob-tiles').children[index];
+      const ready = document.createElement('span');
+      ready.className = 'ready';
+      ready.textContent = 'ready to go';
+      tile.append(ready);
+      tile.setAttribute('aria-label', `Open ${site.name} in a new tab – OpenPosse comes with its lasso`);
+    }
+  })
+  .catch((error) => console.warn('[openposse] could not read the lassos that come with OpenPosse –', error?.message ?? error));
 
 el('ob-open-panel').addEventListener('click', () => openPanel());
 

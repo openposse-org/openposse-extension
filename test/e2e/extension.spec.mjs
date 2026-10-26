@@ -429,6 +429,44 @@ test('the first assistant ticks onboarding wherever it was added', async ({ cont
   await expect(tab(page, 'Your first lasso')).toContainText('done');
 });
 
+test('the welcome tiles mark the sites whose lasso comes with OpenPosse', async ({ context, extensionId }) => {
+  const page = context.pages().find((p) => p.url() === `chrome-extension://${extensionId}/setup.html`);
+  const ready = page.locator('#ob-tiles button', { has: page.locator('.ready') });
+  // Notion's tile opens app.notion.com, which the shipped *.notion.com lasso covers.
+  await expect(ready).toHaveCount(2);
+  await expect(ready.nth(0)).toHaveAttribute('aria-label', 'Open Notion in a new tab – OpenPosse comes with its lasso');
+  await expect(ready.nth(1)).toHaveAttribute('aria-label', 'Open ChatGPT in a new tab – OpenPosse comes with its lasso');
+  await expect(page.locator('#ob-tiles button', { hasText: 'HubSpot' }).locator('.ready')).toHaveCount(0);
+});
+
+test('on a site whose lasso comes with OpenPosse, the panel offers it, and one click adds it', async ({ context, extensionId }) => {
+  const vendor = await context.newPage();
+  await vendor.goto(VENDOR_URL);
+  const panel = await openPanel(context, extensionId);
+  // The panel's own page is in front until the vendor's is; then it reads the vendor's tab.
+  await vendor.bringToFront();
+
+  const card = panel.locator('#builtin');
+  await expect(card).toBeVisible();
+  await expect(panel.locator('#builtin-text')).toHaveText('OpenPosse comes with a lasso for Fixture.');
+  // The offer has its own Lasso it myself, so the empty card is not shown under it.
+  await expect(panel.locator('#empty')).toBeHidden();
+
+  // The e2e build's manifest already grants the site, standing in for Chrome's Allow.
+  await panel.click('#builtin-add');
+  await expect(card).toBeHidden();
+  const { agents } = await panel.evaluate(() => chrome.storage.local.get('agents'));
+  expect(agents.map((a) => a.name)).toEqual(['Acme']);
+});
+
+test('the worker adds only a lasso the package lists', async ({ context, extensionId }) => {
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/setup.html`);
+  const answer = await page.evaluate(
+    () => chrome.runtime.sendMessage({ kind: 'openposse.agent.builtin', file: '../manifest.json' }));
+  expect(answer).toEqual({ ok: false, reason: '../manifest.json is not a lasso that comes with OpenPosse' });
+});
+
 test('an empty side panel says where to go, and how to lasso there, on a page it cannot lasso', async ({ context, extensionId }) => {
   const panel = await openPanel(context, extensionId);
   // The panel's own page is in front, which nothing can drive.

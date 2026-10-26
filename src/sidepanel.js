@@ -39,6 +39,7 @@ import { startRope } from './rope.js';
 import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
 import { micState, modelState, shortcutKey, unfinished } from './steps.js';
+import { builtInLassos, offerFor } from './builtin.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -759,8 +760,10 @@ function say(text) {
  */
 function drawEmpty() {
   const { agents, problem, read } = roster;
+  drawBuiltIn();
   const empty = el('empty');
-  empty.hidden = !read || agents.length > 0;
+  // The offer has a Lasso it myself of its own, so the two never stand one above the other.
+  empty.hidden = !read || agents.length > 0 || offer !== null;
   empty.classList.toggle('problem', Boolean(problem));
   if (empty.hidden) return;
 
@@ -773,6 +776,62 @@ function drawEmpty() {
 }
 
 el('empty-lasso').addEventListener('click', lassoThisTab);
+
+// ── The lassos that come with OpenPosse ────────────────────────────────────────────────────
+
+/** Read once: they are part of the package. Empty until then, or if they cannot be read. */
+let builtIns = [];
+/** The one on offer for the tab in front, or null. */
+let offer = null;
+
+builtInLassos()
+  .then((entries) => { builtIns = entries; drawEmpty(); })
+  .catch((error) => console.warn('[openposse] could not read the lassos that come with OpenPosse –', error?.message ?? error));
+
+/**
+ * "OpenPosse comes with a lasso for ChatGPT", on ChatGPT, while no assistant lives there – the
+ * owner's call of 2026-10-26. Only once the roster has been read, so it never flashes at
+ * somebody who already has that assistant, and never over a roster that could not be read.
+ */
+function drawBuiltIn() {
+  const card = el('builtin');
+  const was = offer?.file;
+  offer = roster.read && !roster.problem && site.host
+    ? offerFor(builtIns, site.host, Object.values(roster.patterns)) : null;
+  card.hidden = offer === null;
+  if (!offer) return;
+  if (offer.file !== was) el('builtin-note').hidden = true;
+  const product = productLabel(offer.lasso.domainPattern) || site.host;
+  el('builtin-text').textContent = `OpenPosse comes with a lasso for ${product}.`;
+  el('builtin-add').textContent = `Add ${product}`;
+}
+
+/** Says why the offer was not taken, under it. */
+function sayBuiltIn(text) {
+  el('builtin-note').textContent = text;
+  el('builtin-note').hidden = false;
+}
+
+el('builtin-add').addEventListener('click', async () => {
+  if (!offer) return;
+  const { file, lasso } = offer;
+  // First statement, nothing awaited before it: Chrome's Allow for this one site.
+  const granted = await chrome.permissions
+    .request({ origins: [matchPattern(lasso.domainPattern)] })
+    .catch((error) => { sayBuiltIn(`Chrome refused the request – ${error?.message ?? error}`); return null; });
+  if (granted === null) return;
+  if (!granted) {
+    // Declining is an answer, not a failure: the offer stays, and says what it needs.
+    sayBuiltIn('Site access is needed to add it.');
+    return;
+  }
+  const answer = await chrome.runtime.sendMessage({ kind: 'openposse.agent.builtin', file })
+    .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+  // Added, the roster changes and the offer goes with it; anything else is said here.
+  if (!answer?.ok) sayBuiltIn(`Not added – ${answer?.reason ?? 'no answer'}.`);
+});
+
+el('builtin-lasso').addEventListener('click', lassoThisTab);
 
 /**
  * "Finish setting up", while something OpenPosse needs is still to do. Read from Chrome each time

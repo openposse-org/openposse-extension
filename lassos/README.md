@@ -6,6 +6,14 @@ writes (`pack` in `src/share.js`). Copy one from GitHub and paste it into Settin
 which is the rule that keeps selector literals out of extension source. M3 replaces this
 directory with the recorder's output.
 
+**These files ship with the extension** (owner's call, 2026-10-26). `tools/build.mjs` copies
+every `*.json` here into the package as it is and writes `lassos/index.json` listing them. On a
+site one of them is for, while no assistant lives there, the side panel offers to add it, and
+the onboarding tiles mark that site "ready to go". Nothing is added on install: adding takes
+the click and Chrome's Allow for that one site, then the same import a pasted file takes
+(`src/builtin.js`). So a file added here is offered to every user from the next release, and a
+filename must be lowercase letters, digits and hyphens, or the index leaves it out.
+
 The envelope around `lasso` says which lasso it is (`docs/lasso-identity.md`):
 
 | Field | What it is |
