@@ -271,10 +271,23 @@
       }
       .coach .say { font-size: 14px; line-height: 1.45; }
       .coach .say.bad { color: var(--error); }
-      .coach .list { margin: 14px 0 16px; display: flex; flex-direction: column; gap: 7px; }
+      .coach .list { margin: 14px 0 16px; display: flex; flex-direction: column; gap: 9px; }
       .coach .row { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
-      .coach .row .tick { color: var(--green); font-size: 11px; }
-      .coach .row .tick.none { color: var(--text-faint); }
+      /* Settings' step numbers, smaller: a grey ring until the step is captured, then green. */
+      .coach .row .num {
+        width: 17px; height: 17px; flex: 0 0 17px; align-self: flex-start;
+        border-radius: 50%; display: grid; place-items: center;
+        font-size: 9.5px; color: var(--text-faint);
+        border: 1px solid var(--line);
+        transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+      }
+      .coach .row .num.done {
+        background: var(--green); border-color: var(--green);
+        color: #00250c; font-weight: 700;
+      }
+      /* What is still to do reads as an instruction, quieter than what was found. */
+      .coach .row.pending .label { color: var(--text-faint); }
+      .coach .row.pending .detail { color: var(--text-faint); font-feature-settings: normal; }
       .coach .row .label { color: var(--text-dim); flex: 0 0 82px; }
       .coach .row .kind {
         font-size: 8.5px; font-weight: 600;

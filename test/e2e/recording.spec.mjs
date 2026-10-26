@@ -25,6 +25,11 @@ test('a finished lasso is named on the card, and Save and return goes back to th
   const { vendor, panel } = await startLassoing(context, extensionId);
   await vendor.bringToFront();
 
+  // Every step is listed before any is done, numbered and grey.
+  const rows = panel.locator('#coach-list .row');
+  await expect(rows).toHaveCount(5);
+  await expect(panel.locator('#coach-list .num.done')).toHaveCount(0);
+
   // What a person does: open the assistant, then ask it two things.
   await vendor.click('[data-testid="open-assistant"]');
   for (const question of ['What is the pipeline total?', 'And the biggest deal?']) {
@@ -39,6 +44,8 @@ test('a finished lasso is named on the card, and Save and return goes back to th
   await expect(box).toBeVisible({ timeout: 30_000 });
   await expect(box).toHaveValue('Fixture');
   await expect(panel.locator('#coach-done')).toBeHidden();
+  // The fake vendor's busy signal is not found, so its row stays grey: four of five are green.
+  await expect(panel.locator('#coach-list .num.done')).toHaveCount(4);
 
   await box.fill('Ivan');
   await panel.click('#coach-name button[type="submit"]');

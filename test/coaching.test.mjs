@@ -331,3 +331,17 @@ test('a closed tab ends the recording and says nothing was saved', () => {
   assert.match(tabClosedInstruction('Notion'), /Nothing has been saved/);
   assert.match(tabClosedInstruction(''), /^The tab was closed/);
 });
+
+test('the checklist shows every step from the start, each pending until it is captured', () => {
+  const rows = captures(newDraft('*.notion.so'));
+  assert.deepEqual(rows.map((r) => r.id), ['open', 'input', 'submit', 'reply', 'busy']);
+  assert.ok(rows.every((r) => r.pending), 'nothing is captured yet');
+
+  // One answer is progress, said on its row, not a capture.
+  let draft = applyCapture(newDraft('*.notion.so'), { kind: 'reply_pending', repliesSoFar: 1 });
+  assert.match(captures(draft).find((r) => r.id === 'reply').detail, /one more/);
+
+  draft = complete();
+  assert.deepEqual(captures(draft).map((r) => r.id), ['open', 'input', 'submit', 'reply', 'busy']);
+  assert.ok(captures(draft).every((r) => !r.pending), 'everything is captured');
+});

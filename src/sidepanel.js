@@ -324,16 +324,16 @@ function renderCoach() {
   // toggle the second press closes the assistant and records the wrong thing.
   const list = el('coach-list');
   list.textContent = '';
-  for (const row of coach.captures ?? []) {
+  for (const [index, row] of (coach.captures ?? []).entries()) {
     const line = document.createElement('div');
-    line.className = 'row';
+    line.className = row.pending ? 'row pending' : 'row';
 
+    // Numbered like Settings' steps: grey until captured, green once it is. Something optional
+    // that was not found stays grey rather than turning red or green: a red mark would say a
+    // recording had failed when it has not, and green would claim something we do not have.
     const tick = document.createElement('span');
-    // A dash rather than a tick for something optional that was not found: a red cross would say
-    // a recording had failed when it has not, and a green tick would claim something we do not
-    // have.
-    tick.className = row.absent ? 'tick none' : 'tick';
-    tick.textContent = row.absent ? '–' : '✓';
+    tick.className = row.pending || row.absent ? 'num' : 'num done';
+    tick.textContent = String(index + 1);
 
     const label = document.createElement('span');
     label.className = 'label';
