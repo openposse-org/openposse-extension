@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.11](https://github.com/openposse-org/openposse-extension/compare/v0.9.10...v0.9.11) (2026-10-26)
+
+
+### Features
+
+* lasso chat sites whose message box is always there, and add ChatGPT ([#71](https://github.com/openposse-org/openposse-extension/issues/71)) ([d2e0d70](https://github.com/openposse-org/openposse-extension/commit/d2e0d70a7e5d4eebbfc6eed3a088c67c1a3bfdf6))
+
 ## [0.9.10](https://github.com/openposse-org/openposse-extension/compare/v0.9.9...v0.9.10) (2026-10-26)
 
 
