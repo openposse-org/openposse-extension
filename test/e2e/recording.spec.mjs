@@ -123,6 +123,26 @@ test('a message box that is always there can be said so, and the open step is do
   await expect(always).toBeHidden();
 });
 
+test('a message box that already has focus is on the card from the start', async ({ context, extensionId }) => {
+  // ChatGPT focuses its box on load. Arming adopts it at once, and those first captures used to
+  // reach the worker before it was listening, so the card never showed the message box.
+  const vendor = await context.newPage();
+  await vendor.goto(VENDOR_URL);
+  await vendor.click('button[data-testid="open-assistant"]');
+  await vendor.focus('textarea[data-testid="composer"]');
+
+  const panel = await openPanel(context, extensionId);
+  await panel.evaluate(async (url) => {
+    const [tab] = await chrome.tabs.query({ url: `${url}*` });
+    await chrome.runtime.sendMessage({ kind: 'openposse.record', tabId: tab.id, pattern: '*.fixture.test' });
+  }, VENDOR_URL);
+  await vendor.bringToFront();
+
+  await expect(panel.locator('#coach-list')).toContainText('Message box');
+  await expect(panel.locator('#coach-say')).toContainText('already open');
+  await expect(panel.locator('#coach-always')).toBeVisible();
+});
+
 test('a picked file puts its name in the box', async ({ context, extensionId }) => {
   const settings = await context.newPage();
   await settings.goto(`chrome-extension://${extensionId}/setup.html`);

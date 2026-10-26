@@ -500,8 +500,17 @@ async function focusTab({ tabId }) {
  */
 async function armRecording({ tabId }, { id, agent }) {
   await ensureContentScript(tabId);
-  await chrome.tabs.sendMessage(tabId, { intent: 'arm_recording' });
+  // **Set before arming, not after.** Arming adopts a message box that already has focus and
+  // reports it (and `armed`) at once, before `sendMessage` resolves – and the relay drops every
+  // capture while `recording` is null. ChatGPT focuses its box on load, so both were lost: the
+  // card never showed the message box and never knew the assistant was already open.
   recording = { id, agent, tabId, keepAlive: startKeepAlive() };
+  try {
+    await chrome.tabs.sendMessage(tabId, { intent: 'arm_recording' });
+  } catch (error) {
+    stopRecording();
+    throw error;
+  }
   return { ok: true, tabId };
 }
 
