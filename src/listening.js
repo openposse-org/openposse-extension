@@ -9,7 +9,7 @@
 // for something that was never meant to be kept. Only the listening *flag* is persisted, because
 // a badge that says we are listening after the worker has died is a lie a user would act on.
 
-import { loadRoster, micGranted, voiceSpeed, engineSettings } from './storage.js';
+import { loadRoster, micGranted, setMicGranted, voiceSpeed, engineSettings } from './storage.js';
 import { channelOf, initialFor } from './channels.js';
 import { panel, panelLevel } from './panel.js';
 import { beginTurn, trace } from './trace.js';
@@ -156,6 +156,16 @@ async function tell(kind, body = {}) {
 }
 
 // ── Starting and stopping ─────────────────────────────────────────────────────────────────
+
+/**
+ * Clears setup's record of the microphone, once Chrome has refused it in the offscreen
+ * document. The record is all the panel and onboarding go on, so without this they keep
+ * saying "granted" over a microphone that no longer is, and nothing offers to ask again.
+ */
+function forgetMic() {
+  setMicGranted(false).catch((error) =>
+    console.warn('[openposse] could not clear the microphone record –', error?.message ?? error));
+}
 
 /**
  * Names for the recogniser to favour, at a boost that E0 showed biting on three in a row.
@@ -528,7 +538,13 @@ export function handleOffscreenMessage(message) {
 
     case 'openposse.listen.failed':
       failure = { code: message.code, message: message.message };
+      // The recogniser refused the microphone, so the grant setup recorded is not there any more.
+      if (message.code === 'not-allowed') forgetMic();
       settle();
+      return true;
+
+    case 'openposse.mic.lost':
+      forgetMic();
       return true;
 
     case 'openposse.listen.note':

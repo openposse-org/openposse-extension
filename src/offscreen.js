@@ -93,6 +93,10 @@ async function startMeter() {
     // AudioContext, an autoplay policy, or the orb simply being wrong.
     console.warn('[openposse] no level meter –', error?.message ?? error);
     meter = null;
+    // Refused here means the grant setup recorded is gone – "Allow this time" ends with its
+    // tab, and this document has no UI to ask again in, so Chrome dismisses the prompt (the
+    // owner's report of 2026-10-26). The worker clears the record, so setup asks again.
+    if (error?.name === 'NotAllowedError') send('openposse.mic.lost', { reason: error.message });
   }
 }
 
