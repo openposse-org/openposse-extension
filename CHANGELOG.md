@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.7](https://github.com/openposse-org/openposse-extension/compare/v0.9.6...v0.9.7) (2026-10-26)
+
+
+### Fixes
+
+* the lasso card can be stopped, stays with its tab, and the add box names its file ([#63](https://github.com/openposse-org/openposse-extension/issues/63)) ([46a0579](https://github.com/openposse-org/openposse-extension/commit/46a0579ee1f1aa93688115a7ae948ea709cc5995))
+
 ## [0.9.6](https://github.com/openposse-org/openposse-extension/compare/v0.9.5...v0.9.6) (2026-10-26)
 
 
