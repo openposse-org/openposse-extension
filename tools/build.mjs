@@ -4,7 +4,8 @@
 // Source and output are separate folders so that what Chrome loads, and what goes into a store
 // zip, is exactly what this script put there. `src/` holds the code, the pages and the manifest;
 // `public/` holds files copied as they are (icons, the vendored speech libraries, the
-// pronunciation dictionaries). Nothing else – not `tools/`, not `test/`, not `node_modules/` –
+// pronunciation dictionaries); `lassos/` holds the lassos that come with OpenPosse, copied as
+// data. Nothing else – not `tools/`, not `test/`, not `node_modules/` –
 // can end up in the package, which it could while the folder Chrome loaded was the repo itself.
 //
 //   node tools/build.mjs            a development build. It keeps the manifest's `key`, so the
@@ -71,7 +72,7 @@ const DEV_ONLY = new Set(['spike', 'spike.html', 'capture']);
 const shipped = (entries) =>
   Object.fromEntries(Object.entries(entries).filter(([name]) => !(store && DEV_ONLY.has(name))));
 
-/** The pages, the stylesheet, `public/` and the manifest – everything esbuild does not write. */
+/** The pages, the stylesheet, `public/`, the lassos and the manifest – everything esbuild does not write. */
 async function copyStatic() {
   // Finder litters folders with `.DS_Store`; none of it belongs in a package.
   await cp('public', OUT, { recursive: true, filter: (path) => !path.endsWith('.DS_Store') });
@@ -90,6 +91,8 @@ async function copyStatic() {
     await cp(`src/supertonic/${file}`, `${OUT}/vendor/supertonic/${file}`);
   }
 
+  await copyLassos();
+
   let manifest = JSON.parse(await readFile('src/manifest.json', 'utf8'));
   const { version } = JSON.parse(await readFile('package.json', 'utf8'));
   // Two version numbers that can disagree eventually will. The manifest's is the one Chrome and
@@ -101,6 +104,23 @@ async function copyStatic() {
   if (beta) manifest = betaManifest(manifest, process.env.BETA_BUILD);
   if (e2e) manifest.host_permissions = [E2E_SITE];
   await writeFile(`${OUT}/manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
+/**
+ * The lassos that come with OpenPosse (`src/builtin.js`): every `lassos/*.json`, copied as it is,
+ * and `lassos/index.json` listing them, since a page cannot list a folder of its own package.
+ * They stay data files, never bundled, so no selector ends up in code.
+ *
+ * The browser tests' build adds the fake vendor's, so a test can be offered one on its site.
+ */
+async function copyLassos() {
+  const files = (await readdir('lassos')).filter((file) => file.endsWith('.json')).sort();
+  for (const file of files) await cp(`lassos/${file}`, `${OUT}/lassos/${file}`);
+  if (e2e) {
+    await cp('test/fixtures/fixture-crm.json', `${OUT}/lassos/openposse-fixture.json`);
+    files.push('openposse-fixture.json');
+  }
+  await writeFile(`${OUT}/lassos/index.json`, `${JSON.stringify(files, null, 2)}\n`);
 }
 
 const options = [
@@ -142,6 +162,7 @@ async function main() {
   };
   watch('src', (_event, file) => { if (/\.(html|css|json)$/.test(file ?? '')) recopy(); });
   watch('public', { recursive: true }, recopy);
+  watch('lassos', recopy);
   console.log(`[build] watching; ${OUT}/ is ready to load`);
 }
 

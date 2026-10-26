@@ -309,11 +309,12 @@
       /* ── The desk ──────────────────────────────────────────────────────────────────────── */
 
       #desk { margin-top: 20px; }
-      #empty { color: var(--text-dim); font-size: 12.5px; margin-bottom: 12px; }
-      #empty p { margin: 0 0 10px; line-height: 1.45; }
-      #empty #empty-text { color: var(--text); font-size: 13.5px; }
-      #empty .actions { display: flex; flex-wrap: wrap; gap: 8px; }
-      #empty .hint { margin: 10px 0 0; color: var(--text-faint); }
+      #empty, #builtin { color: var(--text-dim); font-size: 12.5px; margin-bottom: 12px; }
+      #empty p, #builtin p { margin: 0 0 10px; line-height: 1.45; }
+      #empty #empty-text, #builtin #builtin-text { color: var(--text); font-size: 13.5px; }
+      #empty .actions, #builtin .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      #empty .hint, #builtin .hint { margin: 10px 0 0; color: var(--text-faint); }
+      #builtin .hint.bad { color: var(--error); }
       /* An unreadable roster is not an empty one, and they must not read the same – and nothing
          is offered on top of it, since it is not an invitation to record a first assistant. */
       #empty.problem #empty-text { color: var(--error); }
@@ -503,6 +504,18 @@
       <section id="desk">
         <!-- Setup that is not finished yet, which reopens onboarding in Settings where it left off. -->
         <button id="finish-setup" class="card finish" hidden>Finish setting up</button>
+
+        <!-- On a site one of the lassos that come with OpenPosse is for, while no assistant lives
+             there: offered, never added without the click and Chrome's Allow. -->
+        <div id="builtin" class="first" hidden>
+          <p id="builtin-text"></p>
+          <div class="actions">
+            <button id="builtin-add"></button>
+            <button class="secondary" id="builtin-lasso">Lasso it myself</button>
+          </div>
+          <p class="hint">Sign in first if the site asks you to. Chrome asks you to allow the site.</p>
+          <p class="hint bad" id="builtin-note" hidden></p>
+        </div>
 
         <!-- With no assistants, the first one is the only thing worth doing here, so it is a card
              naming the site in front rather than a sentence. The words are the script's. -->
