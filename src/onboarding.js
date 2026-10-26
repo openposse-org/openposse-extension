@@ -22,6 +22,9 @@ import {
 } from './steps.js';
 import { GROUPING, groupingOn, markGroupingAsked, turnGroupingOff } from './grouping.js';
 import { icon } from './icons.js';
+import { hasWebGPU, agreedToSupertonic } from './tts.js';
+import { KOKORO, SUPERTONIC } from './weights.js';
+import { engineSettings } from './storage.js';
 
 const el = (id) => document.getElementById(id);
 const dialog = el('onboarding');
@@ -47,7 +50,7 @@ const BORROWED = {
 };
 
 /** What only this modal knows: the welcome was passed, the pin was skipped, the task in front. */
-const local = { started: false, skipped: [], task: null, modelFound: false };
+const local = { started: false, skipped: [], task: null };
 let facts = null;
 let shown = progress({ mic: 'ask', model: 'downloadable' });
 /** Where each borrowed step came from, so closing puts it back. */
@@ -105,10 +108,29 @@ function giveBack() {
 // ── Reading where things stand ─────────────────────────────────────────────────────────────
 
 async function read() {
-  const [mic, model, pin, shortcut, grouping, groupingIsOn, assistant] = await Promise.all([
-    micState(), modelState(), pinned(), shortcutKey(), groupingAnswered(), groupingOn(), firstAssistant(),
+  const [mic, model, voice, pin, shortcut, grouping, groupingIsOn, assistant] = await Promise.all([
+    micState(), modelState(), voiceState(), pinned(), shortcutKey(), groupingAnswered(), groupingOn(),
+    firstAssistant(),
   ]);
-  return { mic, model, pin, shortcut, grouping, groupingIsOn, assistant };
+  return { mic, model, voice, pin, shortcut, grouping, groupingIsOn, assistant };
+}
+
+/** WebGPU does not come and go while the page is open, so it is asked once. */
+let gpu = null;
+
+/**
+ * Whether a neural voice can speak: `ready` for Supertonic downloaded and agreed to, or Kokoro
+ * downloaded – the same test the engine choice makes – `missing`, or `unsupported` without
+ * WebGPU. Read here rather than in steps.js, which the worker loads, and has no use for weights.
+ */
+async function voiceState() {
+  gpu ??= hasWebGPU();
+  if (!(await gpu)) return 'unsupported';
+  const [supertonic, kokoro, { agreement }] = await Promise.all([
+    SUPERTONIC.status(), KOKORO.status(), engineSettings(),
+  ]);
+  const speaks = (supertonic.state === 'ready' && agreedToSupertonic(agreement)) || kokoro.state === 'ready';
+  return speaks ? 'ready' : 'missing';
 }
 
 async function refresh() {
@@ -152,9 +174,7 @@ function draw() {
     const name = document.createElement('span');
     name.textContent = task.label;
     const status = document.createElement('span');
-    const found = task.id === 'downloads' && local.modelFound;
-    status.textContent = finished ? (found ? 'already on this computer' : 'done')
-      : done === 0 ? 'not started' : `${done} of ${of} done`;
+    status.textContent = finished ? 'done' : done === 0 ? 'not started' : `${done} of ${of} done`;
     words.append(name, status);
     tab.append(badge, words);
     tab.addEventListener('click', () => go(task.id));
@@ -326,13 +346,10 @@ export async function openOnboarding() {
     facts = await read();
   } catch (error) {
     console.warn('[openposse] could not read the setup steps –', error?.message ?? error);
-    facts = { mic: 'ask', model: 'downloadable', pin: false, shortcut: '', grouping: false, assistant: null };
+    facts = { mic: 'ask', model: 'downloadable', voice: 'missing', pin: false, shortcut: '', grouping: false, assistant: null };
   }
   shown = progress({ ...local, ...facts });
   local.task = shown.task;
-  // Chrome keeps its speech model for every profile and site, and removing OpenPosse leaves it,
-  // so a fresh install can find it there – the owner's report of 2026-10-26. Said as such.
-  local.modelFound = facts.model === 'ready';
   dialog.showModal();
   draw();
   // The pin has no event, the microphone can be unblocked in Chrome's settings, and a download

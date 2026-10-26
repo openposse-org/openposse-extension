@@ -165,14 +165,17 @@ export const STEPS = [
   // Before the first assistant, so its tab can be the first to join the group.
   { id: 'grouping', task: 'permissions' },
   { id: 'model', task: 'downloads' },
+  // Supertonic or Kokoro, by the owner's call of 2026-10-26: the system voices are a fallback,
+  // not where somebody should finish setting up.
+  { id: 'voice', task: 'downloads' },
   { id: 'assistant', task: 'lasso' },
   { id: 'done' },
 ];
 
 /**
  * The three tasks onboarding is split into, by the owner's call of 2026-10-25: Chrome's
- * permissions and the simple toggles, the downloads, and the first lasso. Better voices sit in
- * Downloads too, but as an option, never a step that could hold it open.
+ * permissions and the simple toggles, the downloads (the speech model and a neural voice), and
+ * the first lasso.
  */
 export const TASKS = [
   { id: 'permissions', label: 'Permissions' },
@@ -196,7 +199,9 @@ export const taskOf = (stepId) => STEPS.find((step) => step.id === stepId)?.task
  * Which steps are done, which one is next, and which task onboarding opens on (`null` for the
  * welcome screen), from what is true now.
  *
- * `facts` is `{ started, mic, model, pin, shortcut, grouping, assistant, skipped }`: `started` is
+ * `facts` is `{ started, mic, model, voice, pin, shortcut, grouping, assistant, skipped }`:
+ * `voice` is `ready` (Supertonic agreed to, or Kokoro, downloaded), `missing`, or `unsupported`
+ * (no WebGPU, so neither could speak however much was downloaded); `started` is
  * whether "Let's get you set up" was pressed (or anything after it is already done, which
  * means it was, some other time), `grouping` whether the tab group question has an answer –
  * either one, since grouping is a choice rather than a requirement – and `skipped` the optional
@@ -205,13 +210,14 @@ export const taskOf = (stepId) => STEPS.find((step) => step.id === stepId)?.task
  * Pure, so the rules are tested without a browser.
  */
 export function progress(facts) {
-  const { mic, model, pin, shortcut, grouping, assistant, skipped = [] } = facts;
+  const { mic, model, voice, pin, shortcut, grouping, assistant, skipped = [] } = facts;
   // Not the model: Chrome may have it already, for its own captions, before anyone pressed anything.
   const later = mic === 'granted' || Boolean(assistant);
   const done = {
     welcome: Boolean(facts.started) || later,
     mic: mic === 'granted',
     model: model === 'ready',
+    voice: voice === 'ready',
     pin: pin === true,
     shortcut: Boolean(shortcut),
     grouping: Boolean(grouping),
@@ -219,16 +225,20 @@ export function progress(facts) {
   };
   // A speech model this Chrome cannot have may be passed over too: typing in the side panel still
   // works, and a card that can never tick would be the end of the page.
-  const impossible = model === 'unavailable' || model === 'unsupported';
-  const skippable = (step) => step.optional || (step.id === 'model' && impossible);
+  // The same for a voice without WebGPU: the system voices are all that machine can use.
+  const impossible = {
+    model: model === 'unavailable' || model === 'unsupported',
+    voice: voice === 'unsupported',
+  };
+  const skippable = (step) => step.optional || Boolean(impossible[step.id]);
   const passed = (step) => done[step.id] || (skippable(step) && skipped.includes(step.id));
   const current = STEPS.find((step) => step.id !== 'done' && !passed(step))?.id ?? 'done';
   done.done = current === 'done';
   // The task onboarding opens on: the first holding a step OpenPosse needs that can still be
   // done. An optional step never decides it, so an unpinned icon does not send somebody back to
-  // the first task every time, and nor does a speech model this Chrome cannot have.
+  // the first task every time, and nor does a speech model or a voice this Chrome cannot have.
   const needed = STEPS.find((step) => step.task && !step.optional && !done[step.id]
-    && !(step.id === 'model' && impossible));
+    && !impossible[step.id]);
   const task = done.welcome ? needed?.task ?? TASKS.at(-1).id : null;
   return { done, current, task };
 }

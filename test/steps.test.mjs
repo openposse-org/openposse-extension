@@ -8,8 +8,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { progress, unfinished, taskProgress, taskOf, STEPS, TASKS } from '../src/steps.js';
 
-const NOTHING = { started: false, mic: 'ask', model: 'downloadable', pin: false, shortcut: '', assistant: null };
-const ALL = { started: true, mic: 'granted', model: 'ready', pin: true, shortcut: '⌥V', grouping: true, assistant: { name: 'Ivan' } };
+const NOTHING = { started: false, mic: 'ask', model: 'downloadable', voice: 'missing', pin: false, shortcut: '', assistant: null };
+const ALL = { started: true, mic: 'granted', model: 'ready', voice: 'ready', pin: true, shortcut: '⌥V', grouping: true, assistant: { name: 'Ivan' } };
 
 test('a first open starts at the welcome screen, before any task', () => {
   const { done, current, task } = progress(NOTHING);
@@ -65,7 +65,7 @@ test('only optional steps can be skipped', () => {
 });
 
 test('a speech model this Chrome cannot have can be passed over, and only then', () => {
-  const at = { ...NOTHING, started: true, mic: 'granted', shortcut: '⌥V', grouping: true, skipped: ['pin', 'model'] };
+  const at = { ...NOTHING, started: true, mic: 'granted', voice: 'ready', shortcut: '⌥V', grouping: true, skipped: ['pin', 'model'] };
   assert.equal(progress({ ...at, model: 'unavailable' }).current, 'assistant');
   assert.equal(progress({ ...at, model: 'unsupported' }).current, 'assistant');
   assert.equal(progress({ ...at, model: 'downloadable' }).current, 'model');
@@ -81,6 +81,19 @@ test('either answer to the tab group ticks it, and then come the downloads', () 
   assert.equal(progress({ ...at, grouping: true }).done.grouping, true);
   assert.equal(progress({ ...at, skipped: ['grouping'] }).current, 'grouping', 'it is answered, not skipped');
   assert.equal(progress({ ...at, grouping: true }).task, 'downloads');
+});
+
+test('Downloads wants a neural voice as well as the speech model', () => {
+  // Supertonic or Kokoro, by the owner's call: the speech model alone does not finish it.
+  const at = { ...NOTHING, started: true, mic: 'granted', pin: true, shortcut: '⌥V', grouping: true, model: 'ready' };
+  assert.equal(progress(at).current, 'voice');
+  assert.equal(progress(at).task, 'downloads');
+  assert.deepEqual(taskProgress('downloads', progress(at).done), { done: 1, of: 2 });
+  assert.equal(progress({ ...at, voice: 'ready' }).current, 'assistant');
+  assert.equal(progress({ ...at, skipped: ['voice'] }).current, 'voice', 'not skippable while one could speak');
+  // Without WebGPU neither could speak, so it is passed over and never holds Downloads open.
+  assert.equal(progress({ ...at, voice: 'unsupported', skipped: ['voice'] }).current, 'assistant');
+  assert.equal(progress({ ...at, voice: 'unsupported' }).task, 'lasso');
 });
 
 test('with every step done it ends on the first lasso', () => {
@@ -101,7 +114,7 @@ test('each task counts its own steps, in the order the tabs show them', () => {
   assert.deepEqual(TASKS.map((t) => t.id), ['permissions', 'downloads', 'lasso']);
   const { done } = progress({ ...NOTHING, started: true, shortcut: '⌥V' });
   assert.deepEqual(taskProgress('permissions', done), { done: 1, of: 4 });
-  assert.deepEqual(taskProgress('downloads', done), { done: 0, of: 1 });
+  assert.deepEqual(taskProgress('downloads', done), { done: 0, of: 2 });
   assert.deepEqual(taskProgress('lasso', progress(ALL).done), { done: 1, of: 1 });
   // The shortcut is first in Permissions, by the owner's call.
   assert.equal(STEPS.find((s) => s.task === 'permissions').id, 'shortcut');

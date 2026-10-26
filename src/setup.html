@@ -990,6 +990,8 @@
       /* A sentence a moved step says only in onboarding: the sheet keeps its explanations in (i). */
       .ob-only { display: none; }
       #onboarding .ob-only { display: block; margin: 2px 0 0; line-height: 1.45; }
+      /* Optional in Settings; onboarding wants a voice (the owner's call of 2026-10-26). */
+      #onboarding .sheet-only { display: none; }
       .ob-note { margin: 10px 0 0; font-size: 12.5px; }
       .ob-note[data-tone="bad"] { color: var(--error); }
 
@@ -1241,7 +1243,7 @@
             <div class="num">5</div>
             <div class="body">
               <div class="head">
-                <h2>Better voices <span class="kind">– optional</span></h2>
+                <h2>Better voices <span class="kind sheet-only">– optional</span></h2>
                 <div class="about">
                   <button class="info" data-icon="info" data-size="15"
                           aria-label="About better voices" aria-describedby="about-weights"></button>
@@ -1260,8 +1262,8 @@
                 </div>
               </div>
               <p class="ob-only">
-                Neural voices that run on this machine. Each is a one-off download. You can skip
-                this and use your system's voices.
+                Neural voices that run on this machine, each a one-off download. Download one
+                to finish: Supertonic, or Kokoro if its use restrictions don't suit you.
               </p>
 
               <!-- **Two downloads side by side, and the reason there are two is the licence.**
