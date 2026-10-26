@@ -14,6 +14,8 @@ Settings, Allow all there, or onboarding's last task. An update adds nothing; in
 panel offers a lasso on its site while no assistant lives there (`src/builtin.js`). So a file
 added here reaches every new user from the next release, and its `name` is what they call the
 assistant. A filename must be lowercase letters, digits and hyphens, or the index leaves it out.
+`openposse-acme-ai.json`, the website's demo vendor, stays here for the website and is left out
+of the package (`NOT_SHIPPED` in `tools/build.mjs`).
 
 The envelope around `lasso` says which lasso it is (`docs/lasso-identity.md`):
 

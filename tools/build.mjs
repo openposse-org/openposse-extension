@@ -107,12 +107,20 @@ async function copyStatic() {
 }
 
 /**
+ * Lassos kept in `lassos/` for the website but left out of the package, by the owner's call of
+ * 2026-10-26: Acme AI is the website's demo vendor, not an assistant anybody uses, and every lasso
+ * shipped is added to every new user's roster.
+ */
+const NOT_SHIPPED = new Set(['openposse-acme-ai.json']);
+
+/**
  * The lassos that come with OpenPosse (`src/builtin.js`): every `lassos/*.json`, copied as it is,
  * and `lassos/index.json` listing them, since a page cannot list a folder of its own package.
  * They stay data files, never bundled, so no selector ends up in code.
  */
 async function copyLassos() {
-  const files = (await readdir('lassos')).filter((file) => file.endsWith('.json')).sort();
+  const files = (await readdir('lassos'))
+    .filter((file) => file.endsWith('.json') && !NOT_SHIPPED.has(file)).sort();
   for (const file of files) await cp(`lassos/${file}`, `${OUT}/lassos/${file}`);
   await writeFile(`${OUT}/lassos/index.json`, `${JSON.stringify(files, null, 2)}\n`);
 }
