@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.12](https://github.com/openposse-org/openposse-extension/compare/v0.9.11...v0.9.12) (2026-10-26)
+
+
+### Features
+
+* ship the lassos with the extension and offer each on its site ([#73](https://github.com/openposse-org/openposse-extension/issues/73)) ([5c5cdad](https://github.com/openposse-org/openposse-extension/commit/5c5cdad9c24dbf2e82b6973f7bfae034ec809cfb))
+
 ## [0.9.11](https://github.com/openposse-org/openposse-extension/compare/v0.9.10...v0.9.11) (2026-10-26)
 
 
