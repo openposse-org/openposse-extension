@@ -1751,16 +1751,30 @@ chrome.permissions.onRemoved.addListener(recheckAccess);
 el('import-file').addEventListener('change', async (event) => {
   const file = event.target.files?.[0];
   if (!file) { offer(''); return; }
+  // **The box shows the file's name**, not its contents and not nothing: left empty it read as
+  // though the pick had not taken, with the summary below it the only sign it had. Set without
+  // an `input` event, so it is never parsed as pasted text; typing or pasting over it is a new
+  // offer, which is the same as picking something else.
+  el('import-text').value = file.name;
   try {
     offer(await file.text());
   } catch (error) {
     // A file that cannot be read is not the same event as a file that is not a lasso, and the
-    // person reacts to them differently – one is worth retrying, the other is not.
+    // person reacts to them differently – one is worth retrying, the other is not. Whatever was
+    // waiting before goes, so the name in the box is never beside another file's summary.
+    el('import-text').value = '';
+    offer('');
     showImport(`That file could not be read – ${error?.message ?? error}`, true);
   }
 });
 
 el('import-text').addEventListener('input', (event) => offer(event.target.value));
+// A file's name is selected on focus, so a paste replaces it rather than landing after it and
+// making a lasso that cannot be read.
+el('import-text').addEventListener('focus', (event) => {
+  const box = event.target;
+  if (box.value && box.value === el('import-file').files?.[0]?.name) box.select();
+});
 
 // The file input is hidden – Chrome's own "Choose File" cannot be restyled – and this opens it.
 el('import-pick').addEventListener('click', () => el('import-file').click());

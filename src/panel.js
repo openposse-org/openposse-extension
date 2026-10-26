@@ -40,11 +40,14 @@ async function rosterForPanel() {
  * Every field is optional and merged, so a caller says only what changed – an interim
  * transcript does not have to restate the roster, and a phase change does not clear the text.
  */
-export async function panel(patch, { create = false } = {}) {
+export async function panel(patch, { create = false, current = null } = {}) {
   if (create) {
     const shortcut = (await chrome.commands.getAll()).find((c) => c.name === 'summon')?.shortcut;
     patch = { agents: await rosterForPanel(), shortcut: shortcut ?? '', ...patch };
   }
+  // `current` asks, after those reads, whether the patch still describes anything: a recording
+  // that ended while they ran would otherwise be drawn again over what replaced it.
+  if (current && !current()) return undefined;
   return toSidePanel(patch);
 }
 

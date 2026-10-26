@@ -38,6 +38,7 @@ import { hashOf, matchFor, staleness, today, unpack } from './share.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
 import {
   derive, stepLabel, heading, instruction, captures, PATIENCE_MS,
+  awayInstruction, tabClosedInstruction,
 } from './coaching.js';
 import { panel } from './panel.js';
 import { frontWindowNow, hydrate as hydrateFront, watchFront } from './front.js';
@@ -1129,6 +1130,21 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
     });
     return true;
   }
+  if (request?.kind === 'openposse.record.cancel') {
+    cancelWizard().then(() => respond({ ok: true }), (error) => {
+      console.error('[openposse] recording could not be stopped –', error);
+      respond({ ok: false, reason: String(error?.message ?? error) });
+    });
+    return true;
+  }
+  if (request?.kind === 'openposse.record.return') {
+    if (!wizard) { respond({ ok: false, reason: 'nothing is being lassoed' }); return false; }
+    focusTab({ tabId: wizard.tabId }).then(respond, (error) => {
+      console.warn('[openposse] could not bring the lassoed tab back –', error?.message ?? error);
+      respond({ ok: false, reason: String(error?.message ?? error) });
+    });
+    return true;
+  }
 
   // Renaming is an edit to an agent that already exists, from Settings. It is deliberately not
   // part of recording any more: a recording that cannot finish without a name is a recording
@@ -1410,6 +1426,8 @@ async function beginWizard({ tabId, pattern, agentId = null }) {
   await armRecording({ tabId }, { id, agent: agentId });
 
   await showCoaching();
+  // Started with another tab already in front – from Settings, say – rather than switched to one.
+  await checkAway();
 
   // The open step is the only one with a deadline, so it is the only one that needs a tick. It
   // fires once: `derive` is what decides whether 45 s has meaning yet, not this timer.
@@ -1424,10 +1442,16 @@ const headingNow = (step) => heading(step, productLabel(wizard?.draft?.domainPat
 /** Pushes whatever `coaching.js` decided into the side panel. */
 async function showCoaching() {
   if (!wizard) return;
+  const mine = wizard;
   const state = derive(wizard.draft, {
     alreadyOpen: wizard.alreadyOpen,
     sinceArmedMs: Date.now() - wizard.armedAt,
   });
+
+  // **Another tab in front wins over the step's own sentence**, because the step cannot advance
+  // until they are back: the recorder listens in the tab it was armed in and nowhere else.
+  const product = productLabel(wizard.draft?.domainPattern);
+  const away = wizard.away && state.step !== 'done';
 
   await panel({
     phase: 'recording',
@@ -1435,14 +1459,71 @@ async function showCoaching() {
       step: state.step,
       heading: headingNow(state.step),
       label: stepLabel(state),
-      instruction: instruction(state, wizard.draft),
+      instruction: away ? awayInstruction(product) : instruction(state, wizard.draft),
       captures: captures(wizard.draft),
       // The panel never asks for a name. See `save()`.
       naming: false,
+      away: away ? product || 'the lassoed tab' : null,
       bad: state.step === 'replies-share-nothing' || state.step === 'abandoned',
     },
-  }, { create: true });
+  }, { create: true, current: () => wizard === mine });
 }
+
+/** Stops the recording from the panel. Nothing is saved, and the panel goes back to its desk. */
+async function cancelWizard() {
+  // Mid-check, a question the dry run already typed carries on in the vendor's page; nothing
+  // reads its answer, since `dryRun` looks for a stop after every await.
+  await endWizard();
+  // Idle even with no wizard: a worker restarted mid-recording has forgotten it, and the panel
+  // showing the card would otherwise have no way back.
+  await panel({ phase: 'idle' });
+}
+
+/**
+ * Notices the lassoed tab going behind another one, and coming back.
+ *
+ * The recording stays with the tab it started in: its listeners are in that page, and moving
+ * them would make a second tab half of one recording. So rather than follow the switch, the card
+ * says where the recording is and offers the way back.
+ */
+async function checkAway() {
+  if (!wizard?.capturing) return;
+  const mine = wizard;
+  const tab = await chrome.tabs.get(mine.tabId).catch((error) => {
+    // Closed: `onRemoved` below says so. Anything else is worth a line.
+    console.warn('[openposse] could not look at the lassoed tab –', error?.message ?? error);
+    return null;
+  });
+  if (!tab || wizard !== mine) return;
+  const away = !tab.active;
+  if (away === Boolean(mine.away)) return;
+  mine.away = away;
+  await showCoaching();
+}
+
+chrome.tabs.onActivated.addListener(() => {
+  checkAway().catch((error) =>
+    console.warn('[openposse] tab switch during a recording not handled –', error?.message ?? error));
+});
+
+// The lassoed tab closed mid-recording: nothing left to watch, so the recording ends and says so.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (!wizard || wizard.tabId !== tabId) return;
+  const product = productLabel(wizard.draft?.domainPattern);
+  const coach = {
+    heading: headingNow('failed'),
+    label: 'SETTING UP · STOPPED',
+    instruction: tabClosedInstruction(product),
+    captures: captures(wizard.draft),
+    naming: false,
+    ended: true,
+    bad: true,
+  };
+  endWizard()
+    .then(() => panel({ phase: 'recording', coach }))
+    .catch((error) =>
+      console.warn('[openposse] closed tab during a recording not handled –', error?.message ?? error));
+});
 
 /**
  * Folds one capture in, and moves the wizard on when there is nothing left to capture.
@@ -1496,7 +1577,12 @@ async function dryRun() {
   //
   // It is also the right privacy behaviour. The recorder's keydown listener must not be live
   // while we type text into somebody's assistant.
+  //
+  // **Stopped from the panel partway through** leaves `wizard` null or a new one, and every
+  // await below is a point where that can have happened, so each is followed by a look.
+  const mine = wizard;
   await stopCapturing();
+  if (wizard !== mine) return;
 
   await panel({ phase: 'recording', coach: { heading: headingNow('checking'), label: 'SETTING UP · CHECKING', instruction: 'Checking it works – asking it two questions…', captures: captures(wizard.draft), naming: false } });
 
@@ -1506,8 +1592,9 @@ async function dryRun() {
     // Sequential on purpose: two at once would race the same composer, and the second answer
     // has to *follow* the first to prove the selector finds a new one rather than re-reading
     // the old one.
-    const result = await askOnce(wizard.tabId, built.lasso, prompt)
+    const result = await askOnce(mine.tabId, built.lasso, prompt)
       .catch((e) => ({ error: e }));
+    if (wizard !== mine) return;
     if (!result || result.error || !result.text) {
       wizard.verifying = false;
       wizard.verified = false;
@@ -1520,6 +1607,7 @@ async function dryRun() {
             + 'this AI assistant ignores clicks it didn’t get from a person. Nothing has been saved.',
           captures: captures(wizard.draft),
           naming: false,
+          ended: true,
           bad: true,
         },
       });
@@ -1544,6 +1632,7 @@ async function dryRun() {
           + 'from the next. This AI assistant may not be one we can drive yet.',
         captures: captures(wizard.draft),
         naming: false,
+        ended: true,
         bad: true,
       },
     });
@@ -1570,8 +1659,11 @@ async function save() {
   if (!lasso) return;
 
   // A lassoed tab joins the OpenPosse group, with grouping on. Saving does not depend on it.
+  const mine = wizard;
   await joinGroup(wizard.tabId).catch((error) =>
     console.warn('[openposse] could not add the lassoed tab to the OpenPosse group –', error?.message ?? error));
+  // The last point a Stop can still mean nothing is saved. See `dryRun`.
+  if (wizard !== mine) return;
 
   if (wizard.agentId) {
     await replaceLasso(wizard.agentId, lasso);
@@ -1587,6 +1679,7 @@ async function save() {
             + `${name}’s lasso. Each site has one AI assistant; its name and voice stay.`,
           captures: captures(wizard.draft),
           naming: false,
+          ended: true,
         },
       });
       await endWizard();
@@ -1633,6 +1726,7 @@ async function save() {
         + `“${name}, …” to talk to it.${caution}`,
       captures: captures(wizard.draft),
       naming: false,
+      ended: true,
     },
   });
   await endWizard();
