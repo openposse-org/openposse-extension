@@ -110,16 +110,10 @@ async function copyStatic() {
  * The lassos that come with OpenPosse (`src/builtin.js`): every `lassos/*.json`, copied as it is,
  * and `lassos/index.json` listing them, since a page cannot list a folder of its own package.
  * They stay data files, never bundled, so no selector ends up in code.
- *
- * The browser tests' build adds the fake vendor's, so a test can be offered one on its site.
  */
 async function copyLassos() {
   const files = (await readdir('lassos')).filter((file) => file.endsWith('.json')).sort();
   for (const file of files) await cp(`lassos/${file}`, `${OUT}/lassos/${file}`);
-  if (e2e) {
-    await cp('test/fixtures/fixture-crm.json', `${OUT}/lassos/openposse-fixture.json`);
-    files.push('openposse-fixture.json');
-  }
   await writeFile(`${OUT}/lassos/index.json`, `${JSON.stringify(files, null, 2)}\n`);
 }
 

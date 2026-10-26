@@ -49,10 +49,8 @@ const MAY_OPEN = new Map([
   // Its own links, Chrome's shortcuts page, the spike page, and "Load icons", which opens each
   // vendor's home page in a minimised window to read its icon, on a button press, then closes it.
   ['setup.js', 'the Settings page'],
-  // The one exception to the rule, the owner's call of 2026-10-25: onboarding, in Settings, may
-  // open a site, and only when one of its six tiles is clicked. Nothing on a turn's path, and
-  // onboarding is never opened by a turn.
-  ['onboarding.js', 'Settings’ onboarding'],
+  // onboarding.js was here from 2026-10-25 for its six site tiles. They went on 2026-10-26, when
+  // the lassos that come with OpenPosse started being added at install, so it opens nothing now.
 ]);
 
 /**

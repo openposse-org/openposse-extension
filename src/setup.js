@@ -969,6 +969,31 @@ chrome.permissions.onRemoved.addListener(refreshGrouping);
 /** Past this many, a search box appears over the roster. */
 const SEARCH_FROM = 11;
 
+/** The sites in `patterns` OpenPosse may not drive yet, each once. */
+async function sitesWithoutAccess(patterns) {
+  const sites = [...new Set(patterns.filter(Boolean))];
+  const held = await Promise.all(sites.map((site) => chrome.permissions.contains({ origins: [matchPattern(site)] })));
+  return sites.filter((_site, index) => !held[index]);
+}
+
+/** The sites Allow all asks for, as the roster was last drawn – read in the click, never awaited. */
+let allowAll = [];
+
+// **Allow all**: one Chrome dialog naming every site still waiting, from one click. Only drawn
+// with two or more, since with one the row's own Allow is the same thing.
+el('allow-all').addEventListener('click', () => {
+  if (allowAll.length === 0) return;
+  chrome.permissions.request({ origins: allowAll.map(matchPattern) })
+    .then(() => refreshRoster(), (error) => {
+      console.warn('[openposse] Allow all was refused –', error?.message ?? error);
+      el('allow-all').textContent = `Chrome refused – ${error?.message ?? error}`;
+    });
+});
+
+// A site allowed here, from the side panel or onboarding, or taken back in Chrome's own menu.
+chrome.permissions.onAdded.addListener(() => redrawRoster());
+chrome.permissions.onRemoved.addListener(() => redrawRoster());
+
 /** Which redraw is the latest – see `refreshRoster`. */
 let rosterDrawn = 0;
 
@@ -998,6 +1023,8 @@ async function refreshRoster() {
 
   const patterns = Object.fromEntries(await Promise.all(
     agents.map(async (agent) => [agent.id, (await lassoFor(agent))?.domainPattern])));
+  // The sites still waiting for their Allow – the lassos added at install start that way.
+  const waiting = await sitesWithoutAccess(Object.values(patterns));
   const icons = await iconPages(patterns);
   const choices = await voiceChoices();
   if (drawing !== rosterDrawn) return;
@@ -1087,10 +1114,12 @@ async function refreshRoster() {
     // A broken agent is listed, not hidden. It still routes, so being told beats finding out
     // when it is asked a question.
     const isBroken = broken.includes(agent.id);
-    kind.className = isBroken ? 'kind bad' : 'kind';
+    const isWaiting = !isBroken && waiting.includes(patterns[agent.id]);
+    kind.className = isBroken ? 'kind bad' : isWaiting ? 'kind warn' : 'kind';
     kind.textContent = isBroken
       ? 'needs re-recording – its lasso is missing'
-      : productLabel(patterns[agent.id]) || patterns[agent.id] || '';
+      : [productLabel(patterns[agent.id]) || patterns[agent.id] || '', isWaiting && 'not allowed yet']
+        .filter(Boolean).join(' · ');
 
     // A made-up recording from the panel's debug drawer says so, and nothing else about it is
     // different: it is drawn exactly as a real one would be, which is what it is for.
@@ -1403,6 +1432,18 @@ async function refreshRoster() {
 
     tools.append(share, again, remove);
 
+    // **Allow**, while its site is not: Chrome's own dialog, from this click, for that one site.
+    if (isWaiting) {
+      const site = patterns[agent.id];
+      const allow = tool('key-round', `Allow ${site.replace(/^\*\./, '')}`, 'primary');
+      allow.addEventListener('click', () => {
+        // First statement, nothing awaited before it: the gesture does not survive one.
+        chrome.permissions.request({ origins: [matchPattern(site)] })
+          .then(() => refreshRoster(), (error) => say(`Chrome refused the request – ${error?.message ?? error}`, true));
+      });
+      tools.prepend(allow);
+    }
+
     // Two lines beside the avatar: the name, which is the rename field, and its tools; then what
     // it drives and its voice. The sheets and the palette are in the row only to be found –
     // they are drawn in Chrome's top layer, over the list.
@@ -1423,6 +1464,9 @@ async function refreshRoster() {
   target.className = 'grid';
   target.replaceChildren(...built);
   el('sort-roster').hidden = agents.length < 2;
+  allowAll = waiting;
+  el('allow-all').hidden = waiting.length < 2;
+  el('allow-all').textContent = `Allow all ${waiting.length} sites`;
   // Only worth its space once the list is long; hidden, it must not go on filtering.
   search.hidden = agents.length < SEARCH_FROM;
   if (search.hidden) search.value = '';

@@ -77,8 +77,8 @@ against a SHA-256 baked into the build; a mismatch throws the file away.
 `tabs.create`, `windows.create`, `tabs.update` with a `url`, or `window.open`. Find the tab with
 `vendorTab` in `src/tabs.js`. `test/tabs.test.mjs` enforces this; do not widen its allowlist.
 Asking does not switch tabs either; navigation is something the user asks for ("show me").
-**The one exception is first-run onboarding**, decided by the maintainer on 2026-10-25: the
-onboarding modal in Settings (`onboarding.js`) may open a site when one of its tiles is clicked.
+Onboarding's site tiles were an exception from 2026-10-25 until 2026-10-26, when the lassos in
+`lassos/` started being added at install and the tiles went; `onboarding.js` opens nothing now.
 The worker opens nothing itself: the install and the side panel's "Finish setting up" leave a
 request in session storage and call `openOptionsPage()`, and Settings shows onboarding when it
 finds one.

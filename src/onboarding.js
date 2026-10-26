@@ -1,20 +1,19 @@
 // Onboarding: a modal over Settings with a welcome, then three tasks – Chrome's permissions and
-// the simple toggles, the downloads, and the first lasso – that can be moved between freely.
+// the simple toggles, the downloads, and the AI assistants – that can be moved between freely.
 //
 // **In Settings, not a page of its own,** by the owner's call of 2026-10-25. The microphone
 // prompt needs a tab (a side panel's fails with `NotAllowedError: Permission dismissed`, measured
 // on macOS the same day), and Settings is the tab that already has the shortcut, microphone,
 // speech model and voice steps working. Those steps are **moved** in from the setup sheet while
 // the modal is open and put back when it closes, so each has one control and one set of rules;
-// what is new here is the pin, the tab group, the first lasso, and the way between them.
+// what is new here is the pin, the tab group, the assistants, and the way between them.
 //
 // **Nothing about how far somebody got is saved.** Every step is read fresh from Chrome (see
 // `steps.js`), so closing half-way and coming back – from the side panel's "Finish setting up" –
 // opens on the first task with something still to do.
 //
-// **This is the one file besides setup.js that may open a tab** (`test/tabs.test.mjs`), and only
-// on a click: a site tile opens that site, so a new user's first assistant is one click away.
-// Nothing on a turn's path opens anything – the owner's rule – and this is not on one.
+// **It opens no tab.** It had six site tiles that did until 2026-10-26, when the lassos that come
+// with OpenPosse started being added at install; the last task allows their sites instead.
 
 import {
   micState, modelState, pinned, shortcutKey, groupingAnswered, firstAssistant,
@@ -24,25 +23,13 @@ import { GROUPING, groupingOn, markGroupingAsked, turnGroupingOff } from './grou
 import { icon } from './icons.js';
 import { hasWebGPU, agreedToSupertonic } from './tts.js';
 import { KOKORO, SUPERTONIC } from './weights.js';
-import { engineSettings } from './storage.js';
-import { builtInLassos, covers } from './builtin.js';
+import { engineSettings, loadRoster, lassoFor } from './storage.js';
+import { matchPattern } from './domain.js';
+import { productLabel } from './routing.js';
+import { channelOf, initialFor } from './channels.js';
 
 const el = (id) => document.getElementById(id);
 const dialog = el('onboarding');
-
-/**
- * The suggested sites, their plain front doors. One list, here, because vendors move their apps
- * (Notion's went to app.notion.com, which is where the shared Notion lasso works) and a tile
- * landing on a marketing page is a bad first minute: check each before a release.
- */
-const SITES = [
-  { name: 'Notion', url: 'https://app.notion.com/', colour: '#191919' },
-  { name: 'HubSpot', url: 'https://app.hubspot.com/', colour: '#ff5c35' },
-  { name: 'Claude', url: 'https://claude.ai/', colour: '#d97757' },
-  { name: 'Gemini', url: 'https://gemini.google.com/', colour: '#1a73e8' },
-  { name: 'ChatGPT', url: 'https://chatgpt.com/', colour: '#10a37f' },
-  { name: 'Copilot', url: 'https://copilot.microsoft.com/', colour: '#0f6cbd' },
-];
 
 /** The setup sheet's steps each task borrows, in the order they come, ahead of its own. */
 const BORROWED = {
@@ -109,11 +96,25 @@ function giveBack() {
 // ── Reading where things stand ─────────────────────────────────────────────────────────────
 
 async function read() {
-  const [mic, model, voice, pin, shortcut, grouping, groupingIsOn, assistant] = await Promise.all([
+  const [mic, model, voice, pin, shortcut, grouping, groupingIsOn, assistant, roster] = await Promise.all([
     micState(), modelState(), voiceState(), pinned(), shortcutKey(), groupingAnswered(), groupingOn(),
-    firstAssistant(),
+    firstAssistant(), rosterAccess(),
   ]);
-  return { mic, model, voice, pin, shortcut, grouping, groupingIsOn, assistant };
+  return { mic, model, voice, pin, shortcut, grouping, groupingIsOn, assistant, roster };
+}
+
+/**
+ * The roster, each with its site and whether that site is allowed: `[{ agent, site, allowed }]`.
+ * The lassos that come with OpenPosse are added at install, before anyone could allow anything,
+ * so on a first run this is them, waiting.
+ */
+async function rosterAccess() {
+  const { arranged } = await loadRoster();
+  return Promise.all(arranged.map(async (agent) => {
+    const site = (await lassoFor(agent))?.domainPattern ?? null;
+    const allowed = Boolean(site) && await chrome.permissions.contains({ origins: [matchPattern(site)] });
+    return { agent, site, allowed };
+  }));
 }
 
 /** WebGPU does not come and go while the page is open, so it is asked once. */
@@ -178,7 +179,7 @@ function draw() {
     status.textContent = finished ? 'done' : done === 0 ? 'not started' : `${done} of ${of} done`;
     words.append(name, status);
     tab.append(badge, words);
-    // The first lasso comes after the downloads, by the tab as much as by Next.
+    // The assistants come after the downloads, by the tab as much as by Next.
     tab.disabled = task.id === 'lasso' && shown.waiting?.includes('downloads');
     tab.addEventListener('click', () => go(task.id));
     return tab;
@@ -239,13 +240,66 @@ function drawGrouping() {
   el('ob-grouping-no').hidden = Boolean(facts.grouping);
 }
 
+/**
+ * The assistants already here and whether each is allowed, with one Allow all for the rest – one
+ * Chrome dialog naming every site. Read from Chrome each time, like the steps.
+ */
+function drawRoster() {
+  const roster = facts.roster ?? [];
+  el('ob-builtins').hidden = roster.length === 0;
+  el('ob-builtin-list').replaceChildren(...roster.map(({ agent, site, allowed }) => {
+    const row = document.createElement('li');
+    const mono = document.createElement('span');
+    mono.className = 'mono';
+    mono.style.setProperty('--tile', channelOf(agent));
+    mono.textContent = initialFor(agent.name);
+    mono.setAttribute('aria-hidden', 'true');
+    const who = document.createElement('span');
+    who.className = 'who';
+    const name = document.createElement('span');
+    name.textContent = agent.name;
+    const where = document.createElement('span');
+    where.textContent = [productLabel(site), site?.replace(/^\*\./, '')].filter(Boolean).join(' · ');
+    who.append(name, where);
+    const state = document.createElement('span');
+    state.className = 'status tech chip';
+    state.textContent = allowed ? 'allowed' : 'not allowed yet';
+    state.dataset.tone = allowed ? 'good' : 'warn';
+    row.append(mono, who, state);
+    return row;
+  }));
+  const waiting = waitingSites();
+  el('ob-allow').hidden = waiting.length === 0;
+  el('ob-allow').textContent = waiting.length > 1 ? `Allow all ${waiting.length} sites` : 'Allow it';
+}
+
+/** The sites still waiting for their Allow, each once – read in the click, so nothing is awaited. */
+const waitingSites = () => [...new Set((facts?.roster ?? [])
+  .filter(({ site, allowed }) => site && !allowed).map(({ site }) => site))];
+
+el('ob-allow').addEventListener('click', () => {
+  const sites = waitingSites();
+  if (sites.length === 0) return;
+  note('ob-lasso-note', '');
+  // First statement, nothing awaited before it: Chrome's own dialog, naming every site.
+  chrome.permissions.request({ origins: sites.map(matchPattern) })
+    .then((granted) => {
+      if (!granted) note('ob-lasso-note', 'Chrome didn’t get a yes, so they wait. You can allow them here or in Settings.');
+    })
+    .catch((error) => note('ob-lasso-note', `Chrome refused the request – ${error?.message ?? error}`, 'bad'))
+    .then(refresh);
+});
+
 function drawAssistant() {
+  drawRoster();
   const name = facts.assistant?.name;
   if (name) {
     const how = facts.shortcut ? `press ${facts.shortcut} and say “${name}, …”` : `say “${name}, …” in the side panel`;
     chip('ob-assistant-status', `${name} is ready – ${how}`, 'good');
   } else {
-    chip('ob-assistant-status', 'no assistants yet – this ticks itself when you lasso one');
+    chip('ob-assistant-status', facts.roster?.length
+      ? 'none allowed yet – this ticks itself when you allow one, or lasso one'
+      : 'no assistants yet – this ticks itself when you lasso one');
   }
 }
 
@@ -326,48 +380,6 @@ function openPanel() {
   });
   return true;
 }
-
-el('ob-tiles').replaceChildren(...SITES.map((site) => {
-  const tile = document.createElement('button');
-  tile.style.setProperty('--tile', site.colour);
-  tile.setAttribute('aria-label', `Open ${site.name} in a new tab`);
-  const mono = document.createElement('span');
-  mono.className = 'mono';
-  mono.textContent = site.name[0];
-  mono.setAttribute('aria-hidden', 'true');
-  tile.append(mono, site.name);
-  tile.addEventListener('click', () => {
-    // The panel first, while the click is still Chrome's idea of a gesture; then the site, in
-    // front, in this window, where the panel takes over: sign in, then Lasso this tab. Opening
-    // the tab grants nothing – access is still asked for, per site, by that button.
-    if (!openPanel()) return;
-    chrome.tabs.create({ url: site.url, windowId, active: true }).catch((error) => {
-      console.warn(`[openposse] could not open ${site.name} –`, error?.message ?? error);
-      note('ob-lasso-note', `${site.name} didn’t open – ${error?.message ?? error}.`, 'bad');
-    });
-  });
-  return tile;
-}));
-
-/**
- * "Ready to go" on the tiles whose site has a lasso that comes with OpenPosse: the panel offers
- * it there, so that first assistant is an Allow rather than a recording. The tile itself still
- * only opens the site; adding is the panel's, on the site, behind Chrome's Allow.
- */
-builtInLassos()
-  .then((entries) => {
-    for (const [index, site] of SITES.entries()) {
-      const host = new URL(site.url).hostname;
-      if (!entries.some((entry) => covers(entry.lasso.domainPattern, host))) continue;
-      const tile = el('ob-tiles').children[index];
-      const ready = document.createElement('span');
-      ready.className = 'ready';
-      ready.textContent = 'ready to go';
-      tile.append(ready);
-      tile.setAttribute('aria-label', `Open ${site.name} in a new tab – OpenPosse comes with its lasso`);
-    }
-  })
-  .catch((error) => console.warn('[openposse] could not read the lassos that come with OpenPosse –', error?.message ?? error));
 
 el('ob-open-panel').addEventListener('click', () => openPanel());
 

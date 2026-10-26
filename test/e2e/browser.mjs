@@ -36,6 +36,13 @@ export const test = base.extend({
    */
   grouping: [false, { option: true }],
 
+  /**
+   * The install adds every lasso that comes with OpenPosse, so a fresh profile is not an empty
+   * roster. Most tests are about one, so the harness takes them out again once onboarding is
+   * up; `test.use({ builtIns: true })` keeps them, for the tests about the install itself.
+   */
+  builtIns: [false, { option: true }],
+
   extensionPath: async ({ grouping }, use) => {
     if (!grouping) {
       await use(EXTENSION);
@@ -76,7 +83,7 @@ export const test = base.extend({
     expect(errors, 'no page logged an error').toEqual([]);
   },
 
-  extensionId: async ({ context }, use) => {
+  extensionId: async ({ context, builtIns }, use) => {
     const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
     const id = new URL(worker.url()).host;
     // A first install opens Settings with onboarding over it. Waiting for that here keeps the tab
@@ -91,6 +98,14 @@ export const test = base.extend({
     }).toBe(true);
     const installed = context.pages().find((page) => page.url() === settings);
     await expect(installed.locator('#onboarding'), 'with onboarding over it').toHaveAttribute('open', '', { timeout: 10_000 });
+    // Onboarding opens once the install has added them, so they are all there to take out.
+    if (!builtIns) {
+      await installed.evaluate(async () => {
+        const keys = Object.keys(await chrome.storage.local.get(null))
+          .filter((key) => key === 'agents' || key === 'rosterOrder' || key.startsWith('lasso:'));
+        await chrome.storage.local.remove(keys);
+      });
+    }
     await use(id);
   },
 });
