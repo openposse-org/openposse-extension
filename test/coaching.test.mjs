@@ -163,6 +163,21 @@ test('a first question sent with Enter asks for the send button on the second', 
   assert.doesNotMatch(instruction(derive(draft), draft), /send button/);
 });
 
+test('an answer too short to find asks for a longer one, first or second', () => {
+  // Claude's "Hello! 👋" held 22 characters, so only the whole turn qualified, buttons and all.
+  let draft = newDraft('*.claude.ai');
+  draft = applyCapture(draft, { kind: 'open', openMethod: 'alwaysOpen' });
+  draft = applyCapture(draft, { kind: 'input', selector: sel('div.box') });
+  draft = applyCapture(draft, { kind: 'submit', submitMethod: 'click', selector: sel('button.send') });
+  draft = applyCapture(draft, { kind: 'reply_pending', repliesSoFar: 0, noAnswerFound: true });
+  assert.match(instruction(derive(draft), draft), /too short/);
+
+  draft = applyCapture(draft, { kind: 'reply_pending', repliesSoFar: 1 });
+  assert.doesNotMatch(instruction(derive(draft), draft), /too short/);
+  draft = applyCapture(draft, { kind: 'reply_pending', repliesSoFar: 1, noAnswerFound: true });
+  assert.match(instruction(derive(draft), draft), /too short/);
+});
+
 test('a finished draft cannot be built from an incomplete one', () => {
   const result = finish(newDraft('*.notion.so'), { triggerMethod: 'synthetic' });
   assert.equal(result.ok, false);

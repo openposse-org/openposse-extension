@@ -148,9 +148,10 @@ export function instruction(state, draft) {
       return 'The AI assistant is already open. Close it first – the shortcut usually toggles, so '
         + 'pressing it now would shut it and we’d record the wrong thing.';
     case 'opened':
-      return says('input') ?? says('submit') ?? says('reply')
+      return says('input') ?? says('submit') ?? says('reply-too-short') ?? says('reply')
         ?? 'Now ask it something.';
     case 'needs-second-answer':
+      if (says('reply-too-short')) return says('reply-too-short');
       // **Sent with Enter, so ask for the button now**, while there is still a question to send.
       // Some assistants ignore an Enter that came from a script (Claude did, 2026-10-26), and the
       // dry run only proves otherwise if nobody presses Return for it. The last send wins, so a
