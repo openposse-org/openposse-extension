@@ -151,7 +151,14 @@ export function instruction(state, draft) {
       return says('input') ?? says('submit') ?? says('reply')
         ?? 'Now ask it something.';
     case 'needs-second-answer':
-      return says('needs-second-answer');
+      // **Sent with Enter, so ask for the button now**, while there is still a question to send.
+      // Some assistants ignore an Enter that came from a script (Claude did, 2026-10-26), and the
+      // dry run only proves otherwise if nobody presses Return for it. The last send wins, so a
+      // click on the second question replaces the Enter.
+      return draft.submitMethod === 'enterKey'
+        ? `${says('needs-second-answer')} This time send it by clicking its send button, if it `
+          + 'has one – some AI assistants ignore an Enter we press for them.'
+        : says('needs-second-answer');
     case 'replies-share-nothing':
       return says('replies-share-nothing');
     case 'nothing-happened':

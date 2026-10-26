@@ -150,6 +150,19 @@ test('one answer asks for another, and it does not read as a failure', () => {
   assert.ok(!/sorry|error|failed|couldn/i.test(problem.message), problem.message);
 });
 
+test('a first question sent with Enter asks for the send button on the second', () => {
+  // Claude ignored the Enter a script pressed, and a Return pressed by hand passed the check.
+  let draft = newDraft('*.claude.ai');
+  draft = applyCapture(draft, { kind: 'submit', submitMethod: 'enterKey' });
+  draft = applyCapture(draft, { kind: 'reply_pending', repliesSoFar: 1 });
+  assert.match(instruction(derive(draft), draft), /clicking its send button/);
+
+  // The click on the second question is the one kept.
+  draft = applyCapture(draft, { kind: 'submit', submitMethod: 'click', selector: sel('button.send') });
+  assert.equal(draft.submitMethod, 'click');
+  assert.doesNotMatch(instruction(derive(draft), draft), /send button/);
+});
+
 test('a finished draft cannot be built from an incomplete one', () => {
   const result = finish(newDraft('*.notion.so'), { triggerMethod: 'synthetic' });
   assert.equal(result.ok, false);

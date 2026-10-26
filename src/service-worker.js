@@ -1735,11 +1735,17 @@ async function save() {
   // Saying so here is not a substitute for testing it, and it is not marked as a failure –
   // plenty of assistants accept a synthetic shortcut. It is the honest statement of what was
   // and was not proven.
-  const caution = wizard.draft.openMethod === 'shortcut'
-    ? ` It opens with a shortcut, and some AI assistants ignore key presses that came from a `
-      + `script. If ${name} doesn’t answer, re-record it from Settings and open the AI assistant `
-      + `by clicking instead.`
-    : '';
+  let caution = '';
+  if (wizard.draft.openMethod === 'shortcut') {
+    caution = ` It opens with a shortcut, and some AI assistants ignore key presses that came from `
+      + `a script. If ${name} doesn’t answer, re-record it from Settings and open the AI `
+      + `assistant by clicking instead.`;
+  } else if (wizard.draft.submitMethod === 'enterKey') {
+    // The same gap for sending: a Return pressed by hand during the check passes it.
+    caution = ` It sends with Enter, and some AI assistants ignore an Enter that came from a `
+      + `script. If ${name}’s questions are typed but never sent, lasso it again and click the `
+      + `send button instead.`;
+  }
 
   await panel({
     phase: 'recording',
