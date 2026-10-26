@@ -44,8 +44,10 @@ test('a finished lasso is named on the card, and Save and return goes back to th
   await expect(box).toBeVisible({ timeout: 30_000 });
   await expect(box).toHaveValue('Fixture');
   await expect(panel.locator('#coach-done')).toBeHidden();
-  // The fake vendor's busy signal is not found, so its row stays grey: four of five are green.
-  await expect(panel.locator('#coach-list .num.done')).toHaveCount(4);
+  // All five settled, the busy row included though the fake vendor has no busy signal: the timer
+  // it falls back to is an answer too, and its words say which.
+  await expect(panel.locator('#coach-list .num.done')).toHaveCount(5);
+  await expect(panel.locator('#coach-list .row').nth(4)).toContainText('using a timer');
 
   await box.fill('Ivan');
   await panel.click('#coach-name button[type="submit"]');

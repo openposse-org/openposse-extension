@@ -328,11 +328,11 @@ function renderCoach() {
     const line = document.createElement('div');
     line.className = row.pending ? 'row pending' : 'row';
 
-    // Numbered like Settings' steps: grey until captured, green once it is. Something optional
-    // that was not found stays grey rather than turning red or green: a red mark would say a
-    // recording had failed when it has not, and green would claim something we do not have.
+    // Numbered like Settings' steps: grey until settled, green once it is. Something optional
+    // that was not found is settled too – the turn falls back to a timer – so it goes green, and
+    // its words say which way it went. Grey there read as a step still owed on a finished lasso.
     const tick = document.createElement('span');
-    tick.className = row.pending || row.absent ? 'num' : 'num done';
+    tick.className = row.pending ? 'num' : 'num done';
     tick.textContent = String(index + 1);
 
     const label = document.createElement('span');
