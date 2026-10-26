@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.13](https://github.com/openposse-org/openposse-extension/compare/v0.9.12...v0.9.13) (2026-10-26)
+
+
+### Features
+
+* add the built-in lassos at install, each waiting for its site's Allow ([#75](https://github.com/openposse-org/openposse-extension/issues/75)) ([fe5ec9a](https://github.com/openposse-org/openposse-extension/commit/fe5ec9a6732844567b93b8db3344348aee9e947f))
+
 ## [0.9.12](https://github.com/openposse-org/openposse-extension/compare/v0.9.11...v0.9.12) (2026-10-26)
 
 
