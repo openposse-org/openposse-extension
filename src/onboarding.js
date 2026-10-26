@@ -177,6 +177,8 @@ function draw() {
     status.textContent = finished ? 'done' : done === 0 ? 'not started' : `${done} of ${of} done`;
     words.append(name, status);
     tab.append(badge, words);
+    // The first lasso comes after the downloads, by the tab as much as by Next.
+    tab.disabled = task.id === 'lasso' && shown.waiting?.includes('downloads');
     tab.addEventListener('click', () => go(task.id));
     return tab;
   }));
@@ -206,11 +208,15 @@ function drawGpu() {
 /**
  * Next waits while a download runs, by the owner's call of 2026-10-25, so nobody moves on
  * thinking it is done. The count is setup.js's, on the root element, since it starts them.
+ * On Downloads it also waits until the speech model and a voice are there (2026-10-26); the
+ * first lasso's tab waits with it, and "Finish later" always closes.
  */
 function drawDownloading() {
   const busy = Number(document.documentElement.dataset.downloading ?? 0) > 0;
-  el('ob-next').disabled = busy;
-  note('ob-busy', busy ? 'Downloading – keep this tab open until it finishes.' : '');
+  const owed = local.task === 'downloads' && shown.waiting?.includes('downloads');
+  el('ob-next').disabled = busy || owed;
+  note('ob-busy', busy ? 'Downloading – keep this tab open until it finishes.'
+    : owed ? `Download ${shown.done.model ? 'a voice' : 'the speech model'} to go on.` : '');
 }
 
 function drawPin() {

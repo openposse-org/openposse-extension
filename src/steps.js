@@ -240,7 +240,11 @@ export function progress(facts) {
   const needed = STEPS.find((step) => step.task && !step.optional && !done[step.id]
     && !impossible[step.id]);
   const task = done.welcome ? needed?.task ?? TASKS.at(-1).id : null;
-  return { done, current, task };
+  // The tasks still holding such a step. Downloads keeps its Next until it is out of this list,
+  // by the owner's call of 2026-10-26.
+  const waiting = [...new Set(STEPS.filter((step) => step.task && !step.optional && !done[step.id]
+    && !impossible[step.id]).map((step) => step.task))];
+  return { done, current, task, waiting };
 }
 
 /**

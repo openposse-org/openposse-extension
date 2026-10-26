@@ -391,6 +391,10 @@ test('with WebGPU, Downloads waits for a neural voice as well as the speech mode
   await expect(page.locator('#step-weights')).not.toHaveClass(/done/);
   await expect(page.locator('#step-weights h2 .kind')).toBeHidden();
   await expect(page.locator('#ob-gpu')).toHaveText('WebGPU available');
+  // And nothing moves on to the first lasso until a voice is downloaded, Next or its tab.
+  await expect(page.locator('#ob-next')).toBeDisabled();
+  await expect(page.locator('#ob-busy')).toHaveText('Download a voice to go on.');
+  await expect(tab(page, 'Your first lasso')).toBeDisabled();
 });
 
 test('a Chrome without on-device speech is told so in Downloads', async ({ context, extensionId }) => {
