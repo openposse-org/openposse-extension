@@ -54,6 +54,9 @@ function failure(code, message, extra = {}) {
  * @returns the method that worked, for `Lasso.triggerMethod`, or null if nothing happened.
  */
 async function openAssistant(lasso) {
+  // A message box that is always on the page has nothing to open. Missing, it means the page
+  // has changed, which the callers say with the lasso's date.
+  if (lasso.openMethod === 'alwaysOpen') return null;
   if (lasso.openMethod === 'click') {
     if (!lasso.openSelector) return null;
     // Wait rather than demand it instantly: the control may be behind a menu that is still
@@ -196,13 +199,16 @@ async function askAssistant({ lasso, prompt, graceMs = null }, emit) {
     openedBy = await openAssistant(lasso);
     input = await waitForElement(lasso.inputSelector, { timeoutMs: 3000 });
     if (!input && lasso.openMethod === 'click') missing = openedBy ? 'input' : 'open';
+    if (!input && lasso.openMethod === 'alwaysOpen') missing = 'input';
     if (!input) openedBy = null;
   }
 
   if (!input) {
     return failure(
       ERROR.timeout,
-      lasso.openMethod === 'click'
+      lasso.openMethod === 'alwaysOpen'
+        ? 'the AI assistant’s message box is not on the page'
+        : lasso.openMethod === 'click'
         ? 'the AI assistant did not open when its button was clicked'
         // **The old text here told the user to rely on the Mac app**, which is parked – it
         // said "needs the app to post a real event", describing a retry path that no longer
@@ -535,6 +541,9 @@ async function invokeViaShortcut({ lasso }) {
     // For a shortcut this is very likely `isTrusted: false` being rejected. There is no
     // fallback: the `CGEventPost` retry belonged to the Mac app, which is parked, and nothing
     // in a browser can post a trusted event. So the honest remedy is a different recording.
+    if (lasso.openMethod === 'alwaysOpen') {
+      return failure(ERROR.timeout, 'the AI assistant’s message box is not on the page');
+    }
     return failure(ERROR.timeout, lasso.openMethod === 'click'
       ? 'the AI assistant did not open when its button was clicked'
       : 'this AI assistant ignores keyboard shortcuts it did not get from a person – '

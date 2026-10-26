@@ -106,6 +106,23 @@ test('closing the lassoed tab ends the recording, and Close leaves the card', as
   await expect(panel.locator('#desk')).toBeVisible();
 });
 
+test('a message box that is always there can be said so, and the open step is done', async ({ context, extensionId }) => {
+  const { vendor, panel } = await startLassoing(context, extensionId);
+  await vendor.bringToFront();
+
+  const always = panel.locator('#coach-always');
+  await expect(always).toBeVisible();
+  await always.click();
+
+  await expect(always).toBeHidden();
+  await expect(panel.locator('#coach-step')).toHaveText('SETTING UP · 2 OF 2');
+  await expect(panel.locator('#coach-list')).toContainText('nothing to open – always on the page');
+
+  // Hidden while another tab is in front, like the step it belongs to.
+  await panel.bringToFront();
+  await expect(always).toBeHidden();
+});
+
 test('a picked file puts its name in the box', async ({ context, extensionId }) => {
   const settings = await context.newPage();
   await settings.goto(`chrome-extension://${extensionId}/setup.html`);

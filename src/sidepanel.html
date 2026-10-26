@@ -493,6 +493,8 @@
           <input type="text" id="coach-name-input" aria-label="Name" spellcheck="false" autocomplete="off">
           <button type="submit">Save and return</button>
         </form>
+        <!-- Only while waiting for the open step: ChatGPT, Claude and Gemini have nothing to open. -->
+        <button class="back" id="coach-always" hidden>Nothing to open – the message box is always there</button>
         <div class="list" id="coach-list"></div>
         <!-- Decoration: the instruction above says everything this does. -->
         <canvas class="rope" id="coach-rope" aria-hidden="true"></canvas>

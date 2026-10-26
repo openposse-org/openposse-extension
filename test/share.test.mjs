@@ -132,6 +132,15 @@ test('a lasso with no openMethod, opening by shortcut, is accepted', () => {
   assert.equal(result.lasso.openMethod, null, 'the absent field survives rather than being filled in');
 });
 
+test('a lasso whose message box is always on the page is accepted, and says nothing about opening', () => {
+  const result = unpack(shared({ openMethod: 'alwaysOpen', openSelector: null, shortcut: null }));
+  assert.equal(result.ok, true, result.problems?.join(' '));
+  assert.equal(result.lasso.openMethod, 'alwaysOpen');
+  const sentence = summarise('Max', result.lasso);
+  assert.doesNotMatch(sentence, /clicks ‘|presses|opens/);
+  assert.match(sentence, /^On notion\.so, Max types your question/);
+});
+
 test('the lassos/ directory imports as it is, and says what it is', async () => {
   // Every file this repo ships is the shared file itself, unpacked exactly as Settings reads one
   // pasted from GitHub, so a file the importer would refuse cannot reach a user. Each carries an

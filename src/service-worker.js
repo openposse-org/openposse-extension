@@ -38,7 +38,7 @@ import { hashOf, matchFor, staleness, today, unpack } from './share.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
 import {
   derive, stepLabel, heading, instruction, captures, PATIENCE_MS,
-  awayInstruction, tabClosedInstruction,
+  awayInstruction, tabClosedInstruction, offersAlwaysOpen,
 } from './coaching.js';
 import { panel } from './panel.js';
 import { frontWindowNow, hydrate as hydrateFront, watchFront } from './front.js';
@@ -1130,6 +1130,17 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
     });
     return true;
   }
+  if (request?.kind === 'openposse.record.alwaysOpen') {
+    if (!wizard?.capturing) { respond({ ok: false, reason: 'nothing is being lassoed' }); return false; }
+    onCapture({ kind: 'open', openMethod: 'alwaysOpen', fromPanel: true }).then(
+      () => respond({ ok: true }),
+      (error) => {
+        console.error('[openposse] could not record that nothing opens –', error);
+        respond({ ok: false, reason: String(error?.message ?? error) });
+      },
+    );
+    return true;
+  }
   if (request?.kind === 'openposse.record.cancel') {
     cancelWizard().then(() => respond({ ok: true }), (error) => {
       console.error('[openposse] recording could not be stopped –', error);
@@ -1464,6 +1475,7 @@ async function showCoaching() {
       // The panel never asks for a name. See `save()`.
       naming: false,
       away: away ? product || 'the lassoed tab' : null,
+      alwaysOpen: !away && offersAlwaysOpen(state),
       bad: state.step === 'replies-share-nothing' || state.step === 'abandoned',
     },
   }, { create: true, current: () => wizard === mine });
@@ -1534,6 +1546,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 async function onCapture(event) {
   if (!wizard || !wizard.capturing) return;
   if (event?.kind === 'armed') wizard.alreadyOpen = event.alreadyOpen === true;
+  // The person said there is nothing to open. A click the recorder later blames for opening it
+  // (New chat, say) is a guess, and the person's word wins over it.
+  if (event?.kind === 'open' && wizard.draft.openMethod === 'alwaysOpen' && !event.fromPanel) return;
 
   wizard.draft = applyCapture(wizard.draft, event);
   await showCoaching();

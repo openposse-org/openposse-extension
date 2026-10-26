@@ -67,6 +67,8 @@ const REQUIRED = ['domainPattern', 'inputSelector', 'submitMethod',
  * and says nothing true about them. So this checks the same pair the runtime checks.
  */
 function opensSomehow(lasso) {
+  // Nothing to open: the message box is always on the page (ChatGPT, Claude, Gemini).
+  if (lasso.openMethod === 'alwaysOpen') return true;
   if (lasso.openMethod === 'click') return isText(lasso.openSelector);
   if (lasso.openMethod === 'shortcut') return Boolean(lasso.shortcut);
   // No method named. The runtime takes the shortcut path, so a shortcut is what it needs.
@@ -392,10 +394,14 @@ export function summarise(name, lasso, recordedOn = null) {
     String(lasso.shortcut.key ?? '').toUpperCase(),
   ].filter(Boolean).join('') : '';
   const opener = labelIn(lasso.openSelector);
-  // The same branch `content.js` takes: a click when it says click, the shortcut otherwise.
-  const open = lasso.openMethod === 'click'
-    ? (opener ? `clicks ${quoted(opener)}` : `opens ${product}’s AI assistant`)
-    : (keys ? `presses ${keys}` : null);
+  // The same branch `content.js` takes: a click when it says click, the shortcut otherwise, and
+  // nothing for a message box that is always on the page.
+  let open = null;
+  if (lasso.openMethod === 'click') {
+    open = opener ? `clicks ${quoted(opener)}` : `opens ${product}’s AI assistant`;
+  } else if (lasso.openMethod !== 'alwaysOpen' && keys) {
+    open = `presses ${keys}`;
+  }
 
   const box = labelIn(lasso.inputSelector);
   const type = box ? `types your question into ${quoted(box)}` : 'types your question';

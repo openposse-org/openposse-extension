@@ -318,6 +318,7 @@ function renderCoach() {
     el('coach-name').dataset.agent = saved.agentId;
     el('coach-name-input').value = saved.name;
   }
+  el('coach-always').hidden = coach.alwaysOpen !== true;
 
   // **Every capture stays on screen once it is made.** Confirmation is the whole reason the list
   // exists: somebody who cannot see that their shortcut registered will press it again, and on a
@@ -851,6 +852,18 @@ el('coach-name').addEventListener('submit', async (event) => {
     }
   }
   leaveCoach();
+});
+el('coach-always').addEventListener('click', () => {
+  chrome.runtime.sendMessage({ kind: 'openposse.record.alwaysOpen' })
+    .then((answer) => {
+      if (answer?.ok) return;
+      el('coach-say').textContent = `That didn’t register – ${answer?.reason ?? 'no reason given'}`;
+      el('coach-say').classList.add('bad');
+    })
+    .catch((error) => {
+      el('coach-say').textContent = `That didn’t register – ${error?.message ?? error}`;
+      el('coach-say').classList.add('bad');
+    });
 });
 el('coach-back').addEventListener('click', () => {
   chrome.runtime.sendMessage({ kind: 'openposse.record.return' }).catch((error) =>

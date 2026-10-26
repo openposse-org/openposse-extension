@@ -11,7 +11,7 @@ import {
 } from '../src/draft.js';
 import {
   derive, stepLabel, heading, instruction, isCancellable, captures, keycaps, PATIENCE_MS,
-  awayInstruction, tabClosedInstruction,
+  awayInstruction, tabClosedInstruction, offersAlwaysOpen,
 } from '../src/coaching.js';
 
 const sel = (css) => ({ css });
@@ -309,6 +309,21 @@ test('the checklist skips what was not captured that way', () => {
   const rows = captures(draft);
   assert.equal(rows.find((r) => r.id === 'open').label, 'Opens from');
   assert.equal(rows.find((r) => r.id === 'submit').detail, '↩');
+});
+
+test('a message box that is always there is offered while waiting to open, and then shown', () => {
+  // ChatGPT, Claude and Gemini have nothing to open, so the open step would wait forever.
+  let draft = newDraft('*.chatgpt.com');
+  assert.equal(offersAlwaysOpen(derive(draft)), true);
+  assert.equal(offersAlwaysOpen(derive(draft, { alreadyOpen: true })), true);
+  assert.equal(offersAlwaysOpen(derive(draft, { sinceArmedMs: PATIENCE_MS })), true);
+
+  draft = applyCapture(draft, { kind: 'open', openMethod: 'alwaysOpen' });
+  const state = derive(draft);
+  assert.equal(state.step, 'opened');
+  assert.equal(offersAlwaysOpen(state), false, 'once said, it is not asked again');
+  assert.equal(captures(draft).find((r) => r.id === 'open').label, 'Opens');
+  assert.equal(problems(draft).some((p) => p.id.startsWith('open')), false);
 });
 
 test('the heading names the product while it is caught, and says when it has been', () => {
