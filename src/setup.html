@@ -954,10 +954,18 @@
       .ob-tabs .words { display: flex; flex-direction: column; min-width: 0; }
       .ob-tabs .words span:last-child { font-size: 11px; font-weight: 400; color: var(--text-dim); }
       .ob-task { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 22px 22px 34px; }
-      /* An icon button's label hangs below it here: above, the first step's was cut off by the
-         top of the task's scrolling box (the owner's report of 2026-10-25). The padding under the
-         last step leaves the last label room. */
-      .ob-task button.icon[aria-label]::after { bottom: auto; top: calc(100% + 8px); }
+      /* An icon button's label, the way the (i) cards are: fixed to the window and anchored to
+         its button, so the task's scrolling box cannot cut it off, below the button and above it
+         only where the window ends. Drawn above inside the box, the first step's was clipped
+         (the owner's report of 2026-10-25); drawn below, a button at the bottom of a short window
+         was, and the close button's stuck out over the top of the modal (2026-10-26). */
+      #onboarding button.icon[aria-label] { anchor-name: --ob-button; anchor-scope: --ob-button; }
+      #onboarding button.icon[aria-label]::after {
+        position: fixed; inset: auto; transform: none; margin-top: 8px;
+        position-anchor: --ob-button;
+        position-area: bottom span-left;
+        position-try-fallbacks: flip-block;
+      }
       .ob-task .step:last-child { margin-bottom: 12px; }
       .ob-task .step p { margin: 2px 0 0; line-height: 1.45; }
       .ob-foot {
