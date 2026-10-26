@@ -95,8 +95,8 @@ export function patternIsDerivable(pattern) {
     if (!isText(rest) || rest.includes('*')) return false;
     return patternForHost(`x.${rest}`) === pattern;
   }
-  // A bare host: an IP literal, `localhost`, or a public suffix `patternForHost` refused to
-  // wildcard. A `*` anywhere else in it is not a pattern the recorder has ever produced, and
+  // A bare host: an IP literal, `localhost`, a host under an umbrella domain such as
+  // `gemini.google.com`, or a public suffix `patternForHost` refused to wildcard. A `*` anywhere else in it is not a pattern the recorder has ever produced, and
   // a lone `*` round-trips to itself through `patternForHost` – so it is refused here instead.
   if (pattern.includes('*')) return false;
   return patternForHost(pattern) === pattern;
