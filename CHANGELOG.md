@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.6](https://github.com/openposse-org/openposse-extension/compare/v0.9.5...v0.9.6) (2026-10-26)
+
+
+### Fixes
+
+* onboarding's tooltips are never cut off by the modal or its scrolling ([#61](https://github.com/openposse-org/openposse-extension/issues/61)) ([d1f497c](https://github.com/openposse-org/openposse-extension/commit/d1f497c5c77d4772327ec1521c9ef425dcedae61))
+
 ## [0.9.5](https://github.com/openposse-org/openposse-extension/compare/v0.9.4...v0.9.5) (2026-10-26)
 
 
