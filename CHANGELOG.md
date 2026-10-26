@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.10](https://github.com/openposse-org/openposse-extension/compare/v0.9.9...v0.9.10) (2026-10-26)
+
+
+### Features
+
+* debug tools can copy the voices to a folder and load them in another build ([#69](https://github.com/openposse-org/openposse-extension/issues/69)) ([493afa5](https://github.com/openposse-org/openposse-extension/commit/493afa538d22b3e22052ee00ec583723ae11c230))
+
 ## [0.9.9](https://github.com/openposse-org/openposse-extension/compare/v0.9.8...v0.9.9) (2026-10-26)
 
 
