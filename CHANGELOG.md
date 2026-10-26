@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.4](https://github.com/openposse-org/openposse-extension/compare/v0.9.3...v0.9.4) (2026-10-26)
+
+
+### Fixes
+
+* onboarding's Downloads waits for a neural voice, and says whether there is WebGPU ([#57](https://github.com/openposse-org/openposse-extension/issues/57)) ([af3f05c](https://github.com/openposse-org/openposse-extension/commit/af3f05cedc6318f92e78189cdfdc34752717817d))
+
 ## [0.9.3](https://github.com/openposse-org/openposse-extension/compare/v0.9.2...v0.9.3) (2026-10-26)
 
 
