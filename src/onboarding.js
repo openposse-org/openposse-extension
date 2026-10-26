@@ -122,6 +122,9 @@ async function refresh() {
   }
   shown = progress({ ...local, ...facts });
   draw();
+  // The borrowed steps' own chips are setup.js's, and were left saying "not downloaded yet"
+  // while this read "ready" – the owner's report of 2026-10-25. So Settings reads them again too.
+  dialog.dispatchEvent(new Event('recheck'));
 }
 
 // ── Drawing ────────────────────────────────────────────────────────────────────────────────
@@ -157,10 +160,21 @@ function draw() {
   }));
   for (const task of TASKS) el(`ob-${task.id}`).hidden = task.id !== local.task;
   el('ob-next').textContent = at === TASKS.length - 1 ? 'Done' : 'Next';
+  drawDownloading();
 
   drawPin();
   drawGrouping();
   drawAssistant();
+}
+
+/**
+ * Next waits while a download runs, by the owner's call of 2026-10-25, so nobody moves on
+ * thinking it is done. The count is setup.js's, on the root element, since it starts them.
+ */
+function drawDownloading() {
+  const busy = Number(document.documentElement.dataset.downloading ?? 0) > 0;
+  el('ob-next').disabled = busy;
+  note('ob-busy', busy ? 'Downloading – keep this tab open until it finishes.' : '');
 }
 
 function drawPin() {
@@ -172,10 +186,14 @@ function drawPin() {
   el('skip-pin').hidden = facts.pin === true || skipped;
 }
 
-/** Once answered, the switch shows what Chrome holds; until then it shows the suggested on. */
+/**
+ * The switch shows what Chrome holds, always. The step ticks once the question has an answer:
+ * on, or a no from "Not now" or from switching it off.
+ */
 function drawGrouping() {
-  if (facts.grouping) el('ob-grouping').setAttribute('aria-checked', String(facts.groupingIsOn));
+  el('ob-grouping').setAttribute('aria-checked', String(facts.groupingIsOn));
   el('step-grouping').classList.toggle('done', Boolean(facts.grouping));
+  el('ob-grouping-no').hidden = Boolean(facts.grouping);
 }
 
 function drawAssistant() {
@@ -190,32 +208,11 @@ function drawAssistant() {
 
 // ── Moving between tasks ───────────────────────────────────────────────────────────────────
 
-/**
- * Shows a task. Leaving Permissions is what answers the tab group, as the retired welcome
- * page's Continue did: on, it asks Chrome, and **that is the first statement of the click** that got
- * here, because a gesture does not survive an await. Either answer ticks the step.
- */
+/** Shows a task. */
 function go(task) {
-  if (local.task === 'permissions' && task !== 'permissions' && facts && !facts.grouping) answerGrouping();
   local.task = task;
   draw();
   el(`ob-${task}`).scrollTop = 0;
-}
-
-function answerGrouping() {
-  const wanted = el('ob-grouping').getAttribute('aria-checked') === 'true';
-  const asking = wanted ? chrome.permissions.request(GROUPING) : Promise.resolve(false);
-  note('ob-grouping-note', '');
-  asking
-    .then(async (granted) => {
-      await markGroupingAsked();
-      if (wanted && !granted) {
-        el('ob-grouping').setAttribute('aria-checked', 'false');
-        note('ob-grouping-note', 'Chrome didn’t get a yes, so grouping is off. You can switch it on in Settings.');
-      }
-    })
-    .catch((error) => note('ob-grouping-note', `Grouping couldn’t be switched on – ${error?.message ?? error}`, 'bad'))
-    .then(refresh);
 }
 
 el('ob-start').addEventListener('click', () => {
@@ -250,18 +247,27 @@ el('skip-pin').addEventListener('click', () => {
   refresh();
 });
 
-// Unanswered, the switch is only the answer being chosen; leaving the task gives it. Answered,
-// it is Settings' switch: on asks Chrome at once, off ungroups the tabs.
+// Settings' switch: on asks Chrome there and then, as **the first statement of the click**,
+// because a gesture does not survive an await; off ungroups the tabs. Until 2026-10-25 it was
+// a suggested on that leaving the task asked about, which left the step unticked while you
+// looked at it and put Chrome's prompt after Next – the owner's report the same day. Either
+// answer ticks the step, a declined prompt included, since that is a no.
 el('ob-grouping').addEventListener('click', () => {
-  const button = el('ob-grouping');
-  if (!facts?.grouping) {
-    button.setAttribute('aria-checked', String(button.getAttribute('aria-checked') !== 'true'));
-    return;
-  }
-  const change = facts.groupingIsOn ? turnGroupingOff() : chrome.permissions.request(GROUPING);
+  const on = facts?.groupingIsOn;
+  const change = on ? turnGroupingOff() : chrome.permissions.request(GROUPING);
   note('ob-grouping-note', '');
   change
+    .then(async (granted) => {
+      await markGroupingAsked();
+      if (!on && !granted) note('ob-grouping-note', 'Chrome didn’t get a yes, so grouping is off. You can switch it on here or in Settings.');
+    })
     .catch((error) => note('ob-grouping-note', `The tab group wasn’t changed – ${error?.message ?? error}`, 'bad'))
+    .then(refresh);
+});
+
+el('ob-grouping-no').addEventListener('click', () => {
+  markGroupingAsked()
+    .catch((error) => console.warn('[openposse] could not record the tab group answer –', error?.message ?? error))
     .then(refresh);
 });
 
@@ -328,6 +334,8 @@ export async function openOnboarding() {
   // finishes when it finishes, so the tabs' counts are read again while the modal is up.
   polling = setInterval(() => { if (!document.hidden) refresh(); }, 1500);
 }
+
+dialog.addEventListener('downloads', () => { if (dialog.open && local.task) drawDownloading(); });
 
 dialog.addEventListener('close', () => {
   clearInterval(polling);

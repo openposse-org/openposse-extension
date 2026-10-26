@@ -109,13 +109,35 @@ async function refreshModel() {
 
 el('install-model').addEventListener('click', async () => {
   setStatus('model-status', 'downloading…');
+  downloading(+1);
   try {
     await installModel();
   } catch (error) {
     setStatus('model-status', `failed: ${error.message}`, 'bad');
     return;
+  } finally {
+    downloading(-1);
   }
   await refreshModel();
+});
+
+// ── Downloads in progress ──────────────────────────────────────────────────────────────────
+//
+// **A voice download runs in this page**, so reloading or closing Settings stops it – the files
+// already fetched are kept, and Download resumes. Asked about on 2026-10-25, when a download
+// started in onboarding came back as "not downloaded" after a reload. So the page counts what is
+// running: onboarding holds Next while it is above nought, and leaving asks first.
+
+let running = 0;
+
+function downloading(delta) {
+  running = Math.max(0, running + delta);
+  document.documentElement.dataset.downloading = String(running);
+  el('onboarding').dispatchEvent(new Event('downloads'));
+}
+
+window.addEventListener('beforeunload', (event) => {
+  if (running > 0) event.preventDefault();
 });
 
 // ── 3. The shortcut ────────────────────────────────────────────────────────────────────────
@@ -337,6 +359,7 @@ async function download(model) {
   // what it says changes – a whole percent or a whole megabyte.
   let shown = '';
   let result;
+  downloading(+1);
   try {
     result = await model.set.download({
       onProgress: ({ bytes, totalBytes }) => {
@@ -354,6 +377,8 @@ async function download(model) {
     setStatus(model.status, `could not start: ${error?.message ?? error}`, 'bad');
     el(model.get).disabled = false;
     return;
+  } finally {
+    downloading(-1);
   }
   el(model.get).disabled = false;
 
@@ -2049,6 +2074,21 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // the end, once the checks below have said what is done.
 el('setup-sheet').addEventListener('toggle', (event) => {
   el('setup').setAttribute('aria-expanded', String(event.newState === 'open'));
+});
+
+// The way back to onboarding after "Finish later", which had none – the owner's report of
+// 2026-10-25. It shuts this sheet itself, since it borrows the steps.
+el('open-onboarding').addEventListener('click', () => openOnboarding());
+
+// Onboarding re-reads where things stand while it is open, and these are the borrowed steps'
+// chips. Not the voices, and not the model while anything downloads: then the line is the
+// download's own, and the recogniser may not say "downloading" until it is done.
+el('onboarding').addEventListener('recheck', () => {
+  const chips = { microphone: refreshMic, shortcut: refreshShortcut };
+  if (running === 0) chips['speech model'] = refreshModel;
+  for (const [name, refresh] of Object.entries(chips)) {
+    refresh().catch((error) => console.warn(`[openposse] setup: ${name} could not be read –`, error?.message ?? error));
+  }
 });
 
 // ── Feedback ───────────────────────────────────────────────────────────────────────────────

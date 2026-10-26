@@ -307,13 +307,15 @@ test('onboarding opens on the welcome, then walks the three tasks, each step tic
   await expect(page.locator('#pin-status')).toHaveText('skipped');
   await expect(tab(page, 'Permissions')).toContainText('2 of 4 done');
 
-  // The tab group: suggested on, answered by leaving the task. Off is answered without Chrome's
-  // prompt, which automation cannot reach.
-  await expect(page.locator('#ob-grouping')).toHaveAttribute('aria-checked', 'true');
-  await page.click('#ob-grouping');
+  // The tab group shows what Chrome holds, off here, and "Not now" answers it without Chrome's
+  // prompt, which automation cannot reach – ticking it there and then, not after Next.
+  await expect(page.locator('#ob-grouping')).toHaveAttribute('aria-checked', 'false');
+  await page.click('#ob-grouping-no');
+  await expect(page.locator('#step-grouping')).toHaveClass(/done/);
+  await expect(page.locator('#ob-grouping-no')).toBeHidden();
+  await expect(tab(page, 'Permissions')).toContainText('3 of 4 done');
   await page.click('#ob-next');
   await expect(tab(page, 'Downloads')).toHaveAttribute('aria-selected', 'true');
-  await expect(tab(page, 'Permissions')).toContainText('3 of 4 done');
 
   // The speech model is reported ready, so it ticks without a press; better voices are there too.
   await expect(page.locator('#ob-downloads > .step').first()).toHaveAttribute('id', 'step-model');
@@ -324,6 +326,19 @@ test('onboarding opens on the welcome, then walks the three tasks, each step tic
   await expect(tab(page, 'Your first lasso')).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('#ob-tiles button')).toHaveCount(6);
   await expect(page.locator('#ob-next')).toHaveText('Done');
+
+  // Next waits while Settings counts a download running, and says why.
+  await page.evaluate(() => {
+    document.documentElement.dataset.downloading = '1';
+    document.getElementById('onboarding').dispatchEvent(new Event('downloads'));
+  });
+  await expect(page.locator('#ob-next')).toBeDisabled();
+  await expect(page.locator('#ob-busy')).toContainText('keep this tab open');
+  await page.evaluate(() => {
+    document.documentElement.dataset.downloading = '0';
+    document.getElementById('onboarding').dispatchEvent(new Event('downloads'));
+  });
+  await expect(page.locator('#ob-next')).toBeEnabled();
 
   // Back goes back, and from the first task to the welcome.
   await tab(page, 'Permissions').click();
@@ -336,9 +351,16 @@ test('onboarding opens on the welcome, then walks the three tasks, each step tic
   await expect(page.locator('#onboarding')).not.toHaveAttribute('open', '');
   await expect(page.locator('#setup-sheet > .step')).toHaveCount(5);
   await expect(page.locator('#setup-sheet #step-shortcut .num')).toHaveText('3');
+
+  // And the setup sheet is the way back.
+  await page.click('#setup');
+  await page.click('#open-onboarding');
+  await expect(page.locator('#onboarding')).toHaveAttribute('open', '');
+  expect(await page.evaluate(() => document.getElementById('setup-sheet').matches(':popover-open'))).toBe(false);
+  await expect(page.locator('#ob-permissions #step-mic')).toHaveCount(1);
 });
 
-test('leaving Permissions asks Chrome for the tab group, and a no leaves grouping off', async ({ context, extensionId }) => {
+test('switching the tab group on asks Chrome there and then, and a no leaves it off', async ({ context, extensionId }) => {
   // Chrome's prompt is out of reach, so it answers no here, and says what it was asked for.
   const page = await onboarding(context, extensionId, {
     before: () => {
@@ -347,8 +369,7 @@ test('leaving Permissions asks Chrome for the tab group, and a no leaves groupin
     },
   });
   await page.click('#ob-start');
-  await tab(page, 'Downloads').click();
-  await tab(page, 'Permissions').click();
+  await page.click('#ob-grouping');
   await expect(page.locator('#step-grouping')).toHaveClass(/done/);
   expect(await page.evaluate(() => window.__asked)).toEqual([{ permissions: ['tabGroups'] }]);
   await expect(page.locator('#ob-grouping')).toHaveAttribute('aria-checked', 'false');

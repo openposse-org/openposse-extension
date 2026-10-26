@@ -951,7 +951,11 @@
       .ob-tabs .done .badge { background: var(--green); border-color: var(--green); color: #00250c; font-weight: 700; }
       .ob-tabs .words { display: flex; flex-direction: column; min-width: 0; }
       .ob-tabs .words span:last-child { font-size: 11px; font-weight: 400; color: var(--text-dim); }
-      .ob-task { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 22px 22px 2px; }
+      .ob-task { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 22px 22px 34px; }
+      /* An icon button's label hangs below it here: above, the first step's was cut off by the
+         top of the task's scrolling box (the owner's report of 2026-10-25). The padding under the
+         last step leaves the last label room. */
+      .ob-task button.icon[aria-label]::after { bottom: auto; top: calc(100% + 8px); }
       .ob-task .step:last-child { margin-bottom: 12px; }
       .ob-task .step p { margin: 2px 0 0; line-height: 1.45; }
       .ob-foot {
@@ -959,7 +963,8 @@
         padding: 14px 22px; border-top: 1px solid var(--line);
       }
       .ob-foot .spacer { margin-left: auto; }
-      .ob-foot #ob-next { color: #fff; }
+      :is(.ob-foot #ob-next, #open-onboarding) { color: #fff; }
+      .ob-foot .ob-note { margin: 0; color: var(--text-dim); }
       #onboarding .link {
         background: none; padding: 8px 4px; color: var(--text-dim); font-weight: 400;
         text-decoration: underline; text-underline-offset: 3px;
@@ -1046,6 +1051,8 @@
             Steps 1–3 are needed once. The rest are optional, and you can change them any time.
             Everything runs on this machine – speech recognition included.
           </p>
+          <!-- Back to onboarding, after "Finish later" or any time. -->
+          <p><button id="open-onboarding">Open the guided setup</button></p>
 
           <section class="step" id="step-mic">
             <div class="num">1</div>
@@ -1679,15 +1686,15 @@
               <div class="head">
                 <h2 id="ob-grouping-label">Keep its tabs together</h2>
                 <div class="end">
-                  <!-- Suggested on, by the owner's decision of 2026-10-25. Leaving this task is
-                       what asks Chrome, as the welcome page's Continue did. -->
-                  <button class="switch" id="ob-grouping" role="switch" aria-checked="true"
+                  <!-- What Chrome holds; switching it on asks Chrome there and then. -->
+                  <button class="link" id="ob-grouping-no">Not now</button>
+                  <button class="switch" id="ob-grouping" role="switch" aria-checked="false"
                           aria-labelledby="ob-grouping-label"></button>
                 </div>
               </div>
               <p>
-                One tab group called OpenPosse for the tabs it talks to. Chrome asks once when you
-                continue. It never opens or closes a tab.
+                One tab group called OpenPosse for the tabs it talks to. Switch it on and Chrome
+                asks once. It never opens or closes a tab.
               </p>
               <p class="ob-note" id="ob-grouping-note" hidden></p>
             </div>
@@ -1714,6 +1721,7 @@
         <div class="ob-foot">
           <button class="link" id="ob-later">Finish later</button>
           <span class="spacer"></span>
+          <span class="ob-note" id="ob-busy" hidden></span>
           <button class="secondary" id="ob-back">Back</button>
           <button id="ob-next">Next</button>
         </div>
