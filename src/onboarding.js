@@ -187,6 +187,20 @@ function draw() {
   drawPin();
   drawGrouping();
   drawAssistant();
+  drawGpu();
+}
+
+/**
+ * Whether this Chrome has WebGPU, said where it matters, by the owner's ask of 2026-10-26:
+ * without it neither neural voice is fast enough, so the voice step can be passed over.
+ */
+function drawGpu() {
+  if (!facts) return;
+  if (facts.voice === 'unsupported') {
+    chip('ob-gpu', 'no WebGPU in this Chrome – system voices will speak, so you can skip this', 'warn');
+  } else {
+    chip('ob-gpu', 'WebGPU available', 'good');
+  }
 }
 
 /**
