@@ -458,3 +458,12 @@ test('Finish setting up brings onboarding back over the Settings already open', 
   // `openOptionsPage()` brings the open one to the front rather than opening another.
   expect(count()).toBe(before);
 });
+
+test('a microphone the offscreen document is refused is no longer reported as granted', async ({ context, extensionId }) => {
+  // "Allow this time" ends with its tab, and the recorder then hears Chrome dismiss its prompt.
+  // The worker is told, and setup's record goes, so the panel and onboarding ask again.
+  const panel = await openPanel(context, extensionId);
+  await panel.evaluate(() => chrome.storage.local.set({ micGranted: true }));
+  await panel.evaluate(() => chrome.runtime.sendMessage({ kind: 'openposse.mic.lost', reason: 'Permission dismissed' }));
+  await expect.poll(() => panel.evaluate(async () => (await chrome.storage.local.get('micGranted')).micGranted)).toBe(false);
+});
