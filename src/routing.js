@@ -348,6 +348,7 @@ export function productLabel(domainPattern) {
 const BRAND_CASING = new Map([
   ['leanix', 'LeanIX'],
   ['openai', 'OpenAI'],
+  ['chatgpt', 'ChatGPT'],
 ]);
 
 /** Matches a fragment against what an agent can be called: its name, or its vendor's. */

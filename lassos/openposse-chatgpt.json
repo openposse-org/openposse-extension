@@ -1,0 +1,22 @@
+{
+  "format": "openposse.lasso",
+  "version": 1,
+  "id": "chatgpt",
+  "name": "ChatGPT",
+  "recordedOn": "2026-10-26",
+  "hash": "c59f60913f42",
+  "lasso": {
+    "domainPattern": "*.chatgpt.com",
+    "openMethod": "alwaysOpen",
+    "shortcut": null,
+    "openSelector": null,
+    "inputSelector": "#mobile-composer-prompt",
+    "submitMethod": "click",
+    "submitSelector": "button[aria-label=\"Send\\ message\"]",
+    "responseContainerSelector": "section[aria-label=\"DIL\\ content\"]",
+    "busySelector": "li[data-conversation-stream-anchor]",
+    "quietPeriodMs": 900,
+    "responseTimeoutMs": 60000,
+    "triggerMethod": "synthetic"
+  }
+}

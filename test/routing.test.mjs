@@ -251,6 +251,9 @@ test('product labels are capitalised for reading, with the brands that need it s
   // Inner capitals are not in a domain, so they come from the table rather than a guess.
   assert.equal(productLabel('app.leanix.net'), 'LeanIX');
   assert.equal(productLabel('chat.openai.com'), 'OpenAI');
+  assert.equal(productLabel('*.chatgpt.com'), 'ChatGPT');
+  // An exact host under an umbrella domain reads as its own product (see `UMBRELLA_DOMAINS`).
+  assert.equal(productLabel('gemini.google.com'), 'Gemini');
   // A real company whose name is an `Object.prototype` key. On a plain-object table this label
   // would be a function, printed into the status line as "function Object() { [native code] }".
   assert.equal(productLabel('constructor.io'), 'Constructor');

@@ -81,6 +81,18 @@ export function derive(draft, { alreadyOpen = false, sinceArmedMs = 0, patienceM
   return { step: 'await-open' };
 }
 
+/**
+ * Whether the card offers "the message box is always on the page".
+ *
+ * **Said by the person, never inferred.** On ChatGPT, Claude and Gemini nothing opens, so the
+ * open step can never be captured and the recording waits forever. Guessing it from a box that
+ * was simply there would also catch a panel left open before arming, which then could not be
+ * opened once closed – so the card asks, while it is still waiting for the open step.
+ */
+export function offersAlwaysOpen(state) {
+  return ['await-open', 'already-open', 'nothing-happened'].includes(state.step);
+}
+
 /** `SETTING UP · 1 OF 2`, above the instruction. */
 export function stepLabel(state) {
   switch (state.step) {
@@ -136,10 +148,18 @@ export function instruction(state, draft) {
       return 'The AI assistant is already open. Close it first – the shortcut usually toggles, so '
         + 'pressing it now would shut it and we’d record the wrong thing.';
     case 'opened':
-      return says('input') ?? says('submit') ?? says('reply')
+      return says('input') ?? says('submit') ?? says('reply-too-short') ?? says('reply')
         ?? 'Now ask it something.';
     case 'needs-second-answer':
-      return says('needs-second-answer');
+      if (says('reply-too-short')) return says('reply-too-short');
+      // **Sent with Enter, so ask for the button now**, while there is still a question to send.
+      // Some assistants ignore an Enter that came from a script (Claude did, 2026-10-26), and the
+      // dry run only proves otherwise if nobody presses Return for it. The last send wins, so a
+      // click on the second question replaces the Enter.
+      return draft.submitMethod === 'enterKey'
+        ? `${says('needs-second-answer')} This time send it by clicking its send button, if it `
+          + 'has one – some AI assistants ignore an Enter we press for them.'
+        : says('needs-second-answer');
     case 'replies-share-nothing':
       return says('replies-share-nothing');
     case 'nothing-happened':
@@ -204,6 +224,8 @@ export function captures(draft) {
     });
   } else if (draft.openMethod === 'click') {
     rows.push({ id: 'open', label: 'Opens from', detail: draft.openSelector?.css ?? '' });
+  } else if (draft.openMethod === 'alwaysOpen') {
+    rows.push({ id: 'open', label: 'Opens', detail: 'nothing to open – always on the page' });
   } else {
     rows.push({ id: 'open', label: 'Opens', detail: 'Open the AI assistant', pending: true });
   }

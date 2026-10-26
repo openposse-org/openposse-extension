@@ -53,6 +53,23 @@ function isPublicSuffix(labels) {
   return labels[1].length === 2 && GENERIC_SECOND_LEVEL.has(labels[0]);
 }
 
+/**
+ * Registrable domains that hold many unrelated products, one per subdomain.
+ *
+ * `*.google.com` for Gemini would be a grant over Gmail, Docs and every other Google site, and
+ * under one site, one assistant it would also claim them all for one assistant. So a host under
+ * one of these keeps its exact name: `gemini.google.com` stays `gemini.google.com`, which is
+ * also what makes its product read as Gemini rather than Google.
+ *
+ * **Not a vendor list.** A domain missing from here still records and works, with the ordinary
+ * wildcard; an entry only narrows the access a recording asks for. That is the same asymmetry as
+ * the rest of this file: too narrow fails visibly, too broad fails invisibly.
+ */
+const UMBRELLA_DOMAINS = new Set([
+  'google.com',
+  'microsoft.com',
+]);
+
 /** An IP literal has no registrable domain, and `*.192.168` is meaningless. */
 function isIPLiteral(host) {
   if (host.includes(':')) return true;            // IPv6, bracketed or not
@@ -71,7 +88,8 @@ function isIPLiteral(host) {
  * superset of the exact host and never loses the page it was recorded on.
  *
  * Returns the exact host — no wildcard — for an IP address, a single-label host such as
- * `localhost`, or anything where the registrable domain cannot be established.
+ * `localhost`, a host under one of the `UMBRELLA_DOMAINS`, or anything where the registrable
+ * domain cannot be established.
  */
 export function patternForHost(host) {
   const clean = String(host ?? '').toLowerCase().replace(/^\.+|\.+$/g, '');
@@ -88,7 +106,10 @@ export function patternForHost(host) {
   const keep = isPublicSuffix(labels.slice(-2)) ? 3 : 2;
   if (labels.length < keep) return clean;
 
-  return `*.${labels.slice(-keep).join('.')}`;
+  const domain = labels.slice(-keep).join('.');
+  if (UMBRELLA_DOMAINS.has(domain)) return clean;
+
+  return `*.${domain}`;
 }
 
 /**

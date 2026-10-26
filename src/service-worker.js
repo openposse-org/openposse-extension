@@ -38,7 +38,7 @@ import { hashOf, matchFor, staleness, today, unpack } from './share.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
 import {
   derive, stepLabel, heading, instruction, captures, PATIENCE_MS,
-  awayInstruction, tabClosedInstruction,
+  awayInstruction, tabClosedInstruction, offersAlwaysOpen,
 } from './coaching.js';
 import { panel } from './panel.js';
 import { frontWindowNow, hydrate as hydrateFront, watchFront } from './front.js';
@@ -500,8 +500,17 @@ async function focusTab({ tabId }) {
  */
 async function armRecording({ tabId }, { id, agent }) {
   await ensureContentScript(tabId);
-  await chrome.tabs.sendMessage(tabId, { intent: 'arm_recording' });
+  // **Set before arming, not after.** Arming adopts a message box that already has focus and
+  // reports it (and `armed`) at once, before `sendMessage` resolves – and the relay drops every
+  // capture while `recording` is null. ChatGPT focuses its box on load, so both were lost: the
+  // card never showed the message box and never knew the assistant was already open.
   recording = { id, agent, tabId, keepAlive: startKeepAlive() };
+  try {
+    await chrome.tabs.sendMessage(tabId, { intent: 'arm_recording' });
+  } catch (error) {
+    stopRecording();
+    throw error;
+  }
   return { ok: true, tabId };
 }
 
@@ -1130,6 +1139,17 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
     });
     return true;
   }
+  if (request?.kind === 'openposse.record.alwaysOpen') {
+    if (!wizard?.capturing) { respond({ ok: false, reason: 'nothing is being lassoed' }); return false; }
+    onCapture({ kind: 'open', openMethod: 'alwaysOpen', fromPanel: true }).then(
+      () => respond({ ok: true }),
+      (error) => {
+        console.error('[openposse] could not record that nothing opens –', error);
+        respond({ ok: false, reason: String(error?.message ?? error) });
+      },
+    );
+    return true;
+  }
   if (request?.kind === 'openposse.record.cancel') {
     cancelWizard().then(() => respond({ ok: true }), (error) => {
       console.error('[openposse] recording could not be stopped –', error);
@@ -1464,6 +1484,7 @@ async function showCoaching() {
       // The panel never asks for a name. See `save()`.
       naming: false,
       away: away ? product || 'the lassoed tab' : null,
+      alwaysOpen: !away && offersAlwaysOpen(state),
       bad: state.step === 'replies-share-nothing' || state.step === 'abandoned',
     },
   }, { create: true, current: () => wizard === mine });
@@ -1534,6 +1555,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 async function onCapture(event) {
   if (!wizard || !wizard.capturing) return;
   if (event?.kind === 'armed') wizard.alreadyOpen = event.alreadyOpen === true;
+  // The person said there is nothing to open. A click the recorder later blames for opening it
+  // (New chat, say) is a guess, and the person's word wins over it.
+  if (event?.kind === 'open' && wizard.draft.openMethod === 'alwaysOpen' && !event.fromPanel) return;
 
   wizard.draft = applyCapture(wizard.draft, event);
   await showCoaching();
@@ -1711,11 +1735,17 @@ async function save() {
   // Saying so here is not a substitute for testing it, and it is not marked as a failure –
   // plenty of assistants accept a synthetic shortcut. It is the honest statement of what was
   // and was not proven.
-  const caution = wizard.draft.openMethod === 'shortcut'
-    ? ` It opens with a shortcut, and some AI assistants ignore key presses that came from a `
-      + `script. If ${name} doesn’t answer, re-record it from Settings and open the AI assistant `
-      + `by clicking instead.`
-    : '';
+  let caution = '';
+  if (wizard.draft.openMethod === 'shortcut') {
+    caution = ` It opens with a shortcut, and some AI assistants ignore key presses that came from `
+      + `a script. If ${name} doesn’t answer, re-record it from Settings and open the AI `
+      + `assistant by clicking instead.`;
+  } else if (wizard.draft.submitMethod === 'enterKey') {
+    // The same gap for sending: a Return pressed by hand during the check passes it.
+    caution = ` It sends with Enter, and some AI assistants ignore an Enter that came from a `
+      + `script. If ${name}’s questions are typed but never sent, lasso it again and click the `
+      + `send button instead.`;
+  }
 
   await panel({
     phase: 'recording',

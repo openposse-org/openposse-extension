@@ -46,6 +46,7 @@ export function newDraft(domainPattern) {
     reply: null,
     repliesSeen: 0,
     noCommonReplySelector: false,
+    answerTooShort: false,
     abandonedMidCapture: false,
     unrecognised: [],
     quietPeriodMs: 900,
@@ -90,6 +91,7 @@ export function applyCapture(draft, event) {
 
     case 'reply':
       next.reply = event.reply ?? null;
+      next.answerTooShort = false;
       // **The ceiling comes from what the vendor actually did.** This is the one number M2 got
       // wrong by guessing, and a recording is the only moment we ever watch a vendor answer at
       // its own pace.
@@ -104,6 +106,10 @@ export function applyCapture(draft, event) {
       // instead of looking like it stopped noticing.
       next.repliesSeen = event.repliesSoFar ?? (draft.repliesSeen + 1);
       next.noCommonReplySelector = event.noCommonSelector === true;
+      // The page answered, but nothing it added held enough text to be an answer. A short reply
+      // ("Hello! 👋") is the usual reason: then only the whole turn qualifies, buttons and all,
+      // and that is what Claude's first lasso read aloud.
+      next.answerTooShort = event.noAnswerFound === true;
       break;
 
     case 'navigated_away':
@@ -179,6 +185,10 @@ export function problems(draft) {
         'We couldn’t tell one answer apart from the next. Ask a second question so we can see '
         + 'where a new answer appears.');
     }
+  } else if (draft.answerTooShort) {
+    add('reply-too-short',
+      'That answer was too short for us to find. Ask something that takes a sentence or two to '
+      + 'answer.');
   } else if (draft.noCommonReplySelector) {
     add('replies-share-nothing',
       'We saw two answers but couldn’t find anything they have in common, so we wouldn’t be '

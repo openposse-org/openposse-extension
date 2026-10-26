@@ -51,6 +51,16 @@ test('hosts with no registrable domain stay exact', () => {
   assert.equal(patternForHost('intranet'), 'intranet');
 });
 
+test('a host under an umbrella domain stays exact', () => {
+  // `*.google.com` for Gemini would ask for Gmail, Docs and every other Google site.
+  assert.equal(patternForHost('gemini.google.com'), 'gemini.google.com');
+  assert.equal(patternForHost('Gemini.Google.com.'), 'gemini.google.com');
+  assert.equal(patternForHost('copilot.microsoft.com'), 'copilot.microsoft.com');
+  assert.equal(patternForHost('google.com'), 'google.com');
+  // Only the domain itself counts, not a name that ends the same way.
+  assert.equal(patternForHost('chat.notgoogle.com'), '*.notgoogle.com');
+});
+
 test('a number-shaped host that is not an IP is still a host', () => {
   // Four numeric labels are an IP; three are not, and `1.2.3` must not be mistaken for one.
   // 999 is out of range, so this is a (very odd) hostname rather than an address.

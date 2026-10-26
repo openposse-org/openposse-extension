@@ -11,7 +11,7 @@ import {
 } from '../src/draft.js';
 import {
   derive, stepLabel, heading, instruction, isCancellable, captures, keycaps, PATIENCE_MS,
-  awayInstruction, tabClosedInstruction,
+  awayInstruction, tabClosedInstruction, offersAlwaysOpen,
 } from '../src/coaching.js';
 
 const sel = (css) => ({ css });
@@ -148,6 +148,34 @@ test('one answer asks for another, and it does not read as a failure', () => {
   assert.ok(problem);
   // From the user's side nothing went wrong — they asked and got an answer.
   assert.ok(!/sorry|error|failed|couldn/i.test(problem.message), problem.message);
+});
+
+test('a first question sent with Enter asks for the send button on the second', () => {
+  // Claude ignored the Enter a script pressed, and a Return pressed by hand passed the check.
+  let draft = newDraft('*.claude.ai');
+  draft = applyCapture(draft, { kind: 'submit', submitMethod: 'enterKey' });
+  draft = applyCapture(draft, { kind: 'reply_pending', repliesSoFar: 1 });
+  assert.match(instruction(derive(draft), draft), /clicking its send button/);
+
+  // The click on the second question is the one kept.
+  draft = applyCapture(draft, { kind: 'submit', submitMethod: 'click', selector: sel('button.send') });
+  assert.equal(draft.submitMethod, 'click');
+  assert.doesNotMatch(instruction(derive(draft), draft), /send button/);
+});
+
+test('an answer too short to find asks for a longer one, first or second', () => {
+  // Claude's "Hello! 👋" held 22 characters, so only the whole turn qualified, buttons and all.
+  let draft = newDraft('*.claude.ai');
+  draft = applyCapture(draft, { kind: 'open', openMethod: 'alwaysOpen' });
+  draft = applyCapture(draft, { kind: 'input', selector: sel('div.box') });
+  draft = applyCapture(draft, { kind: 'submit', submitMethod: 'click', selector: sel('button.send') });
+  draft = applyCapture(draft, { kind: 'reply_pending', repliesSoFar: 0, noAnswerFound: true });
+  assert.match(instruction(derive(draft), draft), /too short/);
+
+  draft = applyCapture(draft, { kind: 'reply_pending', repliesSoFar: 1 });
+  assert.doesNotMatch(instruction(derive(draft), draft), /too short/);
+  draft = applyCapture(draft, { kind: 'reply_pending', repliesSoFar: 1, noAnswerFound: true });
+  assert.match(instruction(derive(draft), draft), /too short/);
 });
 
 test('a finished draft cannot be built from an incomplete one', () => {
@@ -309,6 +337,21 @@ test('the checklist skips what was not captured that way', () => {
   const rows = captures(draft);
   assert.equal(rows.find((r) => r.id === 'open').label, 'Opens from');
   assert.equal(rows.find((r) => r.id === 'submit').detail, '↩');
+});
+
+test('a message box that is always there is offered while waiting to open, and then shown', () => {
+  // ChatGPT, Claude and Gemini have nothing to open, so the open step would wait forever.
+  let draft = newDraft('*.chatgpt.com');
+  assert.equal(offersAlwaysOpen(derive(draft)), true);
+  assert.equal(offersAlwaysOpen(derive(draft, { alreadyOpen: true })), true);
+  assert.equal(offersAlwaysOpen(derive(draft, { sinceArmedMs: PATIENCE_MS })), true);
+
+  draft = applyCapture(draft, { kind: 'open', openMethod: 'alwaysOpen' });
+  const state = derive(draft);
+  assert.equal(state.step, 'opened');
+  assert.equal(offersAlwaysOpen(state), false, 'once said, it is not asked again');
+  assert.equal(captures(draft).find((r) => r.id === 'open').label, 'Opens');
+  assert.equal(problems(draft).some((p) => p.id.startsWith('open')), false);
 });
 
 test('the heading names the product while it is caught, and says when it has been', () => {

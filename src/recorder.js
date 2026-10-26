@@ -622,7 +622,7 @@ function watchForReply() {
 function describeCandidates(added) {
   const visible = added.filter((el) => isVisible(el));
   const notComposer = visible.filter((el) => !(session.input && el.contains(session.input)));
-  const lengths = notComposer.map((el) => (el.innerText ?? '').length);
+  const lengths = notComposer.map(answerLength);
   const enoughText = lengths.filter((n) => n >= MIN_ANSWER_TEXT).length;
 
   return [
@@ -635,11 +635,46 @@ function describeCandidates(added) {
   ].join(' ');
 }
 
+/** Controls, which are page furniture rather than the answer. */
+const FURNITURE = 'button, [role="button"], [role="toolbar"], [role="menu"]';
+
+/**
+ * How much of an element's text is the answer – its text, less what sits in controls or is
+ * clipped to nothing for screen readers.
+ *
+ * **Measured on Claude, 2026-10-26.** Each answer sits in a turn that also holds a hidden
+ * "Claude responded:" heading and a copy/speak/thumbs toolbar. Counted as text, those made the
+ * whole turn the "largest" candidate and pushed the element holding only the answer below the
+ * 90% cut, so the lasso read the heading and the buttons aloud. A short answer ("Hello! 👋")
+ * was worse: only the turn reached `MIN_ANSWER_TEXT` at all. Lengths only, never the text.
+ */
+function answerLength(el) {
+  let length = (el.innerText ?? '').length;
+  // Outermost only, so a toolbar's own buttons are not taken away twice.
+  const furniture = [...(el.querySelectorAll?.('*') ?? [])]
+    .filter((part) => part.matches(FURNITURE) || isClipped(part));
+  for (const part of furniture) {
+    if (furniture.some((other) => other !== part && other.contains(part))) continue;
+    length -= (part.innerText ?? '').length;
+  }
+  return Math.max(0, length);
+}
+
+/**
+ * Text kept only for screen readers: positioned out of the flow and clipped to a pixel.
+ * Positioned, because `display: contents` wrappers also measure 0×0 and hold the whole answer.
+ */
+function isClipped(el) {
+  const rect = el.getBoundingClientRect?.();
+  if (!rect || rect.width > 1 || rect.height > 1) return false;
+  return el.ownerDocument?.defaultView?.getComputedStyle(el).position === 'absolute';
+}
+
 function chooseReplyElement(added) {
   const candidates = added.filter((el) => {
     if (!isVisible(el)) return false;
     if (session.input && el.contains(session.input)) return false;
-    return (el.innerText ?? '').length >= MIN_ANSWER_TEXT;
+    return answerLength(el) >= MIN_ANSWER_TEXT;
   });
   if (candidates.length === 0) return null;
 
@@ -676,7 +711,7 @@ function chooseReplyElement(added) {
   //
   // So: take the largest text any candidate holds, keep the ones within 10% of it – those all
   // contain the answer and differ only in how much extra they carry.
-  const textLength = (el) => (el.innerText ?? '').length;
+  const textLength = answerLength;
   const largest = Math.max(...pool.map(textLength));
   const holdsTheAnswer = pool.filter((el) => textLength(el) >= largest * 0.9);
 
