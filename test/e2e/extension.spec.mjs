@@ -321,6 +321,8 @@ test('onboarding opens on the welcome, then walks the three tasks, each step tic
   await expect(page.locator('#ob-downloads > .step').first()).toHaveAttribute('id', 'step-model');
   await expect(page.locator('#step-model')).toHaveClass(/done/);
   await expect(page.locator('#ob-downloads #step-weights')).toBeVisible();
+  // The test browser has no WebGPU, and the voice step says so, and that it may be skipped.
+  await expect(page.locator('#ob-gpu')).toContainText('no WebGPU');
 
   await page.click('#ob-next');
   await expect(tab(page, 'Your first lasso')).toHaveAttribute('aria-selected', 'true');
@@ -375,6 +377,20 @@ test('switching the tab group on asks Chrome there and then, and a no leaves it 
   await expect(page.locator('#ob-grouping')).toHaveAttribute('aria-checked', 'false');
   await expect(page.locator('#ob-grouping-note')).toContainText('grouping is off');
   expect(await page.evaluate(() => chrome.permissions.contains({ permissions: ['tabGroups'] }))).toBe(false);
+});
+
+test('with WebGPU, Downloads waits for a neural voice as well as the speech model', async ({ context, extensionId }) => {
+  // The test browser has no WebGPU, so it is given one; no voice is downloaded here.
+  const page = await onboarding(context, extensionId, {
+    before: () => { Object.defineProperty(navigator, 'gpu', { value: { requestAdapter: async () => ({}) } }); },
+  });
+  await page.click('#ob-start');
+  await expect(tab(page, 'Downloads')).toContainText('1 of 2 done');
+  await tab(page, 'Downloads').click();
+  await expect(page.locator('#step-model')).toHaveClass(/done/);
+  await expect(page.locator('#step-weights')).not.toHaveClass(/done/);
+  await expect(page.locator('#step-weights h2 .kind')).toBeHidden();
+  await expect(page.locator('#ob-gpu')).toHaveText('WebGPU available');
 });
 
 test('a Chrome without on-device speech is told so in Downloads', async ({ context, extensionId }) => {

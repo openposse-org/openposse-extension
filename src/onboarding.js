@@ -22,6 +22,9 @@ import {
 } from './steps.js';
 import { GROUPING, groupingOn, markGroupingAsked, turnGroupingOff } from './grouping.js';
 import { icon } from './icons.js';
+import { hasWebGPU, agreedToSupertonic } from './tts.js';
+import { KOKORO, SUPERTONIC } from './weights.js';
+import { engineSettings } from './storage.js';
 
 const el = (id) => document.getElementById(id);
 const dialog = el('onboarding');
@@ -105,10 +108,29 @@ function giveBack() {
 // ── Reading where things stand ─────────────────────────────────────────────────────────────
 
 async function read() {
-  const [mic, model, pin, shortcut, grouping, groupingIsOn, assistant] = await Promise.all([
-    micState(), modelState(), pinned(), shortcutKey(), groupingAnswered(), groupingOn(), firstAssistant(),
+  const [mic, model, voice, pin, shortcut, grouping, groupingIsOn, assistant] = await Promise.all([
+    micState(), modelState(), voiceState(), pinned(), shortcutKey(), groupingAnswered(), groupingOn(),
+    firstAssistant(),
   ]);
-  return { mic, model, pin, shortcut, grouping, groupingIsOn, assistant };
+  return { mic, model, voice, pin, shortcut, grouping, groupingIsOn, assistant };
+}
+
+/** WebGPU does not come and go while the page is open, so it is asked once. */
+let gpu = null;
+
+/**
+ * Whether a neural voice can speak: `ready` for Supertonic downloaded and agreed to, or Kokoro
+ * downloaded – the same test the engine choice makes – `missing`, or `unsupported` without
+ * WebGPU. Read here rather than in steps.js, which the worker loads, and has no use for weights.
+ */
+async function voiceState() {
+  gpu ??= hasWebGPU();
+  if (!(await gpu)) return 'unsupported';
+  const [supertonic, kokoro, { agreement }] = await Promise.all([
+    SUPERTONIC.status(), KOKORO.status(), engineSettings(),
+  ]);
+  const speaks = (supertonic.state === 'ready' && agreedToSupertonic(agreement)) || kokoro.state === 'ready';
+  return speaks ? 'ready' : 'missing';
 }
 
 async function refresh() {
@@ -165,6 +187,20 @@ function draw() {
   drawPin();
   drawGrouping();
   drawAssistant();
+  drawGpu();
+}
+
+/**
+ * Whether this Chrome has WebGPU, said where it matters, by the owner's ask of 2026-10-26:
+ * without it neither neural voice is fast enough, so the voice step can be passed over.
+ */
+function drawGpu() {
+  if (!facts) return;
+  if (facts.voice === 'unsupported') {
+    chip('ob-gpu', 'no WebGPU in this Chrome – system voices will speak, so you can skip this', 'warn');
+  } else {
+    chip('ob-gpu', 'WebGPU available', 'good');
+  }
 }
 
 /**
@@ -324,7 +360,7 @@ export async function openOnboarding() {
     facts = await read();
   } catch (error) {
     console.warn('[openposse] could not read the setup steps –', error?.message ?? error);
-    facts = { mic: 'ask', model: 'downloadable', pin: false, shortcut: '', grouping: false, assistant: null };
+    facts = { mic: 'ask', model: 'downloadable', voice: 'missing', pin: false, shortcut: '', grouping: false, assistant: null };
   }
   shown = progress({ ...local, ...facts });
   local.task = shown.task;
