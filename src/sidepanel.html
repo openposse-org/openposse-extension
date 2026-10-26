@@ -256,6 +256,9 @@
       .coach:not([hidden]) { display: flex; flex-direction: column; min-height: 100%; position: relative; }
       .coach .close { position: absolute; top: 0; right: 0; }
       .coach .back { align-self: flex-start; margin-top: 12px; font-size: 12.5px; }
+      .coach .name:not([hidden]) { display: flex; gap: 8px; margin-top: 12px; }
+      .coach .name input { flex: 1 1 auto; min-width: 0; }
+      .coach .name button { flex: none; font-size: 12.5px; }
       /* The design's 2:1 frame, as wide as the card allows and no wider than the design drew it.
          Auto margins centre it vertically in the space under the checklist. */
       .coach .rope {
@@ -469,6 +472,14 @@
         <div class="say" id="coach-say"></div>
         <!-- Only while the recording's tab is not the one in front: watching a tab needs it. -->
         <button class="back" id="coach-back" hidden></button>
+        <!-- Once it has finished or failed: the same way out as the close button, where the eye
+             already is after reading the result. -->
+        <button class="back" id="coach-done" hidden>Done</button>
+        <!-- After a new assistant is saved: its name, editable, and the way back. -->
+        <form class="name" id="coach-name" hidden>
+          <input type="text" id="coach-name-input" aria-label="Name" spellcheck="false" autocomplete="off">
+          <button type="submit">Save and return</button>
+        </form>
         <div class="list" id="coach-list"></div>
         <!-- Decoration: the instruction above says everything this does. -->
         <canvas class="rope" id="coach-rope" aria-hidden="true"></canvas>

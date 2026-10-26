@@ -309,6 +309,15 @@ function renderCoach() {
   // The worker says which tab it is watching when that is not the one in front.
   el('coach-back').hidden = !coach.away;
   el('coach-back').textContent = coach.away ? `Back to ${coach.away}` : '';
+  // A new assistant gets its name box, which is its own way back; anything else that has ended
+  // gets Done. The box is filled once per assistant, so a redraw never undoes somebody's typing.
+  const saved = coach.saved ?? null;
+  el('coach-done').hidden = !coach.ended || Boolean(saved);
+  el('coach-name').hidden = !saved;
+  if (saved && el('coach-name').dataset.agent !== saved.agentId) {
+    el('coach-name').dataset.agent = saved.agentId;
+    el('coach-name-input').value = saved.name;
+  }
 
   // **Every capture stays on screen once it is made.** Confirmation is the whole reason the list
   // exists: somebody who cannot see that their shortcut registered will press it again, and on a
@@ -814,13 +823,34 @@ async function lassoThisTab() {
   await chrome.runtime.sendMessage({ kind: 'openposse.record', tabId, pattern });
 }
 
-// The worker owns the recording, so both of these are asks; the panel changes when it answers.
-el('coach-close').addEventListener('click', () => {
+// The worker owns the recording, so these are asks; the panel changes when it answers.
+const leaveCoach = () => {
   // Said on the card, not by `say`: the dock it writes to is hidden while recording.
   chrome.runtime.sendMessage({ kind: 'openposse.record.cancel' }).catch((error) => {
     el('coach-say').textContent = `Could not stop lassoing – ${error?.message ?? error}`;
     el('coach-say').classList.add('bad');
   });
+};
+el('coach-close').addEventListener('click', leaveCoach);
+el('coach-done').addEventListener('click', leaveCoach);
+
+// Save and return: the name is the one Settings would rename, with the same rules (`renameAgent`).
+el('coach-name').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const saved = state.coach?.saved;
+  const name = el('coach-name-input').value.trim();
+  if (saved && name !== saved.name) {
+    const result = await chrome.runtime
+      .sendMessage({ kind: 'openposse.agent.rename', agentId: saved.agentId, name })
+      .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+    if (!result?.ok) {
+      // Stays on the card with the box as typed, so the fix is one edit away.
+      el('coach-say').textContent = `Not renamed – ${result?.reason ?? 'no answer'}.`;
+      el('coach-say').classList.add('bad');
+      return;
+    }
+  }
+  leaveCoach();
 });
 el('coach-back').addEventListener('click', () => {
   chrome.runtime.sendMessage({ kind: 'openposse.record.return' }).catch((error) =>

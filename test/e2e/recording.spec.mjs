@@ -1,6 +1,6 @@
-// Lassoing, driven in a real browser: the card's way out, a switch to another tab while it
-// watches, and the lassoed tab closing. The recording itself, a person opening and asking a real
-// assistant, is checked by hand (docs/testing.md); these start it and leave it watching.
+// Lassoing, driven in a real browser: a whole recording on the fake vendor and naming it, the
+// card's way out, a switch to another tab while it watches, and the lassoed tab closing. Real
+// vendors are checked by hand (docs/testing.md).
 //
 // The panel's page is opened as a tab of its own (see `openPanel`), so bringing it to the front
 // is itself a switch away from the vendor's tab, which is what the away tests use.
@@ -21,12 +21,41 @@ async function startLassoing(context, extensionId) {
   return { vendor, panel };
 }
 
+test('a finished lasso is named on the card, and Save and return goes back to the panel', async ({ context, extensionId }) => {
+  const { vendor, panel } = await startLassoing(context, extensionId);
+  await vendor.bringToFront();
+
+  // What a person does: open the assistant, then ask it two things.
+  await vendor.click('[data-testid="open-assistant"]');
+  for (const question of ['What is the pipeline total?', 'And the biggest deal?']) {
+    await vendor.click('[data-testid="composer"]');
+    await vendor.keyboard.type(question);
+    await vendor.click('[data-testid="send"]');
+    await expect(vendor.locator('[data-testid="send"]')).toBeVisible({ timeout: 10_000 });
+  }
+
+  // The check asks it two questions of its own before saving.
+  const box = panel.locator('#coach-name-input');
+  await expect(box).toBeVisible({ timeout: 30_000 });
+  await expect(box).toHaveValue('Fixture');
+  await expect(panel.locator('#coach-done')).toBeHidden();
+
+  await box.fill('Ivan');
+  await panel.click('#coach-name button[type="submit"]');
+  await expect(panel.locator('#coach')).toBeHidden();
+  await expect(panel.locator('#desk')).toBeVisible();
+  const { agents } = await panel.evaluate(() => chrome.storage.local.get('agents'));
+  expect(agents.map((a) => a.name)).toEqual(['Ivan']);
+});
+
 test('lassoing can be stopped from the card, and nothing is saved', async ({ context, extensionId }) => {
   const { vendor, panel } = await startLassoing(context, extensionId);
   await vendor.bringToFront();
 
   const close = panel.locator('#coach-close');
   await expect(close).toHaveAttribute('aria-label', 'Stop lassoing – nothing is saved');
+  // Nothing has finished, so there is no Done yet.
+  await expect(panel.locator('#coach-done')).toBeHidden();
   await close.click();
 
   await expect(panel.locator('#coach')).toBeHidden();
@@ -61,8 +90,11 @@ test('closing the lassoed tab ends the recording, and Close leaves the card', as
   await expect(panel.locator('#coach-back')).toBeHidden();
   const close = panel.locator('#coach-close');
   await expect(close).toHaveAttribute('aria-label', 'Close');
-  await close.click();
+  // Done, under the message, is the same way out.
+  await expect(panel.locator('#coach-done')).toBeVisible();
+  await panel.locator('#coach-done').click();
   await expect(panel.locator('#coach')).toBeHidden();
+  await expect(panel.locator('#desk')).toBeVisible();
 });
 
 test('a picked file puts its name in the box', async ({ context, extensionId }) => {
