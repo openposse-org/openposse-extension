@@ -309,22 +309,31 @@ function renderCoach() {
   // The worker says which tab it is watching when that is not the one in front.
   el('coach-back').hidden = !coach.away;
   el('coach-back').textContent = coach.away ? `Back to ${coach.away}` : '';
+  // A new assistant gets its name box, which is its own way back; anything else that has ended
+  // gets Done. The box is filled once per assistant, so a redraw never undoes somebody's typing.
+  const saved = coach.saved ?? null;
+  el('coach-done').hidden = !coach.ended || Boolean(saved);
+  el('coach-name').hidden = !saved;
+  if (saved && el('coach-name').dataset.agent !== saved.agentId) {
+    el('coach-name').dataset.agent = saved.agentId;
+    el('coach-name-input').value = saved.name;
+  }
 
   // **Every capture stays on screen once it is made.** Confirmation is the whole reason the list
   // exists: somebody who cannot see that their shortcut registered will press it again, and on a
   // toggle the second press closes the assistant and records the wrong thing.
   const list = el('coach-list');
   list.textContent = '';
-  for (const row of coach.captures ?? []) {
+  for (const [index, row] of (coach.captures ?? []).entries()) {
     const line = document.createElement('div');
-    line.className = 'row';
+    line.className = row.pending ? 'row pending' : 'row';
 
+    // Numbered like Settings' steps: grey until settled, green once it is. Something optional
+    // that was not found is settled too – the turn falls back to a timer – so it goes green, and
+    // its words say which way it went. Grey there read as a step still owed on a finished lasso.
     const tick = document.createElement('span');
-    // A dash rather than a tick for something optional that was not found: a red cross would say
-    // a recording had failed when it has not, and a green tick would claim something we do not
-    // have.
-    tick.className = row.absent ? 'tick none' : 'tick';
-    tick.textContent = row.absent ? '–' : '✓';
+    tick.className = row.pending ? 'num' : 'num done';
+    tick.textContent = String(index + 1);
 
     const label = document.createElement('span');
     label.className = 'label';
@@ -814,13 +823,34 @@ async function lassoThisTab() {
   await chrome.runtime.sendMessage({ kind: 'openposse.record', tabId, pattern });
 }
 
-// The worker owns the recording, so both of these are asks; the panel changes when it answers.
-el('coach-close').addEventListener('click', () => {
+// The worker owns the recording, so these are asks; the panel changes when it answers.
+const leaveCoach = () => {
   // Said on the card, not by `say`: the dock it writes to is hidden while recording.
   chrome.runtime.sendMessage({ kind: 'openposse.record.cancel' }).catch((error) => {
     el('coach-say').textContent = `Could not stop lassoing – ${error?.message ?? error}`;
     el('coach-say').classList.add('bad');
   });
+};
+el('coach-close').addEventListener('click', leaveCoach);
+el('coach-done').addEventListener('click', leaveCoach);
+
+// Save and return: the name is the one Settings would rename, with the same rules (`renameAgent`).
+el('coach-name').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const saved = state.coach?.saved;
+  const name = el('coach-name-input').value.trim();
+  if (saved && name !== saved.name) {
+    const result = await chrome.runtime
+      .sendMessage({ kind: 'openposse.agent.rename', agentId: saved.agentId, name })
+      .catch((error) => ({ ok: false, reason: String(error?.message ?? error) }));
+    if (!result?.ok) {
+      // Stays on the card with the box as typed, so the fix is one edit away.
+      el('coach-say').textContent = `Not renamed – ${result?.reason ?? 'no answer'}.`;
+      el('coach-say').classList.add('bad');
+      return;
+    }
+  }
+  leaveCoach();
 });
 el('coach-back').addEventListener('click', () => {
   chrome.runtime.sendMessage({ kind: 'openposse.record.return' }).catch((error) =>

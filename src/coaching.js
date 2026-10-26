@@ -186,7 +186,11 @@ export function keycaps(shortcut) {
 }
 
 /**
- * The checklist shown when everything is in hand, in the order the captures were made.
+ * The checklist, **every step from the start**, in the order they are performed.
+ *
+ * Shown up front so the whole job is visible before any of it is done, the way Settings lists
+ * its steps: a step not yet captured is `pending` and says what to do, and once captured it says
+ * what was found. The panel numbers the rows by position.
  *
  * `isKeys` renders as keycaps rather than a code chip – a shortcut is something you pressed,
  * not page structure.
@@ -200,19 +204,34 @@ export function captures(draft) {
     });
   } else if (draft.openMethod === 'click') {
     rows.push({ id: 'open', label: 'Opens from', detail: draft.openSelector?.css ?? '' });
+  } else {
+    rows.push({ id: 'open', label: 'Opens', detail: 'Open the AI assistant', pending: true });
   }
 
   if (draft.input) {
     rows.push({ id: 'input', label: 'Message box', detail: draft.input.css });
+  } else {
+    rows.push({ id: 'input', label: 'Message box', detail: 'Click in it and type a question', pending: true });
   }
 
   if (draft.submitMethod === 'click') {
     rows.push({ id: 'submit', label: 'Send button', detail: draft.submitSelector?.css ?? '' });
   } else if (draft.submitMethod === 'enterKey') {
     rows.push({ id: 'submit', label: 'Sends with', detail: '↩', isKeys: true });
+  } else {
+    rows.push({ id: 'submit', label: 'Sends', detail: 'Send the question', pending: true });
   }
 
-  if (draft.reply) {
+  if (!draft.reply) {
+    // Two answers are needed to find where answers go, so the first one is said as progress.
+    rows.push({
+      id: 'reply',
+      label: 'Answer appears',
+      detail: draft.repliesSeen > 0 ? 'One answer seen – ask it one more thing' : 'Wait for its answer',
+      pending: true,
+    });
+    rows.push({ id: 'busy', label: 'Knows when done', detail: 'Found from the answers', pending: true });
+  } else {
     rows.push({ id: 'reply', label: 'Answer appears', detail: draft.reply.selector?.css ?? '' });
 
     // **Shown whether or not it was found, which is the point of the row.**

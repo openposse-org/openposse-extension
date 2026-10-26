@@ -1699,7 +1699,7 @@ async function save() {
   const name = freeName(agents, suggested);
   // The voice comes from `assignVoices`' accent heuristic rather than being chosen here, and
   // Settings has the picker with previews for anyone who wants a different one.
-  await addAgent({ name, voice: null, lasso });
+  const added = await addAgent({ name, voice: null, lasso });
 
   // **The one thing the dry run cannot check, said out loud.**
   //
@@ -1722,10 +1722,14 @@ async function save() {
     coach: {
       heading: headingNow('done'),
       label: 'SETTING UP · DONE',
-      instruction: `Saved as ${name}. You can rename it in Settings, or just say `
-        + `“${name}, …” to talk to it.${caution}`,
+      instruction: `Saved as ${name}. The name is what you say to talk to it, so change it below `
+        + `if you’d call it something else.${caution}`,
       captures: captures(wizard.draft),
       naming: false,
+      // **Named here, in the panel, not in the vendor's page.** Naming left the recording because
+      // a page takes its own focus back mid-typing; the panel is our own document, so a box here
+      // keeps its focus. The assistant is already saved, so leaving the box alone loses nothing.
+      saved: { agentId: added.id, name },
       ended: true,
     },
   });

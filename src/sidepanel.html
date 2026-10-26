@@ -256,6 +256,9 @@
       .coach:not([hidden]) { display: flex; flex-direction: column; min-height: 100%; position: relative; }
       .coach .close { position: absolute; top: 0; right: 0; }
       .coach .back { align-self: flex-start; margin-top: 12px; font-size: 12.5px; }
+      .coach .name:not([hidden]) { display: flex; gap: 8px; margin-top: 12px; }
+      .coach .name input { flex: 1 1 auto; min-width: 0; }
+      .coach .name button { flex: none; font-size: 12.5px; }
       /* The design's 2:1 frame, as wide as the card allows and no wider than the design drew it.
          Auto margins centre it vertically in the space under the checklist. */
       .coach .rope {
@@ -268,10 +271,23 @@
       }
       .coach .say { font-size: 14px; line-height: 1.45; }
       .coach .say.bad { color: var(--error); }
-      .coach .list { margin: 14px 0 16px; display: flex; flex-direction: column; gap: 7px; }
+      .coach .list { margin: 14px 0 16px; display: flex; flex-direction: column; gap: 9px; }
       .coach .row { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
-      .coach .row .tick { color: var(--green); font-size: 11px; }
-      .coach .row .tick.none { color: var(--text-faint); }
+      /* Settings' step numbers, smaller: a grey ring until the step is captured, then green. */
+      .coach .row .num {
+        width: 17px; height: 17px; flex: 0 0 17px; align-self: flex-start;
+        border-radius: 50%; display: grid; place-items: center;
+        font-size: 9.5px; color: var(--text-faint);
+        border: 1px solid var(--line);
+        transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+      }
+      .coach .row .num.done {
+        background: var(--green); border-color: var(--green);
+        color: #00250c; font-weight: 700;
+      }
+      /* What is still to do reads as an instruction, quieter than what was found. */
+      .coach .row.pending .label { color: var(--text-faint); }
+      .coach .row.pending .detail { color: var(--text-faint); font-feature-settings: normal; }
       .coach .row .label { color: var(--text-dim); flex: 0 0 82px; }
       .coach .row .kind {
         font-size: 8.5px; font-weight: 600;
@@ -469,6 +485,14 @@
         <div class="say" id="coach-say"></div>
         <!-- Only while the recording's tab is not the one in front: watching a tab needs it. -->
         <button class="back" id="coach-back" hidden></button>
+        <!-- Once it has finished or failed: the same way out as the close button, where the eye
+             already is after reading the result. -->
+        <button class="back" id="coach-done" hidden>Done</button>
+        <!-- After a new assistant is saved: its name, editable, and the way back. -->
+        <form class="name" id="coach-name" hidden>
+          <input type="text" id="coach-name-input" aria-label="Name" spellcheck="false" autocomplete="off">
+          <button type="submit">Save and return</button>
+        </form>
         <div class="list" id="coach-list"></div>
         <!-- Decoration: the instruction above says everything this does. -->
         <canvas class="rope" id="coach-rope" aria-hidden="true"></canvas>

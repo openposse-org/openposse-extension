@@ -58,7 +58,9 @@
 
       send.hidden = true;
       stop.hidden = false;
-      const words = ANSWER.split(' ');
+      // The question goes back at the end, so two different questions get two different answers,
+      // as the check after a recording requires: it refuses a lasso that reads one answer twice.
+      const words = `${ANSWER} You asked: ${question}`.split(' ');
       let next = 0;
       const timer = setInterval(() => {
         answer.textContent += (next ? ' ' : '') + words[next];
