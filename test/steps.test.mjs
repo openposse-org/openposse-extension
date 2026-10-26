@@ -94,6 +94,10 @@ test('Downloads wants a neural voice as well as the speech model', () => {
   // Without WebGPU neither could speak, so it is passed over and never holds Downloads open.
   assert.equal(progress({ ...at, voice: 'unsupported', skipped: ['voice'] }).current, 'assistant');
   assert.equal(progress({ ...at, voice: 'unsupported' }).task, 'lasso');
+  // Which tasks still owe a step, so Downloads can hold its Next until both are there.
+  assert.deepEqual(progress(at).waiting, ['downloads', 'lasso']);
+  assert.deepEqual(progress({ ...at, voice: 'ready' }).waiting, ['lasso']);
+  assert.deepEqual(progress({ ...at, voice: 'unsupported' }).waiting, ['lasso']);
 });
 
 test('with every step done it ends on the first lasso', () => {

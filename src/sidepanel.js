@@ -732,8 +732,9 @@ function say(text) {
 
 /**
  * The empty roster, as a card about the tab in front: "Is there an AI assistant on notion.com?"
- * with the same Lasso this tab the dock has, and the scripted turn for seeing what one looks like
- * before recording anything. On a page nothing can drive, it says where to go instead.
+ * with the same Lasso this tab the dock has. On a page nothing can drive, it says where to go
+ * and how to record one there. The demo turn is the play button over the orb alone: the card's
+ * own copy of it went on 2026-10-26, by the owner's call.
  *
  * Drawn from both halves of what it depends on – the roster and the tab in front – and only
  * once the roster has been read, so a panel with five assistants never flashes an invitation.
@@ -748,13 +749,12 @@ function drawEmpty() {
   const recordable = Boolean(site.pattern);
   el('empty-text').textContent = problem
     ?? (recordable ? `Is there an AI assistant on ${site.host}?`
-      : 'No AI assistants yet. Open the site where your AI assistant lives.');
+      : 'No AI assistants yet. Open the site where your AI assistant lives, then press Lasso this tab here to record it.');
   el('empty-lasso').hidden = !recordable;
   el('empty-hint').hidden = !recordable;
 }
 
 el('empty-lasso').addEventListener('click', lassoThisTab);
-el('empty-demo').addEventListener('click', () => playDemo());
 
 /**
  * "Finish setting up", while something OpenPosse needs is still to do. Read from Chrome each time
@@ -976,7 +976,7 @@ el('demo').addEventListener('click', () => {
   playDemo();
 });
 
-/** Starts the scripted turn. Also the empty roster's "Show me what a turn looks like". */
+/** Starts the scripted turn. */
 function playDemo() {
   runs += 1;
   const run = runs;
