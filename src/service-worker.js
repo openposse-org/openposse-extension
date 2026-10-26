@@ -35,7 +35,7 @@ import { joinGroup, expandGroupOf, leaveGroup, reconcileGroups } from './groupin
 import { requestOnboarding } from './steps.js';
 import { DONE_MS } from './title.js';
 import { hashOf, matchFor, staleness, today, unpack } from './share.js';
-import { builtInText } from './builtin.js';
+import { builtInText, listed } from './builtin.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
 import {
   derive, stepLabel, heading, instruction, captures, PATIENCE_MS,
@@ -439,6 +439,7 @@ const ERROR = {
   tabNotFound: 'TAB_NOT_FOUND',
   unsupportedIntent: 'UNSUPPORTED_INTENT',
   timeout: 'TIMEOUT',
+  noAccess: 'NO_ACCESS',
 };
 
 // ── Recording (M3) ──────────────────────────────────────────────────────────────────────
@@ -906,6 +907,16 @@ async function dispatchIntent(request) {
     return;
   }
 
+  // An assistant added at install waits for its Allow. Asked first, so it is not reported as a
+  // tab that is not open – which, without access, is what the tab query would say.
+  if (!(await chrome.permissions.contains({ origins: [matchPattern(lasso.domainPattern)] }))) {
+    reply('error', {
+      code: ERROR.noAccess,
+      message: `${agent} needs access to ${lasso.domainPattern.replace(/^\*\./, '')} – allow it in Settings.`,
+    });
+    return;
+  }
+
   const tab = await vendorTab(lasso.domainPattern);
   if (!tab) {
     reply('error', {
@@ -1287,12 +1298,14 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
  * `reconcileRegistrations` then registers the content script for the new origin, so there is
  * nothing to register by hand: the granted origins are the source of truth.
  */
-async function importShared(text, { replace = null } = {}) {
+async function importShared(text, { replace = null, needsAccess = true } = {}) {
   const read = unpack(text);
   if (!read.ok) return { ok: false, reason: read.problems.join(' ') };
 
+  // `needsAccess: false` is the install adding the lassos that come with OpenPosse, before anyone
+  // could have clicked an Allow – see `addBuiltIns`. Every sender of a message keeps the check.
   const pattern = matchPattern(read.lasso.domainPattern);
-  if (!(await chrome.permissions.contains({ origins: [pattern] }))) {
+  if (needsAccess && !(await chrome.permissions.contains({ origins: [pattern] }))) {
     // Reached when the page's own request was declined, or when something other than the page
     // sent this. Either way it is not a failure to report as broken – nothing was granted, so
     // nothing is added.
@@ -1337,6 +1350,25 @@ async function importShared(text, { replace = null } = {}) {
   const agent = await addAgent({ name, voice: null, lasso, origin });
   await reconcileRegistrations();
   return { ok: true, name: agent.name, renamed: agent.name !== read.name };
+}
+
+/**
+ * Adds every lasso that comes with OpenPosse, on a first install – the owner's call of
+ * 2026-10-26, replacing that morning's offer-per-site as the way in.
+ *
+ * **Added without access, and none is asked for here.** Chrome's Allow needs a click on one of
+ * our pages, which an install is not, so each assistant waits in the roster until it is allowed:
+ * Settings has an Allow on its row and an Allow all over the list, onboarding has the same, and
+ * a question to one before then says so rather than failing as a missing tab (`dispatchIntent`).
+ *
+ * Only on install. An update never adds one: somebody who deleted an assistant would get it back
+ * with every release. A lasso new in an update is offered by the side panel on its site instead.
+ */
+async function addBuiltIns() {
+  for (const file of await listed()) {
+    const result = await importShared(await builtInText(file), { needsAccess: false });
+    if (!result.ok) console.warn(`[openposse] the built-in lasso ${file} was not added –`, result.reason);
+  }
 }
 
 /** Every agent with its lasso, leaving out any whose lasso is missing. */
@@ -1942,8 +1974,12 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
   // which is also what the reload button in chrome://extensions sends, must not open a tab
   // every time.
   if (reason === chrome.runtime.OnInstalledReason.INSTALL) {
-    openOnboarding().catch((error) =>
-      console.warn('[openposse] could not open onboarding after install:', error?.message ?? error));
+    // Before onboarding opens, so its first-lasso step already lists them.
+    addBuiltIns()
+      .catch((error) => console.warn('[openposse] could not add the lassos that come with OpenPosse –', error?.message ?? error))
+      .then(openOnboarding)
+      .catch((error) =>
+        console.warn('[openposse] could not open onboarding after install:', error?.message ?? error));
   }
   // A reload destroys the offscreen document and clears session storage, but the badge is the
   // browser's and survives – so without this the toolbar claims a microphone is open that

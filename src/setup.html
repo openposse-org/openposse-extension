@@ -597,6 +597,8 @@
       #roster .line > .kind {
         min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       }
+      /* Added at install and waiting for its Allow: something to do, not something wrong. */
+      #roster .kind.warn { color: var(--amber); }
       #roster .voice-pick { margin-left: auto; max-width: 150px; }
       /* "mock", on the made-up recordings from the panel's debug drawer. */
       .badge {
@@ -982,23 +984,19 @@
         text-decoration: underline; text-underline-offset: 3px;
       }
 
-      /* The six sites, as the welcome page had them: a monogram in a colour, bundled – never a
-         favicon looked up by domain, which would be a network call nobody asked for. */
-      .ob-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
-      .ob-tiles button {
-        display: flex; flex-direction: column; align-items: center; gap: 8px;
-        padding: 16px 8px; background: var(--well); color: var(--text);
-        border: 1px solid var(--line); border-radius: var(--radius-card); font-weight: 500;
+      /* The assistants that come with OpenPosse, one row each: the letter, the name and site,
+         and whether the site is allowed yet, in words as well as colour. */
+      .ob-builtins { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px; }
+      .ob-builtins li {
+        display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+        background: var(--well); border: 1px solid var(--line); border-radius: var(--radius-card);
       }
-      .ob-tiles button:hover { border-color: rgb(var(--ink) / 0.3); }
-      .ob-tiles .mono {
-        width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center;
-        font-weight: 700; font-size: 17px; color: #fff; background: var(--tile);
+      .ob-builtins .mono {
+        width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
+        font-weight: 700; font-size: 15px; color: #fff; background: var(--tile);
       }
-      .ob-tiles .ready {
-        font-size: 11px; font-weight: 600; color: var(--green);
-        margin-top: -4px;
-      }
+      .ob-builtins .who { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+      .ob-builtins .who span:last-child { color: var(--text-dim); font-size: 12.5px; }
       #ob-lasso .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
       #ob-lasso h2 { font-size: 14px; }
       /* A sentence a moved step says only in onboarding: the sheet keeps its explanations in (i). */
@@ -1573,6 +1571,8 @@
           <button class="icon small" id="sort-roster" popovertarget="sort-menu"
                   data-icon="arrow-up-down" data-size="14" data-tip-at="start"
                   aria-label="Sort AI assistants" hidden></button>
+          <!-- One Chrome dialog for every site still waiting – the script sets its label. -->
+          <button id="allow-all" hidden></button>
           <div id="sort-menu" popover="auto" role="group" aria-label="Sort AI assistants">
             <p class="note">Sorts the list once. Drag an avatar to move one.</p>
             <button type="button" data-sort="name">Name</button>
@@ -1745,15 +1745,22 @@
         <div class="ob-task" id="ob-downloads" role="tabpanel" hidden></div>
 
         <div class="ob-task" id="ob-lasso" role="tabpanel" hidden>
-          <h2>Lasso your first AI assistant</h2>
+          <h2>Your AI assistants</h2>
+          <!-- The lassos that come with OpenPosse, added at install: what is left is Chrome's
+               Allow for their sites, one dialog for all of them. -->
+          <div id="ob-builtins" hidden>
+            <p>
+              OpenPosse comes with these, already added. Allow their sites and they’re ready –
+              you sign in to each site as you always do.
+            </p>
+            <ul class="ob-builtins" id="ob-builtin-list"></ul>
+            <div class="actions"><button id="ob-allow">Allow all</button></div>
+          </div>
+          <!-- Any site's assistant can be lassoed, not only these. -->
           <p>
-            Pick a site to open it with the side panel beside it. Sign in if you need to, then
-            press <strong>Lasso this tab</strong> and follow the panel. Sites marked
-            <strong>ready to go</strong> come with a lasso: the panel offers to add it.
+            Want another? Open any site with an AI assistant on it, then press
+            <strong>Lasso this tab</strong> in the side panel and follow it.
           </p>
-          <div class="ob-tiles" id="ob-tiles"></div>
-          <!-- The six are a start, not a list of what works: any site's assistant can be lassoed. -->
-          <p>Or open any site with an AI assistant on it, then open OpenPosse there.</p>
           <div class="actions"><button class="secondary" id="ob-open-panel">Open the side panel</button></div>
           <span class="status tech chip" id="ob-assistant-status">checking…</span>
           <p class="ob-note" id="ob-lasso-note" hidden></p>

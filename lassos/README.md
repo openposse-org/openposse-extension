@@ -7,12 +7,15 @@ which is the rule that keeps selector literals out of extension source. M3 repla
 directory with the recorder's output.
 
 **These files ship with the extension** (owner's call, 2026-10-26). `tools/build.mjs` copies
-every `*.json` here into the package as it is and writes `lassos/index.json` listing them. On a
-site one of them is for, while no assistant lives there, the side panel offers to add it, and
-the onboarding tiles mark that site "ready to go". Nothing is added on install: adding takes
-the click and Chrome's Allow for that one site, then the same import a pasted file takes
-(`src/builtin.js`). So a file added here is offered to every user from the next release, and a
-filename must be lowercase letters, digits and hyphens, or the index leaves it out.
+every `*.json` here into the package as it is and writes `lassos/index.json` listing them. A
+first install adds every one to the roster (owner's call, later the same day), through the same
+import a pasted file takes, but without access: each waits for Chrome's Allow, from its row in
+Settings, Allow all there, or onboarding's last task. An update adds nothing; instead the side
+panel offers a lasso on its site while no assistant lives there (`src/builtin.js`). So a file
+added here reaches every new user from the next release, and its `name` is what they call the
+assistant. A filename must be lowercase letters, digits and hyphens, or the index leaves it out.
+`openposse-acme-ai.json`, the website's demo vendor, stays here for the website and is left out
+of the package (`NOT_SHIPPED` in `tools/build.mjs`).
 
 The envelope around `lasso` says which lasso it is (`docs/lasso-identity.md`):
 

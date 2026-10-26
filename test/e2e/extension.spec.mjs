@@ -325,8 +325,10 @@ test('onboarding opens on the welcome, then walks the three tasks, each step tic
   await expect(page.locator('#ob-gpu')).toContainText('no WebGPU');
 
   await page.click('#ob-next');
-  await expect(tab(page, 'Your first lasso')).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('#ob-tiles button')).toHaveCount(6);
+  await expect(tab(page, 'Your AI assistants')).toHaveAttribute('aria-selected', 'true');
+  // With the install's assistants taken out by the harness, there is nothing to allow yet.
+  await expect(page.locator('#ob-builtins')).toBeHidden();
+  await expect(page.locator('#ob-open-panel')).toBeVisible();
   await expect(page.locator('#ob-next')).toHaveText('Done');
 
   // Next waits while Settings counts a download running, and says why.
@@ -394,7 +396,7 @@ test('with WebGPU, Downloads waits for a neural voice as well as the speech mode
   // And nothing moves on to the first lasso until a voice is downloaded, Next or its tab.
   await expect(page.locator('#ob-next')).toBeDisabled();
   await expect(page.locator('#ob-busy')).toHaveText('Download a voice to go on.');
-  await expect(tab(page, 'Your first lasso')).toBeDisabled();
+  await expect(tab(page, 'Your AI assistants')).toBeDisabled();
 });
 
 test('a Chrome without on-device speech is told so in Downloads', async ({ context, extensionId }) => {
@@ -404,59 +406,81 @@ test('a Chrome without on-device speech is told so in Downloads', async ({ conte
   await expect(page.locator('#model-status')).toContainText('switched off in this Chrome');
 });
 
-test('a site tile opens that site in a new tab, and only on a click', async ({ context, extensionId }) => {
-  // Served from here, so the test reaches no real vendor.
-  await context.route('https://app.notion.com/**', (route) =>
-    route.fulfill({ status: 200, contentType: 'text/html', body: '<title>Notion</title>' }));
-  const page = await onboarding(context, extensionId);
-  await page.click('#ob-start');
-  await tab(page, 'Your first lasso').click();
-  const before = context.pages().length;
-
-  const opened = context.waitForEvent('page');
-  await page.getByRole('button', { name: 'Open Notion in a new tab' }).click();
-  const notion = await opened;
-  await expect.poll(() => notion.url()).toBe('https://app.notion.com/');
-  expect(context.pages().length).toBe(before + 1);
-});
-
 test('the first assistant ticks onboarding wherever it was added', async ({ context, extensionId }) => {
   const page = await onboarding(context, extensionId);
   await page.click('#ob-start');
-  await tab(page, 'Your first lasso').click();
+  await tab(page, 'Your AI assistants').click();
   await addAcme(context, extensionId);
   await expect(page.locator('#ob-assistant-status')).toContainText('Acme is ready');
-  await expect(tab(page, 'Your first lasso')).toContainText('done');
+  await expect(tab(page, 'Your AI assistants')).toContainText('done');
 });
 
-test('the welcome tiles mark the sites whose lasso comes with OpenPosse', async ({ context, extensionId }) => {
-  const page = context.pages().find((p) => p.url() === `chrome-extension://${extensionId}/setup.html`);
-  const ready = page.locator('#ob-tiles button', { has: page.locator('.ready') });
-  // Notion's tile opens app.notion.com, which the shipped *.notion.com lasso covers.
-  await expect(ready).toHaveCount(2);
-  await expect(ready.nth(0)).toHaveAttribute('aria-label', 'Open Notion in a new tab – OpenPosse comes with its lasso');
-  await expect(ready.nth(1)).toHaveAttribute('aria-label', 'Open ChatGPT in a new tab – OpenPosse comes with its lasso');
-  await expect(page.locator('#ob-tiles button', { hasText: 'HubSpot' }).locator('.ready')).toHaveCount(0);
+test.describe('the lassos that come with OpenPosse, added at install', () => {
+  test.use({ builtIns: true });
+
+  /** The roster's names, in order. */
+  const names = (page) => page.evaluate(async () => {
+    const { agents = [] } = await chrome.storage.local.get('agents');
+    return agents.map((agent) => agent.name);
+  });
+
+  test('every one is in the roster, and those not allowed wait in Settings with an Allow', async ({ context, extensionId }) => {
+    const settings = context.pages().find((p) => p.url() === `chrome-extension://${extensionId}/setup.html`);
+    // Those in lassos/, in the order of their files, less the website's demo vendor.
+    expect(await names(settings)).toEqual(['ChatGPT', 'Peter']);
+
+    await settings.click('#ob-welcome .ob-close');
+    // None of their sites is allowed: an install cannot ask.
+    const waiting = settings.locator('#roster .agent', { has: settings.locator('.kind.warn') });
+    await expect(waiting).toHaveCount(2);
+    await expect(settings.locator('#roster .agent', { hasText: 'ChatGPT' }).locator('.kind.warn'))
+      .toHaveText('ChatGPT · not allowed yet');
+    await expect(settings.getByRole('button', { name: 'Allow chatgpt.com' })).toBeVisible();
+    await expect(settings.locator('#allow-all')).toHaveText('Allow all 2 sites');
+  });
+
+  test('onboarding lists them, with one Allow all, and does not tick until one is allowed', async ({ context, extensionId }) => {
+    const page = await onboarding(context, extensionId);
+    await page.click('#ob-start');
+    await tab(page, 'Your AI assistants').click();
+    await expect(page.locator('#ob-builtin-list li')).toHaveCount(2);
+    await expect(page.locator('#ob-builtin-list li', { hasText: 'not allowed yet' })).toHaveCount(2);
+    await expect(page.locator('#ob-allow')).toHaveText('Allow all 2 sites');
+    await expect(page.locator('#ob-assistant-status')).toContainText('none allowed yet');
+    await expect(tab(page, 'Your AI assistants')).toContainText('not started');
+
+    // One that is allowed – the fake vendor's, whose site this build grants – ticks it.
+    await addAcme(context, extensionId);
+    await expect(page.locator('#ob-builtin-list li')).toHaveCount(3);
+    await expect(page.locator('#ob-assistant-status')).toContainText('Acme is ready');
+  });
+
+  test('a question to one not allowed yet says so, rather than that no tab is open', async ({ context, extensionId }) => {
+    const panel = await openPanel(context, extensionId);
+    await expect(panel.locator('#prompt')).toHaveAttribute('data-agent', 'ChatGPT');
+    await panel.click('#type');
+    await panel.fill('#prompt', 'What is new?');
+    await panel.press('#prompt', 'Enter');
+    await expect(panel.locator('body')).toContainText('ChatGPT needs access to chatgpt.com – allow it in Settings.');
+  });
 });
 
-test('on a site whose lasso comes with OpenPosse, the panel offers it, and one click adds it', async ({ context, extensionId }) => {
+test('on a site whose lasso comes with OpenPosse and no assistant, the panel offers it', async ({ context, extensionId }) => {
+  // Deleted from the roster – which the harness has done to all three – it is offered back on its
+  // site. Served from here, so the test reaches no real ChatGPT.
+  await context.route('https://chatgpt.com/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'text/html', body: '<title>ChatGPT</title>' }));
   const vendor = await context.newPage();
-  await vendor.goto(VENDOR_URL);
+  await vendor.goto('https://chatgpt.com/');
   const panel = await openPanel(context, extensionId);
   // The panel's own page is in front until the vendor's is; then it reads the vendor's tab.
   await vendor.bringToFront();
 
-  const card = panel.locator('#builtin');
-  await expect(card).toBeVisible();
-  await expect(panel.locator('#builtin-text')).toHaveText('OpenPosse comes with a lasso for Fixture.');
+  await expect(panel.locator('#builtin')).toBeVisible();
+  await expect(panel.locator('#builtin-text')).toHaveText('OpenPosse comes with a lasso for ChatGPT.');
+  await expect(panel.locator('#builtin-add')).toHaveText('Add ChatGPT');
   // The offer has its own Lasso it myself, so the empty card is not shown under it.
   await expect(panel.locator('#empty')).toBeHidden();
-
-  // The e2e build's manifest already grants the site, standing in for Chrome's Allow.
-  await panel.click('#builtin-add');
-  await expect(card).toBeHidden();
-  const { agents } = await panel.evaluate(() => chrome.storage.local.get('agents'));
-  expect(agents.map((a) => a.name)).toEqual(['Acme']);
 });
 
 test('the worker adds only a lasso the package lists', async ({ context, extensionId }) => {

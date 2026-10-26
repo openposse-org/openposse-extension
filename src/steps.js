@@ -13,7 +13,8 @@
 // `test/tabs.test.mjs` lets do it, and a shared module that could would widen that to every page
 // importing it.
 
-import { loadRoster, micGranted, setMicGranted } from './storage.js';
+import { loadRoster, lassoFor, micGranted, setMicGranted } from './storage.js';
+import { matchPattern } from './domain.js';
 import { groupingOn, groupingState } from './grouping.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
@@ -128,10 +129,18 @@ export async function groupingAnswered() {
 
 // ── The first assistant ────────────────────────────────────────────────────────────────────
 
-/** The roster's first assistant, as the roster is arranged, or `null` with none yet. */
+/**
+ * The roster's first assistant that can answer, as the roster is arranged, or `null` with none
+ * yet. **One whose site is allowed**: the lassos that come with OpenPosse are in the roster from
+ * the install, before anyone could allow their sites, and do not count until they are.
+ */
 export async function firstAssistant() {
   const { arranged } = await loadRoster();
-  return arranged[0] ?? null;
+  for (const agent of arranged) {
+    const pattern = (await lassoFor(agent))?.domainPattern;
+    if (pattern && await chrome.permissions.contains({ origins: [matchPattern(pattern)] })) return agent;
+  }
+  return null;
 }
 
 // ── Asking Settings to show onboarding ─────────────────────────────────────────────────────
@@ -175,12 +184,13 @@ export const STEPS = [
 /**
  * The three tasks onboarding is split into, by the owner's call of 2026-10-25: Chrome's
  * permissions and the simple toggles, the downloads (the speech model and a neural voice), and
- * the first lasso.
+ * the AI assistants – allowing the ones that come with OpenPosse, or lassoing one (renamed from
+ * "Your first lasso" on 2026-10-26, when those started being added at install).
  */
 export const TASKS = [
   { id: 'permissions', label: 'Permissions' },
   { id: 'downloads', label: 'Downloads' },
-  { id: 'lasso', label: 'Your first lasso' },
+  { id: 'lasso', label: 'Your AI assistants' },
 ];
 
 /**
