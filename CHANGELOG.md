@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.5](https://github.com/openposse-org/openposse-extension/compare/v0.9.4...v0.9.5) (2026-10-26)
+
+
+### Fixes
+
+* Downloads holds Next until a voice is there, and the empty side panel says how to lasso ([#59](https://github.com/openposse-org/openposse-extension/issues/59)) ([618497d](https://github.com/openposse-org/openposse-extension/commit/618497df97842f48ced6d3d2b17693742185e412))
+
 ## [0.9.4](https://github.com/openposse-org/openposse-extension/compare/v0.9.3...v0.9.4) (2026-10-26)
 
 
