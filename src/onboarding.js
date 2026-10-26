@@ -47,7 +47,7 @@ const BORROWED = {
 };
 
 /** What only this modal knows: the welcome was passed, the pin was skipped, the task in front. */
-const local = { started: false, skipped: [], task: null };
+const local = { started: false, skipped: [], task: null, modelFound: false };
 let facts = null;
 let shown = progress({ mic: 'ask', model: 'downloadable' });
 /** Where each borrowed step came from, so closing puts it back. */
@@ -152,7 +152,9 @@ function draw() {
     const name = document.createElement('span');
     name.textContent = task.label;
     const status = document.createElement('span');
-    status.textContent = finished ? 'done' : done === 0 ? 'not started' : `${done} of ${of} done`;
+    const found = task.id === 'downloads' && local.modelFound;
+    status.textContent = finished ? (found ? 'already on this computer' : 'done')
+      : done === 0 ? 'not started' : `${done} of ${of} done`;
     words.append(name, status);
     tab.append(badge, words);
     tab.addEventListener('click', () => go(task.id));
@@ -328,6 +330,9 @@ export async function openOnboarding() {
   }
   shown = progress({ ...local, ...facts });
   local.task = shown.task;
+  // Chrome keeps its speech model for every profile and site, and removing OpenPosse leaves it,
+  // so a fresh install can find it there – the owner's report of 2026-10-26. Said as such.
+  local.modelFound = facts.model === 'ready';
   dialog.showModal();
   draw();
   // The pin has no event, the microphone can be unblocked in Chrome's settings, and a download

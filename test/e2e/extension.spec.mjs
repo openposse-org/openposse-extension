@@ -324,6 +324,8 @@ test('onboarding opens on the welcome, then walks the three tasks, each step tic
 
   await page.click('#ob-next');
   await expect(tab(page, 'Your first lasso')).toHaveAttribute('aria-selected', 'true');
+  // Chrome had the model before anyone pressed anything, and the tab says so rather than "done".
+  await expect(tab(page, 'Downloads')).toContainText('already on this computer');
   await expect(page.locator('#ob-tiles button')).toHaveCount(6);
   await expect(page.locator('#ob-next')).toHaveText('Done');
 

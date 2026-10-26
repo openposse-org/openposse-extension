@@ -944,6 +944,8 @@
       .ob-tabs button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
       .ob-tabs .badge {
         width: 21px; height: 21px; flex: 0 0 21px; border-radius: 50%;
+        /* No padding or tracking from the page's other .badge: they pushed the tick right. */
+        padding: 0; letter-spacing: 0;
         display: grid; place-items: center; font-size: 10px;
         border: 1px solid rgb(var(--ink) / 0.16); color: var(--text-dim);
       }
