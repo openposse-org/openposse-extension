@@ -429,12 +429,15 @@ test('the first assistant ticks onboarding wherever it was added', async ({ cont
   await expect(tab(page, 'Your first lasso')).toContainText('done');
 });
 
-test('an empty side panel offers the demo turn, and says where to go on a page it cannot lasso', async ({ context, extensionId }) => {
+test('an empty side panel says where to go, and how to lasso there, on a page it cannot lasso', async ({ context, extensionId }) => {
   const panel = await openPanel(context, extensionId);
   // The panel's own page is in front, which nothing can drive.
-  await expect(panel.locator('#empty-text')).toHaveText('No AI assistants yet. Open the site where your AI assistant lives.');
+  await expect(panel.locator('#empty-text')).toHaveText(
+    'No AI assistants yet. Open the site where your AI assistant lives, then press Lasso this tab here to record it.');
   await expect(panel.locator('#empty-lasso')).toBeHidden();
-  await expect(panel.locator('#empty-demo')).toBeVisible();
+  // The demo turn is the play button over the orb, not a second button in the card.
+  await expect(panel.locator('#empty-demo')).toHaveCount(0);
+  await expect(panel.locator('#demo')).toBeVisible();
   // Setup is not finished in a fresh profile, so the way back to it is offered.
   await expect(panel.locator('#finish-setup')).toBeVisible();
 
