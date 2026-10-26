@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.8](https://github.com/openposse-org/openposse-extension/compare/v0.9.7...v0.9.8) (2026-10-26)
+
+
+### Fixes
+
+* a microphone grant that has lapsed is asked for again, not reported as granted ([#65](https://github.com/openposse-org/openposse-extension/issues/65)) ([b408e1a](https://github.com/openposse-org/openposse-extension/commit/b408e1aa6a4b1c11ebbc82f3df95afc0cf4b999d))
+
 ## [0.9.7](https://github.com/openposse-org/openposse-extension/compare/v0.9.6...v0.9.7) (2026-10-26)
 
 
