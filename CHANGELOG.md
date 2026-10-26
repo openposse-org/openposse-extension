@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.9](https://github.com/openposse-org/openposse-extension/compare/v0.9.8...v0.9.9) (2026-10-26)
+
+
+### Fixes
+
+* a finished lasso is named on the card, and its checklist shows every step from the start ([#67](https://github.com/openposse-org/openposse-extension/issues/67)) ([25686f5](https://github.com/openposse-org/openposse-extension/commit/25686f51fef1231c0cd1d10e450c221eb069aa7f))
+
 ## [0.9.8](https://github.com/openposse-org/openposse-extension/compare/v0.9.7...v0.9.8) (2026-10-26)
 
 
