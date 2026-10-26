@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.3](https://github.com/openposse-org/openposse-extension/compare/v0.9.2...v0.9.3) (2026-10-26)
+
+
+### Fixes
+
+* onboarding modal fixes – tooltips, tab group step, live chips, downloads, a way back ([#55](https://github.com/openposse-org/openposse-extension/issues/55)) ([44a3d5a](https://github.com/openposse-org/openposse-extension/commit/44a3d5a62756ffbd34bbb4fb2524eb6093946f8c))
+
 ## [0.9.2](https://github.com/openposse-org/openposse-extension/compare/v0.9.1...v0.9.2) (2026-10-25)
 
 
