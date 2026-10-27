@@ -427,31 +427,31 @@ test.describe('the lassos that come with OpenPosse, added at install', () => {
   test('every one is in the roster, and those not allowed wait in Settings with an Allow', async ({ context, extensionId }) => {
     const settings = context.pages().find((p) => p.url() === `chrome-extension://${extensionId}/setup.html`);
     // Those in lassos/, in the order of their files, less the website's demo vendor.
-    expect(await names(settings)).toEqual(['ChatGPT', 'Peter']);
+    expect(await names(settings)).toEqual(['ChatGPT', 'Sofia', 'Peter']);
 
     await settings.click('#ob-welcome .ob-close');
     // None of their sites is allowed: an install cannot ask.
     const waiting = settings.locator('#roster .agent', { has: settings.locator('.kind.warn') });
-    await expect(waiting).toHaveCount(2);
+    await expect(waiting).toHaveCount(3);
     await expect(settings.locator('#roster .agent', { hasText: 'ChatGPT' }).locator('.kind.warn'))
       .toHaveText('ChatGPT · not allowed yet');
     await expect(settings.getByRole('button', { name: 'Allow chatgpt.com' })).toBeVisible();
-    await expect(settings.locator('#allow-all')).toHaveText('Allow all 2 sites');
+    await expect(settings.locator('#allow-all')).toHaveText('Allow all 3 sites');
   });
 
   test('onboarding lists them, with one Allow all, and does not tick until one is allowed', async ({ context, extensionId }) => {
     const page = await onboarding(context, extensionId);
     await page.click('#ob-start');
     await tab(page, 'Your AI assistants').click();
-    await expect(page.locator('#ob-builtin-list li')).toHaveCount(2);
-    await expect(page.locator('#ob-builtin-list li', { hasText: 'not allowed yet' })).toHaveCount(2);
-    await expect(page.locator('#ob-allow')).toHaveText('Allow all 2 sites');
+    await expect(page.locator('#ob-builtin-list li')).toHaveCount(3);
+    await expect(page.locator('#ob-builtin-list li', { hasText: 'not allowed yet' })).toHaveCount(3);
+    await expect(page.locator('#ob-allow')).toHaveText('Allow all 3 sites');
     await expect(page.locator('#ob-assistant-status')).toContainText('none allowed yet');
     await expect(tab(page, 'Your AI assistants')).toContainText('not started');
 
     // One that is allowed – the fake vendor's, whose site this build grants – ticks it.
     await addAcme(context, extensionId);
-    await expect(page.locator('#ob-builtin-list li')).toHaveCount(3);
+    await expect(page.locator('#ob-builtin-list li')).toHaveCount(4);
     await expect(page.locator('#ob-assistant-status')).toContainText('Acme is ready');
   });
 
