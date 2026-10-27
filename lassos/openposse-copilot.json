@@ -1,0 +1,21 @@
+{
+  "format": "openposse.lasso",
+  "version": 1,
+  "id": "copilot",
+  "name": "Omar",
+  "recordedOn": "2026-10-27",
+  "hash": "d40943646c16",
+  "lasso": {
+    "domainPattern": "m365.cloud.microsoft",
+    "inputSelector": "#m365-chat-editor-target-element",
+    "openMethod": "alwaysOpen",
+    "openSelector": null,
+    "quietPeriodMs": 900,
+    "responseContainerSelector": "div[data-testid=\"markdown-reply\"]",
+    "responseTimeoutMs": 60000,
+    "shortcut": null,
+    "submitMethod": "click",
+    "submitSelector": "button[aria-label=\"Send\"]",
+    "triggerMethod": "synthetic"
+  }
+}
