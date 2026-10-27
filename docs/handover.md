@@ -118,7 +118,13 @@ early return that can be mistaken for a different failure says which one it is.
   `model_quantized.onnx`), and an unknown dtype is ignored silently. The peak-amplitude guard in
   `kokoro.js` stays.
 - **The order of `VOICES` in `weights.js` is load-bearing**: unassigned agents get a voice by
-  position.
+  position. The same holds for `PHONON_VOICES` and Supertonic's voices.
+- **Phonon is the default voice (2026-10-27)** and the only one not gated on WebGPU. It runs
+  through phonon-tts, vendored unchanged in `public/vendor/phonon/`, fed `blob:` URLs over the
+  verified files with its own cache off; never give it an `hf://` name, which would fetch. One CPU
+  thread: more needs COOP/COEP, which would block cross-origin images on extension pages. Only
+  Phonon 31M English is Apache-2.0; the 40M models are CC BY-NC. Its silence check judges the
+  first half second, because Phonon starts each answer quietly.
 - **Speech `phrases` boost is logarithmic.** Use 3.0 for an agent name; 8–10 makes the recogniser
   hear the name everywhere. Endpointing comes from the recogniser (`speechend`, `end`); do not
   build a silence timer.

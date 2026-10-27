@@ -14,9 +14,9 @@
 // set's own `download`, so each is checked against its pinned hash before it is kept. A file
 // changed on disk is refused the way a bad download is.
 
-import { KOKORO, SUPERTONIC } from './weights.js';
+import { KOKORO, SUPERTONIC, PHONON } from './weights.js';
 
-export const SETS = [SUPERTONIC, KOKORO];
+export const SETS = [PHONON, SUPERTONIC, KOKORO];
 
 /**
  * Copies every stored file of each set into `root`. Returns `{ written, missing }`: files

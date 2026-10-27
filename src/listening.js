@@ -351,6 +351,7 @@ const UNSPOKEN_COPY = {
   'audio-busy': 'Something else is using the audio output.',
   'synthesis-unavailable': 'This browser could not speak the answer.',
   'kokoro-silent-audio': 'The neural voice produced no sound – the answer is above.',
+  'phonon-silent-audio': 'The neural voice produced no sound – the answer is above.',
 };
 
 function reportUnspoken(reason) {

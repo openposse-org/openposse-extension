@@ -33,6 +33,13 @@ What they check:
   offscreen page that speaks, opened as a tab because Chrome's own offscreen document is not a page
   Playwright watches. It carries ONNX Runtime for Supertonic, so a load-time throw there would
   otherwise only show as a voice that never speaks.
+- **Phonon is offered first and answers once installed, without WebGPU.** It needs no
+  agreement; with stand-ins for its files in its cache, Settings says it is installed, names
+  Phonon as the voice that answers in a browser with no WebGPU, and lists its voices.
+- **Phonon's runtime starts from the package.** phonon-tts imports from `vendor/phonon/`, starts
+  its worker, compiles its WebAssembly under the extension's CSP and reads files from `blob:`
+  URLs, refusing only the stand-in files themselves. Real speech needs the real weights, which
+  the test browser cannot fetch: that is a hand check.
 - **Supertonic's download waits for its licence.** Download is disabled until "I agree" is
   ticked; ticking stores the agreement, unticking withdraws it, and the full licence it links to is
   in the package. Nothing is downloaded.
@@ -85,6 +92,7 @@ assistant with Share first.
 | **Showing.** "Yes" and "show me" switch to the vendor's tab and raise its window; with no tab open, "No Notion tab is open." and nothing opens | ☐ | ☐ | ☐ |
 | **Tab titles.** Asked from another tab, the vendor's tab reads `typing…`, `answering…`, then `done` before its title; clicking the tab or "show me" clears `done`, and left alone it clears within 90 s; asked from the vendor's own tab, `done` clears after about 5 s; reloading the extension mid-answer gives the tab its title back within about 90 s | ☐ | ☐ | ☐ |
 | **System voices.** Step 4's list plays each voice at the set pace. On a Mac it lists Samantha, Fred, Daniel and Moira | ☐ | ☐ | ☐ |
+| **Phonon.** Step 5 downloads 66 MB with a moving percentage and verifies, and Phonon becomes the voice even if Supertonic or Kokoro was chosen before; answers are spoken in Phonon, starting quickly; each of Harper, Miles, Maeve and Edwin plays from the voice list; prices, dates and an email address in the sample box are read out properly; with WebGPU off (`chrome://flags`, or a machine without it) Phonon still speaks; the console's first `spoke` line names the device it ran on | ☐ | ☐ | ☐ |
 | **Kokoro.** Step 5 downloads with a moving percentage and verifies; answers are spoken in Kokoro; with WebGPU off, the system voices take over | ☐ | ☐ | ☐ |
 | **An update keeps Kokoro.** On an install with only Kokoro downloaded, answers are still spoken in Kokoro after loading the new build | ☐ | ☐ | ☐ |
 | **Supertonic.** Its Download stays disabled until "I agree" is ticked; it downloads 401 MB with a moving percentage and verifies; answers are spoken in Supertonic; with Kokoro too, "Which one speaks" switches between them; unticking "I agree", or removing Supertonic, returns answers to Kokoro | ☐ | ☐ | ☐ |
@@ -99,6 +107,6 @@ What differs by system, so a difference is not mistaken for a fault:
 - **Voices.** Windows offers its own voices (David, Zira and Mark on a US install). Linux offers
   eSpeak voices through speech-dispatcher, often with no language recorded, or none at all.
   Choosing a curated set for each is parked for a later release.
-- **WebGPU,** which Supertonic and Kokoro both need, is not available on every Linux setup; the
-  system voices are the expected result there.
+- **WebGPU,** which Supertonic and Kokoro both need, is not available on every Linux setup;
+  Phonon on the processor, or the system voices, are the expected result there.
 - **ChromeOS** has no global shortcuts, so it is driven from the toolbar icon only.

@@ -21,11 +21,12 @@
 import { assignVoices, localVoices, offeredVoices } from './voices.js';
 import {
   chooseEngine, hasWebGPU, assignKokoroVoices, KOKORO_VOICES,
-  assignSupertonicVoices, SUPERTONIC_VOICES, supertonicLanguage,
+  assignSupertonicVoices, SUPERTONIC_VOICES, supertonicLanguage, assignPhononVoices, PHONON_VOICES,
 } from './tts.js';
-import { weightsStatus, SUPERTONIC } from './weights.js';
+import { weightsStatus, SUPERTONIC, PHONON } from './weights.js';
 import * as kokoro from './kokoro.js';
 import * as supertonic from './supertonic.js';
+import * as phonon from './phonon.js';
 
 const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
 const Phrase = globalThis.SpeechRecognitionPhrase;
@@ -346,6 +347,7 @@ async function hasKokoroAssets() {
 async function engine(settings = null) {
   return chooseEngine({
     hasWebGPU: await hasWebGPU(),
+    hasPhononAssets: (await PHONON.status()).state === 'ready',
     hasKokoroAssets: await hasKokoroAssets(),
     hasSupertonicAssets: (await SUPERTONIC.status()).state === 'ready',
     agreement: settings?.agreement ?? null,
@@ -354,24 +356,27 @@ async function engine(settings = null) {
 }
 
 /**
- * The two neural engines, by the name `chooseEngine` gives them, each with its voices and the way
- * it hands them out. `speak` and the warm-up treat them alike from here on.
+ * The neural engines, by the name `chooseEngine` gives them, each with its voices and the way it
+ * hands them out. `speak` and the warm-up treat them alike from here on.
  */
 const NEURAL = {
+  phonon: { module: phonon, voices: PHONON_VOICES, assign: assignPhononVoices },
   kokoro: { module: kokoro, voices: KOKORO_VOICES, assign: assignKokoroVoices },
   supertonic: { module: supertonic, voices: SUPERTONIC_VOICES, assign: assignSupertonicVoices },
 };
 
 /**
- * Frees Supertonic's graphs when another engine has been chosen, so a change of engine in
- * Settings does not leave two models on the GPU. Kokoro's lives in its own worker and is not
- * unloaded, as before. A no-op when Supertonic never loaded.
+ * Frees Supertonic's graphs and Phonon's worker when another engine has been chosen, so a change
+ * of engine in Settings does not leave two models in memory. Kokoro's lives in its own worker and
+ * is not unloaded, as before. A no-op for an engine that never loaded.
  */
 function release(chosen) {
-  if (chosen === 'supertonic') return;
-  supertonic.unload().catch((error) => {
-    console.warn('[openposse] Supertonic could not be unloaded –', error?.message ?? error);
-  });
+  for (const [name, module] of [['supertonic', supertonic], ['phonon', phonon]]) {
+    if (chosen === name) continue;
+    module.unload().catch((error) => {
+      console.warn(`[openposse] ${name} could not be unloaded –`, error?.message ?? error);
+    });
+  }
 }
 
 /**
@@ -415,9 +420,11 @@ async function speak({
   speechSynthesis.resume();
   kokoro.cancel();
   supertonic.cancel();
+  phonon.cancel();
 
-  // The fork. `chooseEngine` routes to Supertonic or Kokoro when WebGPU and that engine's weights
-  // are present (and, for Supertonic, its licence agreed to), and to the system voices otherwise.
+  // The fork. `chooseEngine` routes to Phonon when its weights are present, to Supertonic or Kokoro
+  // when WebGPU and that engine's weights are (and, for Supertonic, its licence agreed to), and to
+  // the system voices otherwise.
   const { engine: chosen } = await engine(settings);
   release(chosen);
   const neural = NEURAL[chosen];
@@ -528,12 +535,13 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
       speak(message).then(() => respond({ ok: true }));
       return true;
     case 'openposse.hush':
-      // Both engines, unconditionally. Which one is speaking depends on state this does not
+      // Every engine, unconditionally. Which one is speaking depends on state this does not
       // have, and stopping the wrong one is worse than stopping one that was already silent.
       speechSynthesis.cancel();
       speechSynthesis.resume();                 // see `speak` – a cancel keeps a pause
       kokoro.cancel();
       supertonic.cancel();
+      phonon.cancel();
       respond({ ok: true });
       return true;
     case 'openposse.voice.pause':
@@ -542,12 +550,14 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
       speechSynthesis.pause();
       kokoro.pause();
       supertonic.pause();
+      phonon.pause();
       respond({ ok: true });
       return true;
     case 'openposse.voice.resume':
       speechSynthesis.resume();
       kokoro.resume();
       supertonic.resume();
+      phonon.resume();
       respond({ ok: true });
       return true;
     case 'openposse.voice.warm':

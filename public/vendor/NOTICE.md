@@ -17,6 +17,7 @@ distinction is this project's standing rule and it has already caught one real p
 | `headtts/openposse-local-only.mjs` | — | **OpenPosse's own** | not third-party; see below |
 | `transformers/transformers.min.js` | 4.0.0 | Apache-2.0 | [@huggingface/transformers](https://www.npmjs.com/package/@huggingface/transformers) |
 | `transformers/ort-wasm-simd-threaded.asyncify.*` | 1.25.0-dev | MIT | [onnxruntime-web](https://www.npmjs.com/package/onnxruntime-web) |
+| `phonon/` | 0.4.2 | MIT OR Apache-2.0 | [phonon-tts](https://www.npmjs.com/package/phonon-tts), from [gradium-ai/xn-ptts](https://github.com/gradium-ai/xn-ptts) |
 | `inter/InterVariable.woff2` | 4.1 | OFL-1.1 | [rsms/inter](https://github.com/rsms/inter) |
 | `lucide/LICENSE` (covering `../src/icons.js`) | `main` @ 2026-10-04 | ISC, plus MIT for the Feather-derived icons | [lucide-icons/lucide](https://github.com/lucide-icons/lucide) |
 | `../dictionaries/en-us.txt` | with HeadTTS | see below | CMU Pronouncing Dictionary, via HeadTTS |
@@ -25,7 +26,8 @@ distinction is this project's standing rule and it has already caught one real p
 
 Each licence text travels with the code it covers: `headtts/LICENSE`,
 `transformers/LICENSE-transformers`, `transformers/LICENSE-onnxruntime` (which covers the bundled
-ONNX Runtime JavaScript too: same project, same licence), `inter/LICENSE.txt`, and
+ONNX Runtime JavaScript too: same project, same licence), `phonon/LICENSE-MIT` and
+`phonon/LICENSE-APACHE` with `phonon/THIRD_PARTY_LICENSES.md`, `inter/LICENSE.txt`, and
 `src/supertonic/LICENSE`, which the build copies to `vendor/supertonic/`. OpenPosse's own licence
 is Apache-2.0, at the repository root.
 
@@ -109,6 +111,29 @@ linked, not the badge.
 - **The upstream project is archived**: no updates, fixes or support. Paragraph 7's request to
   use the latest version is therefore met by the pinned revision.
 - **Kokoro stays because of this licence**, as the English voice without use restrictions.
+
+## Phonon
+
+The third neural voice and the default since 2026-10-27, checked that day by the same rule.
+
+- **`phonon/` is the npm package `phonon-tts@0.4.2`, unchanged**, fetched with `npm pack` (no
+  install scripts) from `registry.npmjs.org/phonon-tts/-/phonon-tts-0.4.2.tgz`, integrity
+  `sha512-ZCE3ZEd4QZGgwHqSacje937FE0mIpCd7LDwv0ZiqcWbUncm9gAghw+HqeAmklRVwEzvc3LK9KsGYGDS2FqKNXg==`.
+  It has **no dependencies**: plain ES modules and WebAssembly built from Gradium's Rust runtime.
+- **Only the single-threaded build is vendored** (`wasm/`). The threaded one (`wasm-threads/`,
+  8.8 MB) needs a cross-origin isolated page, which the extension's pages are not, and
+  `src/phonon.js` asks for one thread.
+- **What gets linked**: `THIRD_PARTY_LICENSES.md`, shipped beside it, lists the Rust crates
+  compiled into the WebAssembly, under Apache-2.0, MIT, ISC, zlib and Unicode-3.0. **No GPL, no
+  eSpeak, no phonemizer**: the tokenizer is SentencePiece, and the text normalisation (numbers,
+  currency, emails) is the package's own Rust. A word-boundary scan of the package for `espeak`
+  finds zero.
+- **It would fetch from Hugging Face if asked**, by its `hf://` model names and its own Cache
+  Storage. `src/phonon.js` never asks: it hands the package `blob:` URLs over the files
+  `src/weights.js` downloaded and verified, with the package's cache switched off.
+- **The weights are Apache-2.0**: `gradium/phonon-31m-en` and voices from `gradium/phonon-voices`,
+  each at a pinned revision and SHA-256-checked by `src/weights.js`. **Phonon 40M and 40M
+  multilingual are CC BY-NC 4.0** and must not be added.
 
 ## What was checked, and what was found
 

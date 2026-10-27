@@ -20,10 +20,11 @@ import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from '.
 import { MOCK_SIZES } from './mocks.js';
 import {
   chooseEngine, describeEngine, hasWebGPU, agreedToSupertonic, SUPERTONIC_LANGUAGES, supertonicLanguage,
+  PHONON_VOICES,
 } from './tts.js';
 import { offeredVoices } from './voices.js';
 import {
-  weightsStatus, ensureAccess, VOICES, KOKORO, SUPERTONIC, SUPERTONIC_LICENCE,
+  weightsStatus, ensureAccess, VOICES, KOKORO, SUPERTONIC, SUPERTONIC_LICENCE, PHONON,
 } from './weights.js';
 import { icon } from './icons.js';
 import { ICONS, iconPages, putIcon } from './favicons.js';
@@ -185,6 +186,7 @@ el('open-shortcuts').addEventListener('click', async () => {
 async function answeringEngine() {
   return chooseEngine({
     hasWebGPU: await hasWebGPU(),
+    hasPhononAssets: (await PHONON.status()).state === 'ready',
     hasKokoroAssets: (await weightsStatus()).state === 'ready',
     hasSupertonicAssets: (await SUPERTONIC.status()).state === 'ready',
     // The same preference and agreement every answer is sent with, so this line cannot name an
@@ -266,11 +268,15 @@ speechSynthesis.addEventListener('voiceschanged', () => { refreshEngine(); });
 const mb = (bytes) => `${Math.round(bytes / 1e6)} MB`;
 
 /**
- * The two downloads, by the name `chooseEngine` gives each engine, with the ids of their
- * buttons, status line and size. One routine below serves both, so the rule is kept the same way
- * for each: started by the button, pinned, verified, and every failure named.
+ * The downloads, by the name `chooseEngine` gives each engine, with the ids of their buttons,
+ * status line and size. One routine below serves all three, so the rule is kept the same way for
+ * each: started by the button, pinned, verified, and every failure named.
  */
 const MODELS = {
+  phonon: {
+    set: PHONON, name: 'Phonon',
+    get: 'get-phonon', drop: 'drop-phonon', status: 'phonon-status', size: 'phonon-size',
+  },
   supertonic: {
     set: SUPERTONIC, name: 'Supertonic',
     get: 'get-supertonic', drop: 'drop-supertonic', status: 'supertonic-status', size: 'supertonic-size',
@@ -291,7 +297,7 @@ async function refreshDownload(model, { usable = true } = {}) {
 
   el(model.drop).hidden = !have;
   el(model.get).hidden = done;
-  // Supertonic's download waits for the agreement. Kokoro's never waits.
+  // Supertonic's download waits for the agreement. Phonon's and Kokoro's never wait.
   el(model.get).disabled = !usable;
   // **"Resume" is wrong for an install that grew.** Nothing stopped: Kokoro's voice set went
   // from six to 28, so a complete install was short some files it never had. `core`
@@ -320,19 +326,26 @@ async function refreshDownload(model, { usable = true } = {}) {
 }
 
 async function refreshWeights() {
-  const { preference, agreement } = await engineSettings();
+  const { agreement } = await engineSettings();
   el('agree-supertonic').checked = agreedToSupertonic(agreement);
+  const phonon = await refreshDownload(MODELS.phonon);
   const supertonic = await refreshDownload(MODELS.supertonic, { usable: agreed() });
   const kokoro = await refreshDownload(MODELS.kokoro);
 
-  const speaks = { supertonic: supertonic === 'ready' && agreed(), kokoro: kokoro === 'ready' };
-  markDone('step-weights', speaks.supertonic || speaks.kokoro);
+  const speaks = {
+    phonon: phonon === 'ready', supertonic: supertonic === 'ready' && agreed(), kokoro: kokoro === 'ready',
+  };
+  markDone('step-weights', Object.values(speaks).some(Boolean));
 
-  // A choice only once both can speak. Supertonic is what speaks unless Kokoro was chosen.
-  el('engine-choice').hidden = !(speaks.supertonic && speaks.kokoro);
-  const speaking = preference === 'kokoro' ? 'kokoro' : 'supertonic';
-  for (const radio of el('engine-choice').querySelectorAll('input')) {
-    radio.checked = radio.value === speaking;
+  // A choice only once two can speak, and only between those: a radio for one that cannot speak
+  // would be a choice that does nothing. The ticked one is whichever answers now, worked out by
+  // the same function the answers use, so it cannot disagree with them.
+  const choice = el('engine-choice');
+  choice.hidden = Object.values(speaks).filter(Boolean).length < 2;
+  const { engine } = await answeringEngine();
+  for (const radio of choice.querySelectorAll('input')) {
+    radio.closest('label').hidden = !speaks[radio.value];
+    radio.checked = radio.value === engine;
   }
 }
 
@@ -344,13 +357,29 @@ async function afterVoiceChange() {
 }
 
 async function download(model) {
+  const result = await fetchModel(model);
+  // **Downloading Phonon makes it the voice**, by the owner's call of 2026-10-27 that it is the
+  // default: an earlier choice between Supertonic and Kokoro was made before it existed, and
+  // would otherwise keep answering after somebody pressed Download on the recommended one.
+  if (result?.ok && model === MODELS.phonon) {
+    try {
+      await setVoiceEngine('phonon');
+    } catch (error) {
+      console.error('[openposse] Phonon could not be made the voice –', error?.message ?? error);
+    }
+  }
+  if (result?.ok) await afterVoiceChange();
+}
+
+/** One model's download, with its progress and failures on its status line. Returns the result, or null. */
+async function fetchModel(model) {
   // First, before any await: `permissions.request` needs this click to still be a live user
   // gesture. HuggingFace redirects to a CDN on another host and neither sends `*` for CORS, so
   // without both origins every file fails with a message that says nothing useful.
   const allowed = await ensureAccess();
   if (!allowed) {
     setStatus(model.status, 'needs access to huggingface.co to download – not granted', 'warn');
-    return;
+    return null;
   }
 
   el(model.get).disabled = true;
@@ -377,7 +406,7 @@ async function download(model) {
     console.error(`[openposse] ${model.name} download threw –`, error?.message ?? error);
     setStatus(model.status, `could not start: ${error?.message ?? error}`, 'bad');
     el(model.get).disabled = false;
-    return;
+    return null;
   } finally {
     downloading(-1);
   }
@@ -396,9 +425,8 @@ async function download(model) {
       ? `refused: ${mismatched.map((f) => f.id).join(', ')} did not match the expected contents`
       : `${result.failed.length} of ${model.set.files.length} failed – ${reasons.join(' · ')}`, 'bad');
     el(model.drop).hidden = false;
-    return;
   }
-  await afterVoiceChange();
+  return result;
 }
 
 for (const model of Object.values(MODELS)) {
@@ -591,8 +619,8 @@ chrome.runtime.onMessage.addListener((message) => {
 
 /** What actually spoke, which is the one thing a preview can report that reading cannot tell you. */
 function describeSpoken(message) {
-  const engine = { kokoro: 'Kokoro', supertonic: 'Supertonic' }[message.engine] ?? 'System voice';
-  const voice = (message.engine === 'kokoro' || message.engine === 'supertonic') && message.voice
+  const engine = { phonon: 'Phonon', kokoro: 'Kokoro', supertonic: 'Supertonic' }[message.engine] ?? 'System voice';
+  const voice = ['phonon', 'kokoro', 'supertonic'].includes(message.engine) && message.voice
     ? describeVoice(message.voice).name
     : message.voice;
   return voice ? `${engine} · ${voice}` : engine;
@@ -658,6 +686,11 @@ const ACCENT = { a: 'American', b: 'British' };
 const GENDER = { f: 'female', m: 'male' };
 
 function describeVoice(id) {
+  // Phonon's voices are names, with their accent and gender in a table rather than in the id.
+  const phonon = PHONON_VOICES.find((v) => v.id === id);
+  if (phonon) {
+    return { name: phonon.name, accent: `${phonon.lang === 'en-GB' ? 'British' : 'American'} ${phonon.gender}` };
+  }
   // Supertonic's voices have no names, only a gender and a number, and no accent: each speaks
   // every language it knows. So "Female 2" is the name, and the group is the gender.
   const supertonic = /^([FM])(\d)$/.exec(id);
@@ -695,10 +728,16 @@ const voicesIn = (accent) => VOICES
   .sort((a, b) => a.name.localeCompare(b.name));
 
 /**
- * A neural engine's voices in the groups they are offered in: Kokoro's by accent, Supertonic's by
- * gender, female first, in their own order.
+ * A neural engine's voices in the groups they are offered in: Kokoro's and Phonon's by accent,
+ * Supertonic's by gender, female first, in their own order.
  */
 function neuralGroups(engine) {
+  if (engine === 'phonon') {
+    return VOICE_GROUPS.map((accent) => ({
+      accent,
+      voices: PHONON_VOICES.map(({ id }) => ({ id, ...describeVoice(id) })).filter((v) => v.accent === accent),
+    })).filter(({ voices }) => voices.length > 0);
+  }
   if (engine === 'supertonic') {
     return ['Female', 'Male'].map((gender) => ({
       accent: gender,

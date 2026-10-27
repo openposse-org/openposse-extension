@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import {
   chooseEngine, describeEngine, assignKokoroVoices, KOKORO_VOICES, REASONS,
   assignSupertonicVoices, SUPERTONIC_VOICES, genderOf, agreedToSupertonic, supertonicSpeed,
-  SUPERTONIC_LANGUAGES, supertonicLanguage,
+  SUPERTONIC_LANGUAGES, supertonicLanguage, assignPhononVoices, PHONON_VOICES,
 } from '../src/tts.js';
 import { SUPERTONIC_LICENCE } from '../src/weights.js';
 import { engineOf, languageOf } from '../src/storage.js';
@@ -55,7 +55,7 @@ test('WebGPU is a hard gate rather than a preference', () => {
   // afford it. Falling back to system voices is the status quo, not a failure.
   const choice = chooseEngine({ hasWebGPU: false, hasKokoroAssets: true });
   assert.equal(choice.reason, 'no-webgpu');
-  assert.match(describeEngine(choice), /too slow/);
+  assert.match(describeEngine(choice), /no WebGPU, which Supertonic and Kokoro need/);
 });
 
 test('each reason sends someone somewhere different', () => {
@@ -63,6 +63,7 @@ test('each reason sends someone somewhere different', () => {
   // different actions. One generic "using system voices" would be true and useless.
   const reasons = [
     'no-webgpu', 'no-assets', 'no-agreement', 'not-built', 'preference', 'kokoro', 'supertonic',
+    'phonon',
   ];
   const said = reasons.map((r) => describeEngine({ reason: r }));
   assert.equal(new Set(said).size, reasons.length, 'every reason reads differently');
@@ -223,7 +224,7 @@ test('WebGPU gates Supertonic as it gates Kokoro', () => {
 });
 
 test('an engine preference from anywhere else reads as automatic', () => {
-  for (const known of ['auto', 'supertonic', 'kokoro', 'system']) assert.equal(engineOf(known), known);
+  for (const known of ['auto', 'phonon', 'supertonic', 'kokoro', 'system']) assert.equal(engineOf(known), known);
   for (const unknown of [undefined, null, '', 'Kokoro', 'piper', 7]) assert.equal(engineOf(unknown), 'auto');
 });
 
@@ -309,3 +310,75 @@ test('ten Supertonic voices are all used before any repeats, and then they repea
   assert.equal(new Set(agents.slice(0, 10).map((a) => got.get(a.id))).size, 10);
   assert.ok(SUPERTONIC_VOICES.some((v) => v.id === got.get('agent-11')));
 });
+
+// ── Phonon ────────────────────────────────────────────────────────────────────────────────
+
+test('Phonon is the default: it answers whenever it is installed, unless another was chosen', () => {
+  const all = { hasWebGPU: true, agreement: AGREED, hasSupertonicAssets: true, hasKokoroAssets: true };
+  assert.equal(chooseEngine({ hasPhononAssets: true }).engine, 'phonon');
+  assert.equal(chooseEngine({ ...all, hasPhononAssets: true }).engine, 'phonon');
+  assert.equal(chooseEngine({ ...all, hasPhononAssets: true, preference: 'phonon' }).engine, 'phonon');
+  // A choice made in Settings still holds where that engine can speak.
+  assert.equal(chooseEngine({ ...all, hasPhononAssets: true, preference: 'supertonic' }).engine, 'supertonic');
+  assert.equal(chooseEngine({ ...all, hasPhononAssets: true, preference: 'kokoro' }).engine, 'kokoro');
+  assert.equal(chooseEngine({ ...all, hasPhononAssets: true, preference: 'system' }).engine, 'system');
+  // An existing install without Phonon keeps exactly what it had.
+  assert.equal(chooseEngine(all).engine, 'supertonic');
+});
+
+test('Phonon needs no WebGPU, so a machine without it still gets a neural voice', () => {
+  // 0.15x real time on one CPU thread, measured in the spike of 2026-10-27.
+  assert.equal(chooseEngine({ hasWebGPU: false, hasPhononAssets: true }).engine, 'phonon');
+  // And a preference for an engine that cannot run here falls to Phonon, not to the system voices.
+  const gpuOnly = { hasWebGPU: false, hasPhononAssets: true, hasKokoroAssets: true, preference: 'kokoro' };
+  assert.equal(chooseEngine(gpuOnly).engine, 'phonon');
+});
+
+test('with nothing installed, the missing download is named rather than the GPU', () => {
+  // Phonon could be downloaded and would speak, so "no WebGPU" would send somebody the wrong way.
+  assert.equal(chooseEngine({ hasWebGPU: false }).reason, 'no-assets');
+  assert.equal(chooseEngine({ hasWebGPU: true }).reason, 'no-assets');
+});
+
+test("Phonon's voices state their accent and gender, and genderOf reads them", () => {
+  assert.ok(PHONON_VOICES.length >= 4);
+  for (const v of PHONON_VOICES) {
+    assert.match(v.id, /^phonon-/, 'its own namespace, so no system voice URI can collide');
+    assert.ok(['en-US', 'en-GB'].includes(v.lang), v.id);
+    assert.equal(genderOf(v.id), v.gender);
+  }
+});
+
+test('an agent keeps its accent and gender when Phonon takes over', () => {
+  const agents = [
+    { id: 'george', voice: 'bm_george' },
+    { id: 'emma', voice: 'bf_emma' },
+    { id: 'heart', voice: 'af_heart' },
+    { id: 'michael', voice: 'am_michael' },
+  ];
+  const kokoro = assignKokoroVoices(agents);
+  const phonon = assignPhononVoices(agents);
+  const of = (id) => PHONON_VOICES.find((v) => v.id === phonon.get(id));
+  for (const { id } of agents) {
+    const hint = kokoro.get(id);
+    assert.equal(of(id).lang, hint.startsWith('b') ? 'en-GB' : 'en-US', id);
+    assert.equal(of(id).gender, genderOf(hint), id);
+  }
+  assert.equal(new Set(phonon.values()).size, agents.length, 'and all different');
+});
+
+test('a Phonon voice somebody chose is kept, and carries its accent back to Kokoro', () => {
+  const chosen = assignPhononVoices([{ id: 'a' }, { id: 'b', voice: 'phonon-edwin' }]);
+  assert.equal(chosen.get('b'), 'phonon-edwin');
+  assert.notEqual(chosen.get('a'), 'phonon-edwin');
+  const back = assignKokoroVoices([{ id: 'b', voice: 'phonon-edwin' }]).get('b');
+  assert.match(back, /^bm_/, 'British and male, as Edwin is');
+});
+
+test('more agents than Phonon voices repeat rather than go without', () => {
+  const agents = Array.from({ length: PHONON_VOICES.length + 2 }, (_, i) => ({ id: `agent-${i}` }));
+  const got = assignPhononVoices(agents);
+  assert.equal(got.size, agents.length);
+  assert.equal(new Set(got.values()).size, PHONON_VOICES.length);
+});
+

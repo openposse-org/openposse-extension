@@ -186,23 +186,24 @@ has an assistant re-records it in the same way.
 
 ### Voices
 
-Answers can be read by three kinds of voice, chosen in Settings:
+Answers can be read by four kinds of voice, chosen in Settings:
 
 | Voice | Download | Languages | Notes |
 |---|---|---|---|
 | **Your computer's own voices** | none | English | Always available |
-| **Supertonic** *(recommended)* | 401 MB | 31 | The fastest and most natural; its licence includes use restrictions you agree to before downloading |
-| **Kokoro** | 340 MB | English | Natural and free of use restrictions |
+| **Phonon** *(recommended)* | 66 MB | English | Fast and natural, free of use restrictions, and works without WebGPU |
+| **Supertonic** | 401 MB | 31 | Fast and natural; its licence includes use restrictions you agree to before downloading; needs WebGPU |
+| **Kokoro** | 340 MB | English | Natural and free of use restrictions; needs WebGPU |
 
-Both downloadable voices run on your computer and need WebGPU. Once downloaded, OpenPosse uses
-them automatically:
+All three downloadable voices run on your computer. Once downloaded, OpenPosse uses them
+automatically:
 
 | Downloaded | Answers are read by |
 |---|---|
-| Supertonic | Supertonic |
-| Kokoro | Kokoro |
-| Both | Supertonic, or Kokoro if you prefer it under **Which one speaks** |
-| Neither | your computer's own voices |
+| Phonon, with or without the others | Phonon, or another you choose under **Which one speaks** |
+| Supertonic and Kokoro | Supertonic, or Kokoro if you prefer it |
+| Only Supertonic, or only Kokoro | that one |
+| None | your computer's own voices |
 
 Settings also lets you set the **pace**, choose a **voice for each assistant** or let OpenPosse
 choose distinct ones for you, and listen to every voice with a sample sentence of your own. With
@@ -263,7 +264,7 @@ flowchart TB
 
         subgraph ext["OpenPosse extension"]
             SW["<b>Service worker</b><br/>assistants · routing · follow-ups<br/>asking · the recording guide"]
-            OFF["<b>Offscreen document</b><br/>microphone · speech recognition<br/>system voices · Supertonic · Kokoro"]
+            OFF["<b>Offscreen document</b><br/>microphone · speech recognition<br/>system voices · Phonon · Supertonic · Kokoro"]
             SP["<b>Side panel</b><br/>listening · answers · typed questions<br/>Record this tab"]
             SET["<b>Settings page</b><br/>microphone · downloads · shortcut<br/>voices · assistants"]
         end
@@ -274,7 +275,7 @@ flowchart TB
     end
 
     STORE[("chrome.storage<br/>assistants · lassos · settings")]
-    CACHE[("Cache Storage<br/>Supertonic and Kokoro<br/>checked by SHA-256")]
+    CACHE[("Cache Storage<br/>Phonon, Supertonic, Kokoro<br/>checked by SHA-256")]
 
     SW <--> OFF
     SW <--> CS
@@ -362,11 +363,20 @@ flowchart TB
     SU --> SPLIT["split into sentences<br/><i>so speaking starts before<br/>the whole answer is ready</i>"]
 
     SPLIT --> GATE{"<b>which voice?</b>"}
-    GATE -->|"no WebGPU,<br/>or nothing downloaded"| SYS
+    GATE -->|"nothing downloaded<br/>that can run here"| SYS
+    GATE -->|"Phonon, downloaded<br/>unless another is preferred"| PH
     GATE -->|"Supertonic, downloaded<br/>and agreed to"| UNI
     GATE -->|"Kokoro, downloaded<br/>alone or preferred"| HT
 
     SYS["<b>Your computer's voices</b><br/>local voices only"] --> OUT
+
+    subgraph phonon["Phonon 31M, through phonon-tts – on this computer"]
+        direction TB
+        PH["<b>reads text</b><br/>numbers, prices, emails spelt out"]
+        WASM["<b>WebAssembly</b>, in a worker<br/>on <b>WebGPU</b>, or the processor without it"]
+        PH --> WASM
+    end
+    WASM --> CHK
 
     subgraph supertonic["Supertonic 3 – on this computer"]
         direction TB
@@ -390,6 +400,7 @@ flowchart TB
     CHK -->|"yes"| SCH["played back to back<br/>on the audio clock"]
     SCH --> OUT["🔊"]
 
+    style phonon fill:#effaf2,stroke:#80c090
     style supertonic fill:#eef6ff,stroke:#80a8d8
     style kokoro fill:#fff7ef,stroke:#e0b080
     style CHK fill:#ffe9e9,stroke:#d08080
@@ -407,10 +418,23 @@ A few details that keep the voice dependable:
   on WebGPU today, due to a known ONNX Runtime issue
   ([#29807](https://github.com/microsoft/onnxruntime/issues/29807)).
 
+#### Phonon
+
+[Phonon 31M](https://huggingface.co/gradium/phonon-31m-en) is the recommended voice. It is English
+only, its model, tokenizer and voices are Apache-2.0, and at 66 MB it is a fifth of the size of
+the others. It runs through [phonon-tts](https://www.npmjs.com/package/phonon-tts), which ships
+with the extension: on WebGPU it measured 0.04–0.05× real time, as fast as Supertonic, and on the
+computer's processor alone 0.15×, so it is the one neural voice that does not need WebGPU. It
+reads numbers, prices, dates and email addresses out properly on its own, and needs no separate
+pronunciation engine. Four of its voices ship, two American and two British.
+
+Only the 31M English model is used. Phonon's larger 40M models are under a non-commercial licence
+and are not offered.
+
 #### Supertonic and Kokoro
 
-[Supertonic 3](https://huggingface.co/supertone-oss-archive/supertonic-3) is the recommended voice.
-It speaks 31 languages from a single download, with all ten of its voices available in every
+[Supertonic 3](https://huggingface.co/supertone-oss-archive/supertonic-3) is the voice for other
+languages. It speaks 31 languages from a single download, with all ten of its voices available in every
 language, and it is quick: around 0.03–0.04× real time on WebGPU in our measurements, roughly five
 times faster than Kokoro. It reads text as characters, so it needs no separate pronunciation
 engine.
@@ -514,7 +538,7 @@ src/                     The extension's code, pages and manifest (plain JavaScr
   recorder.js              captures a lasso
   selector.js  dom.js      finding the right elements on a page
   routing.js  domain.js    choosing an assistant, and site access
-  supertonic.js kokoro.js  the two downloadable voices
+  phonon.js supertonic.js kokoro.js  the three downloadable voices
   player.js  tts.js        playback, and choosing which voice speaks
   supertonic/              Supertonic's browser helper, its licence, and the model's licence
   weights.js               the voice downloads: fixed versions, SHA-256 checks
@@ -535,7 +559,7 @@ small enough to read and understand.
 
 **Available today:** speaking and typing to your assistants, routing by name and by sound,
 follow-up questions, recording and sharing assistants, asking to see an answer in its tab, and
-answers read by Supertonic, Kokoro or your computer's own voices.
+answers read by Phonon, Supertonic, Kokoro or your computer's own voices.
 
 **Coming next:** the Chrome Web Store listing.
 
@@ -551,6 +575,9 @@ licences are listed in [NOTICE](NOTICE) and [public/vendor/NOTICE.md](public/ven
 
 - **Kokoro-82M** and its voices are Apache-2.0, and **HeadTTS** is MIT. OpenPosse uses HeadTTS's
   own rule-based pronunciation, so no GPL-licensed component is included.
+- **Phonon 31M**'s model and voices are Apache-2.0, and **phonon-tts**, which runs it and ships in
+  `public/vendor/phonon/`, is MIT or Apache-2.0; the Rust crates compiled into its WebAssembly are
+  MIT, ISC, zlib and Unicode-3.0.
 - **Supertonic**'s browser helper is MIT. Its model weights are not included in this repository
   or the extension: they are downloaded on request under the BigScience Open RAIL-M licence, whose
   full text ships with the extension as `vendor/supertonic/MODEL_LICENSE.txt`.
