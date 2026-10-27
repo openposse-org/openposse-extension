@@ -6,6 +6,19 @@
 // global shortcut.
 
 import { test, expect, addAcme, openPanel, ask, LASSO, VENDOR_URL, ANSWER } from './browser.mjs';
+import { PHONON } from '../../src/weights.js';
+
+/**
+ * Puts a stand-in for every Phonon file in its cache, so the page reads Phonon as installed. Not
+ * the real weights, which the test browser cannot fetch: what this checks is what the page does
+ * with an installed voice, not the voice.
+ */
+async function fakePhonon(page) {
+  await page.evaluate(async ({ cache, urls }) => {
+    const store = await caches.open(cache);
+    for (const url of urls) await store.put(url, new Response('stand-in'));
+  }, { cache: PHONON.cache, urls: PHONON.files.map((f) => f.url) });
+}
 
 test('every extension page opens without an error', async ({ context, extensionId }) => {
   // `offscreen.html` too, opened as a tab: Chrome's own offscreen document is not a page these
@@ -53,6 +66,56 @@ test("Supertonic's download waits for its use restrictions to be agreed to", asy
   const href = await settings.locator('.terms a').getAttribute('href');
   const text = await settings.evaluate(async (path) => (await fetch(path)).text(), href);
   expect(text).toContain('BigScience Open RAIL-M License');
+});
+
+test('Phonon is offered first, needs no agreement, and answers once installed, WebGPU or not', async ({ context, extensionId }) => {
+  // The test browser has no WebGPU, which is the case Phonon exists for: Supertonic and Kokoro
+  // would not speak here, Phonon does.
+  const settings = await context.newPage();
+  await settings.goto(`chrome-extension://${extensionId}/setup.html`);
+  const models = settings.locator('#step-weights .model');
+  await expect(models.first()).toHaveAttribute('id', 'phonon-model');
+  await expect(settings.locator('#phonon-status')).toHaveText(/not downloaded · 66 MB/);
+  await expect(settings.locator('#get-phonon')).toBeEnabled();
+
+  await fakePhonon(settings);
+  await settings.reload();
+  await expect(settings.locator('#phonon-status')).toHaveText(`installed – ${PHONON.files.length} files, verified`);
+  await expect(settings.locator('#engine')).toHaveText(/^Phonon – neural voices/);
+  await expect(settings.locator('#step-weights')).toHaveClass(/done/);
+  // Its voices, by accent, in place of the system voices.
+  await expect(settings.locator('#voices-section')).toBeVisible();
+  await expect(settings.locator('#voice-list')).toContainText('Harper');
+  await expect(settings.locator('#voice-list')).toContainText('Edwin');
+  // One engine that can speak is nothing to choose between.
+  await expect(settings.locator('#engine-choice')).toBeHidden();
+});
+
+test("Phonon's vendored runtime starts its worker and WebAssembly from the package", async ({ context, extensionId }) => {
+  // Everything short of real weights: the module imports from the extension, the worker starts,
+  // the WebAssembly compiles under the page's CSP and reads files from blob: URLs, and only then
+  // are the stand-in files refused. A wrong path or a blocked worker fails earlier, and differently.
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/setup.html`);
+  const outcome = await page.evaluate(async () => {
+    const vendor = (path) => chrome.runtime.getURL(`vendor/phonon/${path}`);
+    const { PhononTTS } = await import(vendor('index.js'));
+    const blob = URL.createObjectURL(new Blob(['not a model']));
+    try {
+      await PhononTTS.load({
+        lang: 'en', quant: 'q8', cache: false, device: 'cpu', threads: 1,
+        model: { weights: { q8: blob }, tokenizer: blob, config: blob, voices: {} },
+        workerUrl: vendor('worker.js'),
+        wasmUrl: vendor('wasm/phonon_tts_bg.wasm'),
+        simdWasmUrl: vendor('wasm/phonon_tts_simd_bg.wasm'),
+      });
+      return 'loaded';
+    } catch (error) {
+      return String(error?.message ?? error);
+    }
+  });
+  // A positive check, not a list of failures it is not: the stand-in got as far as being parsed.
+  expect(outcome).toMatch(/^cannot parse config\.json/);
 });
 
 test('an assistant shared as a file is added from Settings', async ({ context, extensionId }) => {
@@ -333,8 +396,13 @@ test('onboarding opens on the welcome, then walks the three tasks, each step tic
   await expect(page.locator('#ob-downloads > .step').first()).toHaveAttribute('id', 'step-model');
   await expect(page.locator('#step-model')).toHaveClass(/done/);
   await expect(page.locator('#ob-downloads #step-weights')).toBeVisible();
-  // The test browser has no WebGPU, and the voice step says so, and that it may be skipped.
-  await expect(page.locator('#ob-gpu')).toContainText('no WebGPU');
+  // The test browser has no WebGPU, and the voice step says so – and that Phonon speaks without it,
+  // so a voice is still needed to go on.
+  await expect(page.locator('#ob-gpu')).toContainText('no WebGPU in this Chrome – Phonon will still speak');
+  await expect(page.locator('#ob-next')).toBeDisabled();
+  await expect(page.locator('#ob-busy')).toHaveText('Download a voice to go on.');
+  await fakePhonon(page);
+  await expect(page.locator('#ob-next')).toBeEnabled();
 
   await page.click('#ob-next');
   await expect(tab(page, 'Your AI assistants')).toHaveAttribute('aria-selected', 'true');
@@ -421,6 +489,9 @@ test('a Chrome without on-device speech is told so in Downloads', async ({ conte
 test('the first assistant ticks onboarding wherever it was added', async ({ context, extensionId }) => {
   const page = await onboarding(context, extensionId);
   await page.click('#ob-start');
+  // A voice is needed to reach the last task, and Phonon can be had without WebGPU.
+  await fakePhonon(page);
+  await expect(tab(page, 'Your AI assistants')).toBeEnabled();
   await tab(page, 'Your AI assistants').click();
   await addAcme(context, extensionId);
   await expect(page.locator('#ob-assistant-status')).toContainText('Acme is ready');
@@ -454,6 +525,8 @@ test.describe('the lassos that come with OpenPosse, added at install', () => {
   test('onboarding lists them, with one Allow all, and does not tick until one is allowed', async ({ context, extensionId }) => {
     const page = await onboarding(context, extensionId);
     await page.click('#ob-start');
+    await fakePhonon(page);
+    await expect(tab(page, 'Your AI assistants')).toBeEnabled();
     await tab(page, 'Your AI assistants').click();
     await expect(page.locator('#ob-builtin-list li')).toHaveCount(3);
     await expect(page.locator('#ob-builtin-list li', { hasText: 'not allowed yet' })).toHaveCount(3);

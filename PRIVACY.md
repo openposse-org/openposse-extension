@@ -15,7 +15,7 @@ keeps no record of what you say.
   assistant in the browser tab you already have open, and reads the answer back from the page.
   The assistant's service, Notion AI for example, receives your question exactly as if you had
   typed it yourself, and that service's own privacy policy covers it.
-- **The answer is spoken by a voice on your computer**: the Supertonic or Kokoro voice, or one of
+- **The answer is spoken by a voice on your computer**: the Phonon, Supertonic or Kokoro voice, or one of
   your system's built-in voices. Voices that would send text to an online service are never used.
 - **Questions and answers are not saved.** They stay on screen until your next question. They are
   not logged, stored or sent anywhere else.
@@ -31,7 +31,7 @@ In Chrome's storage for the extension, on your computer only:
 - **Whether you agreed to the Supertonic voice's licence**, which version, and when.
 - **The addresses of the sites your assistants are on**, to show their icons if you turn site
   icons on. Chrome supplies those icons from its own cache; OpenPosse does not download them.
-- **The Supertonic and Kokoro voice files**, if you download them.
+- **The Phonon, Supertonic and Kokoro voice files**, if you download them.
 - **Whether you answered the tab group question, and the ids of the OpenPosse tab groups**, if
   you turn grouping on, so the same group is used again.
 
@@ -40,7 +40,7 @@ Removing the extension deletes all of it.
 ## What goes over the network
 
 - **The voice downloads, when you ask for them.** Pressing Download in setup fetches the
-  Supertonic or Kokoro voice files from Hugging Face (huggingface.co); Supertonic's only once you
+  Phonon, Supertonic or Kokoro voice files from Hugging Face (huggingface.co); Supertonic's only once you
   have agreed to its licence. Each file is checked against a fingerprint built into the extension
   before it is used, and one that does not match is thrown away. Hugging Face sees an ordinary
   download from your browser. This happens only when you press a button, and never while you are

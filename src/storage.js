@@ -105,11 +105,11 @@ const AGREEMENT_KEY = 'supertonicAgreement';
 const LANGUAGE_KEY = 'voiceLanguage';
 
 /**
- * `auto` picks the best installed engine; `kokoro` prefers Kokoro when Supertonic is installed
- * too; `supertonic` and `system` say what they mean. Anything else, from a newer build or from
- * nowhere, reads as `auto`, which is what everyone had before the setting existed.
+ * `auto` picks the best installed engine, Phonon first; `phonon`, `supertonic` and `kokoro` prefer
+ * that one where it can speak; `system` says what it means. Anything else, from a newer build or
+ * from nowhere, reads as `auto`, which is what everyone had before the setting existed.
  */
-export const ENGINES = ['auto', 'supertonic', 'kokoro', 'system'];
+export const ENGINES = ['auto', 'phonon', 'supertonic', 'kokoro', 'system'];
 export const engineOf = (value) => (ENGINES.includes(value) ? value : 'auto');
 
 export async function setVoiceEngine(value) {

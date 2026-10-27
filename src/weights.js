@@ -1,5 +1,5 @@
-// The voice models' weights – Kokoro's and Supertonic's: what they are, where they come from, and
-// how we know they are what we asked for.
+// The voice models' weights – Phonon's, Supertonic's and Kokoro's: what they are, where they come
+// from, and how we know they are what we asked for.
 //
 // **This file is the whole of the amended rule made real.** The local-only rule, as amended on
 // 2026-09-26, permits a model to be downloaded from setup, when the user asks, from a pinned
@@ -11,9 +11,9 @@
 // system voices; it never fetches.
 //
 // Each model is a **set**: a list of pinned, hashed files and a cache of its own, made by
-// `weightSet` below. The two sets share every line that verifies, stores and reports, so the rule
-// is enforced once rather than twice. Kokoro's set keeps the names it has always had
-// (`weightsStatus`, `downloadWeights` and the rest); Supertonic's is `SUPERTONIC`.
+// `weightSet` below. The sets share every line that verifies, stores and reports, so the rule
+// is enforced once rather than per model. Kokoro's set keeps the names it has always had
+// (`weightsStatus`, `downloadWeights` and the rest); the others are `SUPERTONIC` and `PHONON`.
 
 /**
  * Where the files live, pinned to a **revision** rather than to `main`.
@@ -319,8 +319,65 @@ const SUPERTONIC_VOICES = Object.entries({
   M5: [291_469, 'dd22b92740314321f8ae11c5e87f8dd60d060f15dd3a632b5adf77f471f77af2'],
 }).map(([id, [bytes, sha256]]) => supertonicFile(id, `voice_styles/${id}.json`, bytes, sha256));
 
+// ── Phonon ────────────────────────────────────────────────────────────────────────────────
+
 /**
- * The hosts a download actually touches – **both of them**, and the same two for both sets.
+ * Phonon 31M English's weights, pinned to a revision of `gradium/phonon-31m-en`: the revision
+ * phonon-tts 0.4.2 names as its own `DEFAULT_MODEL`, which the spike of 2026-10-27 measured.
+ *
+ * **Apache-2.0, weights, tokenizer and voices alike**, so there is nothing to agree to. Only this
+ * model: Phonon 40M and 40M multilingual are CC BY-NC 4.0 and must never be pinned here.
+ *
+ * **No phonemizer, so no eSpeak.** The tokenizer is SentencePiece, and the text normalisation
+ * (numbers, currency, emails) is Rust compiled into phonon-tts's WebAssembly, whose crates are
+ * MIT, ISC, zlib and Unicode-3.0 (`vendor/phonon/THIRD_PARTY_LICENSES.md`).
+ *
+ * **q8 only, 64.5 MB.** It is the only weights WebGPU accepts (f32 is refused by the package:
+ * "f32 weights cannot be quantized on the GPU"), and on the CPU it was faster than f32 as well.
+ * Measured on an M3 Pro: 0.04–0.05× real time on WebGPU, 0.15× on one CPU thread.
+ *
+ * The hashes are the Git-LFS object ids from Hugging Face's API, as for the other two sets, and
+ * the two JSON files were digested after download; the sizes are exact.
+ */
+const PHONON_REVISION = '8c64b55ec301728e2d1695bfea87a08a267d0c2d';
+const PHONON_REPO = 'https://huggingface.co/gradium/phonon-31m-en/resolve';
+
+/**
+ * The voice catalog, `gradium/phonon-voices`, pinned the same way. 102 voices; the four here are
+ * the ones the spike tried, two American and two British, a woman and a man of each.
+ */
+const PHONON_VOICES_REVISION = '0ee17205f254b5abc43b266c8a0f215565c352f7';
+const PHONON_VOICES_REPO = 'https://huggingface.co/gradium/phonon-voices/resolve';
+
+const PHONON_CORE = [
+  { id: 'weights', url: `${PHONON_REPO}/${PHONON_REVISION}/model.q8.gguf`, bytes: 64_512_352, sha256: null },
+  { id: 'tokenizer', url: `${PHONON_REPO}/${PHONON_REVISION}/tokenizer.json`, bytes: 277_967, sha256: null },
+  { id: 'config', url: `${PHONON_REPO}/${PHONON_REVISION}/config.json`, bytes: 2_851, sha256: null },
+];
+
+/**
+ * **The voices, in assignment order**, which is load-bearing as it is for the other two sets: an
+ * agent with no chosen voice gets the first free one of its accent and gender, so this order does
+ * not change once it ships. New voices go after these.
+ *
+ * `lang` and `gender` are stated rather than read from an id, because Phonon's voices are names:
+ * the catalog's `voices.jsonl` gives each one's language, and the gender is the spike's note.
+ * `name` is what Settings shows.
+ */
+export const PHONON_VOICES = [
+  { id: 'phonon-harper', name: 'Harper', lang: 'en-US', gender: 'female', path: 'voices/4SZHfMpw-p46Ywgs.safetensors', sha256: null },
+  { id: 'phonon-miles', name: 'Miles', lang: 'en-US', gender: 'male', path: 'voices/d9XCyhjo4JhkHF1d.safetensors', sha256: null },
+  { id: 'phonon-maeve', name: 'Maeve', lang: 'en-GB', gender: 'female', path: 'voices/6PWnV0Nq4wu7RVBT.safetensors', sha256: null },
+  { id: 'phonon-edwin', name: 'Edwin', lang: 'en-GB', gender: 'male', path: 'voices/zUCxzrOrugTSis03.safetensors', sha256: null },
+].map(({ path, sha256, ...voice }) => ({
+  ...voice,
+  url: `${PHONON_VOICES_REPO}/${PHONON_VOICES_REVISION}/${path}`,
+  bytes: 256_136,
+  sha256,
+}));
+
+/**
+ * The hosts a download actually touches – **both of them**, and the same two for every set.
  *
  * `huggingface.co/…/resolve/…` answers with a **302 to `us.aws.cdn.hf.co`**, and that response
  * carries `access-control-allow-origin: https://huggingface.co` rather than `*`. So a fetch
@@ -600,6 +657,16 @@ export const SUPERTONIC = weightSet({
   files: [...SUPERTONIC_CORE, ...SUPERTONIC_VOICES],
   cache: 'openposse-supertonic-v1',
   voices: SUPERTONIC_VOICES,
+});
+
+/**
+ * Phonon's set: about 66 MB, in a cache of its own. The weights come first, so a download that
+ * stopped early reads as interrupted rather than as an install short of a voice.
+ */
+export const PHONON = weightSet({
+  files: [...PHONON_CORE, ...PHONON_VOICES],
+  cache: 'openposse-phonon-v1',
+  voices: PHONON_VOICES,
 });
 
 // Kokoro's names from before there were two sets. Setup, the offscreen page and the tests use

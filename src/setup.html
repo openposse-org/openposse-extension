@@ -1263,33 +1263,49 @@
                   <div class="tip" role="tooltip" id="about-weights">
                     <p>
                       The system voices are your operating system's, and they sound like it.
-                      Supertonic and Kokoro are neural voice models that run <em>on this
+                      Phonon, Supertonic and Kokoro are neural voice models that run <em>on this
                       machine</em> – nothing you say or hear goes anywhere. Each is a one-off
                       download, kept locally afterwards.
                     </p>
                     <p>
-                      Both need Chrome's WebGPU, which uses your graphics chip, to be fast enough
-                      to talk with. Without it, OpenPosse keeps using the system voices.
+                      Supertonic and Kokoro need Chrome's WebGPU, which uses your graphics chip,
+                      to be fast enough to talk with. Phonon uses it when it is there and is fast
+                      enough without it.
                     </p>
                   </div>
                 </div>
               </div>
               <p class="ob-only">
                 Neural voices that run on this machine, each a one-off download. Download one
-                to finish: Supertonic, or Kokoro if its use restrictions don't suit you.
+                to finish: Phonon is the smallest and works on any computer.
               </p>
               <p class="ob-only"><span class="status tech chip" id="ob-gpu">checking for WebGPU…</span></p>
 
-              <!-- **Two downloads side by side, and the reason there are two is the licence.**
-                   Supertonic is faster and speaks 31 languages, but its weights come with use
-                   restrictions that everyone using them must agree to. Kokoro has none, so it
-                   stays for anyone, or any organisation, that cannot accept them.
+              <!-- **Three downloads, Phonon first**, by the owner's call of 2026-10-27 that it is
+                   the default: English only, Apache-2.0 with nothing to agree to, the smallest by
+                   far, and fast enough without WebGPU. Supertonic stays for its 31 languages,
+                   behind the agreement its use restrictions need; Kokoro stays for anyone who
+                   already has it.
 
                    The sizes are filled in from each set's own total rather than written here: a
                    number typed into copy goes stale silently, and Kokoro's has moved three times. -->
+              <div class="model" id="phonon-model">
+                <div class="head">
+                  <h3>Phonon <span class="kind">– recommended, English, <span id="phonon-size">…</span></span></h3>
+                  <div class="end">
+                    <button class="icon primary" id="get-phonon" data-icon="download"
+                            data-tip-at="end" aria-label="Download Phonon"></button>
+                    <button class="icon bad" id="drop-phonon" data-icon="trash" data-tip-at="end"
+                            aria-label="Remove Phonon" hidden></button>
+                  </div>
+                </div>
+                <p class="model-note">No use restrictions, and works without WebGPU.</p>
+                <span class="status tech chip" id="phonon-status">checking…</span>
+              </div>
+
               <div class="model" id="supertonic-model">
                 <div class="head">
-                  <h3>Supertonic <span class="kind">– recommended, <span id="supertonic-size">…</span></span></h3>
+                  <h3>Supertonic <span class="kind">– 31 languages, <span id="supertonic-size">…</span></span></h3>
                   <div class="end">
                     <button class="icon primary" id="get-supertonic" data-icon="download"
                             data-tip-at="end" aria-label="Download Supertonic" disabled></button>
@@ -1298,7 +1314,7 @@
                   </div>
                 </div>
                 <p class="model-note">
-                  Faster, and speaks 31 languages. Its licence limits what it may be used for.
+                  Its licence limits what it may be used for. Needs WebGPU.
                 </p>
                 <span class="status tech chip" id="supertonic-status">checking…</span>
 
@@ -1348,13 +1364,15 @@
                             aria-label="Remove Kokoro" hidden></button>
                   </div>
                 </div>
-                <p class="model-note">No use restrictions.</p>
+                <p class="model-note">No use restrictions. Needs WebGPU.</p>
                 <span class="status tech chip" id="weights-status">checking…</span>
               </div>
 
-              <!-- Only once both can speak: with one of them, there is nothing to choose. -->
+              <!-- Only once two can speak, and only those two or three: with one, there is
+                   nothing to choose. -->
               <fieldset class="pick" id="engine-choice" hidden>
                 <legend>Which one speaks</legend>
+                <label><input type="radio" name="engine" value="phonon" />Phonon</label>
                 <label><input type="radio" name="engine" value="supertonic" />Supertonic</label>
                 <label><input type="radio" name="engine" value="kokoro" />Kokoro</label>
               </fieldset>
