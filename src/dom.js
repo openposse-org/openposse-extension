@@ -190,12 +190,18 @@ export function deepQuerySelectorAll(selector, root = document, seen = new Set()
  * for why both.
  */
 export function newMatches(selector, before) {
-  const known = new Set(before);
-  const knownText = new Set(
-    [...known].map((el) => (el.innerText ?? '').trim()).filter((text) => text !== '')
-  );
-  return () => deepQuerySelectorAll(selector).filter((el) =>
-    !known.has(el) && !knownText.has((el.innerText ?? '').trim()));
+  // Text taken now: a node taken off the page no longer says what it said.
+  const known = new Map(before.map((el) => [el, (el.innerText ?? '').trim()]));
+  return () => {
+    // **Only the text of answers that have left the page.** One showing it again is that answer
+    // mounted again; while the original is still on the page, the same words are a new answer
+    // that happens to match – "4", asked twice – and a page that only ever appends works
+    // exactly as it did when this counted.
+    const gone = new Set();
+    for (const [el, text] of known) if (!el.isConnected && text !== '') gone.add(text);
+    return deepQuerySelectorAll(selector).filter((el) =>
+      !known.has(el) && !gone.has((el.innerText ?? '').trim()));
+  };
 }
 
 export function waitForNewMatch(
