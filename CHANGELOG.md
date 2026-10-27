@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.19](https://github.com/openposse-org/openposse-extension/compare/v0.9.18...v0.9.19) (2026-10-27)
+
+
+### Features
+
+* add the Copilot lasso, named Omar ([#90](https://github.com/openposse-org/openposse-extension/issues/90)) ([bc48a96](https://github.com/openposse-org/openposse-extension/commit/bc48a9673a8650675c7add550e631c699d306805))
+
 ## [0.9.18](https://github.com/openposse-org/openposse-extension/compare/v0.9.17...v0.9.18) (2026-10-27)
 
 
