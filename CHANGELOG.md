@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.14](https://github.com/openposse-org/openposse-extension/compare/v0.9.13...v0.9.14) (2026-10-27)
+
+
+### Features
+
+* add the Claude lasso ([#77](https://github.com/openposse-org/openposse-extension/issues/77)) ([508bd8a](https://github.com/openposse-org/openposse-extension/commit/508bd8acf241c504385a489837a9f5b7a12f7018))
+
 ## [0.9.13](https://github.com/openposse-org/openposse-extension/compare/v0.9.12...v0.9.13) (2026-10-26)
 
 
