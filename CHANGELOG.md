@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.15](https://github.com/openposse-org/openposse-extension/compare/v0.9.14...v0.9.15) (2026-10-27)
+
+
+### Fixes
+
+* follow an answer the page re-renders mid-answer ([#79](https://github.com/openposse-org/openposse-extension/issues/79)) ([e001fc5](https://github.com/openposse-org/openposse-extension/commit/e001fc573d3170b57e3476f4a8771ee770f25784))
+
 ## [0.9.14](https://github.com/openposse-org/openposse-extension/compare/v0.9.13...v0.9.14) (2026-10-27)
 
 
