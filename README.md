@@ -31,6 +31,9 @@ ask:
 > *"And what about next quarter?"* – a follow-up goes to whoever answered last, so there is no need
 > to repeat the name.
 
+OpenPosse comes with three assistants already named: **Sofia** for Claude, **Sam** for ChatGPT and
+**Peter** for Notion AI. Any other assistant can be added by showing OpenPosse how you use it.
+
 Press the shortcut, say a name and your question, and OpenPosse takes care of the rest. It works
 out which assistant you meant, types your question into that assistant's own box, presses its send
 button, waits for the reply, and reads it back to you in that assistant's voice.
@@ -45,8 +48,9 @@ answers back all run on your computer. There is no OpenPosse account, API key or
 conversation involves only your microphone, the assistant's page and its answer.
 
 **Simplicity.** Setting up OpenPosse never calls for a configuration file, a terminal or technical
-terms. Adding an assistant is a short guided recording: you show OpenPosse how you use it once, and
-it takes it from there.
+terms. The assistants that come with OpenPosse need only Chrome's Allow for their site, and adding
+any other is a short guided recording: you show OpenPosse how you use it once, and it takes it
+from there.
 
 **Your tabs.** OpenPosse works with the assistant in the tab you are already signed into, and when
 you ask to see an answer, it brings that same tab forward. It never opens a vendor's site on your
@@ -61,14 +65,14 @@ OpenPosse lets you know rather than opening one.
 
 - **Google Chrome 139 or later**, on macOS 13 or later, Windows 10 or 11, Linux or ChromeOS. This
   is the version that brought on-device speech recognition.
-- **WebGPU in Chrome**, for the neural voices. Without it, OpenPosse uses your computer's own
-  voices.
+- **WebGPU in Chrome** is optional. Phonon, the default voice, runs without it, a little slower;
+  Supertonic and Kokoro need it.
 - **Node.js 20 or later**, to build from source.
 
 ### Installing from source
 
-A Chrome Web Store listing is in preparation. Until then, OpenPosse can be built and loaded
-directly:
+A beta is with testers in the Chrome Web Store, and the public listing is in preparation. Until
+then, OpenPosse can be built and loaded directly:
 
 ```bash
 git clone https://github.com/openposse-org/openposse-extension.git && cd openposse-extension
@@ -80,10 +84,17 @@ Then, in Chrome:
 
 1. Open `chrome://extensions` and turn on **Developer mode**.
 2. Choose **Load unpacked** and select the `dist/` folder.
-3. Settings opens with a short welcome and three setup tasks: permissions, downloads and your
-   first lasso. If you close it early, the side panel offers to finish setup.
-4. Open the tab with your assistant, open OpenPosse from the toolbar, and choose **Record this
-   tab**.
+3. Settings opens with a short welcome and three setup tasks, which you can move between freely:
+   - **Permissions**: your shortcut, the microphone, pinning OpenPosse to the toolbar, and the
+     optional [tab group](#the-tab-group).
+   - **Downloads**: the speech model and a voice.
+   - **Your AI assistants**: Sofia, Sam and Peter are already added, and **Allow all** lets their
+     sites in with one Chrome dialog.
+
+   If you close it early, the side panel shows **Finish setting up**, which reopens it at the
+   first task with something left to do.
+4. Open a tab with one of your assistants and open OpenPosse from the toolbar. For an assistant
+   that does not come with OpenPosse, choose **Lasso this tab** and follow the guide.
 
 ### The keyboard shortcut
 
@@ -138,9 +149,44 @@ Each of these switches to a tab that is already open, the same one your question
 phrase only counts as navigation when it makes up the whole request, so a question that happens
 to begin with "show me" is always asked rather than mistaken for a request to switch tabs.
 
+### The tab group
+
+If you like, OpenPosse keeps the tabs it talks to in one tab group per window, called OpenPosse.
+It is off unless you switch it on, in onboarding or in Settings, and Chrome asks once for
+permission to manage tab groups. A tab joins the group when you lasso it or ask it a question.
+Grouping never opens or closes a tab, never moves one between windows, and leaves a tab that is
+already in a group of your own where it is. Switching it off ungroups the tabs.
+
+### Seeing what a turn looks like
+
+The play button at the top of the side panel runs a short scripted conversation through the real
+panel and the real voice, so you can see and hear how a question is routed and answered without
+asking any assistant anything.
+
+### The assistants that come with OpenPosse
+
+OpenPosse ships with lassos for three assistants, already named:
+
+| Assistant | Site |
+|---|---|
+| **Sofia** | Claude (`claude.ai`) |
+| **Sam** | ChatGPT (`chatgpt.com`) |
+| **Peter** | Notion AI (`notion.com`) |
+
+A new install adds all three, each waiting for Chrome's Allow for its site, which you can give
+from onboarding's last task, from **Allow all** in Settings (shown while two or more sites are
+waiting), or from each assistant's row. After an update, an assistant that is new to you is
+offered rather than added: on its site the side panel says OpenPosse comes with a lasso for it,
+with **Add** and **Lasso it myself**. Nothing is
+offered on a site where you already have an assistant. You can rename any of them in Settings.
+
+These files are part of the extension and nothing is fetched to add them, so a newer lasso
+arrives with a release. They are the same files as in [`lassos/`](lassos), and are added exactly
+as a shared file would be.
+
 ### Adding an assistant
 
-Assistants are added by showing OpenPosse how you use them, with no code or configuration
+Any other assistant is added by showing OpenPosse how you use it, with no code or configuration
 involved. The recording takes a minute or two:
 
 ```mermaid
@@ -156,7 +202,8 @@ While you record, OpenPosse watches you open the assistant, type a question, sen
 the answer, and does so twice so that it can recognise answers in general rather than one
 particular message. A short guide in the panel ticks off each step as it is captured. Once you
 finish, OpenPosse replays the recording by itself to make sure it works before the assistant is
-added.
+added. If that check fails, the panel says what went wrong, and the message can be copied to send
+on with a bug report.
 
 The result is a **lasso**: a short description of how to use the assistant's page. Anyone adding
 a shared lasso sees its steps before granting anything, along these lines:
@@ -176,8 +223,9 @@ a shared lasso sees its steps before granting anything, along these lines:
 
 Once an assistant works for you, **Share** in Settings shows its lasso and saves it as a small
 file you can send to a colleague. They add it under **Add a shared AI assistant** in Settings,
-Chrome asks them to allow the assistant's site, and it is ready to use. A lasso holds the assistant's name and how to use its page, and never anything from
-your conversations. The [`lassos/`](lassos) folder has an example.
+Chrome asks them to allow the assistant's site, and it is ready to use. A lasso holds the
+assistant's name and how to use its page, and never anything from your conversations. The
+[`lassos/`](lassos) folder has examples, including the ones that come with OpenPosse.
 
 Each site has one assistant. Each file says when its lasso was recorded, and adding one for a
 site that already has an assistant offers to replace that assistant's lasso, keeping its name,
@@ -265,8 +313,8 @@ flowchart TB
         subgraph ext["OpenPosse extension"]
             SW["<b>Service worker</b><br/>assistants · routing · follow-ups<br/>asking · the recording guide"]
             OFF["<b>Offscreen document</b><br/>microphone · speech recognition<br/>system voices · Phonon · Supertonic · Kokoro"]
-            SP["<b>Side panel</b><br/>listening · answers · typed questions<br/>Record this tab"]
-            SET["<b>Settings page</b><br/>microphone · downloads · shortcut<br/>voices · assistants"]
+            SP["<b>Side panel</b><br/>listening · answers · typed questions<br/>Lasso this tab · built-in offers"]
+            SET["<b>Settings page</b><br/>onboarding · microphone · downloads<br/>shortcut · voices · assistants"]
         end
 
         subgraph tab["An assistant's tab (allowed one site at a time)"]
@@ -497,6 +545,7 @@ What is stored, what uses the network and what never does is described in plain 
 | `tabs`, `scripting` | Finding an assistant's tab and working with its page |
 | `activeTab` | Starting a recording on the current tab |
 | `favicon` *(optional)* | Showing your assistants' site icons, if you turn that on |
+| `tabGroups` *(optional)* | Keeping the tabs OpenPosse talks to in one tab group, if you turn that on |
 | Site access *(optional)* | Requested **one site at a time**, when you add an assistant there |
 
 No site access is granted when OpenPosse is installed. Chrome describes site access in broad terms
@@ -534,6 +583,10 @@ src/                     The extension's code, pages and manifest (plain JavaScr
   offscreen.js             microphone, speech recognition, and the voices
   sidepanel.js             the main window
   setup.js                 Settings
+  onboarding.js  steps.js  the first-run tasks over Settings, read fresh from Chrome each time
+  builtin.js               the lassos that come with OpenPosse, and offering them on their sites
+  grouping.js              the optional OpenPosse tab group
+  demo.js                  the scripted turn behind the side panel's play button
   content.js               works with an assistant's page
   recorder.js              captures a lasso
   selector.js  dom.js      finding the right elements on a page
@@ -543,7 +596,7 @@ src/                     The extension's code, pages and manifest (plain JavaScr
   supertonic/              Supertonic's browser helper, its licence, and the model's licence
   weights.js               the voice downloads: fixed versions, SHA-256 checks
 public/                  Files copied as they are: icons, the pronunciation dictionary, and vendor/
-lassos/                  Example assistants, as shareable lasso files
+lassos/                  The assistants that ship with OpenPosse, plus the website's demo one, as shareable lasso files
 test/                    Unit tests; e2e/ browser tests, with a sample assistant in fixtures/
 tools/                   The build script and developer helpers
 docs/                    Testing, releasing, and design notes
@@ -558,10 +611,12 @@ small enough to read and understand.
 ## Project status
 
 **Available today:** speaking and typing to your assistants, routing by name and by sound,
-follow-up questions, recording and sharing assistants, asking to see an answer in its tab, and
-answers read by Phonon, Supertonic, Kokoro or your computer's own voices.
+follow-up questions, Sofia, Sam and Peter for Claude, ChatGPT and Notion AI out of the box,
+recording and sharing other assistants, guided first-run setup, an optional tab group, asking to
+see an answer in its tab, and answers read by Phonon, Supertonic, Kokoro or your computer's own
+voices.
 
-**Coming next:** the Chrome Web Store listing.
+**Coming next:** the public Chrome Web Store listing (a beta is with testers now).
 
 **Being explored:** listening in more languages, and using an assistant's own "still generating"
 indicator to read answers sooner.
