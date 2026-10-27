@@ -271,6 +271,7 @@
       }
       .coach .say { font-size: 14px; line-height: 1.45; }
       .coach .say.bad { color: var(--error); }
+      .coach .why { margin-top: 8px; font-size: 12.5px; color: var(--text-dim); }
       .coach .list { margin: 14px 0 16px; display: flex; flex-direction: column; gap: 9px; }
       .coach .row { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
       /* Settings' step numbers, smaller: a grey ring until the step is captured, then green. */
@@ -484,11 +485,16 @@
         <h2 class="heading" id="coach-heading"></h2>
         <div class="step" id="coach-step"></div>
         <div class="say" id="coach-say"></div>
+        <!-- When the check failed: what it was actually told, under the usual cause above. -->
+        <div class="why" id="coach-why" hidden></div>
         <!-- Only while the recording's tab is not the one in front: watching a tab needs it. -->
         <button class="back" id="coach-back" hidden></button>
         <!-- Once it has finished or failed: the same way out as the close button, where the eye
              already is after reading the result. -->
         <button class="back" id="coach-done" hidden>Done</button>
+        <!-- When the check failed: the lasso as a shared file, to fix by hand or send to support.
+             It is not saved, so this is the only place it still exists. -->
+        <button class="back" id="coach-copy" hidden>Copy lasso</button>
         <!-- After a new assistant is saved: its name, editable, and the way back. -->
         <form class="name" id="coach-name" hidden>
           <input type="text" id="coach-name-input" aria-label="Name" spellcheck="false" autocomplete="off">

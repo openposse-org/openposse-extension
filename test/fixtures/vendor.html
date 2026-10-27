@@ -44,7 +44,12 @@
 
     const ANSWER = 'The pipeline total is 4.2 million dollars across 38 open deals this quarter.';
 
-    send.addEventListener('click', () => {
+    // At `?trusted`, Send ignores a click a script made, as some vendors do: a recording works and
+    // the check after it does not.
+    const trustedOnly = new URLSearchParams(location.search).has('trusted');
+
+    send.addEventListener('click', (event) => {
+      if (trustedOnly && !event.isTrusted) return;
       const question = composer.value.trim();
       if (!question) return;
       composer.value = '';

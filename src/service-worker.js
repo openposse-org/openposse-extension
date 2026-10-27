@@ -34,7 +34,7 @@ import { vendorTab } from './tabs.js';
 import { joinGroup, expandGroupOf, leaveGroup, reconcileGroups } from './grouping.js';
 import { requestOnboarding } from './steps.js';
 import { DONE_MS } from './title.js';
-import { hashOf, matchFor, staleness, today, unpack } from './share.js';
+import { hashOf, matchFor, pack, staleness, today, toFile, unpack } from './share.js';
 import { builtInText, listed } from './builtin.js';
 import { newDraft, applyCapture, isComplete, finish } from './draft.js';
 import {
@@ -1675,6 +1675,8 @@ async function dryRun() {
           label: 'SETTING UP · DIDN’T WORK',
           instruction: 'We recorded it, but driving it ourselves didn’t work. That usually means '
             + 'this AI assistant ignores clicks it didn’t get from a person. Nothing has been saved.',
+          reason: whyNoAnswer(result),
+          draft: await draftFile(built.lasso),
           captures: captures(wizard.draft),
           naming: false,
           ended: true,
@@ -1700,6 +1702,7 @@ async function dryRun() {
         label: 'SETTING UP · DIDN’T WORK',
         instruction: 'We read the same answer twice, so we wouldn’t be able to tell one reply '
           + 'from the next. This AI assistant may not be one we can drive yet.',
+        draft: await draftFile(built.lasso),
         captures: captures(wizard.draft),
         naming: false,
         ended: true,
@@ -1721,6 +1724,33 @@ async function dryRun() {
   // typed anyway: "Notion", from the domain the recorder already captured. Renaming it to
   // "Ivan" is then an edit to something that exists, in Settings, where no page can interfere.
   await save();
+}
+
+/**
+ * What the check was told when a question got no answer, for the failed card.
+ *
+ * The sentence above it is a guess at the usual cause; this is what actually happened – "send
+ * button not found", a timeout – which is what somebody fixing the lasso by hand needs.
+ */
+function whyNoAnswer(result) {
+  const said = result?.error?.message ?? result?.message;
+  return said ? String(said) : 'no answer came back';
+}
+
+/**
+ * A lasso that failed its check, as the text Settings' "Add a shared AI assistant" reads.
+ *
+ * **Offered, never saved.** It did not work, so it stays off the roster; the card lets somebody
+ * copy it to fix by hand or send to support, rather than losing a recording that may be one
+ * selector away from working.
+ */
+async function draftFile(lasso) {
+  try {
+    return toFile(await pack({ name: productLabel(lasso.domainPattern) || 'Assistant', lasso }));
+  } catch (error) {
+    console.warn('[openposse] could not write the failed lasso out –', error?.message ?? error);
+    return null;
+  }
 }
 
 /** Writes the verified lasso out, as a new agent or over the one being re-recorded. */
