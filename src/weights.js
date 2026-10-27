@@ -350,9 +350,12 @@ const PHONON_VOICES_REVISION = '0ee17205f254b5abc43b266c8a0f215565c352f7';
 const PHONON_VOICES_REPO = 'https://huggingface.co/gradium/phonon-voices/resolve';
 
 const PHONON_CORE = [
-  { id: 'weights', url: `${PHONON_REPO}/${PHONON_REVISION}/model.q8.gguf`, bytes: 64_512_352, sha256: null },
-  { id: 'tokenizer', url: `${PHONON_REPO}/${PHONON_REVISION}/tokenizer.json`, bytes: 277_967, sha256: null },
-  { id: 'config', url: `${PHONON_REPO}/${PHONON_REVISION}/config.json`, bytes: 2_851, sha256: null },
+  { id: 'weights', url: `${PHONON_REPO}/${PHONON_REVISION}/model.q8.gguf`, bytes: 64_512_352,
+    sha256: 'a7d9aad2cd6dc66473f24a08bc6d2939030ef4d751ef82349361fbef3272dbae' },
+  { id: 'tokenizer', url: `${PHONON_REPO}/${PHONON_REVISION}/tokenizer.json`, bytes: 277_967,
+    sha256: '691a00068fa7b989f2f3e5ae5daa2d1a5bb319f2d5360deafcfb19a8bb6e7936' },
+  { id: 'config', url: `${PHONON_REPO}/${PHONON_REVISION}/config.json`, bytes: 2_851,
+    sha256: '7062ea376e6b158543c8abec8e5af67df171c49ad70eb7e2a0fb25c16f265e06' },
 ];
 
 /**
