@@ -68,6 +68,8 @@ function isPublicSuffix(labels) {
 const UMBRELLA_DOMAINS = new Set([
   'google.com',
   'microsoft.com',
+  // Microsoft 365's own domain: Outlook, Teams and Copilot all live under it.
+  'cloud.microsoft',
 ]);
 
 /** An IP literal has no registrable domain, and `*.192.168` is meaningless. */

@@ -56,6 +56,8 @@ test('a host under an umbrella domain stays exact', () => {
   assert.equal(patternForHost('gemini.google.com'), 'gemini.google.com');
   assert.equal(patternForHost('Gemini.Google.com.'), 'gemini.google.com');
   assert.equal(patternForHost('copilot.microsoft.com'), 'copilot.microsoft.com');
+  // `*.cloud.microsoft` would also be Outlook and Teams.
+  assert.equal(patternForHost('copilot.cloud.microsoft'), 'copilot.cloud.microsoft');
   assert.equal(patternForHost('google.com'), 'google.com');
   // Only the domain itself counts, not a name that ends the same way.
   assert.equal(patternForHost('chat.notgoogle.com'), '*.notgoogle.com');
