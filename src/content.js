@@ -12,6 +12,7 @@ import {
   deepQuerySelector,
   deepQuerySelectorAll,
   deepQuerySelectorVisible,
+  newMatches,
   pressShortcut,
   setEditableText,
   setInputValue,
@@ -226,10 +227,12 @@ async function askAssistant({ lasso, prompt, graceMs = null }, emit) {
     );
   }
 
-  // Count existing replies BEFORE submitting. On a chat page the previous answers are still
+  // Take the existing replies BEFORE submitting. On a chat page the previous answers are still
   // in the DOM, so "wait for the response container" would match one of those immediately and
   // we would stream last turn's answer back as though it were this one.
-  const repliesBefore = deepQuerySelectorAll(lasso.responseContainerSelector).length;
+  const before = deepQuerySelectorAll(lasso.responseContainerSelector);
+  const repliesBefore = before.length;
+  const sinceAsked = newMatches(lasso.responseContainerSelector, before);
 
   // Named so it can be re-applied: when the assistant has *just* opened, the framework may
   // not have bound to the input yet, and a value set before that is silently discarded.
@@ -312,8 +315,7 @@ async function askAssistant({ lasso, prompt, graceMs = null }, emit) {
    *
    * It does not read anything the user wrote – only our own prompt, and only to exclude it.
    */
-  const withoutOurQuestion = (all) => {
-    const fresh = all.slice(repliesBefore);
+  const withoutOurQuestion = (fresh) => {
     const needle = prompt.slice(0, 48);
 
     // Not the row echoing our own question.
@@ -365,7 +367,7 @@ async function askAssistant({ lasso, prompt, graceMs = null }, emit) {
   let passes = 0;
 
   let container = await waitForNewMatch(
-    lasso.responseContainerSelector, repliesBefore,
+    lasso.responseContainerSelector, before,
     // `quietPeriodMs` is the vendor's own measured "things have stopped changing", recorded
     // per lasso rather than guessed – the right order of magnitude for how long to wait in
     // case a status row is about to be followed by the real answer.
@@ -439,7 +441,7 @@ async function askAssistant({ lasso, prompt, graceMs = null }, emit) {
       // null, ending the loop with the text we already had – which is the right answer for it.
       : await waitForNewMatch(
         lasso.responseContainerSelector,
-        deepQuerySelectorAll(lasso.responseContainerSelector).length,
+        deepQuerySelectorAll(lasso.responseContainerSelector),
         {
           // **The grace shrinks after the first extra pass.** It exists for the gap between a
           // status row and the answer, which is the model thinking – seconds, and only once.
@@ -472,7 +474,7 @@ async function askAssistant({ lasso, prompt, graceMs = null }, emit) {
       // be one; the app replaces the answer on `.done`, so what is left on screen is right.
       onDelta: (delta) => emit({ kind: 'partial_result', text: delta }),
       // Picked the same way as the first time, for a page that replaces the element mid-answer.
-      refind: () => withoutOurQuestion(deepQuerySelectorAll(lasso.responseContainerSelector)),
+      refind: () => withoutOurQuestion(sinceAsked()),
     });
   }
 
