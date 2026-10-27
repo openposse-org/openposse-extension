@@ -208,6 +208,7 @@ and reads its answer aloud.
 | `scripting` | Registers and injects the script that types into the assistant and reads its answer, on sites the user has granted. |
 | `sidePanel` | OpenPosse's main window, opened from the toolbar or the keyboard shortcut. |
 | `favicon` (optional) | Shows the icons of the user's assistants' sites, when the user turns that setting on. |
+| `tabGroups` (optional) | Off until the user switches it on in onboarding or Settings. Puts the tabs where the user's AI assistants are open into one tab group named OpenPosse, so the user can see which tabs OpenPosse is asking. It never moves a tab out of a group the user made, and it leaves pinned tabs alone. |
 | Host permissions (optional, `https://*/*`) | Requested for one site at a time, when the user adds an assistant on that site, and used only to type into that assistant and read its answer. |
 
 **Remote code:** No. Everything that runs is in the package, ONNX Runtime included. The Supertonic
