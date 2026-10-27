@@ -163,7 +163,12 @@ export function deepQuerySelectorAll(selector, root = document, seen = new Set()
  * the response container" resolves instantly against the *previous* answer — and the agent
  * reads the opening reply aloud again, forever, with no error anywhere.
  *
- * The caller counts matches before submitting and passes that count here.
+ * The caller takes the matches before submitting and passes them here. **New means not one of
+ * those, not more of them.** Copilot (m365.cloud.microsoft, 2026-10-27) keeps only the latest
+ * few answers mounted, so while an answer arrives older ones are taken off the page: measured
+ * 4 → 3 → 2 → 3 for one new answer. A count never rose past where it started, and every turn
+ * timed out with the answer on screen. A match showing exactly the text of one that was there
+ * before is that answer mounted again, not a new one, so it does not count either.
  *
  * **It does not resolve on the first new match**, and that cost a working setup. Notion adds a
  * *status* row — "Working on your request", "Connecting a few dots" — before it adds the answer
@@ -179,31 +184,62 @@ export function deepQuerySelectorAll(selector, root = document, seen = new Set()
  *
  * @returns {Promise<Element|null>} the newest match, or null on timeout.
  */
+/**
+ * A function listing the matches for `selector` that are new since `before` was taken: not one
+ * of those elements, and not showing exactly the text one of them showed. See `waitForNewMatch`
+ * for why both.
+ */
+export function newMatches(selector, before) {
+  // Text taken now: a node taken off the page no longer says what it said.
+  const known = new Map(before.map((el) => [el, (el.innerText ?? '').trim()]));
+  return () => {
+    // **Only the text of answers that have left the page.** One showing it again is that answer
+    // mounted again; while the original is still on the page, the same words are a new answer
+    // that happens to match – "4", asked twice – and a page that only ever appends works
+    // exactly as it did when this counted.
+    const gone = new Set();
+    for (const [el, text] of known) if (!el.isConnected && text !== '') gone.add(text);
+    return deepQuerySelectorAll(selector).filter((el) =>
+      !known.has(el) && !gone.has((el.innerText ?? '').trim()));
+  };
+}
+
 export function waitForNewMatch(
-  selector, previousCount, { timeoutMs = 15000, settleMs = 900, choose } = {}
+  selector, before, { timeoutMs = 15000, settleMs = 900, choose } = {}
 ) {
+  const fresh = newMatches(selector, before);
+
   const newest = () => {
-    const all = deepQuerySelectorAll(selector);
-    if (all.length <= previousCount) return null;
+    const all = fresh();
+    if (all.length === 0) return null;
     // Last, not first: chat transcripts append downward, so the newest reply is the final
     // match. With a single-answer vendor there is only one match and last === first.
     //
     // `choose` overrides that when the selector names transcript *rows* rather than answers —
-    // which is all some vendors expose. It is given every match and the count from before the
-    // question, because deciding which row is the answer needs the caller's knowledge of what
-    // it asked, and this module has none.
-    return choose ? choose(all, previousCount) : all[all.length - 1];
+    // which is all some vendors expose. It is given the new matches, because deciding which
+    // row is the answer needs the caller's knowledge of what it asked, and this module has none.
+    return choose ? choose(all) : all[all.length - 1];
   };
 
   return new Promise((resolve) => {
     let settleTimer = null;
     let observer = null;
+    let seen = 0;
 
     const finish = () => {
       clearTimeout(settleTimer);
+      // **Nothing new once it settled is a reason to keep waiting, not to stop.** Copilot mounts
+      // an older answer again with its text still empty, so it looks new until its text arrives
+      // and shows it is not. Resolving then reported "no new response" a second after asking,
+      // with the real answer still to come (2026-10-27).
+      const found = newest();
+      if (!found) {
+        seen = 0;
+        return;
+      }
       clearTimeout(deadline);
       observer?.disconnect();
-      resolve(newest());
+      resolve(found);
     };
 
     const deadline = setTimeout(() => {
@@ -219,12 +255,12 @@ export function waitForNewMatch(
       settleTimer = setTimeout(finish, settleMs);
     };
 
-    let seen = deepQuerySelectorAll(selector).length;
-    if (seen > previousCount) armSettle();
+    seen = fresh().length;
+    if (seen > 0) armSettle();
 
     observer = new MutationObserver(() => {
-      const count = deepQuerySelectorAll(selector).length;
-      if (count <= previousCount || count === seen) return;
+      const count = fresh().length;
+      if (count === 0 || count === seen) return;
       seen = count;
       armSettle();
     });

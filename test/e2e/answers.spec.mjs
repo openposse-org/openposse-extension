@@ -7,8 +7,11 @@ import { test, expect, openPanel } from './browser.mjs';
 
 const URL = 'https://fixture.test/chat';
 
-/** A chat page whose box is always there, answering after a moment. */
-const page = (answer) => `<!doctype html><html><head><style>
+/**
+ * A chat page whose box is always there, answering after a moment. With `keep`, only that many
+ * turns stay on the page, the oldest taken off as each answer arrives, as Copilot's does.
+ */
+const page = (answer, keep = 0) => `<!doctype html><html><head><style>
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
   .contents { display: contents; }
 </style></head><body>
@@ -28,13 +31,30 @@ document.getElementById('send').addEventListener('click', () => {
     + '<div class="contents"><div data-answer-text><p>' + text + '</p></div></div>'
     + '<div role="toolbar" aria-label="Message actions"><button>Copy</button><button>Read aloud</button>'
     + '<button>Good answer</button><button>Bad answer</button><span>just now</span></div></div>';
-  setTimeout(() => document.getElementById('log').append(turn), 300);
+  const log = document.getElementById('log');
+  // With \`keep\`, from the check's own questions on (after the two recorded), an older answer
+  // is also taken off and mounted again at once, its text empty for a moment, and the new
+  // answer takes longer than a settle to arrive.
+  const late = ${keep} > 0 && n > 2;
+  const old = late && log.firstElementChild;
+  if (old) {
+    const again = old.cloneNode(true);
+    const text = again.querySelector('[data-answer-text] p');
+    const words = text.textContent;
+    text.textContent = '';
+    old.replaceWith(again);
+    setTimeout(() => { text.textContent = words; }, 100);
+  }
+  setTimeout(() => {
+    log.append(turn);
+    while (${keep} > 0 && log.children.length > ${keep}) log.firstElementChild.remove();
+  }, late ? 2000 : 300);
 });
 </script></body></html>`;
 
 /** Lassos the chat page, says there is nothing to open, and asks two questions. */
-async function lassoChat(context, extensionId, answer) {
-  await context.route(URL, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: page(answer) }));
+async function lassoChat(context, extensionId, answer, keep = 0) {
+  await context.route(URL, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: page(answer, keep) }));
   const chat = await context.newPage();
   await chat.goto(URL);
   const panel = await openPanel(context, extensionId);
@@ -70,4 +90,12 @@ test('a recorded answer is the answer alone, not the turn around it', async ({ c
 test('an answer too short to find asks for a longer one', async ({ context, extensionId }) => {
   const panel = await lassoChat(context, extensionId, 'Hello N!');
   await expect(panel.locator('#coach-say')).toContainText('too short for us to find');
+});
+
+test('a page that takes older answers off as new ones arrive still has its answers found', async ({ context, extensionId }) => {
+  // Two turns stay mounted: the check's own questions find two already there, and each new
+  // answer takes the oldest off, so the count never rises past two.
+  const panel = await lassoChat(context, extensionId,
+    'Here is answer N about Q, which runs well past forty characters so it counts.', 2);
+  await expect(panel.locator('#coach-say')).toContainText('Saved as', { timeout: 30_000 });
 });
