@@ -427,7 +427,7 @@ test.describe('the lassos that come with OpenPosse, added at install', () => {
   test('every one is in the roster, and those not allowed wait in Settings with an Allow', async ({ context, extensionId }) => {
     const settings = context.pages().find((p) => p.url() === `chrome-extension://${extensionId}/setup.html`);
     // Those in lassos/, in the order of their files, less the website's demo vendor.
-    expect(await names(settings)).toEqual(['ChatGPT', 'Sofia', 'Peter']);
+    expect(await names(settings)).toEqual(['Sam', 'Sofia', 'Peter']);
 
     await settings.click('#ob-welcome .ob-close');
     // None of their sites is allowed: an install cannot ask.
@@ -457,11 +457,11 @@ test.describe('the lassos that come with OpenPosse, added at install', () => {
 
   test('a question to one not allowed yet says so, rather than that no tab is open', async ({ context, extensionId }) => {
     const panel = await openPanel(context, extensionId);
-    await expect(panel.locator('#prompt')).toHaveAttribute('data-agent', 'ChatGPT');
+    await expect(panel.locator('#prompt')).toHaveAttribute('data-agent', 'Sam');
     await panel.click('#type');
     await panel.fill('#prompt', 'What is new?');
     await panel.press('#prompt', 'Enter');
-    await expect(panel.locator('body')).toContainText('ChatGPT needs access to chatgpt.com – allow it in Settings.');
+    await expect(panel.locator('body')).toContainText('Sam needs access to chatgpt.com – allow it in Settings.');
   });
 });
 
