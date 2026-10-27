@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.18](https://github.com/openposse-org/openposse-extension/compare/v0.9.17...v0.9.18) (2026-10-27)
+
+
+### Features
+
+* a failed lasso says what happened, and can be copied ([#86](https://github.com/openposse-org/openposse-extension/issues/86)) ([b91308a](https://github.com/openposse-org/openposse-extension/commit/b91308a7aad8d00a470e1a3f5310086defb369bc))
+
+
+### Fixes
+
+* Copilot under cloud.microsoft is one site, not a wildcard ([#85](https://github.com/openposse-org/openposse-extension/issues/85)) ([cca7e0f](https://github.com/openposse-org/openposse-extension/commit/cca7e0f5a8cb2b0f5f0bb6705e53bd819200a19e))
+* find a new answer on a page that takes older ones off, as Copilot does ([#87](https://github.com/openposse-org/openposse-extension/issues/87)) ([9eac277](https://github.com/openposse-org/openposse-extension/commit/9eac277d9c3cf956f3d863ed9b1cdda6d5566789))
+
 ## [0.9.17](https://github.com/openposse-org/openposse-extension/compare/v0.9.16...v0.9.17) (2026-10-27)
 
 
