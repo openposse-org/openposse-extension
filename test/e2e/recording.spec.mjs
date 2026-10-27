@@ -9,9 +9,9 @@ import { Buffer } from 'node:buffer';
 import { test, expect, openPanel, LASSO, VENDOR_URL } from './browser.mjs';
 
 /** Opens the fake vendor and the panel, and starts lassoing the vendor's tab from the panel. */
-async function startLassoing(context, extensionId) {
+async function startLassoing(context, extensionId, url = VENDOR_URL) {
   const vendor = await context.newPage();
-  await vendor.goto(VENDOR_URL);
+  await vendor.goto(url);
   const panel = await openPanel(context, extensionId);
   await panel.evaluate(async (url) => {
     const [tab] = await chrome.tabs.query({ url: `${url}*` });
@@ -55,6 +55,37 @@ test('a finished lasso is named on the card, and Save and return goes back to th
   await expect(panel.locator('#desk')).toBeVisible();
   const { agents } = await panel.evaluate(() => chrome.storage.local.get('agents'));
   expect(agents.map((a) => a.name)).toEqual(['Ivan']);
+});
+
+test('a lasso that fails its check says what happened, and can be copied though not saved', async ({ context, extensionId }) => {
+  // Waits out the check's answer timeout, the recorder's 30-second minimum.
+  test.setTimeout(120_000);
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  // At `?trusted` the fake vendor's Send ignores a click it did not get from a person.
+  const { vendor, panel } = await startLassoing(context, extensionId, `${VENDOR_URL}?trusted`);
+  await vendor.bringToFront();
+
+  await vendor.click('[data-testid="open-assistant"]');
+  for (const question of ['What is the pipeline total?', 'And the biggest deal?']) {
+    await vendor.click('[data-testid="composer"]');
+    await vendor.keyboard.type(question);
+    await vendor.click('[data-testid="send"]');
+    await expect(vendor.locator('[data-testid="send"]')).toBeVisible({ timeout: 10_000 });
+  }
+
+  await expect(panel.locator('#coach-step')).toHaveText('SETTING UP · DIDN’T WORK', { timeout: 90_000 });
+  await expect(panel.locator('#coach-why')).toHaveText(/^What happened: .+\.$/);
+  const copy = panel.locator('#coach-copy');
+  await expect(copy).toBeVisible();
+  await copy.click();
+  await expect(copy).toHaveText('Copied');
+
+  // What was copied is the file Settings adds, with the recorded selectors in it.
+  const shared = JSON.parse(await panel.evaluate(() => navigator.clipboard.readText()));
+  expect(shared.format).toBe('openposse.lasso');
+  expect(shared.lasso.submitSelector).toBe('button[data-testid="send"]');
+  const { agents = [] } = await panel.evaluate(() => chrome.storage.local.get('agents'));
+  expect(agents).toEqual([]);
 });
 
 test('lassoing can be stopped from the card, and nothing is saved', async ({ context, extensionId }) => {

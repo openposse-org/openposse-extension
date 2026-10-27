@@ -320,6 +320,10 @@ function renderCoach() {
     el('coach-name-input').value = saved.name;
   }
   el('coach-always').hidden = coach.alwaysOpen !== true;
+  el('coach-why').hidden = !coach.reason;
+  el('coach-why').textContent = coach.reason ? `What happened: ${coach.reason}.` : '';
+  el('coach-copy').hidden = !coach.draft;
+  if (!coach.draft) el('coach-copy').textContent = 'Copy lasso';
 
   // **Every capture stays on screen once it is made.** Confirmation is the whole reason the list
   // exists: somebody who cannot see that their shortcut registered will press it again, and on a
@@ -923,6 +927,17 @@ el('coach-always').addEventListener('click', () => {
       el('coach-say').textContent = `That didn’t register – ${error?.message ?? error}`;
       el('coach-say').classList.add('bad');
     });
+});
+// The failed lasso, as the file Settings would add, so it can be fixed by hand or sent on.
+el('coach-copy').addEventListener('click', async () => {
+  const draft = state.coach?.draft;
+  if (!draft) return;
+  try {
+    await navigator.clipboard.writeText(draft);
+    el('coach-copy').textContent = 'Copied';
+  } catch (error) {
+    el('coach-copy').textContent = `Couldn’t copy – ${error?.message ?? error}`;
+  }
 });
 el('coach-back').addEventListener('click', () => {
   chrome.runtime.sendMessage({ kind: 'openposse.record.return' }).catch((error) =>
