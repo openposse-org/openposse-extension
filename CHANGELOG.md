@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.17](https://github.com/openposse-org/openposse-extension/compare/v0.9.16...v0.9.17) (2026-10-27)
+
+
+### Fixes
+
+* macOS browser tests no longer see WebGPU in onboarding ([#82](https://github.com/openposse-org/openposse-extension/issues/82)) ([2e7de65](https://github.com/openposse-org/openposse-extension/commit/2e7de65818861e01274d356df9944e19bcff6cba))
+
 ## [0.9.16](https://github.com/openposse-org/openposse-extension/compare/v0.9.15...v0.9.16) (2026-10-27)
 
 
