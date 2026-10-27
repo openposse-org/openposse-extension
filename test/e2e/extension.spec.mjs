@@ -80,6 +80,18 @@ test('a typed question reaches the vendor, and its answer comes back to the pane
   await expect(panel.locator('body')).toContainText(ANSWER, { timeout: 20_000 });
 });
 
+test('an answer whose element the page replaces mid-answer comes back whole', async ({ context, extensionId }) => {
+  // Claude's page did this, and only its first word, "Not", reached the panel and was spoken.
+  await addAcme(context, extensionId);
+  const vendor = await context.newPage();
+  await vendor.goto(`${VENDOR_URL}?swap`);
+  const panel = await openPanel(context, extensionId);
+
+  await ask(panel, 'What is the pipeline total?');
+
+  await expect(panel.locator('body')).toContainText(ANSWER, { timeout: 20_000 });
+});
+
 test("a typed question that starts with the assistant's name reaches the vendor without it", async ({ context, extensionId }) => {
   // People type the way they speak: "Matt, what is on this to-do list?" once reached the vendor
   // with "Matt," still in it, because the typed path went straight to the agent the box was

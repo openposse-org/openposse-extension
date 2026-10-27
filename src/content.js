@@ -471,6 +471,8 @@ async function askAssistant({ lasso, prompt, graceMs = null }, emit) {
       // for driving a page. The cost is that a status row can be spoken before it is known to
       // be one; the app replaces the answer on `.done`, so what is left on screen is right.
       onDelta: (delta) => emit({ kind: 'partial_result', text: delta }),
+      // Picked the same way as the first time, for a page that replaces the element mid-answer.
+      refind: () => withoutOurQuestion(deepQuerySelectorAll(lasso.responseContainerSelector)),
     });
   }
 

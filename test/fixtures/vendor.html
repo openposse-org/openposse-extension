@@ -62,8 +62,20 @@
       // as the check after a recording requires: it refuses a lasso that reads one answer twice.
       const words = `${ANSWER} You asked: ${question}`.split(' ');
       let next = 0;
+      // At `?swap`, the answer element is replaced after its first word and the rest is written
+      // into the new one, as Claude's page does (2026-10-27). The swap waits until after the
+      // lasso's 600 ms settle, so the old element is the one already being read.
+      const swap = new URLSearchParams(location.search).has('swap');
+      const started = Date.now();
+      let into = answer;
       const timer = setInterval(() => {
-        answer.textContent += (next ? ' ' : '') + words[next];
+        if (swap && next === 1 && Date.now() - started < 800) return;
+        if (swap && next === 1) {
+          const fresh = into.cloneNode(true);
+          into.replaceWith(fresh);
+          into = fresh;
+        }
+        into.textContent += (next ? ' ' : '') + words[next];
         next += 1;
         if (next < words.length) return;
         clearInterval(timer);

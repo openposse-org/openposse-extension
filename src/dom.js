@@ -284,17 +284,40 @@ export function waitForElement(
  * answer so far, so passing the full text each time would make the app speak the answer from
  * the beginning on every mutation.
  *
+ * **The element can be swapped out from under it.** Claude's page replaces its reply element
+ * part-way through an answer (2026-10-27): the first one held "Not", the page put a new one in
+ * its place and wrote the rest there. A detached element gets no more mutations, so it went
+ * quiet, and "Not" was the whole answer, on screen and spoken. `refind` names the answer again
+ * when that happens, and the stream carries on from the new element.
+ *
+ * @param refind  returns the answer element as the page now has it, or null
  * @returns {Promise<string>} the complete text.
  */
-export function streamResponse(container, { quietPeriodMs = 900, timeoutMs = 120000, onDelta }) {
+export function streamResponse(container, {
+  quietPeriodMs = 900, timeoutMs = 120000, onDelta, refind,
+}) {
   return new Promise((resolve) => {
     let spoken = '';
     let quietTimer = null;
 
+    // Follows a replacement, if there is one. False when the element is still the page's, or
+    // when nothing has taken its place yet – the next mutation asks again.
+    const follow = () => {
+      if (container.isConnected || !refind) return false;
+      const replacement = refind();
+      if (!replacement || replacement === container) return false;
+      observer.disconnect();
+      container = replacement;
+      observer.observe(container, { childList: true, subtree: true, characterData: true });
+      return true;
+    };
+
     const finish = () => {
       clearTimeout(quietTimer);
       clearTimeout(overallTimer);
+      follow();
       observer.disconnect();
+      swaps.disconnect();
       resolve(container.innerText ?? '');
     };
 
@@ -305,7 +328,7 @@ export function streamResponse(container, { quietPeriodMs = 900, timeoutMs = 120
       quietTimer = setTimeout(finish, quietPeriodMs);
     };
 
-    const observer = new MutationObserver(() => {
+    const read = () => {
       const text = container.innerText ?? '';
       if (text.length > spoken.length && text.startsWith(spoken)) {
         // The common case: the vendor appended. Emit only the new tail.
@@ -318,9 +341,18 @@ export function streamResponse(container, { quietPeriodMs = 900, timeoutMs = 120
         spoken = text;
       }
       armQuietTimer();
-    });
+    };
 
+    const observer = new MutationObserver(read);
     observer.observe(container, { childList: true, subtree: true, characterData: true });
+
+    // Watches for the swap, which the observer above cannot see: it is on the element being
+    // thrown away. `childList` on the body only, so text streaming anywhere costs a single
+    // `isConnected` check and nothing more.
+    const swaps = new MutationObserver(() => {
+      if (follow()) read();
+    });
+    swaps.observe(document.body, { childList: true, subtree: true });
     armQuietTimer();
   });
 }
