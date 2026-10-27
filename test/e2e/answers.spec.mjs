@@ -31,11 +31,24 @@ document.getElementById('send').addEventListener('click', () => {
     + '<div class="contents"><div data-answer-text><p>' + text + '</p></div></div>'
     + '<div role="toolbar" aria-label="Message actions"><button>Copy</button><button>Read aloud</button>'
     + '<button>Good answer</button><button>Bad answer</button><span>just now</span></div></div>';
+  const log = document.getElementById('log');
+  // With \`keep\`, from the check's own questions on (after the two recorded), an older answer
+  // is also taken off and mounted again at once, its text empty for a moment, and the new
+  // answer takes longer than a settle to arrive.
+  const late = ${keep} > 0 && n > 2;
+  const old = late && log.firstElementChild;
+  if (old) {
+    const again = old.cloneNode(true);
+    const text = again.querySelector('[data-answer-text] p');
+    const words = text.textContent;
+    text.textContent = '';
+    old.replaceWith(again);
+    setTimeout(() => { text.textContent = words; }, 100);
+  }
   setTimeout(() => {
-    const log = document.getElementById('log');
     log.append(turn);
     while (${keep} > 0 && log.children.length > ${keep}) log.firstElementChild.remove();
-  }, 300);
+  }, late ? 2000 : 300);
 });
 </script></body></html>`;
 

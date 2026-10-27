@@ -218,12 +218,22 @@ export function waitForNewMatch(
   return new Promise((resolve) => {
     let settleTimer = null;
     let observer = null;
+    let seen = 0;
 
     const finish = () => {
       clearTimeout(settleTimer);
+      // **Nothing new once it settled is a reason to keep waiting, not to stop.** Copilot mounts
+      // an older answer again with its text still empty, so it looks new until its text arrives
+      // and shows it is not. Resolving then reported "no new response" a second after asking,
+      // with the real answer still to come (2026-10-27).
+      const found = newest();
+      if (!found) {
+        seen = 0;
+        return;
+      }
       clearTimeout(deadline);
       observer?.disconnect();
-      resolve(newest());
+      resolve(found);
     };
 
     const deadline = setTimeout(() => {
@@ -239,7 +249,7 @@ export function waitForNewMatch(
       settleTimer = setTimeout(finish, settleMs);
     };
 
-    let seen = fresh().length;
+    seen = fresh().length;
     if (seen > 0) armSettle();
 
     observer = new MutationObserver(() => {
