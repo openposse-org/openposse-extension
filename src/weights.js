@@ -364,14 +364,18 @@ const PHONON_CORE = [
  * not change once it ships. New voices go after these.
  *
  * `lang` and `gender` are stated rather than read from an id, because Phonon's voices are names:
- * the catalog's `voices.jsonl` gives each one's language, and the gender is the spike's note.
+ * both are the catalog's own, from `voices.jsonl` at the pinned revision (`locale`, `gender`).
  * `name` is what Settings shows.
  */
 export const PHONON_VOICES = [
-  { id: 'phonon-harper', name: 'Harper', lang: 'en-US', gender: 'female', path: 'voices/4SZHfMpw-p46Ywgs.safetensors', sha256: null },
-  { id: 'phonon-miles', name: 'Miles', lang: 'en-US', gender: 'male', path: 'voices/d9XCyhjo4JhkHF1d.safetensors', sha256: null },
-  { id: 'phonon-maeve', name: 'Maeve', lang: 'en-GB', gender: 'female', path: 'voices/6PWnV0Nq4wu7RVBT.safetensors', sha256: null },
-  { id: 'phonon-edwin', name: 'Edwin', lang: 'en-GB', gender: 'male', path: 'voices/zUCxzrOrugTSis03.safetensors', sha256: null },
+  { id: 'phonon-harper', name: 'Harper', lang: 'en-US', gender: 'female', path: 'voices/4SZHfMpw-p46Ywgs.safetensors',
+    sha256: '6b3da6e2d796a20c51af892c482bd6509fb88267a221aff83c870843dee2a123' },
+  { id: 'phonon-miles', name: 'Miles', lang: 'en-US', gender: 'male', path: 'voices/d9XCyhjo4JhkHF1d.safetensors',
+    sha256: 'eab20e4f159b48cfbc01b1885804e24f681f80e7a64f909182763a4e3361bee8' },
+  { id: 'phonon-maeve', name: 'Maeve', lang: 'en-GB', gender: 'female', path: 'voices/6PWnV0Nq4wu7RVBT.safetensors',
+    sha256: '56494ee67d533ad227ff0dfd0b1c13ff5aa91f1ad6e596e66c2986ba3005e844' },
+  { id: 'phonon-edwin', name: 'Edwin', lang: 'en-GB', gender: 'male', path: 'voices/zUCxzrOrugTSis03.safetensors',
+    sha256: 'ff1d0735b8b45710462b1d1f846da040f970c6eb62c7c2f36dbfb8e5bde74f1e' },
 ].map(({ path, sha256, ...voice }) => ({
   ...voice,
   url: `${PHONON_VOICES_REPO}/${PHONON_VOICES_REVISION}/${path}`,
