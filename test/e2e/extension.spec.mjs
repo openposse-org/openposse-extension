@@ -270,7 +270,7 @@ test('when the page no longer has what the lasso clicks, the turn says the lasso
 /**
  * The Settings tab the install opened, with the two things automation cannot do stubbed: Chrome's
  * microphone prompt, answered with a silent track, and the speech model, reported as `model`
- * without a download. Everything after them – recording the grant, ticking – is the real code.
+ * without a download. WebGPU is taken away too, so every runner sees the same onboarding. Everything after them – recording the grant, ticking – is the real code.
  *
  * The install's request was taken when the tab first loaded, so the reload asks for onboarding
  * again, before the page's own script runs, the way the worker asks before opening Settings.
@@ -281,6 +281,9 @@ async function onboarding(context, extensionId, { model = 'available', before } 
     navigator.mediaDevices.getUserMedia = async () => new AudioContext().createMediaStreamDestination().stream;
     const SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition;
     if (SR) SR.available = async () => state;
+    // No WebGPU unless a test gives it one. Headless Chromium has none on Linux and Windows, but
+    // on the macOS runners it gets a real adapter, and Downloads then waits for a voice.
+    Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true });
     chrome.storage.session.set({ onboarding: Date.now() });
   }, model);
   if (before) await page.addInitScript(before);
