@@ -1,0 +1,22 @@
+{
+  "format": "openposse.lasso",
+  "version": 1,
+  "id": "claude",
+  "name": "Claude",
+  "recordedOn": "2026-10-26",
+  "hash": "29d3317121aa",
+  "lasso": {
+    "busySelector": "button[data-testid=\"chat-input-stop\"]",
+    "domainPattern": "*.claude.ai",
+    "inputSelector": "div[data-testid=\"chat-input\"]",
+    "openMethod": "alwaysOpen",
+    "openSelector": null,
+    "quietPeriodMs": 900,
+    "responseContainerSelector": "div[data-perf-reply-text]",
+    "responseTimeoutMs": 60000,
+    "shortcut": null,
+    "submitMethod": "click",
+    "submitSelector": "button[aria-label=\"Send message\"]",
+    "triggerMethod": "synthetic"
+  }
+}
