@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.16](https://github.com/openposse-org/openposse-extension/compare/v0.9.15...v0.9.16) (2026-10-27)
+
+
+### Features
+
+* make Phonon 31M the default voice ([#81](https://github.com/openposse-org/openposse-extension/issues/81)) ([6c4b658](https://github.com/openposse-org/openposse-extension/commit/6c4b65827b233659996352dac6db8efbcd19a49c))
+
 ## [0.9.15](https://github.com/openposse-org/openposse-extension/compare/v0.9.14...v0.9.15) (2026-10-27)
 
 

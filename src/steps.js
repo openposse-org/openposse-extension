@@ -174,8 +174,8 @@ export const STEPS = [
   // Before the first assistant, so its tab can be the first to join the group.
   { id: 'grouping', task: 'permissions' },
   { id: 'model', task: 'downloads' },
-  // Supertonic or Kokoro, by the owner's call of 2026-10-26: the system voices are a fallback,
-  // not where somebody should finish setting up.
+  // A neural voice, by the owner's call of 2026-10-26: the system voices are a fallback, not
+  // where somebody should finish setting up. Phonon, Supertonic or Kokoro.
   { id: 'voice', task: 'downloads' },
   { id: 'assistant', task: 'lasso' },
   { id: 'done' },
@@ -210,8 +210,9 @@ export const taskOf = (stepId) => STEPS.find((step) => step.id === stepId)?.task
  * welcome screen), from what is true now.
  *
  * `facts` is `{ started, mic, model, voice, pin, shortcut, grouping, assistant, skipped }`:
- * `voice` is `ready` (Supertonic agreed to, or Kokoro, downloaded), `missing`, or `unsupported`
- * (no WebGPU, so neither could speak however much was downloaded); `started` is
+ * `voice` is `ready` (Phonon, Supertonic agreed to, or Kokoro, downloaded), `missing`, or
+ * `unsupported` (nothing could speak however much was downloaded – no longer reported since
+ * Phonon, which needs no WebGPU, but still honoured); `started` is
  * whether "Let's get you set up" was pressed (or anything after it is already done, which
  * means it was, some other time), `grouping` whether the tab group question has an answer –
  * either one, since grouping is a choice rather than a requirement – and `skipped` the optional
@@ -235,7 +236,7 @@ export function progress(facts) {
   };
   // A speech model this Chrome cannot have may be passed over too: typing in the side panel still
   // works, and a card that can never tick would be the end of the page.
-  // The same for a voice without WebGPU: the system voices are all that machine can use.
+  // The same for a voice that cannot speak here, should that ever be reported again.
   const impossible = {
     model: model === 'unavailable' || model === 'unsupported',
     voice: voice === 'unsupported',

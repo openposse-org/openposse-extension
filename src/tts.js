@@ -1,6 +1,6 @@
 // Which engine speaks, and in whose voice.
 //
-// Three engines, chosen at runtime rather than at build time:
+// Four engines, chosen at runtime rather than at build time:
 //
 // - **System** (`speechSynthesis`) – always present, free, and on macOS it is Apple's own 41
 //   local voices, which is the same set the Mac app used. Elsewhere it is whatever the OS
@@ -11,13 +11,19 @@
 // - **Supertonic 3** – neural TTS in 31 languages, about five times faster than Kokoro here,
 //   also on WebGPU. Its weights are Open RAIL-M, so it is only ever chosen once somebody has
 //   agreed to the licence's use restrictions, and Kokoro stays for anyone who cannot.
+// - **Phonon 31M** – the default since 2026-10-27, by the owner's call after the spike. English
+//   only, Apache-2.0 with nothing to agree to, 66 MB against Kokoro's 340 and Supertonic's 401,
+//   as fast as Supertonic on WebGPU, and **fast enough without it**: 0.15× real time on one CPU
+//   thread, so it is the one neural voice that is not gated on WebGPU.
 //
 // **The selection is the interesting part and it is pure, so it is tested.** Getting it wrong
 // is not a crash: it is a product that sounds worse than it should on a capable machine, or
 // one that stutters unusably on a machine that cannot keep up – and both of those are
 // invisible on whatever laptop the developer happened to use.
 
-import { VOICES, langOf, SUPERTONIC, SUPERTONIC_LICENCE } from './weights.js';
+import {
+  VOICES, langOf, SUPERTONIC, SUPERTONIC_LICENCE, PHONON_VOICES as PHONON_SET,
+} from './weights.js';
 
 /**
  * Kokoro's English voices, Apache-2.0 with the weights.
@@ -33,6 +39,15 @@ import { VOICES, langOf, SUPERTONIC, SUPERTONIC_LICENCE } from './weights.js';
  * Order is carried over unchanged, and it matters – see the note on `VOICES`.
  */
 export const KOKORO_VOICES = VOICES.map(({ id }) => ({ id, lang: langOf(id) }));
+
+/**
+ * Phonon's voices, from `weights.js`, each with the accent and gender stated there: its voices
+ * are names, so neither can be read from the id. Above Supertonic's, whose list is built with
+ * `genderOf`, which reads this one.
+ */
+export const PHONON_VOICES = PHONON_SET.map(({ id, name, lang, gender }) => ({ id, name, lang, gender }));
+
+const phononVoice = (id) => PHONON_VOICES.find((v) => v.id === id) ?? null;
 
 /**
  * Supertonic's ten voices, from `weights.js` for the same reason. Every one speaks every
@@ -62,12 +77,15 @@ export function supertonicLanguage(chosen) {
 }
 
 /**
- * `female`, `male`, or null, from either engine's voice id.
+ * `female`, `male`, or null, from any neural engine's voice id.
  *
  * Kokoro names voices `<accent><gender>_<name>` (`af_heart`), Supertonic `<gender><number>`
- * (`F1`). Anything else, a system voice's identifier among them, says nothing about gender.
+ * (`F1`), and Phonon's are looked up, since a name says nothing. Anything else, a system voice's
+ * identifier among them, says nothing about gender.
  */
 export function genderOf(id) {
+  const phonon = phononVoice(id);
+  if (phonon) return phonon.gender;
   const text = String(id ?? '');
   const letter = /^[ab][fm]_/.test(text) ? text[1] : /^[FM][1-9]$/.test(text) ? text[0].toLowerCase() : null;
   return letter === 'f' ? 'female' : letter === 'm' ? 'male' : null;
@@ -81,9 +99,10 @@ export function genderOf(id) {
  * system voices" would be true and useless.
  */
 export const REASONS = {
+  'phonon': 'Phonon – neural voices, running on this machine',
   'supertonic': 'Supertonic – neural voices, running on this machine',
   'kokoro': 'Kokoro – neural voices, running on this machine',
-  'no-webgpu': 'System voices – this browser has no WebGPU, and the neural voices are too slow without it to hold a conversation',
+  'no-webgpu': 'System voices – this browser has no WebGPU, which Supertonic and Kokoro need to keep up with a conversation; Phonon does not',
   'no-assets': 'System voices – no neural voice model is installed',
   'no-agreement': 'System voices – Supertonic is downloaded, but its use restrictions have not been agreed to',
   'not-built': 'System voices – the Kokoro model is downloaded, but the engine that reads it is not built yet',
@@ -141,47 +160,51 @@ export const KOKORO_IMPLEMENTED = true;
 /**
  * Picks an engine from what is actually available.
  *
- * **WebGPU is a hard gate, not a preference.** Kokoro runs about three times faster than real
- * time on WebGPU and roughly ten times slower than *that* on the WASM fallback – which is not
- * a degraded experience, it is an unusable one, and shipping it would make the product feel
- * broken on exactly the machines least able to afford it. Falling back to system voices is the
- * status quo rather than a failure, which is what makes the gate safe to enforce.
- *
- * **Between the two neural engines, Supertonic unless somebody chose Kokoro**, and only from
- * what is installed:
+ * **Phonon unless somebody chose another**, and only from what is installed:
  *
  * | Installed | Speaks |
  * |---|---|
- * | Supertonic only | Supertonic |
- * | Kokoro only | Kokoro, so an existing install keeps exactly what it has |
- * | Both | Supertonic, or Kokoro if that is the stored preference |
- * | Neither | the system voices |
+ * | Phonon, with or without the others | Phonon, or the one chosen in Settings if that can speak |
+ * | Supertonic and Kokoro, no Phonon | Supertonic, or Kokoro if that is the stored preference |
+ * | One of those two | that one, so an existing install keeps exactly what it has |
+ * | Nothing | the system voices |
+ *
+ * **WebGPU is a hard gate for Supertonic and Kokoro, not a preference.** Kokoro runs about three
+ * times faster than real time on WebGPU and roughly ten times slower than *that* on the WASM
+ * fallback, and Supertonic's best WebAssembly run was 0.73× real time – not a degraded experience,
+ * an unusable one. **Phonon is not gated**: it measured 0.15× real time on one CPU thread, so a
+ * machine without WebGPU still gets a neural voice, and with WebGPU phonon-tts uses it itself.
  *
  * **Supertonic is never chosen without a stored agreement to its licence**, however it came to
  * be on disk. The agreement is what binds its use restrictions to the person using it, so
  * weights without one are treated as weights that are not there.
  *
  * @param hasWebGPU            `navigator.gpu` gives an adapter
+ * @param hasPhononAssets      Phonon's weights and voices are actually on disk
  * @param hasKokoroAssets      Kokoro's model and voices are actually on disk
  * @param hasSupertonicAssets  Supertonic's graphs and voices are actually on disk
  * @param agreement            the stored agreement to Supertonic's licence, or null
- * @param preference           `'system'` to force it, `'kokoro'` to prefer Kokoro when both are
- *                             installed, anything else for the best available
+ * @param preference           `'system'` to force it, `'supertonic'` or `'kokoro'` to prefer that
+ *                             one where it can speak, anything else for the best available
  */
 export function chooseEngine({
-  hasWebGPU = false, hasKokoroAssets = false, hasSupertonicAssets = false, agreement = null,
-  preference = 'auto', implemented = KOKORO_IMPLEMENTED,
+  hasWebGPU = false, hasPhononAssets = false, hasKokoroAssets = false, hasSupertonicAssets = false,
+  agreement = null, preference = 'auto', implemented = KOKORO_IMPLEMENTED,
 } = {}) {
   if (preference === 'system') return { engine: 'system', reason: 'preference' };
-  if (!hasWebGPU) return { engine: 'system', reason: 'no-webgpu' };
 
-  const supertonic = hasSupertonicAssets && agreedToSupertonic(agreement);
-  const kokoro = hasKokoroAssets && implemented;
-  if (kokoro && (preference === 'kokoro' || !supertonic)) return { engine: 'kokoro', reason: 'kokoro' };
+  const supertonic = hasWebGPU && hasSupertonicAssets && agreedToSupertonic(agreement);
+  const kokoro = hasWebGPU && hasKokoroAssets && implemented;
+  if (preference === 'kokoro' && kokoro) return { engine: 'kokoro', reason: 'kokoro' };
+  if (preference === 'supertonic' && supertonic) return { engine: 'supertonic', reason: 'supertonic' };
+  if (hasPhononAssets) return { engine: 'phonon', reason: 'phonon' };
   if (supertonic) return { engine: 'supertonic', reason: 'supertonic' };
+  if (kokoro) return { engine: 'kokoro', reason: 'kokoro' };
 
   // Nothing can speak. Name the nearest obstacle, so somebody is sent to the thing that is
-  // actually in the way: an agreement not given, then an engine not built, then a missing download.
+  // actually in the way: a GPU the downloaded engines need, then an agreement not given, then an
+  // engine not built, then a missing download.
+  if (!hasWebGPU && (hasSupertonicAssets || hasKokoroAssets)) return { engine: 'system', reason: 'no-webgpu' };
   if (hasSupertonicAssets) return { engine: 'system', reason: 'no-agreement' };
   if (hasKokoroAssets) return { engine: 'system', reason: 'not-built' };
   return { engine: 'system', reason: 'no-assets' };
@@ -241,10 +264,11 @@ export function assignKokoroVoices(agents, voices = KOKORO_VOICES) {
   for (const agent of agents ?? []) {
     if (out.has(agent.id)) continue;
     // A stored *system* voice identifier is not a Kokoro id, but it does say which accent was
-    // wanted, so it is still worth reading rather than discarding.
-    const wanted = /en-GB/i.test(String(agent?.voice ?? '')) ? 'en-GB' : 'en-US';
-    // And a Supertonic voice somebody chose says which gender, so an agent moved back to Kokoro
-    // keeps it. Null for everything else, which leaves the choice exactly as it always was.
+    // wanted, so it is still worth reading rather than discarding. A Phonon voice says it outright.
+    const wanted = phononVoice(agent?.voice)?.lang
+      ?? (/en-GB/i.test(String(agent?.voice ?? '')) ? 'en-GB' : 'en-US');
+    // And a Supertonic or Phonon voice somebody chose says which gender, so an agent moved back to
+    // Kokoro keeps it. Null for everything else, which leaves the choice exactly as it always was.
     const gender = genderOf(agent?.voice);
     const free = voices.filter((v) => !taken.has(v.id));
     const pool = free.length > 0 ? free : voices;
@@ -290,6 +314,47 @@ export function assignSupertonicVoices(agents, voices = SUPERTONIC_VOICES) {
     const pool = free.length > 0 ? free : voices;
 
     const voice = pool.find((v) => v.gender === gender) ?? pool[0];
+    if (!voice) continue;
+    taken.add(voice.id);
+    out.set(agent.id, voice.id);
+  }
+  return out;
+}
+
+/**
+ * A Phonon voice per agent: one somebody chose is kept, and the rest are matched to the accent and
+ * gender of the Kokoro voice each agent has, chosen or assigned, distinct until all are in use.
+ *
+ * **Kokoro's assignment is the hint, as it is for Supertonic**, because it already reads every
+ * kind of stored voice – a Kokoro id, a system voice's accent, a Supertonic voice's gender – so an
+ * agent keeps sounding like the same person when Phonon takes over. With four voices against
+ * Kokoro's 28 the match is often only the accent or only the gender; accent is kept first, since a
+ * British agent turning American is the bigger change.
+ */
+export function assignPhononVoices(agents, voices = PHONON_VOICES) {
+  const taken = new Set();
+  const out = new Map();
+  const known = new Set(voices.map((v) => v.id));
+
+  // Chosen voices first, so a deliberate choice is never reassigned.
+  for (const agent of agents ?? []) {
+    if (known.has(agent?.voice)) {
+      taken.add(agent.voice);
+      out.set(agent.id, agent.voice);
+    }
+  }
+
+  const kokoro = assignKokoroVoices(agents);
+  for (const agent of agents ?? []) {
+    if (out.has(agent.id)) continue;
+    const hint = kokoro.get(agent.id);
+    const lang = hint ? langOf(hint) : 'en-US';
+    const gender = genderOf(hint);
+    const free = voices.filter((v) => !taken.has(v.id));
+    const pool = free.length > 0 ? free : voices;
+
+    const voice = pool.find((v) => v.lang === lang && v.gender === gender)
+      ?? pool.find((v) => v.lang === lang) ?? pool.find((v) => v.gender === gender) ?? pool[0];
     if (!voice) continue;
     taken.add(voice.id);
     out.set(agent.id, voice.id);

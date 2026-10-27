@@ -22,7 +22,7 @@ import {
 import { GROUPING, groupingOn, markGroupingAsked, turnGroupingOff } from './grouping.js';
 import { icon } from './icons.js';
 import { hasWebGPU, agreedToSupertonic } from './tts.js';
-import { KOKORO, SUPERTONIC } from './weights.js';
+import { KOKORO, SUPERTONIC, PHONON } from './weights.js';
 import { engineSettings, loadRoster, lassoFor } from './storage.js';
 import { matchPattern } from './domain.js';
 import { productLabel } from './routing.js';
@@ -96,11 +96,12 @@ function giveBack() {
 // ── Reading where things stand ─────────────────────────────────────────────────────────────
 
 async function read() {
-  const [mic, model, voice, pin, shortcut, grouping, groupingIsOn, assistant, roster] = await Promise.all([
+  gpu ??= hasWebGPU();
+  const [mic, model, voice, pin, shortcut, grouping, groupingIsOn, assistant, roster, webgpu] = await Promise.all([
     micState(), modelState(), voiceState(), pinned(), shortcutKey(), groupingAnswered(), groupingOn(),
-    firstAssistant(), rosterAccess(),
+    firstAssistant(), rosterAccess(), gpu,
   ]);
-  return { mic, model, voice, pin, shortcut, grouping, groupingIsOn, assistant, roster };
+  return { mic, model, voice, pin, shortcut, grouping, groupingIsOn, assistant, roster, webgpu };
 }
 
 /**
@@ -121,18 +122,19 @@ async function rosterAccess() {
 let gpu = null;
 
 /**
- * Whether a neural voice can speak: `ready` for Supertonic downloaded and agreed to, or Kokoro
- * downloaded – the same test the engine choice makes – `missing`, or `unsupported` without
- * WebGPU. Read here rather than in steps.js, which the worker loads, and has no use for weights.
+ * Whether a neural voice can speak: `ready` for Phonon downloaded, or with WebGPU for Supertonic
+ * downloaded and agreed to or Kokoro downloaded – the same test the engine choice makes – and
+ * `missing` otherwise. Never `unsupported` any more: Phonon runs without WebGPU, so every machine
+ * can finish this step. Read here rather than in steps.js, which the worker loads, and has no use
+ * for weights.
  */
 async function voiceState() {
   gpu ??= hasWebGPU();
-  if (!(await gpu)) return 'unsupported';
-  const [supertonic, kokoro, { agreement }] = await Promise.all([
-    SUPERTONIC.status(), KOKORO.status(), engineSettings(),
+  const [webgpu, phonon, supertonic, kokoro, { agreement }] = await Promise.all([
+    gpu, PHONON.status(), SUPERTONIC.status(), KOKORO.status(), engineSettings(),
   ]);
-  const speaks = (supertonic.state === 'ready' && agreedToSupertonic(agreement)) || kokoro.state === 'ready';
-  return speaks ? 'ready' : 'missing';
+  const gpuSpeaks = (supertonic.state === 'ready' && agreedToSupertonic(agreement)) || kokoro.state === 'ready';
+  return phonon.state === 'ready' || (webgpu && gpuSpeaks) ? 'ready' : 'missing';
 }
 
 async function refresh() {
@@ -195,13 +197,13 @@ function draw() {
 }
 
 /**
- * Whether this Chrome has WebGPU, said where it matters, by the owner's ask of 2026-10-26:
- * without it neither neural voice is fast enough, so the voice step can be passed over.
+ * Whether this Chrome has WebGPU, said where it matters, by the owner's ask of 2026-10-26. Since
+ * Phonon it decides which downloads will speak rather than whether any can: Phonon does without.
  */
 function drawGpu() {
   if (!facts) return;
-  if (facts.voice === 'unsupported') {
-    chip('ob-gpu', 'no WebGPU in this Chrome – system voices will speak, so you can skip this', 'warn');
+  if (!facts.webgpu) {
+    chip('ob-gpu', 'no WebGPU in this Chrome – Phonon will still speak; Supertonic and Kokoro won’t', 'warn');
   } else {
     chip('ob-gpu', 'WebGPU available', 'good');
   }

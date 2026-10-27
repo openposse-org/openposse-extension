@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 
 import {
   MODEL, VOICES, ALL, TOTAL_BYTES, verify, digest, downloadWeights, DTYPE, KNOWN_DTYPES, langOf,
-  weightsStatus, removeWeights, KOKORO, SUPERTONIC,
+  weightsStatus, removeWeights, KOKORO, SUPERTONIC, PHONON,
 } from '../src/weights.js';
 
 /**
@@ -49,7 +49,7 @@ test('the URLs are pinned to a revision, not to a branch', () => {
   // A `main` URL is a moving target: the bytes behind it can change without the URL changing,
   // so a hash mismatch would one day mean "upstream rebuilt" rather than "something is wrong",
   // and the check would be retired as flaky. Pinning makes a mismatch mean what it should.
-  for (const file of [...ALL, ...SUPERTONIC.files]) {
+  for (const file of [...ALL, ...SUPERTONIC.files, ...PHONON.files]) {
     assert.ok(!file.url.includes('/main/'), `${file.id} points at a branch: ${file.url}`);
     assert.match(file.url, /\/resolve\/[0-9a-f]{40}\//, file.id);
   }
@@ -154,7 +154,7 @@ test('the advertised total matches what is actually listed', () => {
 test('every file has a hash, and they look like hashes', () => {
   // The invariant the amended rule rests on. Adding a voice without its hash would sail past
   // review and quietly reduce "verified" to "downloaded" for that file alone.
-  const every = [...ALL, ...SUPERTONIC.files];
+  const every = [...ALL, ...SUPERTONIC.files, ...PHONON.files];
   for (const file of every) {
     assert.match(file.sha256 ?? '', /^[0-9a-f]{64}$/, `${file.id} has no usable hash`);
     assert.ok(file.bytes > 0, file.id);
@@ -200,6 +200,34 @@ test("Kokoro's set is the one it always was", () => {
   assert.equal(KOKORO.totalBytes, TOTAL_BYTES);
   assert.equal(KOKORO.cache, 'openposse-kokoro-v1');
   assert.notEqual(SUPERTONIC.cache, KOKORO.cache);
+});
+
+// ── Phonon ────────────────────────────────────────────────────────────────────────────────
+
+test("Phonon's set: the q8 weights, the two files they need, then the voices", () => {
+  const ids = PHONON.files.map((f) => f.id);
+  assert.equal(new Set(ids).size, ids.length, 'no id listed twice');
+  assert.deepEqual(ids.slice(0, 3), ['weights', 'tokenizer', 'config'], 'the weights first');
+  assert.ok(PHONON.files[0].url.endsWith('/model.q8.gguf'), 'q8, the only weights WebGPU takes');
+
+  // Only Phonon 31M English is Apache-2.0; the 40M models are CC BY-NC and must never be pinned.
+  for (const file of PHONON.files.slice(0, 3)) {
+    assert.match(file.url, /^https:\/\/huggingface\.co\/gradium\/phonon-31m-en\/resolve\//, file.id);
+  }
+  for (const voice of PHONON.voices) {
+    assert.match(voice.url, /^https:\/\/huggingface\.co\/gradium\/phonon-voices\/resolve\//, voice.id);
+  }
+
+  // The assignment order, pinned as the other sets' are.
+  assert.deepEqual(PHONON.voices.map((v) => v.id), ['phonon-harper', 'phonon-miles', 'phonon-maeve', 'phonon-edwin']);
+  assert.ok(ids.slice(3).every((id) => id.startsWith('phonon-')), 'voices come last');
+});
+
+test("Phonon's advertised total is the sum of exact sizes, about 66 MB, in a cache of its own", () => {
+  // The sizes the spike's own download reported on 2026-10-27.
+  assert.equal(PHONON.totalBytes, 64_512_352 + 277_967 + 2_851 + 4 * 256_136);
+  assert.equal(PHONON.cache, 'openposse-phonon-v1');
+  assert.equal(new Set([PHONON.cache, SUPERTONIC.cache, KOKORO.cache]).size, 3);
 });
 
 /**

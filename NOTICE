@@ -22,6 +22,10 @@ licence text committed beside the code it covers:
   public/vendor/transformers/
     transformers.min.js                      transformers.js, Apache-2.0
     ort-wasm-simd-threaded.asyncify.*        ONNX Runtime Web, MIT
+  public/vendor/phonon/                      phonon-tts 0.4.2, MIT OR Apache-2.0;
+                                             its WebAssembly's Rust crates are
+                                             listed in THIRD_PARTY_LICENSES.md
+                                             beside it
   public/vendor/inter/                       Inter, SIL Open Font License 1.1
   public/dictionaries/en-us.txt              CMU Pronouncing Dictionary,
                                              simplified BSD, via HeadTTS
@@ -36,6 +40,11 @@ Face when the user presses Download in Settings, after agreeing to their
 licence, the BigScience Open RAIL-M License (dated August 18, 2022). Its text
 is src/supertonic/MODEL_LICENSE.txt, shipped in the package as
 vendor/supertonic/MODEL_LICENSE.txt.
+
+Phonon 31M's model weights, tokenizer and voices (Apache-2.0,
+gradium/phonon-31m-en and gradium/phonon-voices) are not bundled either. They
+are downloaded from Settings when the user asks for them, from URLs pinned in
+src/weights.js, and checked against a SHA-256 there before use.
 
 What was checked in each case, and the one package that failed the check, is in
 public/vendor/NOTICE.md. That file is the record, not this one.
