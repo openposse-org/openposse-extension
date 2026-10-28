@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.20](https://github.com/openposse-org/openposse-extension/compare/v0.9.19...v0.9.20) (2026-10-28)
+
+
+### Features
+
+* add the Gemini lasso, named Emma ([#92](https://github.com/openposse-org/openposse-extension/issues/92)) ([8bae83a](https://github.com/openposse-org/openposse-extension/commit/8bae83a78c54f1131928549b296e655b05bb3246))
+
 ## [0.9.19](https://github.com/openposse-org/openposse-extension/compare/v0.9.18...v0.9.19) (2026-10-27)
 
 
