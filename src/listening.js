@@ -629,7 +629,9 @@ export function handleOffscreenMessage(message) {
           + (message.ok ? 'spoken' : (message.reason ?? 'failed')));
       panelLevel(0);
       // A voice that failed or was cancelled before making a sound never sent `audible`.
-      panel({ warming: false });
+      // **And the turn is over**, so the status line settles from "is speaking" to the name. Nothing
+      // did this before 2026-10-28, so every answer said "is speaking" until the next turn began.
+      panel({ warming: false, phase: 'idle', ifPhase: 'answering' });
       if (!message.ok) reportUnspoken(message.reason);
       if (awaitingReply) {
         awaitingReply = false;
