@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.22](https://github.com/openposse-org/openposse-extension/compare/v0.9.21...v0.9.22) (2026-10-28)
+
+
+### Features
+
+* get more lassos from openposse.org in Settings ([#97](https://github.com/openposse-org/openposse-extension/issues/97)) ([839128e](https://github.com/openposse-org/openposse-extension/commit/839128ebb713ba6a3090d6bd6e6b8c710f797703))
+
 ## [0.9.21](https://github.com/openposse-org/openposse-extension/compare/v0.9.20...v0.9.21) (2026-10-28)
 
 
