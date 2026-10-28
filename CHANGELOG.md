@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.23](https://github.com/openposse-org/openposse-extension/compare/v0.9.22...v0.9.23) (2026-10-28)
+
+
+### Fixes
+
+* call Notion's assistant Notion, lasso id notion ([#99](https://github.com/openposse-org/openposse-extension/issues/99)) ([32f7d79](https://github.com/openposse-org/openposse-extension/commit/32f7d7924d1cf753e39b5996d65e1f03a80ea086))
+
 ## [0.9.22](https://github.com/openposse-org/openposse-extension/compare/v0.9.21...v0.9.22) (2026-10-28)
 
 
