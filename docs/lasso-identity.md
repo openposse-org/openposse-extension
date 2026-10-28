@@ -10,7 +10,7 @@ re-recorded, and a person who imported an earlier one has no way to know. This s
 
 | Field, in the envelope | What it is | Who sets it |
 |---|---|---|
-| `id` | The lineage: which assistant this is a lasso for, as a slug (`notion-ai`) | The publisher (the website); kept on import and written back on share |
+| `id` | The lineage: which assistant this is a lasso for, as a slug (`notion`) | The publisher (the website); kept on import and written back on share |
 | `recordedOn` | The day it was recorded, `YYYY-MM-DD` | The recorder, at save time |
 | `hash` | The lasso's content, as 12 hex characters of SHA-256 over canonical JSON of `lasso` | Whoever writes the file: Settings on share, the website on publish; the same function in both |
 
@@ -42,7 +42,7 @@ has and that the site may have a newer one.
 ### 3.1 `id`
 
 A lower-case slug, `[a-z0-9-]+`, one per assistant lineage, chosen by the publisher. The website
-derives it from the site's product (`notion.com` → `notion-ai`, `openposse.org` → `acme-ai`) and
+derives it from the site's product (`notion.com` → `notion`, `openposse.org` → `acme-ai`) and
 refuses two source lassos for one product, so an `id` is unique on the site. A recording that
 was never published has no `id`: Settings' share writes the field only when the agent carries
 one, which it does from the day it was imported.
@@ -155,7 +155,7 @@ identical to what Settings would share for it.
 
 ## 7. One shape in `lassos/` (done 2026-10-24)
 
-Done: `lassos/` now holds shared files with the website's ids (`notion-ai`, `acme-ai`), and
+Done: `lassos/` now holds shared files with the website's ids (`notion`, `acme-ai`), and
 the test unpacks them directly and checks each stored hash. What follows is the reasoning.
 
 Before this, `lassos/` held bare recordings and Settings refuses a bare file, so a file copied from

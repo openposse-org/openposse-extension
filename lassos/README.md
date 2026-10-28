@@ -21,7 +21,7 @@ The envelope around `lasso` says which lasso it is (`docs/lasso-identity.md`):
 
 | Field | What it is |
 |---|---|
-| `id` | The lineage, the slug the website gives the product (`notion-ai`, `acme-ai`). The filename is `openposse-<id>.json` |
+| `id` | The lineage, the slug the website gives the product (`notion`, `acme-ai`). The filename is `openposse-<id>.json` |
 | `name` | The name the recording suggests for the AI assistant. The importer may pick another |
 | `recordedOn` | The day the lasso was recorded |
 | `hash` | 12 hex characters of SHA-256 over canonical JSON of `lasso`, from `hashOf`. Importers recompute it and never trust the file's |

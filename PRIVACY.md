@@ -13,7 +13,7 @@ keeps no record of what you say.
 - **Working out which assistant you meant happens on your computer.**
 - **Your question goes to the assistant you named, and only there.** OpenPosse types it into that
   assistant in the browser tab you already have open, and reads the answer back from the page.
-  The assistant's service, Notion AI for example, receives your question exactly as if you had
+  The assistant's service, Notion for example, receives your question exactly as if you had
   typed it yourself, and that service's own privacy policy covers it.
 - **The answer is spoken by a voice on your computer**: the Phonon, Supertonic or Kokoro voice, or one of
   your system's built-in voices. Voices that would send text to an online service are never used.

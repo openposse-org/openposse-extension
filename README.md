@@ -32,7 +32,7 @@ ask:
 > to repeat the name.
 
 OpenPosse comes with five assistants already named: **Sofia** for Claude, **Sam** for ChatGPT,
-**Peter** for Notion AI, **Omar** for Microsoft 365 Copilot and **Emma** for Gemini. Any other assistant can be added by showing OpenPosse how you use it.
+**Peter** for Notion, **Omar** for Microsoft 365 Copilot and **Emma** for Gemini. Any other assistant can be added by showing OpenPosse how you use it.
 
 Press the shortcut, say a name and your question, and OpenPosse takes care of the rest. It works
 out which assistant you meant, types your question into that assistant's own box, presses its send
@@ -171,7 +171,7 @@ OpenPosse ships with lassos for five assistants, already named:
 |---|---|
 | **Sofia** | Claude (`claude.ai`) |
 | **Sam** | ChatGPT (`chatgpt.com`) |
-| **Peter** | Notion AI (`notion.com`) |
+| **Peter** | Notion (`notion.com`) |
 | **Omar** | Microsoft 365 Copilot (`m365.cloud.microsoft`) |
 | **Emma** | Gemini (`gemini.google.com`) |
 
@@ -619,7 +619,7 @@ small enough to read and understand.
 ## Project status
 
 **Available today:** speaking and typing to your assistants, routing by name and by sound,
-follow-up questions, Sofia, Sam, Peter, Omar and Emma for Claude, ChatGPT, Notion AI, Copilot and Gemini out of
+follow-up questions, Sofia, Sam, Peter, Omar and Emma for Claude, ChatGPT, Notion, Copilot and Gemini out of
 the box,
 recording and sharing other assistants, guided first-run setup, an optional tab group, asking to
 see an answer in its tab, and answers read by Phonon, Supertonic, Kokoro or your computer's own
