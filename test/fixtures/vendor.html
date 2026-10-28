@@ -61,6 +61,10 @@
       answer.dataset.testid = 'answer';
       document.getElementById('log').append(asked, answer);
 
+      // At `?empty`, the answer element is mounted and nothing is ever written into it, as
+      // Gemini's page does while its tab is hidden (2026-10-28).
+      if (new URLSearchParams(location.search).has('empty')) return;
+
       send.hidden = true;
       stop.hidden = false;
       // The question goes back at the end, so two different questions get two different answers,

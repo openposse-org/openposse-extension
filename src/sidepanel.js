@@ -965,7 +965,10 @@ chrome.runtime.onMessage.addListener((message) => {
   }
   if (message?.kind !== 'openposse.orb') return false;
 
-  const patch = message.state ?? {};
+  const { ifPhase, ...patch } = message.state ?? {};
+  // A patch for one phase only: the end of a voice settles the turn that was speaking, never one
+  // a new question has started since – a voice cut off by that question also reports its end.
+  if (ifPhase && state.phase !== ifPhase) return false;
 
   // **Nothing here hides the panel.** The retired in-page orb faded out after an idle beat and
   // was stripped from a tab before a switch, because it sat over somebody else's application. A
