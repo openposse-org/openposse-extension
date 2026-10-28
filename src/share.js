@@ -110,7 +110,7 @@ export function patternIsDerivable(pattern) {
 // the same assistant once it has left the machine it was recorded on. See
 // `docs/lasso-identity.md`.
 //
-// - `id`: the lineage, a slug such as `notion-ai`. Only the website hands one out; a recording
+// - `id`: the lineage, a slug such as `notion`. Only the website hands one out; a recording
 //   that was never published has none, and is matched by its site and name instead.
 // - `recordedOn`: the day it was recorded, `YYYY-MM-DD`. Stored inside the lasso on this
 //   machine and lifted into the envelope by `pack`.

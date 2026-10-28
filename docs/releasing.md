@@ -130,7 +130,7 @@ This is the beta of OpenPosse, for testers. It updates more often than the publi
 things may change between versions. If something doesn't work as you'd expect, please let us
 know at https://github.com/openposse-org/openposse-extension/issues
 
-OpenPosse lets you talk to the AI assistants you already use, such as Notion AI, by voice.
+OpenPosse lets you talk to the AI assistants you already use, such as Notion, by voice.
 
 Give each assistant a name, then simply ask: "Ivan, summarise the Q3 planning page." OpenPosse
 works out which assistant you meant, types your question into that assistant in the tab you
