@@ -155,6 +155,20 @@ test('an answer whose element the page replaces mid-answer comes back whole', as
   await expect(panel.locator('body')).toContainText(ANSWER, { timeout: 20_000 });
 });
 
+test('an answer that stays empty says so, and the panel does not stay on speaking', async ({ context, extensionId }) => {
+  // Gemini mounts its answer and leaves it empty while its tab is hidden. That was taken as a
+  // finished answer: nothing was spoken, and the panel said "is speaking" until the next turn.
+  await addAcme(context, extensionId);
+  const vendor = await context.newPage();
+  await vendor.goto(`${VENDOR_URL}?empty`);
+  const panel = await openPanel(context, extensionId);
+
+  await ask(panel, 'What is the pipeline total?');
+
+  await expect(panel.locator('body')).toContainText('the answer stayed empty', { timeout: 20_000 });
+  await expect(panel.locator('body')).not.toContainText('is speaking');
+});
+
 test("a typed question that starts with the assistant's name reaches the vendor without it", async ({ context, extensionId }) => {
   // People type the way they speak: "Matt, what is on this to-do list?" once reached the vendor
   // with "Matt," still in it, because the typed path went straight to the agent the box was

@@ -310,6 +310,13 @@ async function putQuestion(agent, prompt, matched, { spoken = false } = {}) {
         : '')
     : (result.payload?.code ?? 'error'));
 
+  // A response with no text is a failure, wherever it came from: `answering` with nothing to say
+  // never reaches the end of speech that would move the panel on, so it stayed on "is speaking".
+  if (result.type === 'response' && !(result.payload?.text ?? '').trim()) {
+    result.type = 'error';
+    result.payload = { ...result.payload, code: 'EMPTY_ANSWER', message: `${agent.name} gave an empty answer.` };
+  }
+
   if (result.type === 'response') {
     // The floor moves only on a real answer. An agent that failed did not take part in the
     // conversation, and inheriting follow-ups would send the next question somewhere it has

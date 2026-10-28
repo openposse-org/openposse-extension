@@ -482,6 +482,22 @@ async function askAssistant({ lasso, prompt, graceMs = null }, emit) {
   // it would leave one running every 150 ms for the life of the page.
   busy.stop();
 
+  // **An answer element with nothing in it is not an answer.** Gemini (2026-10-28) mounts the new
+  // answer while its tab is hidden and writes the text only once the tab is shown again, so the
+  // page went quiet on an empty element and this returned it as a success: nothing was spoken and
+  // the panel sat on "is speaking". Whether the tab was hidden is the part a person can act on.
+  if (!(text ?? '').trim()) {
+    const hidden = document.visibilityState === 'hidden';
+    return failure(
+      ERROR.timeout,
+      hidden
+        ? 'the answer stayed empty while its tab was in the background – this AI assistant only '
+          + 'writes its answer while its tab is on screen'
+        : 'the answer stayed empty',
+      { openedBy, emptyAnswer: true, hidden }
+    );
+  }
+
   // Transport diagnostics, not content: how many reply elements existed before and after.
   // Without these, "Andy answered" and "Andy re-read the previous answer" are the same
   // observation – the text alone cannot distinguish them, especially when the question is
