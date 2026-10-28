@@ -1,0 +1,21 @@
+{
+  "format": "openposse.lasso",
+  "version": 1,
+  "id": "gemini",
+  "name": "Emma",
+  "recordedOn": "2026-10-28",
+  "hash": "f1e56d013020",
+  "lasso": {
+    "domainPattern": "gemini.google.com",
+    "inputSelector": "rich-textarea div.ql-editor[contenteditable=\"true\"]",
+    "openMethod": "alwaysOpen",
+    "openSelector": null,
+    "quietPeriodMs": 900,
+    "responseContainerSelector": "message-content div.markdown",
+    "responseTimeoutMs": 60000,
+    "shortcut": null,
+    "submitMethod": "click",
+    "submitSelector": "button[aria-label=\"Send message\"]",
+    "triggerMethod": "synthetic"
+  }
+}
