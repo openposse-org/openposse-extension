@@ -1,4 +1,4 @@
-# RFC: Assistant Hooks (working title)
+# RFC: AI Assistant Hooks (working title)
 
 **Status:** Draft 0.1, 2026-10-06 · **Author:** [your name] · **Reference client:** OpenPosse
 
@@ -8,7 +8,7 @@
 
 Many web apps now have an AI assistant built into their pages. People's own tools (a voice tool, a browser agent, an accessibility tool) can only use one by scraping the page. They have to guess which box takes the question, which button sends it, and when the answer is finished.
 
-Assistant Hooks is a small, opt-in standard a vendor adds to its page. With it, an agent can find the assistant, ask it something and read the answer, inside the user's own signed-in session. Think of it as MCP for the assistant that's already in a web app, served by the page instead of a server.
+AI Assistant Hooks is a small, opt-in standard a vendor adds to its page. With it, an agent can find the assistant, ask it something and read the answer, inside the user's own signed-in session. Think of it as MCP for the assistant that's already in a web app, served by the page instead of a server.
 
 There are two levels: Level 1 is a few HTML attributes, and Level 2 adds two JavaScript functions.
 
@@ -148,7 +148,7 @@ Agents pass on any code they don't recognise unchanged, and ignore hook names an
 
 ## 8. Prior art
 
-- **MCP** connects agents to servers, usually run by the vendor with their own login, mostly to reach the vendor's data. Assistant Hooks reaches the vendor's assistant, the product built on that data, inside the user's own session and permissions, with nothing to host. The two work together.
+- **MCP** connects agents to servers, usually run by the vendor with their own login, mostly to reach the vendor's data. AI Assistant Hooks reaches the vendor's assistant, the product built on that data, inside the user's own session and permissions, with nothing to host. The two work together.
 - **WebMCP** is a proposal in a W3C community group for pages to register tools that agents in the browser can call (`navigator.modelContext`). Level 2 builds on it where it's available. This RFC adds a fixed set of names, so `ask_assistant` means the same thing on every site. It also adds the markup level for vendors who won't ship a JavaScript API.
 - **WAI-ARIA** already has `aria-busy` for content that's still being updated. Level 1 uses it alongside the explicit state.
 
