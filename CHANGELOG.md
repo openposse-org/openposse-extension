@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.21](https://github.com/openposse-org/openposse-extension/compare/v0.9.20...v0.9.21) (2026-10-28)
+
+
+### Fixes
+
+* the panel stops saying an assistant is speaking once it has finished, or had nothing to say ([#93](https://github.com/openposse-org/openposse-extension/issues/93)) ([ecc7ad3](https://github.com/openposse-org/openposse-extension/commit/ecc7ad31471358a4da56806c66f04e212d3202ce))
+
 ## [0.9.20](https://github.com/openposse-org/openposse-extension/compare/v0.9.19...v0.9.20) (2026-10-28)
 
 
