@@ -31,8 +31,8 @@ ask:
 > *"And what about next quarter?"* – a follow-up goes to whoever answered last, so there is no need
 > to repeat the name.
 
-OpenPosse comes with four assistants already named: **Sofia** for Claude, **Sam** for ChatGPT,
-**Peter** for Notion AI and **Omar** for Microsoft 365 Copilot. Any other assistant can be added by showing OpenPosse how you use it.
+OpenPosse comes with five assistants already named: **Sofia** for Claude, **Sam** for ChatGPT,
+**Peter** for Notion AI, **Omar** for Microsoft 365 Copilot and **Emma** for Gemini. Any other assistant can be added by showing OpenPosse how you use it.
 
 Press the shortcut, say a name and your question, and OpenPosse takes care of the rest. It works
 out which assistant you meant, types your question into that assistant's own box, presses its send
@@ -88,7 +88,7 @@ Then, in Chrome:
    - **Permissions**: your shortcut, the microphone, pinning OpenPosse to the toolbar, and the
      optional [tab group](#the-tab-group).
    - **Downloads**: the speech model and a voice.
-   - **Your AI assistants**: Sofia, Sam, Peter and Omar are already added, and **Allow all** lets their
+   - **Your AI assistants**: Sofia, Sam, Peter, Omar and Emma are already added, and **Allow all** lets their
      sites in with one Chrome dialog.
 
    If you close it early, the side panel shows **Finish setting up**, which reopens it at the
@@ -165,7 +165,7 @@ asking any assistant anything.
 
 ### The assistants that come with OpenPosse
 
-OpenPosse ships with lassos for four assistants, already named:
+OpenPosse ships with lassos for five assistants, already named:
 
 | Assistant | Site |
 |---|---|
@@ -173,8 +173,9 @@ OpenPosse ships with lassos for four assistants, already named:
 | **Sam** | ChatGPT (`chatgpt.com`) |
 | **Peter** | Notion AI (`notion.com`) |
 | **Omar** | Microsoft 365 Copilot (`m365.cloud.microsoft`) |
+| **Emma** | Gemini (`gemini.google.com`) |
 
-A new install adds all four, each waiting for Chrome's Allow for its site, which you can give
+A new install adds all five, each waiting for Chrome's Allow for its site, which you can give
 from onboarding's last task, from **Allow all** in Settings (shown while two or more sites are
 waiting), or from each assistant's row. After an update, an assistant that is new to you is
 offered rather than added: on its site the side panel says OpenPosse comes with a lasso for it,
@@ -612,7 +613,7 @@ small enough to read and understand.
 ## Project status
 
 **Available today:** speaking and typing to your assistants, routing by name and by sound,
-follow-up questions, Sofia, Sam, Peter and Omar for Claude, ChatGPT, Notion AI and Copilot out of
+follow-up questions, Sofia, Sam, Peter, Omar and Emma for Claude, ChatGPT, Notion AI, Copilot and Gemini out of
 the box,
 recording and sharing other assistants, guided first-run setup, an optional tab group, asking to
 see an answer in its tab, and answers read by Phonon, Supertonic, Kokoro or your computer's own
