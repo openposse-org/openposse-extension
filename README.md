@@ -182,9 +182,14 @@ offered rather than added: on its site the side panel says OpenPosse comes with 
 with **Add** and **Lasso it myself**. Nothing is
 offered on a site where you already have an assistant. You can rename any of them in Settings.
 
-These files are part of the extension and nothing is fetched to add them, so a newer lasso
-arrives with a release. They are the same files as in [`lassos/`](lassos), and are added exactly
-as a shared file would be.
+These files are part of the extension and nothing is fetched to add them. They are the same
+files as in [`lassos/`](lassos), and are added exactly as a shared file would be.
+
+Lassos added after your version was released are on [openposse.org/lassos](https://openposse.org/lassos/).
+The cloud button beside **Add a shared AI assistant** in Settings lists them, only when you press
+it, and marks the sites you already have an assistant on. Picking one loads its file into the box
+as if you had pasted it: you see what it does, press Add, and Chrome asks you to allow its site.
+A file that does not match the list's fingerprint for it is not loaded.
 
 ### Adding an assistant
 
@@ -597,6 +602,7 @@ src/                     The extension's code, pages and manifest (plain JavaScr
   player.js  tts.js        playback, and choosing which voice speaks
   supertonic/              Supertonic's browser helper, its licence, and the model's licence
   weights.js               the voice downloads: fixed versions, SHA-256 checks
+  catalog.js               the lassos list on openposse.org, read from Settings' cloud button
 public/                  Files copied as they are: icons, the pronunciation dictionary, and vendor/
 lassos/                  The assistants that ship with OpenPosse, plus the website's demo one, as shareable lasso files
 test/                    Unit tests; e2e/ browser tests, with a sample assistant in fixtures/

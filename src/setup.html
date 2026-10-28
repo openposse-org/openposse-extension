@@ -538,6 +538,33 @@
         display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px;
       }
       #import-question { flex-basis: 100%; margin: 0; overflow-wrap: anywhere; }
+      /* The lassos on openposse.org, under the cloud button: the sort menu's shape, one row an
+         assistant – its name, then the product and site, dimmer. One already here is shown and
+         cannot be picked. */
+      #import-catalog { anchor-name: --catalog; }
+      #catalog-menu {
+        inset: auto; margin: 6px 0 0;
+        position-anchor: --catalog;
+        position-area: bottom span-left;
+        position-try-fallbacks: flip-block;
+        width: 280px; max-height: 320px; overflow-y: auto; padding: 6px;
+        border: 1px solid var(--glass-edge); border-radius: var(--radius-card);
+        background: var(--raised); color: var(--text);
+        box-shadow: 0 14px 36px var(--shadow);
+      }
+      #catalog-menu:popover-open, #catalog-list { display: grid; gap: 1px; }
+      #catalog-menu .note { margin: 2px 8px 6px; color: var(--text-faint); font-size: 11.5px; }
+      #catalog-menu .note.bad { color: var(--error); }
+      #catalog-list button {
+        display: grid; gap: 1px; padding: 6px 8px; border-radius: 6px; text-align: left;
+        background: transparent; color: var(--text); font-weight: 400;
+      }
+      #catalog-list button:is(:hover, :focus-visible):not(:disabled) {
+        background: rgb(var(--ink) / 0.08); outline: 0;
+      }
+      #catalog-list button:disabled { opacity: 1; cursor: default; }
+      #catalog-list button:disabled .name { color: var(--text-dim); }
+      #catalog-list .where { color: var(--text-faint); font-size: 11.5px; }
 
       /* ── The roster, three across ───────────────────────────────────────────────────────
          The voice list's shape, for the same reason: thirty-odd in one column is a scroll
@@ -1552,10 +1579,15 @@
           <textarea id="import-text" rows="1" spellcheck="false"
                     aria-label="Shared AI assistant"
                     placeholder="Paste or pick a file"></textarea>
-          <!-- A placeholder for getting one straight from GitHub, which comes later. It fetches
-               nothing yet, so it is disabled and its label says so. -->
-          <button class="icon" id="import-github" data-icon="cloud-download" data-tip-at="end"
-                  aria-label="Get one from GitHub – coming soon" disabled></button>
+          <!-- The lassos on openposse.org, read only when this is pressed (src/catalog.js).
+               Picking one loads its file into the box above, as a pasted file. -->
+          <button class="icon" id="import-catalog" data-icon="cloud-download" data-tip-at="end"
+                  popovertarget="catalog-menu" aria-expanded="false"
+                  aria-label="Get more from openposse.org"></button>
+          <div id="catalog-menu" popover="auto" role="group" aria-label="Lassos on openposse.org">
+            <p class="note" id="catalog-note">Asking openposse.org…</p>
+            <div id="catalog-list"></div>
+          </div>
           <!-- The file input does the reading and is never seen: Chrome's own "Choose File"
                is a text button that cannot be restyled, so this icon opens it instead. -->
           <input type="file" id="import-file" accept="application/json,.json" hidden>
@@ -1774,9 +1806,12 @@
             <ul class="ob-builtins" id="ob-builtin-list"></ul>
             <div class="actions"><button id="ob-allow">Allow all</button></div>
           </div>
-          <!-- Any site's assistant can be lassoed, not only these. -->
+          <!-- Any site's assistant can be lassoed, not only these. Newer lassos than this
+               version's are on openposse.org, behind the cloud button under this dialog – named
+               here, never fetched from here (the owner's call, 2026-10-28). -->
           <p>
-            Want another? Open any site with an AI assistant on it, then press
+            Want another? Settings can get more from openposse.org later, with the cloud button.
+            Or open any site with an AI assistant on it, then press
             <strong>Lasso this tab</strong> in the side panel and follow it.
           </p>
           <div class="actions"><button class="secondary" id="ob-open-panel">Open the side panel</button></div>

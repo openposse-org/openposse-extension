@@ -1,6 +1,6 @@
 # OpenPosse privacy policy
 
-Effective 25 October 2026. This covers the OpenPosse extension and OpenPosse Beta.
+Effective 28 October 2026. This covers the OpenPosse extension and OpenPosse Beta.
 
 **In short:** OpenPosse has no servers. It collects nothing, sends nothing to its developers, and
 keeps no record of what you say.
@@ -46,6 +46,12 @@ Removing the extension deletes all of it.
   download from your browser. This happens only when you press a button, and never while you are
   talking to an assistant. Your agreement to the licence is kept on your computer and sent
   nowhere.
+- **The lassos list on openposse.org, when you ask for it.** Pressing "Get more from
+  openposse.org" in Settings reads the list of shared AI assistants at
+  `https://openposse.org/lassos/index.json`, and picking one reads that one file from beside it.
+  Nothing about you or your assistants is sent, and no cookies go with it; openposse.org sees an
+  ordinary request from your browser. A file is only shown if it matches the list, and it is added
+  only when you press Add and allow its site, as with a file someone sends you.
 - **Nothing else.** No analytics, no crash reports, no accounts and no advertising. OpenPosse has
   no server to send anything to.
 

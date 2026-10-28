@@ -7,6 +7,7 @@
 
 import { test, expect, addAcme, openPanel, ask, LASSO, VENDOR_URL, ANSWER } from './browser.mjs';
 import { PHONON } from '../../src/weights.js';
+import { hashOf, unpack } from '../../src/share.js';
 
 /**
  * Puts a stand-in for every Phonon file in its cache, so the page reads Phonon as installed. Not
@@ -279,6 +280,90 @@ test('a page that renames itself mid-turn keeps its new title', async ({ context
   await expect(panel.locator('body')).toContainText(ANSWER, { timeout: 20_000 });
   await expect.poll(titles, { timeout: 5_000 }).toContain('done · Pipeline review');
   expect(await titles()).toContain('answering… · Pipeline review');
+});
+
+/**
+ * Serves a stand-in for openposse.org's lassos: the fake vendor's lasso as "fixture", Acme AI,
+ * and a file that does not match its list entry. Returns the addresses asked for.
+ */
+async function fakeCatalog(context, { broken = false } = {}) {
+  const read = unpack(LASSO);
+  const hash = await hashOf(read.lasso);
+  const entry = (id, name, file, site, entryHash = hash) =>
+    ({ id, name, product: `${name} product`, site, file, recordedOn: '2026-10-28', hash: entryHash, summary: '' });
+  const index = {
+    version: 1, generated: '2026-10-28',
+    lassos: [
+      entry('fixture', 'Acme', 'openposse-fixture.json', 'fixture.test'),
+      entry('tampered', 'Tampered', 'openposse-tampered.json', 'tampered.fixture.test', '000000000000'),
+      entry('acme-ai', 'Acme AI', 'openposse-acme-ai.json', 'openposse.org'),
+    ],
+  };
+  const asked = [];
+  await context.route('https://openposse.org/lassos/**', (route) => {
+    const url = route.request().url();
+    asked.push(url);
+    const body = broken ? '<html>Down for maintenance</html>'
+      : url.endsWith('/index.json') ? JSON.stringify(index) : LASSO;
+    return route.fulfill({
+      body, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' },
+    });
+  });
+  return asked;
+}
+
+/**
+ * Settings on a fresh profile, once its setup sheet has opened by itself and been closed: the
+ * sheet is a popover too, and opening it would close the list under the cloud button.
+ */
+async function freshSettings(context, extensionId) {
+  const settings = await context.newPage();
+  await settings.goto(`chrome-extension://${extensionId}/setup.html`);
+  await expect(settings.locator('#setup-sheet')).toBeVisible();
+  await settings.keyboard.press('Escape');
+  await expect(settings.locator('#setup-sheet')).toBeHidden();
+  return settings;
+}
+
+test('an assistant from openposse.org loads into the box, and is added like a pasted file', async ({ context, extensionId }) => {
+  const asked = await fakeCatalog(context);
+  const settings = await freshSettings(context, extensionId);
+  // Nothing is asked of openposse.org until the button is pressed.
+  expect(asked).toEqual([]);
+
+  await settings.click('#import-catalog');
+  const menu = settings.locator('#catalog-menu');
+  await expect(menu.locator('button')).toHaveText([/^AcmeAcme product/, /^Tampered/]);
+  await expect(menu).not.toContainText('Acme AI');
+  expect(asked).toEqual(['https://openposse.org/lassos/index.json']);
+
+  await menu.getByRole('button', { name: /^Tampered/ }).click();
+  await expect(settings.locator('#import-status')).toHaveText(/not the one its list describes/);
+  await expect(settings.locator('#import-add')).toBeDisabled();
+
+  await settings.click('#import-catalog');
+  await menu.getByRole('button', { name: /^Acme ?Acme product/ }).click();
+  await expect(menu).toBeHidden();
+  await expect(settings.locator('#import-text')).toHaveValue('openposse-fixture.json from openposse.org');
+  await expect(settings.locator('#import-preview')).toBeVisible();
+  await settings.click('#import-add');
+  await expect(settings.locator('#import-status')).toHaveText('Added Acme.');
+
+  // Once it is here, the list says so and does not offer it again.
+  await settings.click('#import-catalog');
+  const row = menu.getByRole('button', { name: /^Acme ?Acme product/ });
+  await expect(row).toBeDisabled();
+  await expect(row).toContainText('you have one here');
+});
+
+// A refused connection is not tested here: Chrome logs it to the console itself, which this
+// harness counts as a page error. What the page does with any failure is the same path.
+test('when openposse.org answers with something that is not the list, the list says so', async ({ context, extensionId }) => {
+  await fakeCatalog(context, { broken: true });
+  const settings = await freshSettings(context, extensionId);
+  await settings.click('#import-catalog');
+  await expect(settings.locator('#catalog-note')).toHaveText(/^Couldn’t get the list – the list on openposse.org could not be read/);
+  await expect(settings.locator('#catalog-list button')).toHaveCount(0);
 });
 
 test('the same shared file twice is recognised, not added again', async ({ context, extensionId }) => {

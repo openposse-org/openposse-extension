@@ -14,6 +14,7 @@ import { mountThemeToggle, segmented } from './appearance.js';
 import { channelOf, colourName, initialFor, PALETTE } from './channels.js';
 import { sortedIDs } from './order.js';
 import { pack, unpack, toFile, filenameFor, summarise, spokenDay } from './share.js';
+import { CATALOG, fetchText, fileURL, marked, mismatch, readCatalog } from './catalog.js';
 import { matchPattern, patternForHost } from './domain.js';
 import { FLOOR_MS, FLOOR_OVERRIDE_KEY, FLOOR_RANGE, floorWindow, productLabel } from './routing.js';
 import { ANSWER_GRACE_MS, GRACE_OVERRIDE_KEY, GRACE_RANGE, graceWindow } from './grace.js';
@@ -1907,6 +1908,78 @@ async function addPending({ replace = null } = {}) {
   el('import-add').disabled = true;
   pending = null;
   await refreshRoster();
+}
+
+// ── Getting one from openposse.org ─────────────────────────────────────────────────────────
+//
+// **Only on a press, and it ends in the box above.** Opening the menu reads the list
+// (`src/catalog.js`); picking a lasso reads its file, checks it against the list, and hands its
+// text to `offer` exactly as a picked file's is handed – so the preview, the Allow and the worker's
+// own check are the ones a pasted file gets. Nothing is added from here.
+
+el('catalog-menu').addEventListener('toggle', (event) => {
+  const open = event.newState === 'open';
+  el('import-catalog').setAttribute('aria-expanded', String(open));
+  if (open) listCatalog();
+});
+
+/** Fills the menu from the list on openposse.org, marking the sites that already have one. */
+async function listCatalog() {
+  const note = el('catalog-note');
+  note.textContent = 'Asking openposse.org…';
+  note.classList.remove('bad');
+  el('catalog-list').replaceChildren();
+  let entries;
+  try {
+    const [text, { agents }] = await Promise.all([fetchText(CATALOG), loadRoster()]);
+    const patterns = await Promise.all(agents.map(async (agent) => (await lassoFor(agent))?.domainPattern));
+    entries = marked(readCatalog(text), patterns);
+  } catch (error) {
+    note.textContent = `Couldn’t get the list – ${error?.message ?? error}`;
+    note.classList.add('bad');
+    return;
+  }
+  const fresh = entries.filter((entry) => !entry.have).length;
+  note.textContent = fresh === 0
+    ? 'You have an AI assistant on every site listed on openposse.org.'
+    : 'Pick one to load it into the box, then add it as usual.';
+  el('catalog-list').replaceChildren(...entries.map((entry) => {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.disabled = entry.have;
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = entry.name;
+    const where = document.createElement('span');
+    where.className = 'where';
+    where.textContent = [entry.product, entry.site, entry.have ? 'you have one here' : null]
+      .filter(Boolean).join(' · ');
+    row.append(name, where);
+    row.addEventListener('click', () => loadFromCatalog(entry));
+    return row;
+  }));
+}
+
+/** One lasso from the list, into the box: checked against the list first, then offered. */
+async function loadFromCatalog(entry) {
+  el('catalog-menu').hidePopover();
+  el('import-file').value = '';
+  el('import-text').value = '';
+  offer('');
+  showImport(`getting ${entry.name} from openposse.org…`);
+  let text;
+  try {
+    text = await fetchText(fileURL(entry));
+  } catch (error) {
+    showImport(`${entry.name} couldn’t be fetched – ${error?.message ?? error}`, true);
+    return;
+  }
+  const problem = await mismatch(entry, text);
+  if (problem) { showImport(problem, true); return; }
+  // The file's name in the box, as a picked file shows its own: the text is checked and kept
+  // in `pending`, and typing over the name is a new offer.
+  el('import-text').value = `${entry.file} from openposse.org`;
+  offer(text);
 }
 
 // ── Debug tools ────────────────────────────────────────────────────────────────────────────
