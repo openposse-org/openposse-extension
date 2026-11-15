@@ -149,7 +149,7 @@ Agents pass on any code they don't recognise unchanged, and ignore hook names an
 ## 8. Prior art
 
 - **MCP** connects agents to servers, usually run by the vendor with their own login, mostly to reach the vendor's data. AI Assistant Hooks reaches the vendor's assistant, the product built on that data, inside the user's own session and permissions, with nothing to host. The two work together.
-- **WebMCP** is a proposal in a W3C community group for pages to register tools that agents in the browser can call (`navigator.modelContext`). Level 2 builds on it where it's available. This RFC adds a fixed set of names, so `ask_assistant` means the same thing on every site. It also adds the markup level for vendors who won't ship a JavaScript API.
+- **WebMCP** is a proposal in a W3C community group for pages to register tools that agents in the browser can call (`document.modelContext`; earlier drafts used `navigator.modelContext`, which Chrome 150 deprecated). Level 2 builds on it where it's available. This RFC adds a fixed set of names, so `ask_assistant` means the same thing on every site. It also adds the markup level for vendors who won't ship a JavaScript API.
 - **WAI-ARIA** already has `aria-busy` for content that's still being updated. Level 1 uses it alongside the explicit state.
 
 ## 9. Why a vendor would do this
