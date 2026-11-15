@@ -1,8 +1,8 @@
 # RFC: AI Assistant Hooks (working title)
 
-**Status:** Draft 0.1, 2026-10-06 · **Author:** [your name] · **Reference client:** OpenPosse
+**Status:** Draft 0.1, 2026-10-06, revised 2026-11-15 · **Author:** [your name] · **Reference client:** OpenPosse
 
-**Unverified:** §8's description of WebMCP was written from memory. Check it before sending this out.
+WebMCP references (§5, §8, §10) were checked against the WebMCP Draft Community Group Report of 13 November 2026.
 
 ## 1. Summary
 
@@ -122,7 +122,45 @@ window.assistantHooks = {
 - It returns `{ ok: true, text }` once the answer is complete, or `{ ok: false, error }` with a code from §6. It doesn't throw for those cases.
 - Results are plain JSON, so they reach an extension unchanged. An extension calls `ask` by running a function in the page's own context (`chrome.scripting.executeScript` with `world: 'MAIN'`).
 - To show the answer while it's still arriving, an agent reads it from the Level 1 markup, which keeps updating while `ask` runs.
-- If the browser supports WebMCP (§8), also register the two functions as tools named `ask_assistant` and `get_last_response`, so the browser's own agent finds them.
+
+### 5.1 With WebMCP
+
+If the browser supports WebMCP (§8), also register the two functions as tools named `ask_assistant` and `get_last_response`, so the browser's own agent finds them:
+
+```js
+if ('modelContext' in document) {
+  const hooks = new AbortController(); // hooks.abort() unregisters both tools
+  const answers = { readOnlyHint: false, untrustedContentHint: true };
+
+  document.modelContext.registerTool({
+    name: 'ask_assistant',
+    title: 'Ask Acme AI',
+    description: 'Ask Acme AI a question in the open conversation and return its answer.',
+    inputSchema: {
+      type: 'object',
+      properties: { prompt: { type: 'string', description: 'The question, as the user would type it.' } },
+      required: ['prompt'],
+    },
+    annotations: answers,
+    execute: ({ prompt }) => window.assistantHooks.ask(prompt),
+  }, { signal: hooks.signal });
+
+  document.modelContext.registerTool({
+    name: 'get_last_response',
+    title: "Acme AI's last answer",
+    description: "Return Acme AI's most recent answer in the open conversation, or null.",
+    inputSchema: { type: 'object', properties: {} },
+    annotations: { ...answers, readOnlyHint: true },
+    execute: () => window.assistantHooks.lastAnswer(),
+  }, { signal: hooks.signal });
+}
+```
+
+- Each tool's `execute` returns the same result as the function it wraps, so `ask_assistant` resolves to `{ ok, text }` or `{ ok, error }` exactly as `ask` does.
+- Set `untrustedContentHint` on both tools: answers are untrusted (§7), and the hint tells the calling agent so.
+- To unregister, abort the signal passed to `registerTool`. WebMCP has no separate unregister call.
+- `document.modelContext` needs a secure context, and the `tools` Permissions Policy, which by default allows only the page's own origin. If the assistant runs in a frame from another origin, the embedding page must allow it, for example `<iframe allow="tools">`.
+- `registerTool` also takes `exposedTo`, a list of other origins allowed to call the tools. Leave it out unless another origin in the same tab needs to ask the assistant.
 
 ## 6. Errors
 
@@ -149,7 +187,7 @@ Agents pass on any code they don't recognise unchanged, and ignore hook names an
 ## 8. Prior art
 
 - **MCP** connects agents to servers, usually run by the vendor with their own login, mostly to reach the vendor's data. AI Assistant Hooks reaches the vendor's assistant, the product built on that data, inside the user's own session and permissions, with nothing to host. The two work together.
-- **WebMCP** is a proposal in a W3C community group for pages to register tools that agents in the browser can call (`navigator.modelContext`). Level 2 builds on it where it's available. This RFC adds a fixed set of names, so `ask_assistant` means the same thing on every site. It also adds the markup level for vendors who won't ship a JavaScript API.
+- **WebMCP** is a proposal in a W3C community group for pages to register tools that agents in the browser can call (`document.modelContext`; earlier drafts used `navigator.modelContext`, which Chrome 150 deprecated). Level 2 builds on it where it's available (§5.1). This RFC adds a fixed set of names, so `ask_assistant` means the same thing on every site. It also adds the markup level for vendors who won't ship a JavaScript API.
 - **WAI-ARIA** already has `aria-busy` for content that's still being updated. Level 1 uses it alongside the explicit state.
 
 ## 9. Why a vendor would do this
@@ -161,7 +199,7 @@ Agents pass on any code they don't recognise unchanged, and ignore hook names an
 
 ## 10. Open questions
 
-1. Can browser extensions call a page's WebMCP tools, or only the browser's own agent? If extensions can, `window.assistantHooks` may not be needed.
+1. Can browser extensions call a page's WebMCP tools? The current draft lets scripts in the page call them with `getTools()` and `executeTool()`, covering frames in the same tab and other origins that `exposedTo` and `fromOrigins` allow. The browser's own agent reaches them some other way that each browser defines. The draft doesn't say whether an extension can do either. If extensions can, `window.assistantHooks` may not be needed.
 2. More than one assistant on a page: should each hook carry an id?
 3. Should `ask` be able to start a new conversation instead of continuing the open one?
 4. Rich answers, such as tables, citations and links. v0.1 is plain text only.
