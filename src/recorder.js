@@ -263,19 +263,98 @@ const CONTROL_SELECTOR =
  * a thing you can click is styled as a thing you can click, whatever element it is made of.
  */
 function clickableTarget(event) {
-  const direct = event.target?.closest?.(CONTROL_SELECTOR);
-  if (direct) return direct;
+  const hit = innermost(event);
+  if (!hit) return null;
 
-  // Walk a few levels for a pointer cursor. Bounded: the cursor is usually set on the control
-  // or its immediate wrapper, and `body` often has one on some sites.
-  let node = event.target;
-  for (let depth = 0; node?.nodeType === 1 && depth < 4; depth += 1) {
-    if (node === document.body) break;
-    const style = node.ownerDocument?.defaultView?.getComputedStyle(node);
-    if (style?.cursor === 'pointer') return node;
-    node = node.parentElement;
+  // **Shapes inside an icon are never the control.** An icon-only send button is usually
+  // `div > svg > path`, and the pointer lands on the `path`. `cursor` is inherited, so the old
+  // walk asked the `path` first, found `pointer`, and recorded a selector for one shape of one
+  // icon – the same shape every icon on the page has. Start from the element around the icon.
+  let start = hit;
+  while (isSvg(start) && start.localName !== 'svg' && up(start)) start = up(start);
+  if (start.localName === 'svg' && up(start)) start = up(start);
+
+  // The nearest real control, **through shadow roots**: `closest` stops at a shadow boundary,
+  // so a button drawn inside a web component was invisible to it.
+  let control = null;
+  for (let node = start; node && !isPageRoot(node); node = up(node)) {
+    if (node.matches?.(CONTROL_SELECTOR) || isControlElement(node)) { control = node; break; }
   }
-  return null;
+
+  if (!control) {
+    // Walk a few levels for a pointer cursor. Bounded: the cursor is usually set on the control
+    // or its immediate wrapper, and `body` often has one on some sites.
+    let node = start;
+    for (let depth = 0; node?.nodeType === 1 && depth < 4; depth += 1) {
+      if (isPageRoot(node)) break;
+      if (cursorOf(node) === 'pointer') { control = node; break; }
+      node = up(node);
+    }
+    if (!control) return null;
+
+    // **The pointer is inherited, so the first element with it is the deepest, not the
+    // control.** A `div` button with a `span` label gives every descendant `cursor: pointer`.
+    // Climb to where the pointer starts – the element whose parent does not have it – within
+    // a few more levels, so a site that sets it on a whole panel cannot drag us there.
+    for (let climb = 0; climb < 4; climb += 1) {
+      const parent = up(control);
+      if (!parent || isPageRoot(parent) || cursorOf(parent) !== 'pointer') break;
+      control = parent;
+    }
+  }
+
+  // A control built of other controls – the inner `<button>` of a `<my-send-button>` – is the
+  // custom element, which is what the page's own markup has and what a selector can reach.
+  for (let host = hostOf(control); host && isControlElement(host); host = hostOf(host)) {
+    control = host;
+  }
+  return control;
+}
+
+/** The node the pointer actually hit, inside open shadow roots (`event.target` is retargeted). */
+function innermost(event) {
+  const first = event.composedPath?.()[0] ?? event.target;
+  if (first?.nodeType === 1) return first;
+  return first?.parentElement ?? null;
+}
+
+/** One step out: the parent element, or the custom element whose shadow root this is. */
+function up(node) {
+  return node.parentElement ?? shadowHost(node.parentNode);
+}
+
+function hostOf(node) {
+  return shadowHost(node.getRootNode?.());
+}
+
+/** The custom element a shadow root belongs to, or null for anything else. */
+function shadowHost(root) {
+  // A shadow root is the only document fragment with a `host`.
+  return root?.nodeType === 11 && root.host ? root.host : null;
+}
+
+function isSvg(node) {
+  return node.namespaceURI === 'http://www.w3.org/2000/svg';
+}
+
+function isPageRoot(node) {
+  return node === document.body || node === document.documentElement;
+}
+
+function cursorOf(node) {
+  return node.ownerDocument?.defaultView?.getComputedStyle(node)?.cursor;
+}
+
+/**
+ * A custom element that is one control by its name – `ui5-button`, `md-icon-button`,
+ * `send-button` – or says so with an `interactive` attribute. Web-component apps put the role
+ * in the tag, and the `<button>` inside is an implementation detail.
+ */
+function isControlElement(node) {
+  const tag = node.localName ?? '';
+  if (!tag.includes('-')) return false;
+  return /-(button|icon-button|link|tab|menu-item|option|checkbox|radio|switch|toggle|chip)$/.test(tag)
+    || node.hasAttribute?.('interactive');
 }
 
 function armClickTracking() {
@@ -292,7 +371,30 @@ function armClickTracking() {
     // log was: a capture that succeeded and recorded nothing.
     session.lastClick = { element: target, selector: selectorFor(target), at: Date.now() };
   };
-  listen(window, 'click', handler, true);
+  listenForPress(handler);
+}
+
+/**
+ * Calls `handler` when a control is pressed: on `pointerdown`, before the page reacts.
+ *
+ * **`click` is too late.** It fires after `pointerup`, and by then a control that opens a
+ * panel or sends a message has often re-rendered itself – the element is detached, its
+ * attributes have changed (`Send` became `Stop`), and the selector describes what the button
+ * turned into rather than what was pressed (2026-11-18).
+ *
+ * A keyboard press of a focused button (Space or Enter on it) fires `click` with no pointer
+ * events at all, so that one is still taken from `click` – told apart by `detail === 0`, which
+ * is what a click without a mouse reports. A pointer press never reaches both paths.
+ */
+function listenForPress(handler) {
+  listen(window, 'pointerdown', (event) => {
+    if (event.button !== 0 || !event.isPrimary) return;
+    handler(event);
+  }, true);
+  listen(window, 'click', (event) => {
+    if (event.detail !== 0) return;
+    handler(event);
+  }, true);
 }
 
 /** How long after a click a composer can appear and still be blamed on it. */
@@ -378,7 +480,7 @@ function armSubmit() {
     onSubmitted({ kind: 'submit', submitMethod: 'enterKey' });
   };
 
-  listen(window, 'click', onClick, true);
+  listenForPress(onClick);
   listen(window, 'keydown', onEnter, true);
 }
 

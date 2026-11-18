@@ -119,14 +119,34 @@ export function isGeneratedID(value) {
   // `ng-container-title` and `chat-input` out of it: a counter at the end is the signature of
   // something assigned, while the same prefix followed by words is a name someone chose. An
   // earlier version matched only "prefix then digits" and let `cdk-overlay-0` through.
-  if (/^(mui|cdk|ng|headlessui|react-aria|downshift|rc|chakra|mantine)(-[a-z]+)*[-_]?\d+$/i
+  //
+  // `ember`, `ui5wc`, `mat` and `radix` were added 2026-11-18: Ember's `ember123`, UI5 web
+  // components' `ui5wc_12`, Angular Material's `mat-input-0`, and Radix ids that carry a plain
+  // counter rather than React's `:r1:`.
+  if (/^(mui|cdk|ng|headlessui|react-aria|downshift|rc|chakra|mantine|ember|ui5wc|mat|radix)(-[a-z]+)*[-_]?\d+$/i
     .test(value)) {
+    return true;
+  }
+
+  // A counter in the *middle*, from a library that numbers each instance and then names its
+  // parts: `react-select-3-input`, `downshift-0-menu`, `headlessui-menu-button-7-items`. The
+  // trailing word is the library's, not the page author's, so the anchored rule above misses it.
+  if (/^(react-select|downshift|headlessui|radix|ui5wc)[-_](.*[-_])?\d+[-_][a-z]/i.test(value)) {
     return true;
   }
 
   // A bare number, or a UUID. Both are counters or handles, never names.
   if (/^\d+$/.test(value)) return true;
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return true;
+
+  // A short hex blob – `msg-3fa9c2b1`, `node_a1b2c3d4` – is a hash, not a word: eight or more
+  // hex characters mixing letters and digits. Shorter than the entropy rule below needs, but a
+  // run of only a-f letters and digits is not something people write.
+  if (value.split(/[-_]/).some((segment) =>
+    segment.length >= 8 && /^[0-9a-f]+$/i.test(segment) && /[a-f]/i.test(segment) && /\d/.test(segment)
+  )) {
+    return true;
+  }
 
   // A high-entropy handle in any segment – `event_34s3k84bks4r9dp0t67t1t3hx7`.
   //
