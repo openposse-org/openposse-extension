@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.24](https://github.com/openposse-org/openposse-extension/compare/v0.9.23...v0.9.24) (2026-11-18)
+
+
+### Features
+
+* lassoing names the control that was pressed, and spots more generated ids ([#103](https://github.com/openposse-org/openposse-extension/issues/103)) ([2c461f5](https://github.com/openposse-org/openposse-extension/commit/2c461f51b53d68c93cbce7103056a8daa42570dc))
+
 ## [0.9.23](https://github.com/openposse-org/openposse-extension/compare/v0.9.22...v0.9.23) (2026-10-28)
 
 
