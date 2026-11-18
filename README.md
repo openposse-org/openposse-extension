@@ -207,9 +207,11 @@ flowchart LR
 
 While you record, OpenPosse watches you open the assistant, type a question, send it and receive
 the answer, and does so twice so that it can recognise answers in general rather than one
-particular message. A short guide in the panel ticks off each step as it is captured. Once you
-finish, OpenPosse replays the recording by itself to make sure it works before the assistant is
-added. If that check fails, the panel says what went wrong, and the message can be copied to send
+particular message. A short guide in the panel ticks off each step as it is captured, and a small
+**OpenPosse is lassoing this tab** bar sits in the corner of the page for as long as the recording
+lasts, with a **Stop** button that ends it without saving anything. An assistant that opens from a
+menu is recorded as each click in turn, the menu and then its item. Once you finish, OpenPosse
+replays the recording by itself to make sure it works before the assistant is added. If that check fails, the panel says what went wrong, and the message can be copied to send
 on with a bug report.
 
 The result is a **lasso**: a short description of how to use the assistant's page. Anyone adding
@@ -218,13 +220,17 @@ a shared lasso sees its steps before granting anything, along these lines:
 | Step | Example |
 |---|---|
 | `site` | `notion.so` |
-| `opens with` | `⌘ J`, or a recorded button |
+| `opens with` | `⌘ J`, or a recorded button (or a menu and its item) |
 | `message box` | `[data-testid="composer"] textarea` |
 | `sends with` | `↩ Enter`, or a recorded button |
 | `answer appears` | a container on the page |
 | `knows when done` | the assistant's own "still generating" control |
 | `quiet period` | `900 ms` |
 | `gives up after` | `60 s` |
+
+Where a button or the message box could be named more than one way when it was recorded (by its
+test id and by its label, say), the lasso keeps the other names too. If a site later renames the
+one the lasso uses, OpenPosse tries the others before saying the lasso is out of date.
 
 ### Sharing an assistant
 

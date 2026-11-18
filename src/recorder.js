@@ -23,7 +23,23 @@
 import { deepQuerySelectorAll, isVisible } from './dom.js';
 import {
   selectorFor, selectorForBoth, describePair, roleAttributes, isGeneratedID, STABLE_ATTRS,
+  fallbacksFor,
 } from './selector.js';
+
+/**
+ * A control's selector, with the others that also name it alone (2026-11-18).
+ *
+ * `fallbacks` rides on `selectorFor`'s result to the draft, which writes them into the lasso
+ * as `fallbacks.open/input/submit`. The runtime tries them, in order, only when the recorded
+ * selector finds nothing.
+ */
+function controlSelector(el) {
+  const selector = selectorFor(el);
+  return { ...selector, fallbacks: selector.isStable ? fallbacksFor(el, selector.css) : [] };
+}
+
+/** The in-page Recording bar's tag. Nothing the recorder captures may be inside it. */
+export const BAR_TAG = 'openposse-lasso-bar';
 
 /** Text long enough to be an answer rather than a label or a spinner. */
 export const MIN_ANSWER_TEXT = 40;
@@ -83,7 +99,11 @@ function summarise(event) {
     case 'open':
       return event.openMethod === 'shortcut'
         ? { by: 'shortcut', keys: keyDescription(event.shortcut) }
-        : { by: 'click', control: event.selector?.css };
+        : {
+          by: 'click',
+          control: event.selector?.css,
+          ...(event.steps ? { steps: event.steps.map((step) => step?.css) } : {}),
+        };
     case 'input':
       return { box: event.selector?.css };
     case 'submit':
@@ -131,6 +151,9 @@ export function arm({ emit }) {
     /// The most recent click, so a composer that appears just after one can be attributed to
     /// it. See `armInput`.
     lastClick: null,
+    /// The presses that may have opened the assistant, oldest first – a menu, then its item.
+    /// See `armClickTracking`.
+    openChain: [],
     submittedAt: null,
     // Everything on the page at submit time. The reply selector's `matchesBefore` is the
     // number of its matches that were already here – which is what proves the selector gained
@@ -162,7 +185,7 @@ export function arm({ emit }) {
   const alreadyOpen = isEditable(focused) && isVisible(focused);
   if (alreadyOpen) {
     session.input = focused;
-    session.emit({ kind: 'input', selector: selectorFor(focused) });
+    session.emit({ kind: 'input', selector: controlSelector(focused) });
   }
 
   // Reported so the app can say so. An assistant that was already open cannot teach us how to
@@ -265,6 +288,9 @@ const CONTROL_SELECTOR =
 function clickableTarget(event) {
   const hit = innermost(event);
   if (!hit) return null;
+  // Our own Recording bar is not part of the assistant. Its shadow root is closed, so a press
+  // on it reaches us as the bar itself.
+  if (hit.localName === BAR_TAG) return null;
 
   // **Shapes inside an icon are never the control.** An icon-only send button is usually
   // `div > svg > path`, and the pointer lands on the `path`. `cursor` is inherited, so the old
@@ -369,9 +395,43 @@ function armClickTracking() {
     // a detached node. `selectorFor` on a detached element walks up to a null parent
     // immediately and returns an empty string, which is what `open click  via structure` in the
     // log was: a capture that succeeded and recorded nothing.
-    session.lastClick = { element: target, selector: selectorFor(target), at: Date.now() };
+    const now = Date.now();
+    const press = { element: target, selector: controlSelector(target), at: now };
+    session.lastClick = press;
+
+    // **Opening can take more than one press** (2026-11-18): a menu, then "Ask AI" inside it.
+    // Once the assistant is open the chain is finished with, and every later press is ordinary
+    // use of the page.
+    if (session.opened || session.input !== null) return;
+    const previous = session.openChain.at(-1);
+    const follows = previous
+      && now - previous.at < OPEN_ATTRIBUTION_MS
+      && revealedBy(previous, target);
+    // The page as it is at this press, so the *next* press can tell whether this one revealed
+    // it. Taken on `pointerdown`, before the page reacts. Only while nothing is open yet, so a
+    // recording pays for it a handful of times, not on every click.
+    press.before = new WeakSet(deepQuerySelectorAll('*'));
+    session.openChain = follows
+      ? [...session.openChain, press].slice(-MAX_OPEN_STEPS)
+      : [press];
   };
   listenForPress(handler);
+}
+
+/** Longest chain of presses an opening can be recorded as. More is somebody exploring. */
+const MAX_OPEN_STEPS = 4;
+
+/**
+ * Whether `target` was put on the page by pressing `previous` – the item of a menu that press
+ * opened. **Not merely pressed soon after**: someone who clicks around and then opens the
+ * assistant must not get a lasso that replays their clicking around. So the next control has
+ * to be new since the previous press, or the previous control has to say it opens something
+ * (`aria-haspopup`, `aria-expanded`), which covers menus that keep their items mounted.
+ */
+function revealedBy(previous, target) {
+  if (previous.element === target) return false;
+  if (!previous.before?.has(target)) return true;
+  return Boolean(previous.element.matches?.('[aria-haspopup]:not([aria-haspopup="false"]), [aria-expanded]'));
 }
 
 /**
@@ -426,17 +486,25 @@ function armInput() {
         && !el.contains(session.lastClick.element)
         && session.lastClick.element !== el) {
       session.opened = true;
+      // The presses that led here, ending with the one just before the composer appeared.
+      // Usually that one alone. Presses inside the composer are someone focusing it, not
+      // opening anything.
+      const chain = session.openChain.at(-1) === session.lastClick
+        ? session.openChain.filter((press) => !el.contains(press.element) && press.element !== el)
+        : [session.lastClick];
+      const steps = chain.length > 0 ? chain : [session.lastClick];
       // The selector was computed at click time – see `armClickTracking`. Recomputing it here
       // would be too late: the control that opened the panel is usually detached by now.
       session.emit({
         kind: 'open',
         openMethod: 'click',
-        selector: session.lastClick.selector,
+        selector: steps[0].selector,
+        ...(steps.length > 1 ? { steps: steps.map((press) => press.selector) } : {}),
       });
     }
 
     session.input = el;
-    session.emit({ kind: 'input', selector: selectorFor(el) });
+    session.emit({ kind: 'input', selector: controlSelector(el) });
   };
   listen(window, 'focusin', handler, true);
 }
@@ -464,7 +532,7 @@ function armSubmit() {
     // buttons and emoji pickers all live there.
     if (session.input.contains(button)) return;
 
-    const selector = selectorFor(button);
+    const selector = controlSelector(button);
     // Kept so the reply window can watch it change. A send control usually cycles
     // enabled → stop → enabled across one answer, which is the vendor saying when it is
     // working – see `watchSubmitState`.
@@ -774,6 +842,7 @@ function isClipped(el) {
 
 function chooseReplyElement(added) {
   const candidates = added.filter((el) => {
+    if (el.localName === BAR_TAG) return false;
     if (!isVisible(el)) return false;
     if (session.input && el.contains(session.input)) return false;
     return answerLength(el) >= MIN_ANSWER_TEXT;

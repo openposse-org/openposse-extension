@@ -309,6 +309,57 @@ export function waitForElement(
 }
 
 /**
+ * A recorded selector and the lasso's fallbacks for it, in the order to try them.
+ *
+ * Fallbacks are optional and newer than the format (2026-11-18): a lasso recorded before them,
+ * or shared from an older OpenPosse, has none, and this is then just `[primary]`. Anything that
+ * is not a non-empty string is dropped, so a hand-edited file cannot put `undefined` in a query.
+ */
+export function selectorsFor(primary, fallbacks) {
+  const list = [primary, ...(Array.isArray(fallbacks) ? fallbacks : [])];
+  return [...new Set(list.filter((sel) => typeof sel === 'string' && sel.trim() !== ''))];
+}
+
+/**
+ * The first visible element any of `selectors` finds, **in their order**, waiting up to
+ * `timeoutMs` for one to appear.
+ *
+ * Order is the point. The recorded selector comes first, and a fallback is only used when it
+ * finds nothing – never because a fallback happened to match an element earlier in the page.
+ */
+export async function waitForAny(selectors, { timeoutMs = 3000 } = {}) {
+  const first = () => {
+    for (const selector of selectors) {
+      const found = deepQuerySelectorVisible(selector);
+      if (found) return found;
+    }
+    return null;
+  };
+  const now = first();
+  if (now || selectors.length === 0) return now;
+
+  return new Promise((resolve) => {
+    const deadline = setTimeout(() => {
+      observer.disconnect();
+      resolve(null);
+    }, timeoutMs);
+    const observer = new MutationObserver(() => {
+      const found = first();
+      if (!found) return;
+      clearTimeout(deadline);
+      observer.disconnect();
+      resolve(found);
+    });
+    observer.observe(document.body ?? document, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'],
+    });
+  });
+}
+
+/**
  * Streams an answer out of a container as the vendor writes it in.
  *
  * **Completion is a quiet period, not an event.** Vendors stream tokens into the DOM and emit
