@@ -19,7 +19,10 @@ test('React useId values are rejected', () => {
 
 test('Framework counters are rejected', () => {
   for (const id of ['mui-1', 'cdk-overlay-0', 'ng-1', 'headlessui-menu-3',
-                    'react-aria-12', 'downshift-0', 'chakra-modal-4', 'mantine-7']) {
+                    'react-aria-12', 'downshift-0', 'chakra-modal-4', 'mantine-7',
+                    // Added 2026-11-18.
+                    'ember123', 'ember-view-42', 'ui5wc_12', 'mat-input-0', 'radix-7',
+                    'react-select-3-input', 'downshift-0-menu', 'headlessui-menu-button-7-items']) {
     assert.equal(isGeneratedID(id), true, `${id} should be rejected`);
   }
 });
@@ -40,6 +43,10 @@ test('Per-message handles are rejected', () => {
   assert.equal(isGeneratedID('34s3k84bks4r9dp0t67t1t3hx7'), true);
   assert.equal(isGeneratedID('01HQ3X9K2MDZ7VN4P8TB6RWGYC'), true);   // ULID
   assert.equal(isGeneratedID('block-a1b2c3d4e5f6a7b8c9d0'), true);
+
+  // Short hex blobs: hashes, not names.
+  assert.equal(isGeneratedID('msg-3fa9c2b1'), true);
+  assert.equal(isGeneratedID('node_a1b2c3d4'), true);
 });
 
 test('Author-written ids are kept', () => {
@@ -54,7 +61,11 @@ test('Author-written ids are kept', () => {
                     // is a word someone chose — which is exactly what splitting on separators
                     // is there to protect.
                     'agent-chat-send-button', 'data-content-editable-root',
-                    'conversation-history-panel', 'assistant-message-container']) {
+                    'conversation-history-panel', 'assistant-message-container',
+                    // Near misses for the 2026-11-18 rules: a word made only of hex letters,
+                    // a short hex-looking run, and framework names followed by words.
+                    'feedback-panel', 'decade-2020', 'ember-sidebar', 'mat-toolbar', 'radix-dialog-title',
+                    'react-select-container', 'h264-toggle', 'step-1-intro']) {
     assert.equal(isGeneratedID(id), false, `${id} should be kept`);
   }
 });
