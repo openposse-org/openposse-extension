@@ -14,17 +14,19 @@ import {
   deepQuerySelectorVisible,
   newMatches,
   pressShortcut,
+  selectorsFor,
   setEditableText,
   setInputValue,
   streamResponse,
-  waitForElement,
   waitForEnabled,
+  waitForAny,
   waitForNewMatch,
 } from './dom.js';
 import {
   arm as armRecorder, disarm as disarmRecorder, isArmed, MIN_ANSWER_TEXT,
 } from './recorder.js';
 import { tell } from './tell.js';
+import { showBar, hideBar } from './lassobar.js';
 import { graceWindow } from './grace.js';
 import { DONE_IN_VIEW_MS, DONE_MS, original, STATES, withState } from './title.js';
 
@@ -60,11 +62,23 @@ async function openAssistant(lasso) {
   if (lasso.openMethod === 'alwaysOpen') return null;
   if (lasso.openMethod === 'click') {
     if (!lasso.openSelector) return null;
-    // Wait rather than demand it instantly: the control may be behind a menu that is still
-    // rendering, and a page that is working perfectly can fail an immediate lookup.
-    const control = await waitForElement(lasso.openSelector, { timeoutMs: 3000 });
-    if (!control) return null;
-    control.click();
+    // **One click, or a few in a row** (2026-11-18): an assistant behind a menu was recorded as
+    // the menu and then its item, as `openSteps`. Without it, a lasso is the one control it
+    // always was. The first step is `openSelector` either way, which is what an older
+    // OpenPosse reading a newer file clicks.
+    const steps = Array.isArray(lasso.openSteps) && lasso.openSteps.length > 1
+      ? lasso.openSteps
+      : [lasso.openSelector];
+    for (const [index, step] of steps.entries()) {
+      // Wait rather than demand it instantly: the control may be behind a menu that is still
+      // rendering, and a page that is working perfectly can fail an immediate lookup.
+      // Fallbacks are recorded for `openSelector`, the first step.
+      const control = await waitForAny(
+        selectorsFor(step, index === 0 ? lasso.fallbacks?.open : null), { timeoutMs: 3000 },
+      );
+      if (!control) return null;
+      control.click();
+    }
     return 'click';
   }
 
@@ -189,7 +203,8 @@ async function askAssistant({ lasso, prompt, graceMs = null }, emit) {
   // Visible, not merely present. LeanIX keeps the panel mounted when closed, so a presence
   // check reports "already open" for a shut panel – which is exactly what happened the first
   // time this was measured, and it silently skipped the thing under test.
-  let input = deepQuerySelectorVisible(lasso.inputSelector);
+  const inputs = selectorsFor(lasso.inputSelector, lasso.fallbacks?.input);
+  let input = inputs.map((sel) => deepQuerySelectorVisible(sel)).find(Boolean) ?? null;
 
   // What the page no longer has, for a lasso that opens by click: the button it clicks, or the
   // box that should have appeared. That is the sign the page has changed since the recording, and
@@ -198,7 +213,7 @@ async function askAssistant({ lasso, prompt, graceMs = null }, emit) {
   let missing = null;
   if (!input) {
     openedBy = await openAssistant(lasso);
-    input = await waitForElement(lasso.inputSelector, { timeoutMs: 3000 });
+    input = await waitForAny(inputs, { timeoutMs: 3000 });
     if (!input && lasso.openMethod === 'click') missing = openedBy ? 'input' : 'open';
     if (!input && lasso.openMethod === 'alwaysOpen') missing = 'input';
     if (!input) openedBy = null;
@@ -256,7 +271,7 @@ async function askAssistant({ lasso, prompt, graceMs = null }, emit) {
     // rendering, and some vendors only mount or enable the send control once the input has
     // content – so an immediate lookup fails on a page that is working perfectly.
     const button = lasso.submitSelector
-      ? await waitForElement(lasso.submitSelector, { timeoutMs: 3000 })
+      ? await waitForAny(selectorsFor(lasso.submitSelector, lasso.fallbacks?.submit), { timeoutMs: 3000 })
       : null;
     if (!button) {
       return failure(ERROR.elementNotFound, 'send button not found', { openedBy });
@@ -550,13 +565,14 @@ function getLastResponse({ lasso }) {
 async function invokeViaShortcut({ lasso }) {
   // Never act blind. These controls are usually *toggles*, so opening one that is already open
   // closes it – turning a working state into a broken one, and looking like the trigger failed.
-  if (deepQuerySelectorVisible(lasso.inputSelector)) {
+  const inputs = selectorsFor(lasso.inputSelector, lasso.fallbacks?.input);
+  if (inputs.some((sel) => deepQuerySelectorVisible(sel))) {
     return { ok: true, openedBy: 'already-open' };
   }
 
   const openedBy = await openAssistant(lasso);
 
-  const input = await waitForElement(lasso.inputSelector, { timeoutMs: 3000 });
+  const input = await waitForAny(inputs, { timeoutMs: 3000 });
   if (!input) {
     // For a shortcut this is very likely `isTrusted: false` being rejected. There is no
     // fallback: the `CGEventPost` retry belonged to the Mac app, which is parked, and nothing
@@ -588,10 +604,13 @@ function armRecording() {
       tell({ kind: 'openposse.recording', event });
     },
   });
+  // Said on the page itself, for as long as the recording lasts (2026-11-18).
+  showBar();
   return { ok: true };
 }
 
 function disarmRecording() {
+  hideBar();
   return { ok: true, wasArmed: isArmed() && disarmRecorder() };
 }
 
