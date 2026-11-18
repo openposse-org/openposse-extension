@@ -104,7 +104,7 @@ export function patternIsDerivable(pattern) {
   return patternForHost(pattern) === pattern;
 }
 
-// ── Which lasso this is ───────────────────────────────────────────────────────────────────
+// ── Which lasso this is ────────────────────────────────────────────────────────────────────
 //
 // Three optional envelope fields, so a lasso can be told apart from an older or newer one of
 // the same assistant once it has left the machine it was recorded on. See
@@ -273,6 +273,28 @@ export function unpack(text) {
   // The envelope's date first; a lasso carrying its own (a recording that was never packed)
   // second. Either way it leaves the lasso, which is where the caller puts it back.
   const { recordedOn: own, ...content } = lasso;
+
+  // The two optional fields added 2026-11-18, kept only in the shape the runtime reads. They are
+  // never a reason to refuse a file: a stranger's `openSteps` that is not a list of selectors is
+  // dropped, and the lasso opens with `openSelector` as it did before them.
+  const strings = (value) => (Array.isArray(value) ? value.filter(isText) : []);
+  if ('openSteps' in content) {
+    const steps = strings(content.openSteps);
+    if (lasso.openMethod === 'click' && steps.length > 1 && steps.length === content.openSteps.length) {
+      content.openSteps = steps;
+    } else {
+      delete content.openSteps;
+    }
+  }
+  if ('fallbacks' in content) {
+    const kept = {};
+    for (const key of ['open', 'input', 'submit']) {
+      const list = strings(content.fallbacks?.[key]);
+      if (list.length > 0) kept[key] = list;
+    }
+    if (Object.keys(kept).length > 0) content.fallbacks = kept;
+    else delete content.fallbacks;
+  }
   return {
     ok: true,
     name: isText(parsed.name) ? parsed.name.trim() : 'Assistant',
@@ -398,7 +420,16 @@ export function summarise(name, lasso, recordedOn = null) {
   // nothing for a message box that is always on the page.
   let open = null;
   if (lasso.openMethod === 'click') {
-    open = opener ? `clicks ${quoted(opener)}` : `opens ${product}’s AI assistant`;
+    // A menu and then its item reads as both clicks, in order. A step with nothing readable in
+    // it is still a click, so it is not dropped from the count.
+    const steps = Array.isArray(lasso.openSteps) && lasso.openSteps.length > 1
+      ? lasso.openSteps.map(labelIn)
+      : [opener];
+    open = steps.every(Boolean)
+      ? `clicks ${steps.map(quoted).join(', then ')}`
+      : steps.length > 1
+        ? `opens ${product}’s AI assistant in ${steps.length} clicks`
+        : `opens ${product}’s AI assistant`;
   } else if (lasso.openMethod !== 'alwaysOpen' && keys) {
     open = `presses ${keys}`;
   }
