@@ -40,6 +40,9 @@ export function newDraft(domainPattern) {
     openMethod: null,
     shortcut: null,
     openSelector: null,
+    // The presses that open it, when it takes more than one (a menu, then its item). Null for
+    // the usual single press, which is `openSelector` alone.
+    openSteps: null,
     input: null,
     submitMethod: null,
     submitSelector: null,
@@ -76,6 +79,8 @@ export function applyCapture(draft, event) {
       // combination that does nothing and then report that the assistant never opened.
       next.shortcut = event.openMethod === 'shortcut' ? (event.shortcut ?? null) : null;
       next.openSelector = event.openMethod === 'click' ? (event.selector ?? null) : null;
+      next.openSteps = event.openMethod === 'click' && Array.isArray(event.steps)
+        && event.steps.length > 1 ? event.steps : null;
       break;
 
     case 'input':
@@ -163,7 +168,8 @@ export function problems(draft) {
       + 'one – we can’t always press a keyboard shortcut on your behalf.');
   } else if (draft.openMethod === 'shortcut' && !draft.shortcut) {
     add('open-keys', 'We saw a shortcut but couldn’t read the keys. Try pressing it again.');
-  } else if (draft.openMethod === 'click' && !usable(draft.openSelector)) {
+  } else if (draft.openMethod === 'click'
+      && (!usable(draft.openSelector) || (draft.openSteps && !draft.openSteps.every(usable)))) {
     add('open-control',
       'We saw you open it by clicking but couldn’t identify the control. Try again.');
   }
@@ -254,6 +260,16 @@ export function finish(draft, { triggerMethod, recordedOn = null }) {
   // would stringify to `[object Object]`, match nothing, and report `ELEMENT_NOT_FOUND` on a
   // lasso that had just been recorded and verified.
   const css = (selector) => selector?.css ?? null;
+  // The other selectors that named each control alone when it was recorded, tried by the
+  // runtime only when the recorded one finds nothing. Left out when there are none, so a lasso
+  // with nothing to fall back on is the same file it always was.
+  const fallbacks = {};
+  for (const [key, selector] of [['open', draft.openSelector], ['input', draft.input],
+    ['submit', draft.submitSelector]]) {
+    const list = (selector?.fallbacks ?? []).filter((sel) => typeof sel === 'string' && sel);
+    if (list.length > 0) fallbacks[key] = list;
+  }
+  const openSteps = draft.openSteps?.map(css).filter(Boolean) ?? [];
 
   return {
     ok: true,
@@ -262,6 +278,9 @@ export function finish(draft, { triggerMethod, recordedOn = null }) {
       openMethod: draft.openMethod,
       shortcut: draft.shortcut,
       openSelector: css(draft.openSelector),
+      // Only for an assistant that takes more than one press to open; `openSelector` is the
+      // first of them, so an older OpenPosse still has something to click.
+      ...(openSteps.length > 1 ? { openSteps } : {}),
       inputSelector: css(draft.input),
       submitMethod: draft.submitMethod,
       submitSelector: css(draft.submitSelector),
@@ -272,6 +291,7 @@ export function finish(draft, { triggerMethod, recordedOn = null }) {
       triggerMethod,
       quietPeriodMs: draft.quietPeriodMs,
       responseTimeoutMs: draft.responseTimeoutMs,
+      ...(Object.keys(fallbacks).length > 0 ? { fallbacks } : {}),
       // The day it was recorded, so a shared copy can be told from an older or newer one.
       // Passed in rather than read from the clock here, which keeps this function pure.
       ...(recordedOn ? { recordedOn } : {}),

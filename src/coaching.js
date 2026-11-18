@@ -223,7 +223,12 @@ export function captures(draft) {
       id: 'open', label: 'Opens with', detail: keycaps(draft.shortcut).join(' '), isKeys: true,
     });
   } else if (draft.openMethod === 'click') {
-    rows.push({ id: 'open', label: 'Opens from', detail: draft.openSelector?.css ?? '' });
+    // Every press when it took more than one – a menu and then its item – so what the card
+    // shows is what the lasso will do.
+    const steps = draft.openSteps?.length > 1 ? draft.openSteps : [draft.openSelector];
+    rows.push({
+      id: 'open', label: 'Opens from', detail: steps.map((step) => step?.css ?? '').join(', then '),
+    });
   } else if (draft.openMethod === 'alwaysOpen') {
     rows.push({ id: 'open', label: 'Opens', detail: 'nothing to open – always on the page' });
   } else {
