@@ -420,13 +420,17 @@ setTurnHandler((text, { reply = false } = {}) => {
  * answers false, which is the right answer from a frame that could not have handled the
  * intent anyway.
  */
-async function frameOwningAssistant(tabId, selector) {
-  if (!selector) return undefined;
+async function frameOwningAssistant(tabId, lasso) {
+  // The recorded message box, then its fallbacks (2026-11-18), the same order the content
+  // script tries them in. A frame that sees any of them owns the assistant.
+  const selectors = [lasso?.inputSelector, ...(lasso?.fallbacks?.input ?? [])]
+    .filter((sel) => typeof sel === 'string' && sel !== '');
+  if (selectors.length === 0) return undefined;
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId, allFrames: true },
-      args: [selector],
-      func: (sel) => Boolean(globalThis.__openposseSeesAssistant?.(sel)),
+      args: [selectors],
+      func: (list) => list.some((sel) => Boolean(globalThis.__openposseSeesAssistant?.(sel))),
     });
     return results.find((entry) => entry.result === true)?.frameId;
   } catch (error) {
@@ -973,14 +977,14 @@ async function dispatchIntent(request) {
       intent: payload.intent, lasso, prompt: payload.prompt, graceMs: payload.graceMs, id,
     };
 
-    let frameId = await frameOwningAssistant(tab.id, lasso.inputSelector);
+    let frameId = await frameOwningAssistant(tab.id, lasso);
     let result = await chrome.tabs.sendMessage(tab.id, message, { frameId: frameId ?? 0 });
 
     // The assistant was shut, so nobody owned it and the top frame took the shortcut – but
     // the panel may have opened in an iframe, where the top frame cannot see it. Re-locate
     // once and let whoever has it now finish the job.
     if (!result?.ok && frameId === undefined) {
-      frameId = await frameOwningAssistant(tab.id, lasso.inputSelector);
+      frameId = await frameOwningAssistant(tab.id, lasso);
       if (frameId !== undefined && frameId !== 0) {
         result = await chrome.tabs.sendMessage(tab.id, message, { frameId });
       }
@@ -1039,7 +1043,7 @@ async function dispatchIntent(request) {
  * about thirty seconds idle – which is why the roster is read from storage per request rather
  * than held in a variable.
  */
-chrome.runtime.onMessage.addListener((request, _sender, respond) => {
+chrome.runtime.onMessage.addListener((request, sender, respond) => {
   // Offscreen traffic first: it is the highest-volume kind by far – an interim result every
   // few hundred milliseconds – and none of it wants a reply. Returning false hands the message
   // on without holding a port open for an answer nobody is going to send.
@@ -1172,6 +1176,20 @@ chrome.runtime.onMessage.addListener((request, _sender, respond) => {
   if (request?.kind === 'openposse.record.cancel') {
     cancelWizard().then(() => respond({ ok: true }), (error) => {
       console.error('[openposse] recording could not be stopped –', error);
+      respond({ ok: false, reason: String(error?.message ?? error) });
+    });
+    return true;
+  }
+  // Stop on the Recording bar in the lassoed page. The same as Stop on the card, but only from
+  // the tab being lassoed: any page we are injected into can send this, and another one must
+  // not be able to end somebody's recording.
+  if (request?.kind === 'openposse.record.stopFromPage') {
+    if (!wizard?.capturing || sender?.tab?.id !== wizard.tabId) {
+      respond({ ok: false, reason: 'not the tab being lassoed' });
+      return false;
+    }
+    cancelWizard().then(() => respond({ ok: true }), (error) => {
+      console.error('[openposse] recording could not be stopped from the page –', error);
       respond({ ok: false, reason: String(error?.message ?? error) });
     });
     return true;
@@ -1851,10 +1869,10 @@ async function save() {
 
 /** One exchange through the recorded lasso, in the tab it was recorded in. */
 async function askOnce(tabId, lasso, prompt) {
-  // The *input* selector, not the lasso: `frameOwningAssistant` runs one probe per frame and
-  // asks each whether it can see that element. Notion has two frames and only one holds the
+  // By the message box: `frameOwningAssistant` runs one probe per frame and asks each whether
+  // it can see the lasso's input (or one of its fallbacks). Notion has two frames and only one holds the
   // composer, and without this the promise resolves with whichever answers first.
-  const frameId = await frameOwningAssistant(tabId, lasso.inputSelector);
+  const frameId = await frameOwningAssistant(tabId, lasso);
   // The same grace a real turn would get, so a lasso is verified under the timing it will run
   // with rather than passing here and misbehaving in a turn.
   const graceMs = await storedGrace();
