@@ -294,6 +294,41 @@ ${[...parent.children].filter((c) => c.tagName === node.tagName).indexOf(node) +
 }
 
 /**
+ * Other selectors that name `el` alone, to try when the recorded one stops matching.
+ *
+ * **One selector is one bet on what a vendor will keep.** A team that renames an `aria-label`
+ * for a new tone of voice usually leaves its `data-testid` alone, and the other way round. A
+ * lasso that also knows `button[data-testid="send"]` keeps working when `button[aria-label=
+ * "Send message"]` stops matching, where today it fails with "send button not found".
+ *
+ * Only stable kinds – attributes and a custom element's tag – each checked now to match `el`
+ * and nothing else. Never a structural path: a fallback that names the wrong element is worse
+ * than none, because the runtime would click it. At most `limit`, best first, and never the
+ * primary itself.
+ */
+export function fallbacksFor(el, primaryCss, { limit = 2 } = {}) {
+  const out = [];
+  const consider = (css) => {
+    if (!css || css === primaryCss || out.includes(css)) return;
+    let found;
+    try { found = deepQuerySelectorAll(css); } catch { return; }
+    if (found.length === 1 && found[0] === el) out.push(css);
+  };
+
+  for (const attr of candidateAttributes(el)) {
+    if (out.length >= limit) break;
+    const value = el.getAttribute?.(attr);
+    if (!value || (attr === 'id' && isGeneratedID(value))) continue;
+    consider(attr === 'id'
+      ? `#${CSS.escape(value)}`
+      : `${el.tagName.toLowerCase()}[${attr}="${CSS.escape(value)}"]`);
+  }
+  const tag = el.tagName?.toLowerCase() ?? '';
+  if (out.length < limit && tag.includes('-')) consider(tag);
+  return out.slice(0, limit);
+}
+
+/**
  * A selector that matches **both** recorded answers – the place answers appear, rather than
  * either of the two that happen to be there.
  *
